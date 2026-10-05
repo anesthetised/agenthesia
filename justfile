@@ -2,6 +2,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 package := "Packages/AgenthesiaKit"
 derived_data := ".build/xcode"
+coverage_thresholds := "JSONRPC=90"
 sources := package + "/Package.swift " + package + "/Sources " + package + "/Tests App"
 
 # List available recipes
@@ -15,6 +16,11 @@ build:
 # Run package tests
 test:
     swift test --package-path {{package}}
+
+# Run package tests with coverage and enforce per-module thresholds
+coverage:
+    swift test --package-path {{package}} --enable-code-coverage
+    scripts/coverage.py "$(swift test --package-path {{package}} --show-codecov-path)" {{coverage_thresholds}}
 
 # Check formatting
 lint:
@@ -34,7 +40,7 @@ run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
 # Run everything CI runs
-ci: lint test app
+ci: lint coverage app
 
 # Remove build artifacts
 clean:

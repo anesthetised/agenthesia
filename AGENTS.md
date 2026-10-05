@@ -23,12 +23,17 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 
 - `just build` — build the package.
 - `just test` — run package tests.
+- `just coverage` — run tests with coverage and enforce per-module thresholds (what CI runs).
 - `just lint` — check formatting (`swift format lint --strict`).
 - `just format` — format the code in place.
 - `just app` — build the app with `xcodebuild`.
 - `just run` — build and launch the app.
 
-Before committing, make sure `just lint` and `just test` pass.
+Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
+above the thresholds in the `justfile`.
+
+To try the protocol layer by hand: `swift run --package-path Packages/AgenthesiaKit acp-cli chat -- <agent>`
+(for example the bundled `MockAgent`).
 
 ## Git
 

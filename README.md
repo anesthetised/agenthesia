@@ -35,6 +35,7 @@ Tasks are defined in the [`justfile`](justfile) (`brew install just`):
 ```sh
 just build   # build the core package
 just test    # run package tests
+just coverage  # run tests with coverage thresholds
 just lint    # check formatting
 just app     # build the app with xcodebuild
 just run     # build and launch the app

@@ -11,3 +11,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+
+# Coverage
+*.profraw
+*.profdata

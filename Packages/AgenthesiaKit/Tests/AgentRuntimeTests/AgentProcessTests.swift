@@ -88,7 +88,13 @@ import Testing
     @Test(.enabled(if: MockAgentBinary.url != nil, "MockAgent has not been built"))
     func drivesTheMockAgentProcessEndToEnd() async throws {
         let binary = try #require(MockAgentBinary.url)
-        let process = try AgentProcess(launching: AgentCommand(executable: binary.path(percentEncoded: false)))
+        // An instrumented MockAgent writes its coverage profile to the working directory unless told otherwise.
+        var environment = ProcessInfo.processInfo.environment
+        environment["LLVM_PROFILE_FILE"] = FileManager.default.temporaryDirectory
+            .appending(path: "MockAgent-%p.profraw").path(percentEncoded: false)
+        let process = try AgentProcess(
+            launching: AgentCommand(executable: binary.path(percentEncoded: false), environment: environment)
+        )
         struct Delegate: ACP.AgentConnectionDelegate {
             func sessionUpdate(_ update: ACP.SessionUpdate, in sessionId: ACP.SessionID) async {}
             func requestPermission(

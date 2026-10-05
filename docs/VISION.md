@@ -47,3 +47,10 @@ These principles decide what goes into the product and what does not. When in do
 - A plugin system. It comes once the core is stable; internal extension points are designed with it
   in mind.
 - Platforms other than macOS.
+
+## After 1.0
+
+- Basic editing in the viewer.
+- Shared MCP servers configured once for every agent.
+- Built-in tools for agents (show, screenshot, ready for review, delegate).
+- User-launched background tasks next to agent sessions.

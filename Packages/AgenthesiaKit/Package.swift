@@ -35,7 +35,8 @@ let package = Package(
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .executableTarget(name: "acp-cli", dependencies: ["ACP", "AgentRuntime"], swiftSettings: swiftSettings),
-        .executableTarget(name: "MockAgent", dependencies: ["ACP"], swiftSettings: swiftSettings),
+        .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
+        .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
 
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .testTarget(
@@ -44,6 +45,7 @@ let package = Package(
             exclude: ["Fixtures"],
             swiftSettings: swiftSettings
         ),
+        .testTarget(name: "ACPTestingTests", dependencies: ["ACPTesting"], swiftSettings: swiftSettings),
         .testTarget(name: "AgentRuntimeTests", dependencies: ["AgentRuntime"], swiftSettings: swiftSettings),
         .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], swiftSettings: swiftSettings),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"], swiftSettings: swiftSettings),

@@ -26,6 +26,14 @@ import Testing
         #expect(try decode("1") != .bool(true))
     }
 
+    @Test func numbersCompareByValue() {
+        #expect(JSONValue.int(1) == .double(1.0))
+        #expect(JSONValue.double(2.0) == .int(2))
+        #expect(JSONValue.int(1) != .double(1.5))
+        #expect(Set<JSONValue>([.int(1), .double(1.0), .string("1")]).count == 2)
+        #expect(JSONValue.null != .bool(false))
+    }
+
     @Test func roundTrips() throws {
         let value: JSONValue = ["a": [1, 2.5, "three", nil, false], "b": ["c": ["d": "e"]]]
         let data = try JSONEncoder().encode(value)

@@ -2,8 +2,9 @@ public import Foundation
 
 /// An arbitrary JSON value.
 ///
-/// Integers and floating-point numbers are kept apart so that integer values survive a round trip.
-public enum JSONValue: Sendable, Hashable {
+/// Integers and floating-point numbers are kept apart so that integer values survive a round trip, but
+/// they compare by numeric value, as in JSON: `.int(1) == .double(1.0)`.
+public enum JSONValue: Sendable {
     case null
     case bool(Bool)
     case int(Int64)
@@ -11,6 +12,34 @@ public enum JSONValue: Sendable, Hashable {
     case string(String)
     case array([JSONValue])
     case object([String: JSONValue])
+}
+
+extension JSONValue: Hashable {
+    public static func == (lhs: JSONValue, rhs: JSONValue) -> Bool {
+        switch (lhs, rhs) {
+        case (.null, .null): true
+        case (.bool(let a), .bool(let b)): a == b
+        case (.int(let a), .int(let b)): a == b
+        case (.double(let a), .double(let b)): a == b
+        case (.int(let a), .double(let b)), (.double(let b), .int(let a)): Double(a) == b
+        case (.string(let a), .string(let b)): a == b
+        case (.array(let a), .array(let b)): a == b
+        case (.object(let a), .object(let b)): a == b
+        default: false
+        }
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .null: hasher.combine(0)
+        case .bool(let bool): hasher.combine(bool)
+        case .int(let int): hasher.combine(Double(int))
+        case .double(let double): hasher.combine(double)
+        case .string(let string): hasher.combine(string)
+        case .array(let array): hasher.combine(array)
+        case .object(let object): hasher.combine(object)
+        }
+    }
 }
 
 extension JSONValue {

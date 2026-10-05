@@ -17,6 +17,10 @@ import sys
 from collections import defaultdict
 
 
+# Executables that tests launch as child processes; their profiles land next to the test runner's.
+EXECUTABLES = ["acp-cli", "MockAgent"]
+
+
 def swift(package: str, *args: str) -> str:
     return subprocess.run(
         ["swift", *args, "--package-path", package], check=True, capture_output=True, text=True
@@ -48,6 +52,7 @@ def report(package: str, threshold_args: list[str]) -> int:
         os.path.join(bundle, "Contents", "MacOS", os.path.basename(bundle).removesuffix(".xctest"))
         for bundle in sorted(glob.glob(os.path.join(bin_dir, "*.xctest")))
     ]
+    binaries += [os.path.join(bin_dir, name) for name in EXECUTABLES]
     binaries = [binary for binary in binaries if os.path.exists(binary)]
     objects = [binaries[0]] + [arg for binary in binaries[1:] for arg in ("-object", binary)]
     exported = subprocess.run(

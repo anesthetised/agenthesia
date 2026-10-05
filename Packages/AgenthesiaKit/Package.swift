@@ -41,7 +41,7 @@ let package = Package(
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .testTarget(
             name: "ACPTests",
-            dependencies: ["ACP"],
+            dependencies: ["ACP", "ACPTesting"],
             exclude: ["Fixtures"],
             swiftSettings: swiftSettings
         ),

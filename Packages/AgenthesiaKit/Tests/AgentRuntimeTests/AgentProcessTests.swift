@@ -88,10 +88,7 @@ import Testing
     @Test(.enabled(if: MockAgentBinary.url != nil, "MockAgent has not been built"))
     func drivesTheMockAgentProcessEndToEnd() async throws {
         let binary = try #require(MockAgentBinary.url)
-        // An instrumented MockAgent writes its coverage profile to the working directory unless told otherwise.
-        var environment = ProcessInfo.processInfo.environment
-        environment["LLVM_PROFILE_FILE"] = FileManager.default.temporaryDirectory
-            .appending(path: "MockAgent-%p.profraw").path(percentEncoded: false)
+        let environment = childEnvironment()
         let process = try AgentProcess(
             launching: AgentCommand(executable: binary.path(percentEncoded: false), environment: environment)
         )
@@ -113,6 +110,47 @@ import Testing
     }
 }
 
+@Suite(.timeLimit(.minutes(1)), .enabled(if: MockAgentBinary.url != nil, "MockAgent has not been built"))
+struct MockAgentScenarioTests {
+    private func launch(_ scenario: Scenario) throws -> AgentProcess {
+        let file = FileManager.default.temporaryDirectory.appending(path: "scenario-\(UUID().uuidString).json")
+        try JSONEncoder().encode(scenario).write(to: file)
+        let binary = try #require(MockAgentBinary.url).path(percentEncoded: false)
+        return try AgentProcess(
+            launching: AgentCommand(
+                executable: binary,
+                arguments: ["--scenario", file.path(percentEncoded: false)],
+                environment: childEnvironment()
+            )
+        )
+    }
+
+    @Test func playsAScenarioAndExitsCleanly() async throws {
+        let process = try launch(
+            Scenario([.expectRequest(method: "initialize", response: .result(["protocolVersion": 1]))])
+        )
+        let connection = Connection(transport: process.transport)
+        await connection.start(handler: Router())
+        #expect(
+            try await connection.request(method: "initialize", params: ["protocolVersion": 1]) == ["protocolVersion": 1]
+        )
+        #expect(await process.waitForExit() == .exited(0))
+    }
+
+    @Test func exitsWithAnErrorOnDeviation() async throws {
+        let process = try launch(Scenario([.expectNotification(method: "session/cancel")]))
+        let connection = Connection(transport: process.transport)
+        await connection.start(handler: Router())
+        try await connection.notify(method: "something/else", params: nil)
+        var log: [String] = []
+        for await line in process.stderr {
+            log.append(line)
+        }
+        #expect(await process.waitForExit() == .exited(1))
+        #expect(log.contains { $0.contains("session/cancel") })
+    }
+}
+
 /// The MockAgent executable built next to the tests, if any.
 enum MockAgentBinary {
     static let url: URL? = {
@@ -124,4 +162,15 @@ enum MockAgentBinary {
             ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path(percentEncoded: false)) }
     }()
+}
+
+/// The environment for instrumented child processes: they write coverage profiles next to the test
+/// runner's when coverage is enabled, and to a temporary directory otherwise, never to the working directory.
+func childEnvironment() -> [String: String] {
+    var environment = ProcessInfo.processInfo.environment
+    if environment["LLVM_PROFILE_FILE"] == nil {
+        environment["LLVM_PROFILE_FILE"] = FileManager.default.temporaryDirectory
+            .appending(path: "agenthesia-child-%p.profraw").path(percentEncoded: false)
+    }
+    return environment
 }

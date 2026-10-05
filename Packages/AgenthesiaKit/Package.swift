@@ -17,6 +17,9 @@ let package = Package(
         .executable(name: "acp-cli", targets: ["acp-cli"]),
         .executable(name: "MockAgent", targets: ["MockAgent"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
+    ],
     targets: [
         .target(name: "JSONRPC", swiftSettings: swiftSettings),
         .target(name: "ACP", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
@@ -34,10 +37,22 @@ let package = Package(
             dependencies: ["AgenthesiaCore", "Rendering"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
-        .executableTarget(name: "acp-cli", dependencies: ["ACP", "AgentRuntime"], swiftSettings: swiftSettings),
+        .executableTarget(
+            name: "acp-cli",
+            dependencies: [
+                "ACP", "AgentRuntime", "JSONRPC", "Workspace",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: swiftSettings
+        ),
         .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
 
+        .testTarget(
+            name: "acp-cliTests",
+            dependencies: ["acp-cli", "ACP", "ACPTesting", "JSONRPC", "MockAgent"],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .testTarget(
             name: "ACPTests",

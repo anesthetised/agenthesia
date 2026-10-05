@@ -1,5 +1,8 @@
 # Agenthesia
 
+[![CI](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/anesthetised/agenthesia/badges/coverage.svg)](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml)
+
 A native, opinionated macOS client for coding agents.
 
 Agenthesia speaks the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), so it works with

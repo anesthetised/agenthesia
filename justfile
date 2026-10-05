@@ -17,11 +17,11 @@ build:
 test:
     swift test --package-path {{package}}
 
-# Run package tests with coverage and enforce per-module thresholds
-coverage:
+# Run package tests with coverage and enforce per-module thresholds (e.g. `just coverage --badge out.svg`)
+coverage *args:
     scripts/coverage.py clean {{package}}
     swift test --package-path {{package}} --enable-code-coverage
-    scripts/coverage.py report {{package}} {{coverage_thresholds}}
+    scripts/coverage.py report {{package}} {{coverage_thresholds}} {{args}}
 
 # Check formatting
 lint:

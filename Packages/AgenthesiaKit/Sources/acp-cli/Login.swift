@@ -28,7 +28,7 @@ struct Login: AsyncParsableCommand {
         }
         guard let chosen = connected.profile.authMethods.first(where: { $0.id == method }) else {
             await connected.shutDown()
-            throw ValidationError("Unknown auth method \(method).")
+            throw CLIError("Unknown auth method \(method).")
         }
         switch chosen {
         case .agent:
@@ -43,7 +43,7 @@ struct Login: AsyncParsableCommand {
             await console.line("Signed in.")
         case .unknown:
             await connected.shutDown()
-            throw ValidationError("Auth method \(method) is not supported.")
+            throw CLIError("Auth method \(method) is not supported.")
         }
     }
 

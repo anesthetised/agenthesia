@@ -61,7 +61,7 @@ struct Chat: AsyncParsableCommand {
         case .resumed(let state), .loaded(let state):
             return state
         case .unavailable:
-            throw ValidationError("\(connected.name) can neither resume nor load sessions.")
+            throw CLIError("\(connected.name) can neither resume nor load sessions.")
         }
     }
 

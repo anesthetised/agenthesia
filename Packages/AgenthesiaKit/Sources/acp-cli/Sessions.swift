@@ -20,7 +20,7 @@ struct Sessions: AsyncParsableCommand {
         defer { Task { await connected.shutDown() } }
         guard connected.profile.canListSessions else {
             await connected.shutDown()
-            throw ValidationError("\(connected.name) cannot list sessions.")
+            throw CLIError("\(connected.name) cannot list sessions.")
         }
         let sessions = try await connected.connection.listSessions(
             cwd: all ? nil : agent.directory.path(percentEncoded: false)

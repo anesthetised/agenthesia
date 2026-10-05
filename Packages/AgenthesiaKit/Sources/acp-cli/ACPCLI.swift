@@ -93,7 +93,7 @@ struct ConnectedAgent {
         } catch ConnectionError.closed {
             let status = await process.terminate()
             try? await Task.sleep(for: .milliseconds(100))
-            throw ValidationError(Self.exitedEarly(status, log: await log.lines))
+            throw CLIError(Self.exitedEarly(status, log: await log.lines))
         } catch {
             await process.terminate()
             throw error
@@ -117,6 +117,15 @@ struct ConnectedAgent {
     func shutDown() async {
         await connection.close()
         await process.terminate()
+    }
+}
+
+/// A failure while running a command, reported without usage help.
+struct CLIError: Error, CustomStringConvertible {
+    let description: String
+
+    init(_ description: String) {
+        self.description = description
     }
 }
 

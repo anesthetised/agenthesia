@@ -1,0 +1,150 @@
+{
+  "source": "docs/protocol/v1/prompt-turn.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/prompt",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "Can you analyze this code for potential issues?"
+          },
+          {
+            "type": "resource",
+            "resource": {
+              "uri": "file:///home/user/project/main.py",
+              "mimeType": "text/x-python",
+              "text": "def process_data(items):\n    for item in items:\n        print(item)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan",
+          "entries": [
+            {
+              "content": "Check for syntax errors",
+              "priority": "high",
+              "status": "pending"
+            },
+            {
+              "content": "Identify potential type issues",
+              "priority": "medium",
+              "status": "pending"
+            },
+            {
+              "content": "Review error handling patterns",
+              "priority": "medium",
+              "status": "pending"
+            },
+            {
+              "content": "Suggest improvements",
+              "priority": "low",
+              "status": "pending"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "msg_agent_c42b9",
+          "content": {
+            "type": "text",
+            "text": "I'll analyze your code for potential issues. Let me examine it..."
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_001",
+          "title": "Analyzing Python code",
+          "kind": "other",
+          "status": "pending"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 53000,
+          "size": 200000,
+          "cost": {
+            "amount": 0.045,
+            "currency": "USD"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/prompt",
+      "kind": "result",
+      "value": {
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_001",
+          "status": "in_progress"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_001",
+          "status": "completed",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "Analysis complete:\n- No syntax errors found\n- Consider adding type hints for better clarity\n- The function could benefit from error handling for empty lists"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "session/cancel",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456"
+      }
+    }
+  ]
+}

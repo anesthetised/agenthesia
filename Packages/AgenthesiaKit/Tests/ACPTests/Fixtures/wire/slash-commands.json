@@ -1,0 +1,48 @@
+{
+  "source": "docs/protocol/v1/slash-commands.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "available_commands_update",
+          "availableCommands": [
+            {
+              "name": "web",
+              "description": "Search the web for information",
+              "input": {
+                "hint": "query to search for"
+              }
+            },
+            {
+              "name": "test",
+              "description": "Run tests for the current project"
+            },
+            {
+              "name": "plan",
+              "description": "Create a detailed implementation plan",
+              "input": {
+                "hint": "description of what to plan"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "session/prompt",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "/web agent client protocol"
+          }
+        ]
+      }
+    }
+  ]
+}

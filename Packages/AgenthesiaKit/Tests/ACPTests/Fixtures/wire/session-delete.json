@@ -1,0 +1,17 @@
+{
+  "source": "docs/protocol/v1/session-delete.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/delete",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456"
+      }
+    },
+    {
+      "method": "session/delete",
+      "kind": "result",
+      "value": {}
+    }
+  ]
+}

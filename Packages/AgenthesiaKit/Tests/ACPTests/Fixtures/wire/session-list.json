@@ -1,0 +1,61 @@
+{
+  "source": "docs/protocol/v1/session-list.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/list",
+      "kind": "request",
+      "value": {
+        "cwd": "/home/user/project",
+        "cursor": "eyJwYWdlIjogMn0="
+      }
+    },
+    {
+      "method": "session/list",
+      "kind": "result",
+      "value": {
+        "sessions": [
+          {
+            "sessionId": "sess_abc123def456",
+            "cwd": "/home/user/project",
+            "title": "Implement session list API",
+            "updatedAt": "2025-10-29T14:22:15Z",
+            "_meta": {
+              "messageCount": 12,
+              "hasErrors": false
+            }
+          },
+          {
+            "sessionId": "sess_xyz789ghi012",
+            "cwd": "/home/user/another-project",
+            "title": "Debug authentication flow",
+            "updatedAt": "2025-10-28T16:45:30Z"
+          },
+          {
+            "sessionId": "sess_uvw345rst678",
+            "cwd": "/home/user/project",
+            "updatedAt": "2025-10-27T15:30:00Z"
+          }
+        ],
+        "nextCursor": "eyJwYWdlIjogM30="
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "session_info_update",
+          "title": "Implement user authentication",
+          "_meta": {
+            "tags": [
+              "feature",
+              "auth"
+            ],
+            "priority": "high"
+          }
+        }
+      }
+    }
+  ]
+}

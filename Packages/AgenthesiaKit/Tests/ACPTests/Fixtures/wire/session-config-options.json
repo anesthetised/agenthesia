@@ -1,0 +1,24 @@
+{
+  "source": "docs/protocol/v1/session-config-options.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/set_config_option",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "configId": "mode",
+        "value": "code"
+      }
+    },
+    {
+      "method": "session/set_config_option",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "configId": "brave_mode",
+        "type": "boolean",
+        "value": true
+      }
+    }
+  ]
+}

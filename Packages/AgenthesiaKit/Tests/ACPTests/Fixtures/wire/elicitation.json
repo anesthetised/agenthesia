@@ -1,0 +1,41 @@
+{
+  "source": "docs/protocol/v1/elicitation.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "elicitation/create",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123",
+        "mode": "form",
+        "message": "How should I approach this refactoring?",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "conservative",
+                "balanced",
+                "aggressive"
+              ]
+            }
+          },
+          "required": [
+            "strategy"
+          ]
+        }
+      }
+    },
+    {
+      "method": "elicitation/create",
+      "kind": "request",
+      "value": {
+        "requestId": 12,
+        "mode": "url",
+        "elicitationId": "github-oauth-001",
+        "url": "https://agent.example.com/connect?elicitationId=github-oauth-001",
+        "message": "Please authorize access to your repositories."
+      }
+    }
+  ]
+}

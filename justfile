@@ -2,7 +2,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 package := "Packages/AgenthesiaKit"
 derived_data := ".build/xcode"
-coverage_thresholds := "JSONRPC=90"
+coverage_thresholds := "JSONRPC=90 ACP=90"
 sources := package + "/Package.swift " + package + "/Sources " + package + "/Tests App"
 
 # List available recipes

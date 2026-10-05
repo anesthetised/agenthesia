@@ -38,7 +38,12 @@ let package = Package(
         .executableTarget(name: "MockAgent", dependencies: ["ACP"], swiftSettings: swiftSettings),
 
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
-        .testTarget(name: "ACPTests", dependencies: ["ACP"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "ACPTests",
+            dependencies: ["ACP"],
+            exclude: ["Fixtures"],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(name: "AgentRuntimeTests", dependencies: ["AgentRuntime"], swiftSettings: swiftSettings),
         .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], swiftSettings: swiftSettings),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"], swiftSettings: swiftSettings),

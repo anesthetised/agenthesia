@@ -1,0 +1,39 @@
+{
+  "source": "docs/protocol/v1/authentication.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "initialize",
+      "kind": "request",
+      "value": {
+        "protocolVersion": 1,
+        "clientCapabilities": {
+          "auth": {
+            "terminal": true
+          }
+        }
+      }
+    },
+    {
+      "method": "authenticate",
+      "kind": "request",
+      "value": {
+        "methodId": "agent-login"
+      }
+    },
+    {
+      "method": "authenticate",
+      "kind": "result",
+      "value": {}
+    },
+    {
+      "method": "logout",
+      "kind": "request",
+      "value": {}
+    },
+    {
+      "method": "logout",
+      "kind": "result",
+      "value": {}
+    }
+  ]
+}

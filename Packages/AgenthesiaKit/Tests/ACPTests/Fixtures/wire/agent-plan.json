@@ -1,0 +1,94 @@
+{
+  "source": "docs/protocol/v1/agent-plan.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan",
+          "entries": [
+            {
+              "content": "Analyze the existing codebase structure",
+              "priority": "high",
+              "status": "pending"
+            },
+            {
+              "content": "Identify components that need refactoring",
+              "priority": "high",
+              "status": "pending"
+            },
+            {
+              "content": "Create unit tests for critical functions",
+              "priority": "medium",
+              "status": "pending"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan_update",
+          "plan": {
+            "type": "items",
+            "planId": "plan-1",
+            "entries": [
+              {
+                "content": "Analyze the existing codebase structure",
+                "priority": "high",
+                "status": "pending"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan_update",
+          "plan": {
+            "type": "markdown",
+            "planId": "implementation-plan",
+            "content": "## Steps\n- [ ] Refactor module\n- [ ] Add tests"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan_update",
+          "plan": {
+            "type": "file",
+            "planId": "design-doc",
+            "uri": "file:///tmp/plan.md"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "plan_removed",
+          "planId": "plan-1"
+        }
+      }
+    }
+  ]
+}

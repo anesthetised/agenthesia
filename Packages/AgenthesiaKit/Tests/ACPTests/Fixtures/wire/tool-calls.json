@@ -1,0 +1,82 @@
+{
+  "source": "docs/protocol/v1/tool-calls.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_001",
+          "name": "read_file",
+          "title": "Reading configuration file",
+          "kind": "read",
+          "status": "pending"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_001",
+          "status": "in_progress",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "Found 3 configuration files..."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "session/request_permission",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "toolCall": {
+          "toolCallId": "call_001"
+        },
+        "options": [
+          {
+            "optionId": "allow-once",
+            "name": "Allow once",
+            "kind": "allow_once"
+          },
+          {
+            "optionId": "reject-once",
+            "name": "Reject",
+            "kind": "reject_once"
+          }
+        ]
+      }
+    },
+    {
+      "method": "session/request_permission",
+      "kind": "result",
+      "value": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "allow-once"
+        }
+      }
+    },
+    {
+      "method": "session/request_permission",
+      "kind": "result",
+      "value": {
+        "outcome": {
+          "outcome": "cancelled"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "source": "docs/protocol/v1/initialization.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "initialize",
+      "kind": "request",
+      "value": {
+        "protocolVersion": 1,
+        "clientCapabilities": {
+          "fs": {
+            "readTextFile": true,
+            "writeTextFile": true
+          },
+          "terminal": true
+        },
+        "clientInfo": {
+          "name": "my-client",
+          "title": "My Client",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "method": "initialize",
+      "kind": "result",
+      "value": {
+        "protocolVersion": 1,
+        "agentCapabilities": {
+          "loadSession": true,
+          "promptCapabilities": {
+            "image": true,
+            "audio": true,
+            "embeddedContext": true
+          },
+          "mcpCapabilities": {
+            "http": true,
+            "sse": true
+          }
+        },
+        "agentInfo": {
+          "name": "my-agent",
+          "title": "My Agent",
+          "version": "1.0.0"
+        },
+        "authMethods": []
+      }
+    }
+  ]
+}

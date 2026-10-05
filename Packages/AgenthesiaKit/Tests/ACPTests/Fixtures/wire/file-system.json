@@ -1,0 +1,49 @@
+{
+  "source": "docs/protocol/v1/file-system.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "initialize",
+      "kind": "request",
+      "value": {
+        "protocolVersion": 1,
+        "clientCapabilities": {
+          "fs": {
+            "readTextFile": true,
+            "writeTextFile": true
+          }
+        }
+      }
+    },
+    {
+      "method": "fs/read_text_file",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "path": "/home/user/project/src/main.py",
+        "line": 10,
+        "limit": 50
+      }
+    },
+    {
+      "method": "fs/read_text_file",
+      "kind": "result",
+      "value": {
+        "content": "def hello_world():\n    print('Hello, world!')\n"
+      }
+    },
+    {
+      "method": "fs/write_text_file",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "path": "/home/user/project/config.json",
+        "content": "{\n  \"debug\": true,\n  \"version\": \"1.0.0\"\n}"
+      }
+    },
+    {
+      "method": "fs/write_text_file",
+      "kind": "result",
+      "value": {}
+    }
+  ]
+}

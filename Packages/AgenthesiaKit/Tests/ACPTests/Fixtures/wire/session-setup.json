@@ -1,0 +1,132 @@
+{
+  "source": "docs/protocol/v1/session-setup.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/new",
+      "kind": "request",
+      "value": {
+        "cwd": "/home/user/project",
+        "mcpServers": [
+          {
+            "name": "filesystem",
+            "command": "/path/to/mcp-server",
+            "args": [
+              "--stdio"
+            ],
+            "env": []
+          }
+        ]
+      }
+    },
+    {
+      "method": "session/new",
+      "kind": "result",
+      "value": {
+        "sessionId": "sess_abc123def456"
+      }
+    },
+    {
+      "method": "session/load",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_789xyz",
+        "cwd": "/home/user/project",
+        "mcpServers": [
+          {
+            "name": "filesystem",
+            "command": "/path/to/mcp-server",
+            "args": [
+              "--mode",
+              "filesystem"
+            ],
+            "env": []
+          }
+        ]
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_789xyz",
+        "update": {
+          "sessionUpdate": "user_message_chunk",
+          "messageId": "msg_user_8f7a1",
+          "content": {
+            "type": "text",
+            "text": "What's the capital of France?"
+          }
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "kind": "notification",
+      "value": {
+        "sessionId": "sess_789xyz",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "messageId": "msg_agent_c42b9",
+          "content": {
+            "type": "text",
+            "text": "The capital of France is Paris."
+          }
+        }
+      }
+    },
+    {
+      "method": "session/load",
+      "kind": "result",
+      "value": {}
+    },
+    {
+      "method": "session/resume",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_789xyz",
+        "cwd": "/home/user/project",
+        "mcpServers": [
+          {
+            "name": "filesystem",
+            "command": "/path/to/mcp-server",
+            "args": [
+              "--mode",
+              "filesystem"
+            ],
+            "env": []
+          }
+        ]
+      }
+    },
+    {
+      "method": "session/resume",
+      "kind": "result",
+      "value": {}
+    },
+    {
+      "method": "session/close",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_789xyz"
+      }
+    },
+    {
+      "method": "session/close",
+      "kind": "result",
+      "value": {}
+    },
+    {
+      "method": "session/load",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_789xyz",
+        "cwd": "/home/user/project",
+        "additionalDirectories": [
+          "/home/user/shared-lib",
+          "/home/user/product-docs"
+        ],
+        "mcpServers": []
+      }
+    }
+  ]
+}

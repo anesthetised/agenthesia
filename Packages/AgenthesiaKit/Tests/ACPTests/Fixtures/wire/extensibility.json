@@ -1,0 +1,22 @@
+{
+  "source": "docs/protocol/v1/extensibility.mdx @ schema-v1.24.1",
+  "entries": [
+    {
+      "method": "session/prompt",
+      "kind": "request",
+      "value": {
+        "sessionId": "sess_abc123def456",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "Hello, world!"
+          }
+        ],
+        "_meta": {
+          "traceparent": "00-80e1afed08e019fc1110464cfa66635c-7a085853722dc6d2-01",
+          "zed.dev/debugMode": true
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # 0009. Tools and MCP
 
-- Status: Accepted
+- Status: Accepted, amended by [0011](0011-cross-agent-memory.md)
 - Date: 2026-10-05
 
 ## Context

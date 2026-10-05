@@ -59,7 +59,10 @@ public actor AgentProcess {
             process.executableURL = URL(filePath: "/usr/bin/env")
             process.arguments = [command.executable] + command.arguments
         }
-        process.environment = command.environment
+        // Assigning nil would launch with an empty environment instead of inheriting this one.
+        if let environment = command.environment {
+            process.environment = environment
+        }
         process.currentDirectoryURL = command.currentDirectory
 
         let stdin = Pipe()

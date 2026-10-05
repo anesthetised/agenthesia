@@ -31,6 +31,13 @@ import Testing
         #expect(await process.waitForExit() == .exited(0))
     }
 
+    @Test func inheritsTheEnvironmentByDefault() async throws {
+        let process = try AgentProcess(launching: AgentCommand(executable: "/bin/sh", arguments: ["-c", "echo $PATH"]))
+        var messages = process.transport.messages.makeAsyncIterator()
+        let path = try await messages.next().map { String(decoding: $0, as: UTF8.self) }
+        #expect(path == ProcessInfo.processInfo.environment["PATH"])
+    }
+
     @Test func runsInTheGivenDirectory() async throws {
         let directory = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory).resolvingSymlinksInPath()
         let process = try AgentProcess(

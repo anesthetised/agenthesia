@@ -69,7 +69,9 @@ struct Login: AsyncParsableCommand {
             process.executableURL = URL(filePath: "/usr/bin/env")
             process.arguments = [command.executable] + command.arguments
         }
-        process.environment = command.environment
+        if let environment = command.environment {
+            process.environment = environment
+        }
         process.currentDirectoryURL = command.currentDirectory
         try process.run()
         process.waitUntilExit()

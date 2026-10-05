@@ -64,9 +64,13 @@ struct ConnectedAgent {
     ) async throws -> ConnectedAgent {
         let process = try AgentProcess(launching: options.agentCommand)
         let showLog = options.agentLog
+        let log = AgentLog()
         Task {
-            for await line in process.stderr where showLog {
-                await console.error("agent: \(line)")
+            for await line in process.stderr {
+                await log.append(line)
+                if showLog {
+                    await console.error("agent: \(line)")
+                }
             }
         }
         var traffic: Connection.TrafficObserver?
@@ -86,10 +90,23 @@ struct ConnectedAgent {
         do {
             let profile = try await connection.initialize(client: ACPCLI.clientInfo)
             return ConnectedAgent(process: process, connection: connection, profile: profile)
+        } catch ConnectionError.closed {
+            let status = await process.terminate()
+            try? await Task.sleep(for: .milliseconds(100))
+            throw ValidationError(Self.exitedEarly(status, log: await log.lines))
         } catch {
             await process.terminate()
             throw error
         }
+    }
+
+    /// Explains an agent that exited before initialization finished.
+    static func exitedEarly(_ status: ExitStatus, log: [String]) -> String {
+        var message = "The agent \(status) before it finished initializing."
+        if !log.isEmpty {
+            message += " Its last output:\n" + log.map { "  " + $0 }.joined(separator: "\n")
+        }
+        return message
     }
 
     var name: String {
@@ -100,6 +117,18 @@ struct ConnectedAgent {
     func shutDown() async {
         await connection.close()
         await process.terminate()
+    }
+}
+
+/// The last lines an agent wrote to stderr.
+actor AgentLog {
+    private(set) var lines: [String] = []
+
+    func append(_ line: String) {
+        lines.append(line)
+        if lines.count > 10 {
+            lines.removeFirst()
+        }
     }
 }
 

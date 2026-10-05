@@ -124,6 +124,20 @@ import Testing
         #expect(authHelp(.init(protocolVersion: 1), command: []).contains("no method"))
     }
 
+    @Test func explainsAgentsThatExitEarly() async {
+        #expect(
+            ConnectedAgent.exitedEarly(.exited(127), log: [])
+                == "The agent exited with code 127 before it finished initializing."
+        )
+        #expect(ConnectedAgent.exitedEarly(.exited(1), log: ["boom"]).hasSuffix("Its last output:\n  boom"))
+        let log = AgentLog()
+        for index in 0..<12 {
+            await log.append("line \(index)")
+        }
+        #expect(await log.lines.first == "line 2")
+        #expect(await log.lines.count == 10)
+    }
+
     @Test func agentOptionsBuildTheCommand() throws {
         let options = try AgentOptions.parse(["--cwd", "/tmp", "--", "agent", "--acp"])
         #expect(options.agentCommand.executable == "agent")

@@ -120,6 +120,22 @@ struct EndToEndTests {
         #expect(await run.waitForExit() == 130)
     }
 
+    @Test func explainsAMissingAgent() async throws {
+        let process = Process()
+        process.executableURL = try #require(Binaries.cli)
+        process.arguments = ["chat", "--", "definitely-not-an-agent-agenthesia"]
+        process.environment = childEnvironment()
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let text = String(decoding: try output.fileHandleForReading.readToEnd() ?? Data(), as: UTF8.self)
+        process.waitUntilExit()
+        #expect(process.terminationStatus != 0)
+        #expect(text.contains("exited with code 127 before it finished initializing"))
+        #expect(text.contains("No such file or directory"))
+    }
+
     @Test func listsSessionsAndSignsIn() async throws {
         let sessions = try CLIRun(["sessions"], cwd: directory)
         #expect(await sessions.waitForExit() == 0)

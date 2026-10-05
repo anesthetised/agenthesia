@@ -14,5 +14,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Proposed |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
 | [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted |
+| [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

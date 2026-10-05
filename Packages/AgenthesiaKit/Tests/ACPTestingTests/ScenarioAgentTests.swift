@@ -18,7 +18,7 @@ private func play(
     return (client, run)
 }
 
-@Suite struct ScenarioAgentTests {
+@Suite(.timeLimit(.minutes(1))) struct ScenarioAgentTests {
     @Test func followsAScenario() async throws {
         enum Read: RPCRequest {
             typealias Params = JSONValue
@@ -76,12 +76,13 @@ private func play(
         #expect(await run.value == nil)
     }
 
-    @Test func reportsUnexpectedMethods() async throws {
+    @Test func reportsUnexpectedMethodsAndClosesTheConnection() async throws {
         let (client, run) = await play(Scenario([.expectRequest(method: "initialize", response: .result(nil))]))
-        try await client.notify(method: "session/cancel", params: nil)
+        let pending = Task { try await client.request(method: "session/new", params: nil) }
         let mismatch = await run.value
         #expect(mismatch?.step == 0)
         #expect(mismatch?.description.contains("initialize") == true)
+        await #expect(throws: ConnectionError.closed) { try await pending.value }
     }
 
     @Test func reportsParamsThatDoNotMatch() async throws {

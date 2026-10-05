@@ -97,7 +97,7 @@ private func play(
     return (await ACP.V1.Client(transport: clientSide, delegate: delegate), run)
 }
 
-@Suite struct ClientTests {
+@Suite(.timeLimit(.minutes(1))) struct ClientTests {
     @Test func runsAFullSessionAgainstTheEchoAgent() async throws {
         let delegate = RecordingDelegate()
         let client = await connectToEcho(delegate)
@@ -213,7 +213,7 @@ private func play(
     }
 }
 
-@Suite struct ClientDelegateTests {
+@Suite(.timeLimit(.minutes(1))) struct ClientDelegateTests {
     private static let terminal: JSONValue = ["sessionId": "s", "terminalId": "t1"]
 
     private static let requests: [(method: String, params: JSONValue, result: JSONValue)] = [

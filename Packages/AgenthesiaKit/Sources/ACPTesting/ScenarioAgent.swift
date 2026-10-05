@@ -28,6 +28,8 @@ public actor ScenarioAgent {
     }
 
     /// Plays the scenario. Returns `nil` when the client followed it, otherwise the first deviation.
+    ///
+    /// On a deviation the transport is closed, so the client's pending requests fail instead of hanging.
     public func run() async -> Mismatch? {
         let reader = Task { [transport] in
             do {
@@ -41,6 +43,7 @@ public actor ScenarioAgent {
 
         for (index, step) in scenario.steps.enumerated() {
             if let message = await play(step) {
+                await transport.close()
                 return Mismatch(step: index, message: message)
             }
         }

@@ -77,7 +77,7 @@ final class EchoClient: Sendable {
     }
 }
 
-@Suite struct EchoAgentTests {
+@Suite(.timeLimit(.minutes(1))) struct EchoAgentTests {
     @Test func initializesWithCapabilities() async throws {
         var options = EchoAgent.Options()
         options.loadSession = false

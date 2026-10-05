@@ -50,7 +50,7 @@ private func makeConnection(
     return (connection, Peer(remote))
 }
 
-@Suite struct ConnectionTests {
+@Suite(.timeLimit(.minutes(1))) struct ConnectionTests {
     @Test func sendsTypedRequestsAndDecodesResults() async throws {
         let (connection, peer) = await makeConnection()
         async let sum = connection.request(Add.self, .init(a: 2, b: 3))

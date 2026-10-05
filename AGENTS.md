@@ -32,8 +32,8 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
 above the thresholds in the `justfile`.
 
-To try the protocol layer by hand: `swift run --package-path Packages/AgenthesiaKit acp-cli chat -- <agent>`
-(for example the bundled `MockAgent`).
+To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just mock-chat` for the bundled
+`MockAgent`.
 
 ## Git
 

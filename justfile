@@ -40,6 +40,16 @@ app configuration="Debug":
 run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
+# Run acp-cli, e.g. `just cli chat -- npx -y @agentclientprotocol/claude-agent-acp`
+[positional-arguments]
+cli *args:
+    swift run --quiet --package-path {{package}} acp-cli "$@"
+
+# Chat with the bundled MockAgent through acp-cli
+mock-chat:
+    swift build --quiet --package-path {{package}} --product MockAgent
+    swift run --quiet --package-path {{package}} acp-cli chat -- "$(swift build --package-path {{package}} --show-bin-path)/MockAgent"
+
 # Run everything CI runs
 ci: lint coverage app
 

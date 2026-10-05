@@ -42,6 +42,8 @@ just coverage  # run tests with coverage thresholds
 just lint    # check formatting
 just app     # build the app with xcodebuild
 just run     # build and launch the app
+just cli chat -- <agent>  # talk to any ACP agent from the terminal
+just mock-chat            # try it with the bundled mock agent
 ```
 
 ## License

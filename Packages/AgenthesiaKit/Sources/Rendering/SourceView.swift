@@ -112,11 +112,11 @@ public final class SourceView: NSView {
         Task {
             let configuration = await Task.detached(priority: .userInitiated) { language.configuration }.value
             guard generation == self.generation, let configuration else { return }
-            highlight(with: configuration)
+            await highlight(with: configuration, generation: generation)
         }
     }
 
-    private func highlight(with configuration: LanguageConfiguration) {
+    private func highlight(with configuration: LanguageConfiguration, generation: Int) async {
         let theme = theme
         let interface = ColoredTokens(
             theme: theme,
@@ -137,8 +137,15 @@ public final class SourceView: NSView {
                     locationTransformer: { Self.point(at: $0, lineStarts: lineStarts) }
                 )
             )
-            let tokens = client.tokenProvider(with: text.predicateTextProvider)
             self.client = client
+            // Neon parses documents under 1 MB on the main thread, a piece at a time as validation reaches further
+            // down, which stalls scrolling. Asking for the end of the text once parses it all, in the background.
+            if length > 0 {
+                let end = NSRange(location: length - 1, length: 1)
+                _ = try await client.highlights(in: end, provider: text.predicateTextProvider, mode: .required)
+            }
+            guard generation == self.generation else { return }
+            let tokens = client.tokenProvider(with: text.predicateTextProvider)
             styler = TextSystemStyler(textSystem: interface, tokenProvider: tokens)
             styler?.validate(.range(visibleRange))
         } catch {

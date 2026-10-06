@@ -2,6 +2,7 @@
 """Line coverage per module for the Swift package, with per-module thresholds.
 
     coverage.py clean  <package-path>
+    coverage.py test   <package-path>
     coverage.py report <package-path> [Module=percent ...] [--badge <file.svg>]
 
 SwiftPM builds one bundle per test target and writes one raw profile per bundle, but its own export only
@@ -59,6 +60,33 @@ def codecov_dir(package: str) -> str:
 def clean(package: str) -> int:
     for path in glob.glob(os.path.join(codecov_dir(package), "*.profraw")):
         os.remove(path)
+    return 0
+
+
+def test(package: str) -> int:
+    """Runs the tests with coverage instrumentation.
+
+    SwiftPM's own coverage export can fail after all tests passed ("Unable to export code coverage", with no
+    details) on packages with C targets. It is not used — `report` exports coverage itself — so that failure
+    alone is ignored; any failed test still fails the run.
+    """
+    process = subprocess.Popen(
+        ["swift", "test", "--package-path", package, "--enable-code-coverage"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    output = []
+    for line in process.stdout:
+        sys.stdout.write(line)
+        output.append(line)
+    if process.wait() == 0:
+        return 0
+    text = "".join(output)
+    failed = "✘" in text or re.search(r"error: (?!Unable to export code coverage)", text)
+    if failed or "Unable to export code coverage" not in text:
+        return 1
+    print("\nIgnoring SwiftPM's failed coverage export; coverage.py exports coverage itself.")
     return 0
 
 
@@ -138,6 +166,8 @@ def main() -> int:
     command, package, *rest = sys.argv[1:]
     if command == "clean":
         return clean(package)
+    if command == "test":
+        return test(package)
     if command == "report":
         return report(package, rest)
     print(__doc__, file=sys.stderr)

@@ -122,9 +122,18 @@ public final class SourceView: NSView {
                 }
             }
             guard generation == self.generation else { return }
-            // Replacing the whole text costs about as much as showing it; coloring it in place took up to 300 ms.
+            guard let storage = (textView.textContentManager as? NSTextContentStorage)?.textStorage else { return }
+            // Only colors changed. Replacing characters also resets selection and invokes text checking.
             let origin = scrollView.contentView.bounds.origin
-            textView.attributedText = colored
+            textView.textContentManager.performEditingTransaction {
+                // The content-manager transaction alone does not batch NSTextStorage edit notifications.
+                storage.beginEditing()
+                defer { storage.endEditing() }
+                colored.enumerateAttribute(.foregroundColor, in: NSRange(0..<colored.length)) { color, range, _ in
+                    if let color { storage.addAttribute(.foregroundColor, value: color, range: range) }
+                }
+            }
+            textView.needsLayout = true
             scrollView.contentView.scroll(to: origin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
             #if DEBUG

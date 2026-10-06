@@ -1,5 +1,6 @@
 import AppKit
 import STTextView
+import Synchronization
 import Testing
 
 @testable import Rendering
@@ -65,6 +66,73 @@ import Testing
         view.setText(String(repeating: line, count: 10_000), language: .swift)
         #expect(view.lineCount == 10_001)
         #expect(await renderedColor(of: "func", in: view) == Theme.standard.color(forCapture: "keyword"))
+    }
+
+    @Test func highlightingChangesOnlyColors() async throws {
+        let view = SourceView()
+        let source = "let greeting = \"👩🏽‍💻 café\" // note\n"
+        view.setText(source, language: .swift)
+        let storage = try #require((view.textView.textContentManager as? NSTextContentStorage)?.textStorage)
+        let decoration = (source as NSString).range(of: "greeting")
+        view.textView.addAttributes([.underlineStyle: NSUnderlineStyle.single.rawValue], range: decoration)
+        let changes = Mutex<[UInt]>([])
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification,
+            object: storage,
+            queue: nil
+        ) { notification in
+            guard let storage = notification.object as? NSTextStorage else { return }
+            changes.withLock { $0.append(storage.editedMask.rawValue) }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        #expect(await renderedColor(of: "let", in: view) == view.theme.color(forCapture: "keyword"))
+        #expect(storage.string == source)
+        #expect(storage.attribute(.underlineStyle, at: decoration.location, effectiveRange: nil) as? Int == 1)
+        let editCount = changes.withLock { $0.count }
+        #expect(editCount == 1)
+        #expect(changes.withLock { $0.allSatisfy { $0 & NSTextStorageEditActions.editedCharacters.rawValue == 0 } })
+    }
+
+    @Test func highlightingPreservesSelectionViewportAndAccessibility() async throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let view = SourceView()
+        window.contentView = view
+        let source = String(repeating: "let greeting = \"👩🏽‍💻 café\" // note\n", count: 300)
+        view.setText(source, language: .swift)
+        view.layoutSubtreeIfNeeded()
+        let selection = (source as NSString).range(of: "👩🏽‍💻 café")
+        view.textView.textSelection = selection
+        let clip = view.scrollView.contentView
+        clip.scroll(to: NSPoint(x: 0, y: 1_000))
+        view.scrollView.reflectScrolledClipView(clip)
+        view.layoutSubtreeIfNeeded()
+        let origin = clip.bounds.origin
+        #expect(origin.y > 0)
+
+        #expect(await renderedColor(of: "let", in: view) == view.theme.color(forCapture: "keyword"))
+        view.layoutSubtreeIfNeeded()
+        #expect(view.textView.textSelection == selection)
+        #expect(abs(clip.bounds.origin.y - origin.y) < 0.5)
+        #expect(abs(clip.bounds.origin.x - origin.x) < 0.5)
+        #expect(view.textView.accessibilitySelectedText() == "👩🏽‍💻 café")
+        #expect(view.textView.accessibilityNumberOfCharacters() == source.utf16.count)
+        #expect(view.textView.accessibilityValue() as? String == source)
+    }
+
+    @Test func latestThemeWinsWhileHighlighting() async throws {
+        let view = SourceView()
+        view.setText("let greeting = \"👩🏽‍💻 café\"", language: .swift)
+        view.theme = Theme(fontSize: 18)
+        view.theme = Theme(fontSize: 22)
+        #expect(await renderedColor(of: "let", in: view) == view.theme.color(forCapture: "keyword"))
+        let storage = try #require((view.textView.textContentManager as? NSTextContentStorage)?.textStorage)
+        #expect(storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont == view.theme.codeFont)
     }
 
     @Test func unknownLanguageIsNotHighlighted() async {

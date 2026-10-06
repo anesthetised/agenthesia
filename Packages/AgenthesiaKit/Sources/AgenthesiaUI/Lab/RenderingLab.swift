@@ -41,7 +41,6 @@
                 .disabled(lab.isRunning)
                 ViewHost(view: lab.content)
                     .id(ObjectIdentifier(lab.content))
-                    .task { await lab.autorun() }
                     .frame(minHeight: 300)
                 Table(lab.results) {
                     TableColumn("Scenario", value: \.scenario)
@@ -53,11 +52,15 @@
                     TableColumn("p99") { Text(format($0.report.p99)) }
                     TableColumn("Max") { Text(format($0.report.max)) }
                     TableColumn("Memory, MB") { Text(format($0.report.memory)) }
+                    // A table takes at most ten columns.
+                    TableColumn("Free RAM, load") { Text("\($0.report.freeMemory)%, \(format($0.report.load))") }
                 }
                 .frame(height: 160)
             }
             .padding()
             .frame(minWidth: 800, minHeight: 600)
+            // On the whole window: a task on the view under test would start again with every new view.
+            .task { await lab.autorun() }
         }
     }
 
@@ -125,6 +128,7 @@
         /// TextKit relayout the old text.
         private(set) var content = NSView()
         private let monitor = FrameMonitor()
+        private var didAutorun = false
 
         /// Runs from `AGENTHESIA_LAB_RUNS`, such as `S1:A,S2:B,S4:lines+colors`: a scenario and its prototype, or
         /// for S4 the SourceView flags.
@@ -133,7 +137,12 @@
 
         /// Runs the scenarios from the environment, prints the results as Markdown and quits.
         func autorun() async {
-            guard let scenarios = Self.autorunScenarios else { return }
+            guard let scenarios = Self.autorunScenarios, !didAutorun else { return }
+            didAutorun = true
+            // Launched from a terminal, the app stays behind it, and a window in the back gets a throttled display
+            // link: the first scenario measured that until the app was brought forward and given time to settle.
+            NSApp.activate()
+            try? await Task.sleep(for: .seconds(1))
             for scenario in scenarios {
                 let parts = scenario.split(separator: ":").map(String.init)
                 let argument = parts.count > 1 ? parts[1] : ""
@@ -297,15 +306,16 @@
         /// The results as a Markdown table, for the ADR.
         var markdown: String {
             var lines = [
-                "| Scenario | Open, ms | Frames | Dropped | p50, ms | p95, ms | p99, ms | Max, ms | Memory, MB |",
-                "|---|--:|--:|--:|--:|--:|--:|--:|--:|",
+                "| Scenario | Open, ms | Frames | Dropped | p50, ms | p95, ms | p99, ms | Max, ms | Memory, MB "
+                    + "| Free RAM, % | Load, \(ProcessInfo.processInfo.activeProcessorCount) cores |",
+                "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|",
             ]
             for result in results {
                 let report = result.report
                 let values = [
                     result.scenario, result.open.map { format($0) } ?? "–", "\(report.frames)", "\(report.dropped)",
                     format(report.p50), format(report.p95), format(report.p99), format(report.max),
-                    format(report.memory),
+                    format(report.memory), "\(report.freeMemory)", format(report.load),
                 ]
                 lines.append("| " + values.joined(separator: " | ") + " |")
             }

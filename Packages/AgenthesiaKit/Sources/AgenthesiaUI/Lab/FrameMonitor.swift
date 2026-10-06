@@ -13,6 +13,10 @@
             var max = 0.0
             /// The process's memory footprint at the end, in MB.
             var memory = 0.0
+            /// The system's free memory at the end, in percent, as `memory_pressure` reports it.
+            var freeMemory = 0
+            /// The system's load average over the last minute; above the number of cores the CPU is short.
+            var load = 0.0
         }
 
         static let signposter = OSSignposter(subsystem: "io.github.anesthetised.Agenthesia", category: "RenderingLab")
@@ -61,7 +65,9 @@
                 p95: percentile(0.95),
                 p99: percentile(0.99),
                 max: sorted.last ?? 0,
-                memory: Self.memoryFootprint()
+                memory: Self.memoryFootprint(),
+                freeMemory: Self.freeMemory(),
+                load: Self.load()
             )
             stop()
             return report
@@ -75,6 +81,17 @@
             dropped = 0
             if let signpost { Self.signposter.endInterval("Scenario", signpost) }
             signpost = nil
+        }
+
+        static func freeMemory() -> Int {
+            var level: Int32 = 0
+            var size = MemoryLayout<Int32>.size
+            return sysctlbyname("kern.memorystatus_level", &level, &size, nil, 0) == 0 ? Int(level) : 0
+        }
+
+        static func load() -> Double {
+            var load = 0.0
+            return getloadavg(&load, 1) == 1 ? load : 0
         }
 
         /// The memory footprint in MB, as Activity Monitor shows it.

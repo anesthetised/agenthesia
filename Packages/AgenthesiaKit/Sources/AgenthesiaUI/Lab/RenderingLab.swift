@@ -17,10 +17,13 @@
         public var body: some View {
             VStack(alignment: .leading) {
                 HStack {
-                    Button("S4: SourceView, 10k lines") { Task { await lab.runSourceView() } }
-                        .disabled(lab.isRunning)
-                    Toggle("Line numbers", isOn: $lab.lineNumbers)
-                    Toggle("Highlighting", isOn: $lab.highlighting)
+                    Picker("Transcript", selection: $lab.prototype) {
+                        ForEach(Prototype.allCases, id: \.self) { Text($0.title) }
+                    }
+                    .fixedSize()
+                    Button("S1: Stream") { Task { await lab.runStream() } }
+                    Button("S2: 10k items") { Task { await lab.runScroll() } }
+                    Button("S5: Appearance") { Task { await lab.runAppearance() } }
                     Spacer()
                     Button("Copy as Markdown") {
                         NSPasteboard.general.clearContents()
@@ -28,8 +31,15 @@
                     }
                     .disabled(lab.results.isEmpty)
                 }
-                ViewHost(view: lab.sourceView)
-                    .id(ObjectIdentifier(lab.sourceView))
+                .disabled(lab.isRunning)
+                HStack {
+                    Button("S4: SourceView, 10k lines") { Task { await lab.runSourceView() } }
+                    Toggle("Line numbers", isOn: $lab.lineNumbers)
+                    Toggle("Highlighting", isOn: $lab.highlighting)
+                }
+                .disabled(lab.isRunning)
+                ViewHost(view: lab.content)
+                    .id(ObjectIdentifier(lab.content))
                     .task { await lab.autorun() }
                     .frame(minHeight: 300)
                 Table(lab.results) {
@@ -80,17 +90,43 @@
         var report: FrameMonitor.Report
     }
 
+    /// The transcript prototypes.
+    enum Prototype: String, CaseIterable {
+        case table = "A"
+        case document = "B"
+        case swiftUI = "C"
+
+        var title: String {
+            switch self {
+            case .table: "A: NSTableView"
+            case .document: "B: TextKit 2"
+            case .swiftUI: "C: SwiftUI"
+            }
+        }
+
+        func make() -> any TranscriptPrototype {
+            switch self {
+            case .table: TableTranscript()
+            case .document: DocumentTranscript()
+            case .swiftUI: SwiftUITranscript()
+            }
+        }
+    }
+
     @Observable
     final class RenderingLab {
         private(set) var results: [LabResult] = []
         private(set) var isRunning = false
+        var prototype = Prototype.table
         var lineNumbers = true
         var highlighting = true
-        /// A new view for every run, as an opened file gets: reusing one makes TextKit relayout the old text.
-        private(set) var sourceView = SourceView()
+        /// The view under test. Every run gets a new one, as an opened file or session does: reusing one makes
+        /// TextKit relayout the old text.
+        private(set) var content = NSView()
         private let monitor = FrameMonitor()
 
-        /// Scenarios from `AGENTHESIA_LAB_RUNS`, such as `lines+colors,lines,plain`: S4 runs with those flags.
+        /// Runs from `AGENTHESIA_LAB_RUNS`, such as `S1:A,S2:B,S4:lines+colors`: a scenario and its prototype, or
+        /// for S4 the SourceView flags.
         static let autorunScenarios = ProcessInfo.processInfo.environment["AGENTHESIA_LAB_RUNS"]?
             .split(separator: ",").map(String.init)
 
@@ -98,22 +134,90 @@
         func autorun() async {
             guard let scenarios = Self.autorunScenarios else { return }
             for scenario in scenarios {
-                let flags = scenario.split(separator: "+")
-                lineNumbers = flags.contains("lines")
-                highlighting = flags.contains("colors")
-                await runSourceView()
+                let parts = scenario.split(separator: ":").map(String.init)
+                let argument = parts.count > 1 ? parts[1] : ""
+                prototype = Prototype(rawValue: argument) ?? .table
+                switch parts[0] {
+                case "S1": await runStream()
+                case "S2": await runScroll()
+                case "S5": await runAppearance()
+                default:
+                    let flags = argument.split(separator: "+")
+                    lineNumbers = flags.contains("lines")
+                    highlighting = flags.contains("colors")
+                    await runSourceView()
+                }
             }
             print(markdown)
             NSApp.terminate(nil)
         }
 
+        /// S1: stream a ~4000-token answer into a 200-item transcript, following its end.
+        func runStream() async {
+            var generator = TranscriptGenerator(seed: 1)
+            let transcript = LabTranscript(items: generator.items(200))
+            var chunks = generator.chunks(of: generator.answer(tokens: 4000))[...]
+            let view = await present(prototype.make())
+            view.show(transcript)
+            view.view.layoutSubtreeIfNeeded()
+            if let scrollView = view.scrollView { scrollToEnd(scrollView) }
+            transcript.startStreaming()
+            view.didAppend()
+            // A chunk a frame: about 1500 characters a second, faster than agents stream.
+            await measure("S1 Stream, \(prototype.title)", in: view.view) {
+                guard let chunk = chunks.popFirst() else { return false }
+                view.didStream(transcript.stream(chunk))
+                return true
+            }
+        }
+
+        /// S2: open a 10 000-item transcript, then scroll it from top to bottom in about 3000 frames.
+        func runScroll() async {
+            var generator = TranscriptGenerator(seed: 2)
+            let transcript = LabTranscript(items: generator.items(10_000))
+            let view = await present(prototype.make())
+            let start = ContinuousClock.now
+            view.show(transcript)
+            view.view.layoutSubtreeIfNeeded()
+            let open = milliseconds(since: start)
+            guard let scrollView = view.scrollView else { return }
+            let clip = scrollView.contentView
+            var frame = 0.0
+            await measure("S2 10k items, \(prototype.title)", open: open, in: view.view) {
+                frame += 1
+                // Heights are estimated until laid out, so the end is recomputed on every frame.
+                let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
+                let y = min(max(clip.bounds.origin.y + 60, end * frame / 3000), end)
+                clip.scroll(to: NSPoint(x: 0, y: y))
+                scrollView.reflectScrolledClipView(clip)
+                return y < end
+            }
+        }
+
+        /// S5: switch between light and dark appearance ten times on a 200-item transcript.
+        func runAppearance() async {
+            var generator = TranscriptGenerator(seed: 1)
+            let transcript = LabTranscript(items: generator.items(200))
+            let view = await present(prototype.make())
+            view.show(transcript)
+            view.view.layoutSubtreeIfNeeded()
+            if let scrollView = view.scrollView { scrollToEnd(scrollView) }
+            let window = view.view.window
+            var frame = 0
+            await measure("S5 Appearance, \(prototype.title)", in: view.view) {
+                frame += 1
+                if frame % 15 == 0 {
+                    window?.appearance = NSAppearance(named: frame / 15 % 2 == 1 ? .darkAqua : .aqua)
+                }
+                return frame < 150
+            }
+            window?.appearance = nil
+        }
+
         /// S4: open a 10 000-line Swift file, then scroll it from top to bottom.
         func runSourceView() async {
-            isRunning = true
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
-            sourceView = SourceView()
-            // Wait for SwiftUI to put the new view in the window, so opening it includes its layout.
-            while sourceView.window == nil { try? await Task.sleep(for: .milliseconds(10)) }
+            let sourceView = await present(SourceView())
             let start = ContinuousClock.now
             sourceView.showsLineNumbers = lineNumbers
             sourceView.setText(text, language: highlighting ? .swift : nil)
@@ -125,20 +229,58 @@
             let scrollView = sourceView.scrollView
             let clip = scrollView.contentView
             clip.scroll(to: .zero)
+            await measure(name, open: open, in: sourceView) {
+                // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
+                let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
+                let y = min(clip.bounds.origin.y + 60, end)
+                clip.scroll(to: NSPoint(x: 0, y: y))
+                scrollView.reflectScrolledClipView(clip)
+                return y < end
+            }
+        }
+
+        /// Shows `view` in the lab and waits until SwiftUI puts it in the window, so that opening it is measured
+        /// with its layout.
+        private func present(_ view: SourceView) async -> SourceView {
+            isRunning = true
+            content = view
+            while view.window == nil { try? await Task.sleep(for: .milliseconds(10)) }
+            return view
+        }
+
+        private func present(_ prototype: any TranscriptPrototype) async -> any TranscriptPrototype {
+            isRunning = true
+            // Grammars load once per app, ~230 ms the first time each: not part of opening a transcript.
+            for language in CodeLanguage.allCases { _ = Highlighter().highlight("x", language: language) }
+            content = prototype.view
+            while prototype.view.window == nil { try? await Task.sleep(for: .milliseconds(10)) }
+            return prototype
+        }
+
+        /// Calls `onFrame` on every frame until it returns `false` and adds the frame times to the results.
+        private func measure(
+            _ name: String,
+            open: Double? = nil,
+            in view: NSView,
+            onFrame: @escaping () -> Bool
+        ) async {
             let report = await withCheckedContinuation { continuation in
-                monitor.run(in: sourceView, name: name) {
-                    // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
-                    let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
-                    let y = min(clip.bounds.origin.y + 60, end)
-                    clip.scroll(to: NSPoint(x: 0, y: y))
-                    scrollView.reflectScrolledClipView(clip)
-                    return y < end
-                } completion: {
-                    continuation.resume(returning: $0)
-                }
+                monitor.run(in: view, name: name, onFrame: onFrame) { continuation.resume(returning: $0) }
             }
             results.append(LabResult(scenario: name, open: open, report: report))
+            if let directory = Self.snapshotDirectory { snapshot(view, to: directory, name: name) }
             isRunning = false
+        }
+
+        /// Where unattended runs save a picture of the view after each scenario: `AGENTHESIA_LAB_SNAPSHOTS`.
+        static let snapshotDirectory = ProcessInfo.processInfo.environment["AGENTHESIA_LAB_SNAPSHOTS"]
+            .map { URL(filePath: $0, directoryHint: .isDirectory) }
+
+        private func snapshot(_ view: NSView, to directory: URL, name: String) {
+            guard let image = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+            view.cacheDisplay(in: view.bounds, to: image)
+            let file = directory.appending(path: name.replacing(/[^A-Za-z0-9]+/, with: "-") + ".png")
+            try? image.representation(using: .png, properties: [:])?.write(to: file)
         }
 
         /// The results as a Markdown table, for the ADR.

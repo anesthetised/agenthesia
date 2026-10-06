@@ -18,10 +18,10 @@ and accept the result.
 - **Parallel sessions.** Run several agents side by side, each in its own process.
 - **Isolated by default.** Every session in a git repository gets its own worktree; review the diff,
   then squash-merge or discard.
-- **Shared memory.** What one agent learns about your project, the next one knows — across Claude, Codex
-  and every other agent.
 - **Built for review.** Diffs, files and Markdown with syntax highlighting; Quick Open for everything else.
 - **Truly native.** SwiftUI and AppKit, keyboard-first, actionable notifications, no web views.
+
+Cross-agent memory is deferred until after the MVP ([ADR-0012](docs/adr/0012-defer-cross-agent-memory.md)).
 
 See [docs/VISION.md](docs/VISION.md) for the principles behind the product and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it is built.

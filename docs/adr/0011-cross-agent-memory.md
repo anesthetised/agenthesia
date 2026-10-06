@@ -1,6 +1,6 @@
 # 0011. Cross-agent memory
 
-- Status: Accepted
+- Status: Superseded by [0012](0012-defer-cross-agent-memory.md)
 - Date: 2026-10-06
 - Amends: [0009](0009-tools-and-mcp.md) (the built-in MCP server moves into the MVP)
 

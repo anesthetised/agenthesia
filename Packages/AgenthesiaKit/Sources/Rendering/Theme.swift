@@ -27,6 +27,13 @@ public struct Theme: Sendable {
         return .systemFont(ofSize: (fontSize * scale).rounded(), weight: level <= 3 ? .bold : .semibold)
     }
 
+    /// The space after a paragraph or block.
+    public var blockSpacing: CGFloat { (fontSize * 0.6).rounded() }
+    /// The space after a list item.
+    public var itemSpacing: CGFloat { (fontSize * 0.2).rounded() }
+    /// The indentation of a nested level: a list or a quote.
+    public var indent: CGFloat { (fontSize * 1.6).rounded() }
+
     public var textColor: NSColor { .labelColor }
     public var secondaryTextColor: NSColor { .secondaryLabelColor }
     public var linkColor: NSColor { .linkColor }

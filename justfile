@@ -40,6 +40,13 @@ app configuration="Debug":
 run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
+# Build and launch an optimized Debug build, which has the Rendering Lab, for measurements
+lab:
+    xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
+        -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build \
+        SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
+    open .build/xcode-lab/Build/Products/Debug/Agenthesia.app
+
 # Run acp-cli, e.g. `just cli chat -- npx -y @agentclientprotocol/claude-agent-acp`
 [positional-arguments]
 cli *args:
@@ -55,4 +62,4 @@ ci: lint coverage app
 
 # Remove build artifacts
 clean:
-    rm -rf {{package}}/.build {{derived_data}}
+    rm -rf {{package}}/.build {{derived_data}} .build/xcode-lab

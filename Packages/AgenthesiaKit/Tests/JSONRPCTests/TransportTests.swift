@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import JSONRPC
 import Testing
@@ -25,6 +26,32 @@ import Testing
 }
 
 @Suite struct FileHandleTransportTests {
+    @Test func invalidWriterReportsSetupFailure() async {
+        let fromPeer = Pipe()
+        let transport = FileHandleTransport(
+            reading: fromPeer.fileHandleForReading,
+            writing: FileHandle(fileDescriptor: -1, closeOnDealloc: false)
+        )
+        await #expect(throws: POSIXError(.EBADF)) { try await transport.send(Data("hello".utf8)) }
+        await transport.close()
+    }
+
+    @Test func sendThrowsWhenPeerHasClosedItsInput() async {
+        await #expect(processExitsWith: .success) {
+            // The host's inherited signal policy must not hide a broken-pipe crash.
+            signal(SIGPIPE, SIG_DFL)
+            let toPeer = Pipe()
+            let fromPeer = Pipe()
+            let transport = FileHandleTransport(
+                reading: fromPeer.fileHandleForReading,
+                writing: toPeer.fileHandleForWriting
+            )
+            try toPeer.fileHandleForReading.close()
+            await #expect(throws: (any Error).self) { try await transport.send(Data("hello".utf8)) }
+            await transport.close()
+        }
+    }
+
     @Test func writesNewlineTerminatedMessages() async throws {
         let toPeer = Pipe()
         let fromPeer = Pipe()

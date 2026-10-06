@@ -22,6 +22,7 @@
                     }
                     .fixedSize()
                     Button("S1: Stream") { Task { await lab.runStream() } }
+                    Button("S6: Long code") { Task { await lab.runStream(longCode: true) } }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
                     Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
@@ -44,9 +45,9 @@
                     .frame(minHeight: 300)
                 Table(lab.results) {
                     TableColumn("Scenario", value: \.scenario)
-                    TableColumn("Open, ms") { Text($0.open.map { format($0) } ?? "–") }
-                    TableColumn("Frames") { Text("\($0.report.frames)") }
-                    TableColumn("Dropped") { Text("\($0.report.dropped)") }
+                    TableColumn("Setup, ms") { Text($0.open.map { format($0) } ?? "–") }
+                    TableColumn("Callbacks") { Text("\($0.report.frames)") }
+                    TableColumn("Hitches / missed≈") { Text("\($0.report.hitches) / \($0.report.estimatedMissed)") }
                     TableColumn("p50") { Text(format($0.report.p50)) }
                     TableColumn("p95") { Text(format($0.report.p95)) }
                     TableColumn("p99") { Text(format($0.report.p99)) }
@@ -86,12 +87,13 @@
 
     // MARK: - Scenarios
 
-    struct LabResult: Identifiable {
+    struct LabResult: Identifiable, Encodable {
         let id = UUID()
         var scenario: String
-        /// How long the content took to appear, in ms; `nil` if the scenario does not open anything.
+        /// Synchronous content setup and layout, not time to first presented pixels.
         var open: Double?
         var report: FrameMonitor.Report
+        var measurements: [String: Double] = [:]
     }
 
     /// The transcript prototypes.
@@ -152,40 +154,61 @@
                 prototype = Prototype(rawValue: argument) ?? .table
                 switch parts[0] {
                 case "S1": await runStream()
+                case "S6": await runStream(longCode: true)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
                 default:
                     let flags = argument.split(separator: "+")
                     lineNumbers = flags.contains("lines")
                     highlighting = flags.contains("colors")
-                    await runSourceView()
+                    await runSourceView(cold: flags.contains("cold"))
                 }
             }
             print(markdown)
+            for result in results {
+                if let data = try? JSONEncoder().encode(result), let json = String(data: data, encoding: .utf8) {
+                    print("BENCHMARK_RESULT=" + json)
+                }
+            }
             NSApp.terminate(nil)
         }
 
         /// S1: stream a ~4000-token answer into a 200-item transcript, following its end.
-        func runStream() async {
+        func runStream(longCode: Bool = false) async {
             var generator = TranscriptGenerator(seed: 1)
             let transcript = LabTranscript(items: generator.items(200))
-            var chunks = generator.chunks(of: generator.answer(tokens: 4000))[...]
+            let answer =
+                longCode
+                ? "```swift\n" + TranscriptGenerator.swiftFile(lines: 400)
+                : generator.answer(tokens: 4000)
+            let chunks = generator.chunks(of: answer)
+            var schedule = StreamSchedule(chunks: chunks, interval: 0.01)
             let view = await present(prototype.make())
             view.show(transcript)
             view.view.layoutSubtreeIfNeeded()
             if let scrollView = view.scrollView { scrollToEnd(scrollView) }
             transcript.startStreaming()
             view.didAppend()
-            // A chunk a frame: about 1500 characters a second, faster than agents stream.
-            await measure("S1 Stream, \(prototype.title)", in: view.view) {
-                guard let chunk = chunks.popFirst() else { return false }
-                view.didStream(transcript.stream(chunk))
+            // The virtual producer emits 100 chunks/s even when the UI stalls. No timer can silently slow it.
+            let start = ContinuousClock.now
+            let name = longCode ? "S6 Long unclosed code" : "S1 Stream"
+            await measure("\(name), \(prototype.title), warm", in: view.view) {
+                guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
+                let batch = schedule.due(at: milliseconds(since: start) / 1000)
+                guard !batch.isEmpty else { return true }
+                view.didStream(transcript.stream(chunks[batch].joined()))
+                schedule.recordApplied(batch, at: milliseconds(since: start) / 1000)
                 return true
             }
+            results[results.count - 1].measurements.merge([
+                "chunkIntervalMS": schedule.interval * 1000,
+                "chunks": Double(chunks.count), "characters": Double(answer.count),
+                "elapsedMS": milliseconds(since: start), "peakBacklogChunks": Double(schedule.peakBacklog),
+                "applyLatencyP95MS": schedule.p95Latency, "applyLatencyMaxMS": schedule.latencies.max() ?? 0,
+            ]) { _, new in new }
         }
 
-        /// S2: open a 10 000-item transcript at its end, then scroll up 120 points a frame (a fast flick) for 3000
-        /// frames.
+        /// S2: open 10 000 items, then scroll at 14 400 points/s for at most 25 seconds.
         func runScroll() async {
             var generator = TranscriptGenerator(seed: 2)
             let transcript = LabTranscript(items: generator.items(10_000))
@@ -197,14 +220,24 @@
             scrollToEnd(scrollView)
             let open = milliseconds(since: start)
             let clip = scrollView.contentView
-            var frames = 0
+            let scrollStart = ContinuousClock.now
+            var previous = scrollStart
+            var done = false
             await measure("S2 10k items, \(prototype.title)", open: open, in: view.view) {
-                frames += 1
-                let y = max(clip.bounds.origin.y - 120, 0)
+                if done { return false }
+                let step = milliseconds(since: previous) / 1000 * 14_400
+                previous = .now
+                let y = max(clip.bounds.origin.y - step, 0)
                 clip.scroll(to: NSPoint(x: 0, y: y))
                 scrollView.reflectScrolledClipView(clip)
-                return y > 0 && frames < 3000
+                done = (y <= 0 && view.isComplete) || milliseconds(since: scrollStart) >= 25_000
+                return true
             }
+            results[results.count - 1].measurements.merge([
+                "allItemsAvailable": view.isComplete ? 1 : 0,
+                "reachedStart": clip.bounds.origin.y <= 0 ? 1 : 0,
+                "elapsedMS": milliseconds(since: scrollStart), "scrollPointsPerSecond": 14_400,
+            ]) { _, new in new }
         }
 
         /// S3: show a 200-item transcript to select and copy text by hand.
@@ -232,33 +265,53 @@
                 if frame % 15 == 0 {
                     window?.appearance = NSAppearance(named: frame / 15 % 2 == 1 ? .darkAqua : .aqua)
                 }
-                return frame < 150
+                return frame <= 150  // Include the interval after the last appearance change.
             }
             window?.appearance = nil
         }
 
-        /// S4: open a 10 000-line Swift file, then scroll it from top to bottom.
-        func runSourceView() async {
+        /// S4: open a 10 000-line Swift file, observing setup and asynchronous highlight completion separately.
+        /// A cold run must be the only scenario in a fresh process (the benchmark runner enforces this).
+        func runSourceView(cold: Bool = false) async {
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
+            if !cold, highlighting { _ = Highlighter().highlight("x", language: .swift) }
             let sourceView = await present(SourceView())
-            let start = ContinuousClock.now
-            sourceView.showsLineNumbers = lineNumbers
-            sourceView.setText(text, language: highlighting ? .swift : nil)
-            sourceView.layoutSubtreeIfNeeded()
-            let open = milliseconds(since: start)
-
             let flags = [lineNumbers ? "lines" : nil, highlighting ? "colors" : nil].compactMap(\.self)
-            let name = "S4 SourceView" + (flags.isEmpty ? "" : " (\(flags.joined(separator: ", ")))")
+            let name = "S4 SourceView, \(cold ? "cold" : "warm") (\(flags.joined(separator: ", ")))"
             let scrollView = sourceView.scrollView
             let clip = scrollView.contentView
-            clip.scroll(to: .zero)
-            await measure(name, open: open, in: sourceView) {
-                // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
-                let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
-                let y = min(clip.bounds.origin.y + 60, end)
+            var start: ContinuousClock.Instant?
+            var previous = ContinuousClock.now
+            var setup = 0.0
+            var firstCallback: Double?
+            var done = false
+            await measure(name, in: sourceView) { [lineNumbers, highlighting] in
+                if done { return false }  // Include the interval after the final UI update.
+                guard let start else {
+                    let setupStart = ContinuousClock.now
+                    start = setupStart
+                    sourceView.showsLineNumbers = lineNumbers
+                    sourceView.setText(text, language: highlighting ? .swift : nil)
+                    sourceView.layoutSubtreeIfNeeded()
+                    setup = milliseconds(since: setupStart)
+                    previous = .now
+                    return true
+                }
+                if firstCallback == nil { firstCallback = milliseconds(since: start) }
+                let step = milliseconds(since: previous) / 1000 * 7200
+                previous = .now
+                let end = max(0, (clip.documentView?.frame.height ?? 0) - clip.bounds.height)
+                let y = min(clip.bounds.origin.y + step, end)
                 clip.scroll(to: NSPoint(x: 0, y: y))
                 scrollView.reflectScrolledClipView(clip)
-                return y < end
+                done = y >= end && (!highlighting || sourceView.highlightCompletedAt != nil)
+                return true
+            }
+            let index = results.count - 1
+            results[index].open = setup
+            results[index].measurements["firstCallbackAfterSetupMS"] = firstCallback
+            if let start, let completed = sourceView.highlightCompletedAt {
+                results[index].measurements["highlightCompleteMS"] = milliseconds(since: start, until: completed)
             }
         }
 
@@ -290,7 +343,18 @@
             let report = await withCheckedContinuation { continuation in
                 monitor.run(in: view, name: name, onFrame: onFrame) { continuation.resume(returning: $0) }
             }
-            results.append(LabResult(scenario: name, open: open, report: report))
+            results.append(
+                LabResult(
+                    scenario: name,
+                    open: open,
+                    report: report,
+                    measurements: [
+                        "viewportWidth": view.bounds.width, "viewportHeight": view.bounds.height,
+                        "backingScale": view.window?.backingScaleFactor ?? 1,
+                        "screenMaximumFPS": Double(view.window?.screen?.maximumFramesPerSecond ?? 0),
+                    ]
+                )
+            )
             if let directory = Self.snapshotDirectory { snapshot(view, to: directory, name: name) }
             isRunning = false
         }
@@ -309,14 +373,15 @@
         /// The results as a Markdown table, for the ADR.
         var markdown: String {
             var lines = [
-                "| Scenario | Open, ms | Frames | Dropped | p50, ms | p95, ms | p99, ms | Max, ms | Memory, MB "
+                "| Scenario | Setup, ms | Callbacks | Hitches | Missed≈ | Excess, ms | p50, ms | p95, ms | p99, ms | Max, ms | Memory, MB "
                     + "| Free RAM, % | Load, \(ProcessInfo.processInfo.activeProcessorCount) cores |",
-                "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|",
+                "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|",
             ]
             for result in results {
                 let report = result.report
                 let values = [
-                    result.scenario, result.open.map { format($0) } ?? "–", "\(report.frames)", "\(report.dropped)",
+                    result.scenario, result.open.map { format($0) } ?? "–", "\(report.frames)", "\(report.hitches)",
+                    "\(report.estimatedMissed)", format(report.excessMilliseconds),
                     format(report.p50), format(report.p95), format(report.p99), format(report.max),
                     format(report.memory), "\(report.freeMemory)", format(report.load),
                 ]
@@ -326,8 +391,11 @@
         }
     }
 
-    private func milliseconds(since start: ContinuousClock.Instant) -> Double {
-        let elapsed = ContinuousClock.now - start
+    private func milliseconds(
+        since start: ContinuousClock.Instant,
+        until end: ContinuousClock.Instant = .now
+    ) -> Double {
+        let elapsed = end - start
         return Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15
     }
 

@@ -35,6 +35,9 @@ jobs:
       - name: Test with coverage
         run: just coverage --badge .build/badges/coverage.svg
 
+      - name: Test benchmark runner
+        run: just test-scripts
+
       - name: Publish coverage badge
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |

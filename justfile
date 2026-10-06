@@ -14,8 +14,12 @@ build:
     swift build --package-path {{package}}
 
 # Run package tests
-test:
+test: test-scripts
     swift test --package-path {{package}}
+
+# Test the benchmark runner without launching benchmarks
+test-scripts:
+    python3 -m unittest discover -s scripts -p 'test_*.py'
 
 # Run package tests with coverage and enforce per-module thresholds (e.g. `just coverage --badge out.svg`)
 coverage *args:
@@ -40,11 +44,20 @@ app configuration="Debug":
 run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
-# Build an optimized Debug build, which has the Rendering Lab, for measurements
-# Time Markdown rendering and highlighting in a release build; leave the Mac alone while it runs
-bench:
-    swift run -c release --package-path {{package}} rendering-bench
+# Run and save sequential fresh-process measurements; agree on resource use before running
+[positional-arguments]
+bench *args:
+    python3 scripts/bench.py micro "$@"
 
+# Build the microbenchmarks without running them
+bench-build:
+    swift build -c release --package-path {{package}} --product rendering-bench
+
+# Locate the Release executable for the benchmark runner
+bench-path:
+    @swift build -c release --package-path {{package}} --show-bin-path
+
+# Build an optimized Debug build, which has the Rendering Lab, for measurements
 lab-build:
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
         -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build -quiet \
@@ -55,10 +68,10 @@ lab: lab-build
     open .build/xcode-lab/Build/Products/Debug/Agenthesia.app
 
 # Leave the Mac alone while it runs: a window behind others gets a throttled display link.
-# Run lab scenarios unattended and print the results, e.g. `just lab-run S1:A,S2:B,S4:lines+colors`
-lab-run runs: lab-build
-    AGENTHESIA_LAB_RUNS={{runs}} .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia \
-        2>/dev/null | grep '^|'
+# Save lab scenarios in fresh processes, e.g. `just lab-run S1:A2,S4:cold+lines+colors --runs 1`
+[positional-arguments]
+lab-run *args:
+    python3 scripts/bench.py lab "$@"
 
 # Run acp-cli, e.g. `just cli chat -- npx -y @agentclientprotocol/claude-agent-acp`
 [positional-arguments]
@@ -71,7 +84,7 @@ mock-chat:
     swift run --quiet --package-path {{package}} acp-cli chat -- "$(swift build --package-path {{package}} --show-bin-path)/MockAgent"
 
 # Run everything CI runs
-ci: lint coverage app
+ci: lint test-scripts coverage app
 
 # Remove build artifacts
 clean:

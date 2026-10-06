@@ -54,6 +54,9 @@ import Testing
         view.setText("let x = 1 // note\n", language: .swift)
         #expect(await renderedColor(of: "let", in: view) == Theme.standard.color(forCapture: "keyword"))
         #expect(await renderedColor(of: "// note", in: view) == Theme.standard.color(forCapture: "comment"))
+        #if DEBUG
+            #expect(view.highlightCompletedAt != nil)
+        #endif
     }
 
     @Test func highlightsALargeFile() async {
@@ -78,6 +81,9 @@ import Testing
         // The grammar loads in the background; give it time to arrive for the first text.
         try? await Task.sleep(for: .milliseconds(300))
         #expect(!isColored(view))
+        #if DEBUG
+            #expect(view.highlightCompletedAt == nil)
+        #endif
     }
 
     @Test func themeChangesTheFont() {

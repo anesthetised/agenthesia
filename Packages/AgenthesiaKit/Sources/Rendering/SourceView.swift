@@ -23,6 +23,11 @@ public final class SourceView: NSView {
     /// Counts texts shown, so that colors computed for an earlier text are not applied.
     private var generation = 0
 
+    #if DEBUG
+        /// Benchmark instrumentation: completion of the latest highlight, including applying its attributes.
+        public private(set) var highlightCompletedAt: ContinuousClock.Instant?
+    #endif
+
     public init(theme: Theme = .standard) {
         self.theme = theme
         textView = STTextView()
@@ -102,6 +107,9 @@ public final class SourceView: NSView {
 
     private func startHighlighting() {
         generation += 1
+        #if DEBUG
+            highlightCompletedAt = nil
+        #endif
         guard let language, !text.isEmpty else { return }
         let generation = generation
         let text = text
@@ -119,6 +127,9 @@ public final class SourceView: NSView {
             textView.attributedText = colored
             scrollView.contentView.scroll(to: origin)
             scrollView.reflectScrolledClipView(scrollView.contentView)
+            #if DEBUG
+                highlightCompletedAt = .now
+            #endif
         }
     }
 

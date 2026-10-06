@@ -116,7 +116,11 @@ let package = Package(
         ),
         .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], swiftSettings: swiftSettings),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"], swiftSettings: swiftSettings),
-        .testTarget(name: "RenderingTests", dependencies: ["Rendering"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "RenderingTests",
+            dependencies: ["Rendering", .product(name: "STTextView", package: "STTextView")],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(name: "AgenthesiaCoreTests", dependencies: ["AgenthesiaCore"], swiftSettings: swiftSettings),
     ]
 )

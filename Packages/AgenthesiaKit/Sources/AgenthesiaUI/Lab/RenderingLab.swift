@@ -15,6 +15,8 @@
             VStack(alignment: .leading) {
                 HStack {
                     Button("S4: SourceView, 10k lines") { lab.runSourceView() }
+                    Toggle("Line numbers", isOn: $lab.lineNumbers)
+                    Toggle("Highlighting", isOn: $lab.highlighting)
                         .disabled(lab.isRunning)
                     Spacer()
                     Button("Copy as Markdown") {
@@ -77,6 +79,8 @@
     final class RenderingLab {
         private(set) var results: [LabResult] = []
         private(set) var isRunning = false
+        var lineNumbers = true
+        var highlighting = true
         let sourceView = SourceView()
         private let monitor = FrameMonitor()
 
@@ -85,14 +89,17 @@
             isRunning = true
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
             let start = ContinuousClock.now
-            sourceView.setText(text, language: .swift)
+            sourceView.textView.showsLineNumbers = lineNumbers
+            sourceView.setText(text, language: highlighting ? .swift : nil)
             sourceView.layoutSubtreeIfNeeded()
             let open = milliseconds(since: start)
 
+            let flags = [lineNumbers ? "lines" : nil, highlighting ? "colors" : nil].compactMap(\.self)
+            let name = "S4 SourceView" + (flags.isEmpty ? "" : " (\(flags.joined(separator: ", ")))")
             let scrollView = sourceView.scrollView
             let clip = scrollView.contentView
             clip.scroll(to: .zero)
-            monitor.run(in: sourceView, name: "S4 SourceView") {
+            monitor.run(in: sourceView, name: name) {
                 // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
                 let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
                 let y = min(clip.bounds.origin.y + 60, end)
@@ -100,7 +107,7 @@
                 scrollView.reflectScrolledClipView(clip)
                 return y < end
             } completion: { report in
-                self.results.append(LabResult(scenario: "S4 SourceView", open: open, report: report))
+                self.results.append(LabResult(scenario: name, open: open, report: report))
                 self.isRunning = false
             }
         }

@@ -7,5 +7,14 @@ struct AgenthesiaApp: App {
         WindowGroup {
             RootView()
         }
+        #if DEBUG
+            .commands { RenderingLabCommands() }
+        #endif
+
+        #if DEBUG
+            Window("Rendering Lab", id: RenderingLabView.windowID) {
+                RenderingLabView()
+            }
+        #endif
     }
 }

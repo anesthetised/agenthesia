@@ -1,8 +1,9 @@
 # 0013. Apply SourceView highlighting as attribute edits
 
-- Status: Proposed (measured prototype; adoption awaits review)
+- Status: Accepted
 - Date: 2026-10-07
-- Scope: Would supersede only the SourceView highlight-completion strategy in ADR-0007.
+- Decider: Project owner
+- Scope: Supersedes only the SourceView highlight-completion strategy in [ADR-0007](0007-transcript-rendering.md).
 
 ## Context
 
@@ -15,7 +16,7 @@ The owner approved a local public-API prototype before considering changes to ST
 not changed when a highlight result arrives; only foreground colors need updating. The source font is
 already applied by `SourceView.applyTheme()`.
 
-## Proposed decision
+## Decision
 
 Keep STTextView, background whole-file highlighting, and the existing generation guard. Apply the
 result's foreground colors through `NSTextStorage.addAttribute` inside both:
@@ -56,6 +57,13 @@ Tests cover a single attributes-only edit notification, preservation of extra at
 selection, viewport position, accessibility text values, and the latest theme. Existing tests cover
 stale-generation rejection and large files. Accessibility property tests are not a full VoiceOver audit.
 
-The proposal is limited to the current read-only viewer. Editable-view requirements, undo and spelling
+The decision is limited to the current read-only viewer. Editable-view requirements, undo and spelling
 annotations need reassessment before extending this strategy to editing. Do not close the performance
 issue solely because average or p95 timing is good.
+
+## Consequences
+
+Adopt the measured attribute-update path without changing STTextView or adding a fork. Selection,
+unrelated attributes and viewport state are preserved when background colors arrive. The remaining
+scrolling stalls are a separate investigation in [#83](https://github.com/anesthetised/agenthesia/issues/83);
+accepting this decision does not establish that SourceView meets its overall smoothness requirement.

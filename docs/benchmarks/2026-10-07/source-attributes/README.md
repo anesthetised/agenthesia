@@ -1,6 +1,6 @@
 # SourceView attribute-update prototype — 2026-10-07
 
-Issue [#78](https://github.com/anesthetised/agenthesia/issues/78), proposed
+Issue [#78](https://github.com/anesthetised/agenthesia/issues/78), accepted
 [ADR-0013](../../../adr/0013-source-highlight-attributes.md).
 
 ## Reproduction
@@ -75,6 +75,8 @@ Tests cover Unicode selection, one attributes-only storage notification, unchang
 extra attributes, latest-theme application and existing stale-generation rejection. Accessibility
 properties are tested; a complete VoiceOver interaction audit has not been performed.
 
-This is a reviewable prototype, not an accepted replacement for ADR-0007 yet. It provides a targeted
-completion improvement and fixes state loss without new dependencies. Remaining scroll stalls and
-adoption of ADR-0013 need review; the performance issue is not closed solely on a good p95.
+The project owner accepted this approach in ADR-0013 on 2026-10-07, superseding only ADR-0007's
+SourceView highlight-completion strategy. It provides a targeted completion improvement and fixes
+state loss without new dependencies. Remaining scroll stalls are investigated separately in
+[#83](https://github.com/anesthetised/agenthesia/issues/83); the performance issue is not closed solely
+on a good p95.

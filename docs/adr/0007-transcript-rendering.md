@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-06
+- Partially superseded by: [ADR-0013](0013-source-highlight-attributes.md) (SourceView highlight completion only).
 
 ## Context
 

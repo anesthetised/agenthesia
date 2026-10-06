@@ -29,6 +29,7 @@
                     .disabled(lab.results.isEmpty)
                 }
                 ViewHost(view: lab.sourceView)
+                    .id(ObjectIdentifier(lab.sourceView))
                     .task { await lab.autorun() }
                     .frame(minHeight: 300)
                 Table(lab.results) {
@@ -85,7 +86,8 @@
         private(set) var isRunning = false
         var lineNumbers = true
         var highlighting = true
-        let sourceView = SourceView()
+        /// A new view for every run, as an opened file gets: reusing one makes TextKit relayout the old text.
+        private(set) var sourceView = SourceView()
         private let monitor = FrameMonitor()
 
         /// Scenarios from `AGENTHESIA_LAB_RUNS`, such as `lines+colors,lines,plain`: S4 runs with those flags.
@@ -109,6 +111,9 @@
         func runSourceView() async {
             isRunning = true
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
+            sourceView = SourceView()
+            // Wait for SwiftUI to put the new view in the window, so opening it includes its layout.
+            while sourceView.window == nil { try? await Task.sleep(for: .milliseconds(10)) }
             let start = ContinuousClock.now
             sourceView.showsLineNumbers = lineNumbers
             sourceView.setText(text, language: highlighting ? .swift : nil)

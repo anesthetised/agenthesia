@@ -30,7 +30,8 @@ import Testing
         #expect(view.textView.text == "one\ntwo\nthree")
         #expect(view.lineCount == 3)
         #expect(view.textView.isEditable == false)
-        #expect(view.textView.showsLineNumbers)
+        #expect(view.showsLineNumbers)
+        #expect(!view.textView.showsLineNumbers)
         #expect(view.textView.font == Theme.standard.codeFont)
 
         view.setText("", language: nil)
@@ -75,6 +76,38 @@ import Testing
         #expect(view.textView.font == Theme(fontSize: 20).codeFont)
     }
 
+    @Test func gutterNumbersTheVisibleLines() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let view = SourceView()
+        window.contentView = view
+        view.setText((1...10_000).map { "line \($0)" }.joined(separator: "\n"), language: nil)
+        view.layoutSubtreeIfNeeded()
+
+        let top = view.gutter.visibleLines()
+        #expect(top.first?.number == 1)
+        #expect(top.map(\.number) == Array(1...top.count))
+        #expect(view.gutter.frame.width > 0)
+
+        let clip = view.scrollView.contentView
+        clip.scroll(to: NSPoint(x: 0, y: 50_000))
+        view.scrollView.reflectScrolledClipView(clip)
+        view.layoutSubtreeIfNeeded()
+        let deep = try #require(view.gutter.visibleLines().first)
+        // The number matches the text of the line at the top.
+        let offset = (view.text as NSString).range(of: "line \(deep.number)\n").location
+        #expect(SourceView.line(at: offset, lineStarts: view.lineStarts) + 1 == deep.number)
+        #expect(deep.number > 1_000)
+        #expect(abs(deep.y) < 40)
+
+        view.showsLineNumbers = false
+        #expect(view.gutter.isHidden)
+    }
+
     @Test func lineStartsAndPoints() {
         let text = "ab\nçd\n\nlast"
         let starts = SourceView.lineStarts(of: text)
@@ -85,5 +118,6 @@ import Testing
         #expect(SourceView.point(at: 6, lineStarts: starts) == .init(row: 2, column: 0))
         #expect(SourceView.point(at: 9, lineStarts: starts) == .init(row: 3, column: 4))
         #expect(SourceView.point(at: -1, lineStarts: starts) == nil)
+        #expect(SourceView.line(at: 5, lineStarts: starts) == 1)
     }
 }

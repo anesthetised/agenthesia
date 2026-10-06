@@ -89,7 +89,7 @@
             isRunning = true
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
             let start = ContinuousClock.now
-            sourceView.textView.showsLineNumbers = lineNumbers
+            sourceView.showsLineNumbers = lineNumbers
             sourceView.setText(text, language: highlighting ? .swift : nil)
             sourceView.layoutSubtreeIfNeeded()
             let open = milliseconds(since: start)

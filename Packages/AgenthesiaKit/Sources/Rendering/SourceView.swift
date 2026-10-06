@@ -14,6 +14,7 @@ import TreeSitterClient
 public final class SourceView: NSView {
     public let textView: STTextView
     public let scrollView: NSScrollView
+    let gutter = LineNumberGutter()
     public var theme: Theme {
         didSet { applyTheme() }
     }
@@ -40,14 +41,19 @@ public final class SourceView: NSView {
         scrollView.documentView = textView
 
         textView.isEditable = false
-        textView.showsLineNumbers = true
         textView.highlightSelectedLine = false
         applyTheme()
 
+        gutter.textView = textView
+        gutter.translatesAutoresizingMaskIntoConstraints = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(gutter)
         addSubview(scrollView)
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            gutter.leadingAnchor.constraint(equalTo: leadingAnchor),
+            gutter.topAnchor.constraint(equalTo: topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.topAnchor.constraint(equalTo: topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -68,19 +74,26 @@ public final class SourceView: NSView {
 
     public var lineCount: Int { lineStarts.count }
 
+    public var showsLineNumbers: Bool {
+        get { !gutter.isHidden }
+        set { gutter.isHidden = !newValue }
+    }
+
     /// Shows `text`, highlighted as `language`; `nil` shows it without colors.
     public func setText(_ text: String, language: CodeLanguage?) {
         self.text = text
         self.language = language
         lineStarts = Self.lineStarts(of: text)
         textView.text = text
+        gutter.lineStarts = lineStarts
         startHighlighting()
     }
 
     private func applyTheme() {
         textView.font = theme.codeFont
         textView.textColor = theme.textColor
-        textView.gutterView?.font = theme.codeFont
+        gutter.font = theme.codeFont
+        gutter.color = theme.secondaryTextColor
         styler?.invalidate(.all)
         styler?.validate(.range(visibleRange))
     }
@@ -124,6 +137,7 @@ public final class SourceView: NSView {
     }
 
     @objc private func visibleTextChanged() {
+        gutter.needsDisplay = true
         styler?.validate(.range(visibleRange))
     }
 
@@ -151,13 +165,19 @@ public final class SourceView: NSView {
     /// The tree-sitter point of a UTF-16 offset: tree-sitter parses UTF-16, so columns are in bytes.
     static func point(at offset: Int, lineStarts: [Int]) -> Point? {
         guard offset >= 0 else { return nil }
+        let row = line(at: offset, lineStarts: lineStarts)
+        return Point(row: row, column: (offset - lineStarts[row]) * 2)
+    }
+
+    /// The zero-based line that contains a UTF-16 offset.
+    static func line(at offset: Int, lineStarts: [Int]) -> Int {
         var low = 0
         var high = lineStarts.count - 1
         while low < high {
             let middle = (low + high + 1) / 2
             if lineStarts[middle] <= offset { low = middle } else { high = middle - 1 }
         }
-        return Point(row: low, column: (offset - lineStarts[low]) * 2)
+        return low
     }
 }
 

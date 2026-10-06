@@ -47,6 +47,11 @@ just cli chat -- <agent>  # talk to any ACP agent from the terminal
 just mock-chat            # try it with the bundled mock agent
 ```
 
+Coverage measures Swift sources in the package, including product UI. The badge and product total
+exclude test support (`ACPTesting`, `MockAgent`) and the debug-only `AgenthesiaUI/Lab/` directory;
+these are still reported separately, with the latter labeled `RenderingLab`. Per-module thresholds
+remain enforced by `just coverage`.
+
 ## License
 
 [GPL-3.0](LICENSE)

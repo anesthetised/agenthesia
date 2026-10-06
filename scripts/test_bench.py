@@ -1,4 +1,5 @@
 import argparse
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -21,16 +22,29 @@ class BenchmarkRunnerTests(unittest.TestCase):
     def test_structured_results_are_not_parsed_from_locale_dependent_tables(self):
         result = {"scenario": "stream", "measurements": {"p95MS": 1.25}}
         output = "| 1,25 |\n" + bench.RESULT_PREFIX + json.dumps(result) + "\n"
-        self.assertEqual(bench.read_results(output), [result])
+        self.assertEqual(bench.read_results(iter(output.splitlines())), [result])
         with self.assertRaises(ValueError):
-            bench.read_results("No results")
+            bench.read_results(["No results"])
+
+    def test_micro_mode_rejects_scenarios_before_building_or_running(self):
+        with patch("sys.argv", ["bench.py", "micro", "S1:A2"]), \
+             patch("sys.stderr", new_callable=io.StringIO) as stderr, \
+             patch.object(bench, "run") as run, \
+             patch.object(bench.Path, "mkdir") as mkdir, \
+             self.assertRaises(SystemExit) as error:
+            bench.main()
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("only supported by lab mode", stderr.getvalue())
+        run.assert_not_called()
+        mkdir.assert_not_called()
 
     def test_run_preserves_log_and_propagates_failure_and_timeout(self):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "run.log"
             def success(*args, **kwargs):
                 kwargs["stdout"].write(bench.RESULT_PREFIX + '{"scenario":"test"}\n')
-            with patch.object(bench.subprocess, "run", side_effect=success) as run:
+            with patch.object(bench.subprocess, "run", side_effect=success) as run, \
+                 patch.object(Path, "read_text", side_effect=AssertionError("Do not load the whole log")):
                 self.assertEqual(bench.run_once(["fake"], {}, log, 2), [{"scenario": "test"}])
                 self.assertEqual(run.call_args.kwargs["timeout"], 2)
             self.assertIn("test", log.read_text())

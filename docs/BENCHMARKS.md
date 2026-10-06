@@ -22,11 +22,21 @@ sequentially, with a 180-second timeout per process. Use `--runs N`, `--timeout 
 the same checkout. It does not limit peak memory within one benchmark process or prevent manually
 launched lab windows; close those before measuring.
 
+Scenario arguments are supported only by `just lab-run`. `just bench S1:A2` is rejected before building
+or running anything; `just bench` runs the complete microbenchmark suite.
+
 Results go to `.build/benchmarks/<UTC timestamp>/`: `report.json`, `build.log`, and a raw log per run.
 The report records the commit, dirty working-tree status, machine, OS, RAM, CPU count, Swift toolchain,
 build configuration, workload, repetitions and per-run results. Lab results also include viewport size,
 screen maximum refresh rate and backing scale. Failed and timed-out runs retain logs and an error in
 the report. An existing output directory is never overwritten.
+
+Runner logs are written to disk and read back line by line for structured results. Only those results,
+not the full log, are retained in the runner's memory.
+
+Coverage reports the debug-only `AgenthesiaUI/Lab/` directory separately as `RenderingLab`. This scope
+and test support are excluded from the product total and badge; the rest of `AgenthesiaUI` remains
+included. Deterministic lab metric and scheduling tests still run in CI.
 
 ## Workloads
 

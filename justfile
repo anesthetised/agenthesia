@@ -40,12 +40,20 @@ app configuration="Debug":
 run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
-# Build and launch an optimized Debug build, which has the Rendering Lab, for measurements
-lab:
+# Build an optimized Debug build, which has the Rendering Lab, for measurements
+lab-build:
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
-        -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build \
+        -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build -quiet \
         SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
+
+# Launch the optimized lab build
+lab: lab-build
     open .build/xcode-lab/Build/Products/Debug/Agenthesia.app
+
+# Run lab scenarios unattended and print the results, e.g. `just lab-run lines+colors,lines,plain`
+lab-run runs: lab-build
+    AGENTHESIA_LAB_RUNS={{runs}} .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia \
+        2>/dev/null | grep '^|'
 
 # Run acp-cli, e.g. `just cli chat -- npx -y @agentclientprotocol/claude-agent-acp`
 [positional-arguments]

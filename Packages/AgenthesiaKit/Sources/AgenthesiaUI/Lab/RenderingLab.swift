@@ -7,6 +7,9 @@
     public struct RenderingLabView: View {
         public static let windowID = "rendering-lab"
 
+        /// Whether the app was launched to run scenarios unattended (see ``RenderingLab/autorun()``).
+        public static var isAutorun: Bool { RenderingLab.autorunScenarios != nil }
+
         @State private var lab = RenderingLab()
 
         public init() {}
@@ -14,10 +17,10 @@
         public var body: some View {
             VStack(alignment: .leading) {
                 HStack {
-                    Button("S4: SourceView, 10k lines") { lab.runSourceView() }
+                    Button("S4: SourceView, 10k lines") { Task { await lab.runSourceView() } }
+                        .disabled(lab.isRunning)
                     Toggle("Line numbers", isOn: $lab.lineNumbers)
                     Toggle("Highlighting", isOn: $lab.highlighting)
-                        .disabled(lab.isRunning)
                     Spacer()
                     Button("Copy as Markdown") {
                         NSPasteboard.general.clearContents()
@@ -26,6 +29,7 @@
                     .disabled(lab.results.isEmpty)
                 }
                 ViewHost(view: lab.sourceView)
+                    .task { await lab.autorun() }
                     .frame(minHeight: 300)
                 Table(lab.results) {
                     TableColumn("Scenario", value: \.scenario)
@@ -84,8 +88,25 @@
         let sourceView = SourceView()
         private let monitor = FrameMonitor()
 
+        /// Scenarios from `AGENTHESIA_LAB_RUNS`, such as `lines+colors,lines,plain`: S4 runs with those flags.
+        static let autorunScenarios = ProcessInfo.processInfo.environment["AGENTHESIA_LAB_RUNS"]?
+            .split(separator: ",").map(String.init)
+
+        /// Runs the scenarios from the environment, prints the results as Markdown and quits.
+        func autorun() async {
+            guard let scenarios = Self.autorunScenarios else { return }
+            for scenario in scenarios {
+                let flags = scenario.split(separator: "+")
+                lineNumbers = flags.contains("lines")
+                highlighting = flags.contains("colors")
+                await runSourceView()
+            }
+            print(markdown)
+            NSApp.terminate(nil)
+        }
+
         /// S4: open a 10 000-line Swift file, then scroll it from top to bottom.
-        func runSourceView() {
+        func runSourceView() async {
             isRunning = true
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
             let start = ContinuousClock.now
@@ -99,17 +120,20 @@
             let scrollView = sourceView.scrollView
             let clip = scrollView.contentView
             clip.scroll(to: .zero)
-            monitor.run(in: sourceView, name: name) {
-                // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
-                let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
-                let y = min(clip.bounds.origin.y + 60, end)
-                clip.scroll(to: NSPoint(x: 0, y: y))
-                scrollView.reflectScrolledClipView(clip)
-                return y < end
-            } completion: { report in
-                self.results.append(LabResult(scenario: name, open: open, report: report))
-                self.isRunning = false
+            let report = await withCheckedContinuation { continuation in
+                monitor.run(in: sourceView, name: name) {
+                    // TextKit 2 estimates the height as it lays out, so the end is recomputed on every frame.
+                    let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
+                    let y = min(clip.bounds.origin.y + 60, end)
+                    clip.scroll(to: NSPoint(x: 0, y: y))
+                    scrollView.reflectScrolledClipView(clip)
+                    return y < end
+                } completion: {
+                    continuation.resume(returning: $0)
+                }
             }
+            results.append(LabResult(scenario: name, open: open, report: report))
+            isRunning = false
         }
 
         /// The results as a Markdown table, for the ADR.

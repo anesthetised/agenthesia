@@ -15,6 +15,7 @@ struct AgenthesiaApp: App {
             Window("Rendering Lab", id: RenderingLabView.windowID) {
                 RenderingLabView()
             }
+            .defaultLaunchBehavior(RenderingLabView.isAutorun ? .presented : .automatic)
         #endif
     }
 }

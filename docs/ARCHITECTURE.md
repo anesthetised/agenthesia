@@ -32,11 +32,12 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
 | `Workspace` | Git (CLI wrapper), worktrees, PTYs, `TerminalHost` (ACP `terminal/*`, including long-lived background processes), file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
-| `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (TextKit 2), `DiffView`. | — |
+| `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). | — |
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
+| `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
 
 ## Data flow
 
@@ -86,9 +87,27 @@ not allowed (Apple system frameworks are fine).
 |---|---|---|
 | [GRDB](https://github.com/groue/GRDB.swift) | MIT | `Persistence` |
 | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) | MIT | `AgenthesiaUI` |
-| [swift-markdown](https://github.com/swiftlang/swift-markdown) | Apache-2.0 | `Rendering` |
-| [SwiftTreeSitter](https://github.com/tree-sitter/swift-tree-sitter) + grammars | BSD/MIT | `Rendering` |
+| [swift-markdown](https://github.com/swiftlang/swift-markdown) (with swift-cmark, BSD-2-Clause) | Apache-2.0 | `Rendering` |
+| [STTextView](https://github.com/krzyzanowskim/STTextView) (with STTextKitPlus, BSD-3-Clause, and CoreTextSwift, MIT) | GPL-3.0 or commercial; used under GPL-3.0 | `Rendering` |
+| [SwiftTreeSitter](https://github.com/tree-sitter/swift-tree-sitter) (with tree-sitter, MIT) | BSD-3-Clause | `Rendering` |
+| tree-sitter grammars: Swift, TypeScript/TSX, JavaScript, Python, JSON, Markdown, Bash, Rust, Go, YAML | MIT | `Rendering` |
 | [swift-argument-parser](https://github.com/apple/swift-argument-parser) | Apache-2.0 | `acp-cli` |
 | [Sparkle](https://sparkle-project.org) (later) | MIT | App |
 
 Dependencies are added when the milestone that needs them starts, not up front.
+
+### Pinning notes
+
+- **Grammars** are pinned to exact versions: grammar releases change node names, which breaks highlight
+  queries.
+- **JavaScript, Python and YAML grammars come from forks** (`anesthetised/tree-sitter-{javascript,python,yaml}`,
+  branch `swift-scanner`, pinned by revision). Each is the upstream release tag plus one manifest change:
+  `src/scanner.c` is always in `sources`. Upstream manifests check for the scanner with a relative
+  `fileExists`, which fails under Xcode 27 and drops the scanner from the build. Upstream PRs
+  (tree-sitter-javascript#383, tree-sitter-yaml#46) are open; tree-sitter-python waits for manifests
+  regenerated with tree-sitter 0.27, whose template is fixed. **Switch each grammar back to upstream once a
+  release includes the fix, then delete the fork**; the forks must stay public until then.
+- **SwiftTreeSitter moved** from ChimeHQ/SwiftTreeSitter to tree-sitter/swift-tree-sitter, and grammars
+  refer to both URLs. The package depends on the old URL and `.swiftpm/configuration/mirrors.json` (with a
+  copy for Xcode in the workspace's `xcshareddata/swiftpm/configuration/`) maps the new one to it, so
+  SwiftPM sees one package.

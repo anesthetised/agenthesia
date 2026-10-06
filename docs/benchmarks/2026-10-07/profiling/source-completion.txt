@@ -1,0 +1,68 @@
+Total sampled main-thread CPU milliseconds: 213.0
+INCLUSIVE (overlapping)
+   213.0 100.0% STTextView.replaceCharacters(in:with:allowsTypingCoalescing:)
+   213.0 100.0% STTextView.setString(_:)
+   213.0 100.0% STTextView.attributedText.setter
+   213.0 100.0% closure #1 in SourceView.startHighlighting()
+   213.0 100.0% 0x100d824b5
+   213.0 100.0% 0x100d81da9
+   213.0 100.0% completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+   208.0  97.7% -[NSTextCheckingController annotatedSubstringForProposedRange:wrap:completionHandler:failureHandler:]
+   208.0  97.7% -[NSTextCheckingController annotatedSubstringForProposedRange:completionHandler:]
+   208.0  97.7% -[NSTextCheckingController _removeSpellingAttributeAfterChangeToRange:replacementLength:]
+   208.0  97.7% -[NSTextCheckingController didChangeTextInRange:]
+   208.0  97.7% STTextView.textCheckingDidChangeText(in:)
+   207.0  97.2% STTextView.annotatedSubstring(forProposedRange:actualRange:)
+   207.0  97.2% @objc STTextView.annotatedSubstring(forProposedRange:actualRange:)
+   167.0  78.4% -[NSMutableAttributedString removeAttribute:range:]
+   162.0  76.1% -[NSConcreteMutableAttributedString setAttributes:range:]
+   158.0  74.2% _platform_memmove
+    33.0  15.5% -[NSAttributedString enumerateAttributesInRange:options:usingBlock:]
+    33.0  15.5% NSAttributedString.attributes(in:options:)
+    32.0  15.0% thunk for @escaping @callee_guaranteed (@guaranteed [NSAttributedStringKey : Any], @unowned _NSRange, @unowned UnsafeMutablePointer<ObjCBool>) -> ()
+    22.0  10.3% static Dictionary._unconditionallyBridgeFromObjectiveC(_:)
+    18.0   8.5% _NativeDictionary.init(_unsafeUninitializedCapacity:allowingDuplicates:initializingWith:)
+    14.0   6.6% 0x100d84ec7
+    11.0   5.2% partial apply for closure #2 in static Dictionary._forceBridgeFromObjectiveC(_:result:)
+     9.0   4.2% objc_msgSend
+     9.0   4.2% closure #1 in NSAttributedString.attributes(in:options:)
+     9.0   4.2% partial apply for closure #1 in NSAttributedString.attributes(in:options:)
+     8.0   3.8% closure #2 in static Dictionary._forceBridgeFromObjectiveC(_:result:)
+     7.0   3.3% tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)
+     7.0   3.3% swift_dynamicCast
+     7.0   3.3% specialized Set.formUnion<A>(_:)
+     6.0   2.8% -[NSConcreteAttributedString initWithAttributedString:]
+     6.0   2.8% -[NSAttributedString attributedSubstringFromRange:]
+     6.0   2.8% NSTextContentManager.attributedString(in:)
+     6.0   2.8% STTextView.attributedSubstring(forProposedRange:actualRange:)
+     6.0   2.8% @objc STTextView.attributedSubstring(forProposedRange:actualRange:)
+     5.0   2.3% STTextContentStorage.replaceContents(in:with:)
+     5.0   2.3% @objc STTextContentStorage.replaceContents(in:with:)
+     5.0   2.3% closure #1 in STTextView.replaceCharacters(in:with:allowsTypingCoalescing:)
+     5.0   2.3% partial apply for closure #1 in STTextView.replaceCharacters(in:with:allowsTypingCoalescing:)
+     5.0   2.3% thunk for @escaping @callee_guaranteed () -> ()
+     5.0   2.3% -[NSTextContentManager performEditingTransactionUsingBlock:]
+     5.0   2.3% -[NSMutableAttributedString(NSMutableAttributedStringKitAdditions) fixAttributesInRange:]
+     5.0   2.3% -[NSTextStorage _fixAttributesInRange:]
+     5.0   2.3% -[NSTextStorage ensureAttributesAreFixedInRange:]
+SELF
+   158.0  74.2% _platform_memmove
+     9.0   4.2% objc_msgSend
+     2.0   0.9% objc_opt_isKindOfClass
+     2.0   0.9% specialized Set.formUnion<A>(_:)
+     2.0   0.9% static String._unconditionallyBridgeFromObjectiveC(_:)
+     2.0   0.9% tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)
+     2.0   0.9% 0x19af945a9
+     2.0   0.9% String.hash(into:)
+     2.0   0.9% -[NSAttributeDictionary objectForKey:]
+     1.0   0.5% -[NSMutableRLEArray insertObject:range:]
+     1.0   0.5% blockForLocation
+     1.0   0.5% -[NSBigMutableString length]
+     1.0   0.5% swift_unknownObjectRetain
+     1.0   0.5% dyld4::APIs::_dyld_get_objc_selector(char const*)
+     1.0   0.5% -[NSTextStorage ensuresFixingAttributes]
+     1.0   0.5% _swift_isClassOrObjCExistentialType
+     1.0   0.5% malloc_type_malloc
+     1.0   0.5% ___chkstk_darwin
+     1.0   0.5% std::__1::pair<swift::GenericCacheEntry*, swift::MetadataResponse> swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcurrentMapStorage<swift::GenericCacheEntry, (unsigned short)14>>::getOrInsert<swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)
+     1.0   0.5% _free

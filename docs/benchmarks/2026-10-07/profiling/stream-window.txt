@@ -1,0 +1,33 @@
+{
+  "anchor": "closure #1 in RenderingLab.runStream",
+  "firstSampleSeconds": 2.645883291,
+  "lastSampleSeconds": 9.902878291,
+  "mainThreadSampledMS": 6151.0,
+  "anchorSampledMS": 1780.0,
+  "inclusiveSampledMS": {
+    "closure #1 in RenderingLab.runStream(longCode:)": 1780.0,
+    "Highlighter.highlight(_:language:)": 1093.0,
+    "StreamingMarkdown.append(_:)": 1248.0,
+    "MarkdownRenderer.blocks(in:)": 26.0,
+    "SizingTextView.intrinsicContentSize.getter": 1737.0,
+    "SizingTextView.apply(_:)": 440.0,
+    "TableTranscript.didStream(_:)": 469.0,
+    "-[NSTextLayoutManager ensureLayoutForRange:]": 1749.0,
+    "-[NSView updateConstraintsForSubtreeIfNeeded]": 1823.0,
+    "NSDisplayCycleFlush": 3170.0
+  }
+}
+Matching symbols:
+1749.0 -[NSTextLayoutManager ensureLayoutForRange:]
+1737.0 SizingTextView.intrinsicContentSize.getter
+1737.0 @objc SizingTextView.intrinsicContentSize.getter
+440.0 SizingTextView.apply(_:)
+361.0 -[NSViewBackingLayer drawInContext:]
+358.0 SizingTextView.layout()
+358.0 @objc SizingTextView.layout()
+311.0 -[_NSTextViewportElementView drawRect:]
+26.0 MarkdownRenderer.blocks(in:)
+7.0 __44-[NSTextLayoutManager ensureLayoutForRange:]_block_invoke_2
+5.0 -[NSTextLayoutManager ensureLayoutForBounds:]
+3.0 -[NSTextView drawRect:]
+1.0 -[NSTableHeaderView drawRect:]

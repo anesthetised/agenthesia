@@ -1,0 +1,56 @@
+Total sampled main-thread CPU milliseconds: 20.0
+INCLUSIVE (overlapping)
+    20.0 100.0% 0x102f44ec7
+    20.0 100.0% closure #2 in closure #1 in SourceView.startHighlighting()
+    20.0 100.0% partial apply for closure #2 in closure #1 in SourceView.startHighlighting()
+    20.0 100.0% thunk for @escaping @callee_guaranteed () -> ()
+    20.0 100.0% -[NSTextContentManager performEditingTransactionUsingBlock:]
+    20.0 100.0% closure #1 in SourceView.startHighlighting()
+    20.0 100.0% 0x102f424b5
+    20.0 100.0% 0x102f41da9
+    20.0 100.0% completeTaskWithClosure(swift::AsyncContext*, swift::SwiftError*)
+    19.0  95.0% -[NSAttributedString enumerateAttribute:inRange:options:usingBlock:]
+    13.0  65.0% thunk for @escaping @callee_guaranteed (@in_guaranteed Any?, @unowned _NSRange, @unowned UnsafeMutablePointer<ObjCBool>) -> ()
+    10.0  50.0% closure #1 in closure #2 in closure #1 in SourceView.startHighlighting()
+    10.0  50.0% partial apply for closure #1 in closure #2 in closure #1 in SourceView.startHighlighting()
+     9.0  45.0% -[NSConcreteTextStorage addAttribute:value:range:]
+     8.0  40.0% __NSConcreteTextStorageLockedForwarding
+     5.0  25.0% -[NSConcreteMutableAttributedString addAttribute:value:range:]
+     4.0  20.0% -[NSAttributeDictionary newWithKey:object:]
+     4.0  20.0% -[NSConcreteMutableAttributedString attribute:atIndex:longestEffectiveRange:inRange:]
+     4.0  20.0% objc_msgSend
+     2.0  10.0% -[__NSCFString isEqualToString:]
+     2.0  10.0% -[NSCatalogColor isEqual:]
+     2.0  10.0% __CFStringEqual
+     2.0  10.0% pthread_setspecific
+     2.0  10.0% 0x19af945a9
+     2.0  10.0% -[NSTextContentStorage _supportsTextAttributesInRange:]
+     2.0  10.0% -[NSTextContentStorage synchronizeTextLayoutManagers:]
+     2.0  10.0% -[NSTextStorage endEditing]
+     2.0  10.0% $defer #1 () in closure #2 in closure #1 in SourceView.startHighlighting()
+     1.0   5.0% -[NSCustomDynamicColor isEqual:]
+     1.0   5.0% -[NSParagraphStyle hash]
+     1.0   5.0% attributeDictionaryHash
+     1.0   5.0% hashProbe
+     1.0   5.0% -[NSConcreteHashTable getItem:]
+     1.0   5.0% object_getClass
+     1.0   5.0% os_unfair_lock_lock
+     1.0   5.0% -[NSRLEArray objectAtIndex:effectiveRange:]
+     1.0   5.0% dispatch thunk of Actor.unownedExecutor.getter
+     1.0   5.0% getMethodFromRelativeList(relative_list_list_t<method_list_t>*, objc_selector*)
+     1.0   5.0% objc_lookUpImpOrForward
+     1.0   5.0% _objc_msgSend_uncached
+SELF
+     4.0  20.0% objc_msgSend
+     2.0  10.0% __CFStringEqual
+     2.0  10.0% -[NSAttributeDictionary newWithKey:object:]
+     2.0  10.0% pthread_setspecific
+     2.0  10.0% 0x19af945a9
+     1.0   5.0% -[__NSCFString isEqualToString:]
+     1.0   5.0% -[NSParagraphStyle hash]
+     1.0   5.0% -[NSConcreteMutableAttributedString attribute:atIndex:longestEffectiveRange:inRange:]
+     1.0   5.0% object_getClass
+     1.0   5.0% os_unfair_lock_lock
+     1.0   5.0% dispatch thunk of Actor.unownedExecutor.getter
+     1.0   5.0% closure #1 in closure #2 in closure #1 in SourceView.startHighlighting()
+     1.0   5.0% getMethodFromRelativeList(relative_list_list_t<method_list_t>*, objc_selector*)

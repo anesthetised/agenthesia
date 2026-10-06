@@ -15,6 +15,8 @@ Agenthesia is a native, opinionated macOS client for coding agents built on the 
 Consult the user before implementing architectural decisions. Present alternatives and their trade-offs,
 recommend an approach, and challenge proposals when there are concrete reasons to disagree.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
+Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
+avoiding unnecessary complexity.
 
 ## Language
 
@@ -37,9 +39,10 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
 above the thresholds in the `justfile`.
 
-Test coverage and benchmarks are important. For performance-sensitive changes, run the relevant
-benchmarks before and after the change and report the results; add a benchmark when the changed path
-is not covered by an existing one.
+Documentation, test coverage and benchmarks are important. Keep documentation aligned with changes.
+For performance-sensitive changes, run the relevant benchmarks before and after the change and report
+the results; add a benchmark when the changed path is not covered by an existing one.
+Obtain the user's approval before running benchmarks; agree on the workload and resource cost first.
 
 To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just mock-chat` for the bundled
 `MockAgent`.
@@ -52,6 +55,8 @@ To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just 
 - When a commit or pull request closes an issue, include `Closes #<n>` in its message or description.
 - Add a co-author trailer for the agent, e.g. `Co-Authored-By: <Agent Name> <email>`.
 - Committing is fine at any time. **Never push** unless explicitly asked to.
+- Track substantial changes in issues and implement them on separate branches. Obtain the user's
+  approval before opening a pull request; pushing still requires an explicit request.
 
 ## Code
 

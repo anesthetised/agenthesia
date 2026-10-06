@@ -97,12 +97,14 @@
     /// The transcript prototypes.
     enum Prototype: String, CaseIterable {
         case table = "A"
+        case tableTextKit = "A2"
         case document = "B"
         case swiftUI = "C"
 
         var title: String {
             switch self {
             case .table: "A: NSTableView"
+            case .tableTextKit: "A′: NSTableView + TextKit 2"
             case .document: "B: TextKit 2"
             case .swiftUI: "C: SwiftUI"
             }
@@ -111,6 +113,7 @@
         func make() -> any TranscriptPrototype {
             switch self {
             case .table: TableTranscript()
+            case .tableTextKit: TableTranscript(textKit: true)
             case .document: DocumentTranscript()
             case .swiftUI: SwiftUITranscript()
             }

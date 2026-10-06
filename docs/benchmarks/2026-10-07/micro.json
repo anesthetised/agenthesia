@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261006T213244.379609Z",
+  "mode": "micro",
+  "runs": 3,
+  "timeoutSeconds": 90,
+  "commit": "7960afe5e6d84391a811a5902564d5decf50ab62",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Release",
+  "scenarios": [
+    "micro"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "micro",
+      "log": "run-1-1.log",
+      "wallSeconds": 21.824870458993246,
+      "samples": [
+        {
+          "scenario": "Highlight Swift",
+          "measurements": {
+            "firstUseMS": 222.64725,
+            "lines": 10000,
+            "medianMS": 287.044958
+          }
+        },
+        {
+          "measurements": {
+            "firstUseMS": 19.674958,
+            "lines": 10000,
+            "medianMS": 312.896375
+          },
+          "scenario": "Highlight TypeScript"
+        },
+        {
+          "measurements": {
+            "medianMS": 388.166084,
+            "firstUseMS": 19.472875,
+            "lines": 10000
+          },
+          "scenario": "Highlight TSX"
+        },
+        {
+          "scenario": "Highlight JavaScript",
+          "measurements": {
+            "medianMS": 393.766958,
+            "firstUseMS": 7.479416,
+            "lines": 10000
+          }
+        },
+        {
+          "measurements": {
+            "firstUseMS": 6.201333,
+            "lines": 10000,
+            "medianMS": 272.320667
+          },
+          "scenario": "Highlight Python"
+        },
+        {
+          "scenario": "Highlight JSON",
+          "measurements": {
+            "medianMS": 65.942458,
+            "firstUseMS": 2.02225,
+            "lines": 9998
+          }
+        },
+        {
+          "scenario": "Highlight Markdown",
+          "measurements": {
+            "medianMS": 79.671709,
+            "firstUseMS": 3.007292,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight Shell",
+          "measurements": {
+            "firstUseMS": 5.281708,
+            "lines": 10000,
+            "medianMS": 121.183792
+          }
+        },
+        {
+          "measurements": {
+            "medianMS": 361.932166,
+            "firstUseMS": 18.707208,
+            "lines": 10000
+          },
+          "scenario": "Highlight Rust"
+        },
+        {
+          "measurements": {
+            "firstUseMS": 3.590625,
+            "lines": 10000,
+            "medianMS": 110.462541
+          },
+          "scenario": "Highlight Go"
+        },
+        {
+          "scenario": "Highlight YAML",
+          "measurements": {
+            "medianMS": 96.7315,
+            "firstUseMS": 5.895125,
+            "lines": 10000
+          }
+        },
+        {
+          "measurements": {
+            "medianMS": 0.3125,
+            "characters": 466
+          },
+          "scenario": "Short answer"
+        },
+        {
+          "scenario": "Typical answer",
+          "measurements": {
+            "medianMS": 0.949917,
+            "characters": 1458
+          }
+        },
+        {
+          "measurements": {
+            "medianMS": 9.951,
+            "characters": 16058
+          },
+          "scenario": "Long answer (~4000 tokens)"
+        },
+        {
+          "measurements": {
+            "p95MS": 1.484834,
+            "chunks": 1236,
+            "totalMS": 1117.0696489999996,
+            "maxMS": 19.5775,
+            "chunkCharacters": 13,
+            "p50MS": 0.766292,
+            "characters": 16058
+          },
+          "scenario": "Mixed answer"
+        },
+        {
+          "scenario": "Long unclosed Swift block",
+          "measurements": {
+            "p95MS": 15.070292,
+            "chunks": 887,
+            "totalMS": 5880.207810999995,
+            "maxMS": 29.693167,
+            "chunkCharacters": 13,
+            "p50MS": 5.913792,
+            "characters": 11529
+          }
+        },
+        {
+          "measurements": {
+            "totalMS": 1171.42825,
+            "items": 1000
+          },
+          "scenario": "Transcript items"
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "micro",
+      "log": "run-2-1.log",
+      "wallSeconds": 21.395480667008087,
+      "samples": [
+        {
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 219.896625,
+            "medianMS": 297.366417
+          },
+          "scenario": "Highlight Swift"
+        },
+        {
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 31.413292,
+            "medianMS": 307.643834
+          },
+          "scenario": "Highlight TypeScript"
+        },
+        {
+          "scenario": "Highlight TSX",
+          "measurements": {
+            "medianMS": 406.886542,
+            "lines": 10000,
+            "firstUseMS": 16.325875
+          }
+        },
+        {
+          "scenario": "Highlight JavaScript",
+          "measurements": {
+            "medianMS": 375.918833,
+            "lines": 10000,
+            "firstUseMS": 6.882083
+          }
+        },
+        {
+          "scenario": "Highlight Python",
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 4.933917,
+            "medianMS": 268.12975
+          }
+        },
+        {
+          "measurements": {
+            "medianMS": 65.553917,
+            "lines": 9998,
+            "firstUseMS": 0.969791
+          },
+          "scenario": "Highlight JSON"
+        },
+        {
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 1.710042,
+            "medianMS": 75.516416
+          },
+          "scenario": "Highlight Markdown"
+        },
+        {
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 3.531666,
+            "medianMS": 113.426583
+          },
+          "scenario": "Highlight Shell"
+        },
+        {
+          "scenario": "Highlight Rust",
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 22.316875,
+            "medianMS": 369.086708
+          }
+        },
+        {
+          "scenario": "Highlight Go",
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 2.245667,
+            "medianMS": 113.957666
+          }
+        },
+        {
+          "measurements": {
+            "lines": 10000,
+            "firstUseMS": 4.569416,
+            "medianMS": 93.700333
+          },
+          "scenario": "Highlight YAML"
+        },
+        {
+          "scenario": "Short answer",
+          "measurements": {
+            "medianMS": 0.317125,
+            "characters": 466
+          }
+        },
+        {
+          "scenario": "Typical answer",
+          "measurements": {
+            "medianMS": 0.987292,
+            "characters": 1458
+          }
+        },
+        {
+          "scenario": "Long answer (~4000 tokens)",
+          "measurements": {
+            "medianMS": 10.158833,
+            "characters": 16058
+          }
+        },
+        {
+          "scenario": "Mixed answer",
+          "measurements": {
+            "totalMS": 1085.9581000000007,
+            "chunks": 1236,
+            "p50MS": 0.756583,
+            "chunkCharacters": 13,
+            "characters": 16058,
+            "maxMS": 21.167208,
+            "p95MS": 1.481584
+          }
+        },
+        {
+          "measurements": {
+            "totalMS": 5842.523536000001,
+            "chunks": 887,
+            "p50MS": 6.2545,
+            "chunkCharacters": 13,
+            "characters": 11529,
+            "maxMS": 28.212125,
+            "p95MS": 15.079041
+          },
+          "scenario": "Long unclosed Swift block"
+        },
+        {
+          "scenario": "Transcript items",
+          "measurements": {
+            "items": 1000,
+            "totalMS": 1147.725041
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "micro",
+      "log": "run-3-1.log",
+      "wallSeconds": 21.17319183400832,
+      "samples": [
+        {
+          "scenario": "Highlight Swift",
+          "measurements": {
+            "medianMS": 290.970459,
+            "lines": 10000,
+            "firstUseMS": 226.929792
+          }
+        },
+        {
+          "scenario": "Highlight TypeScript",
+          "measurements": {
+            "medianMS": 307.778583,
+            "lines": 10000,
+            "firstUseMS": 21.089833
+          }
+        },
+        {
+          "scenario": "Highlight TSX",
+          "measurements": {
+            "medianMS": 409.262541,
+            "firstUseMS": 16.397916,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight JavaScript",
+          "measurements": {
+            "medianMS": 377.080417,
+            "firstUseMS": 8.503084,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight Python",
+          "measurements": {
+            "firstUseMS": 4.849208,
+            "medianMS": 258.287792,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight JSON",
+          "measurements": {
+            "medianMS": 60.714666,
+            "firstUseMS": 1.081667,
+            "lines": 9998
+          }
+        },
+        {
+          "scenario": "Highlight Markdown",
+          "measurements": {
+            "medianMS": 74.131083,
+            "lines": 10000,
+            "firstUseMS": 1.777416
+          }
+        },
+        {
+          "scenario": "Highlight Shell",
+          "measurements": {
+            "firstUseMS": 3.885083,
+            "medianMS": 110.992625,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight Rust",
+          "measurements": {
+            "medianMS": 360.446583,
+            "lines": 10000,
+            "firstUseMS": 14.5035
+          }
+        },
+        {
+          "scenario": "Highlight Go",
+          "measurements": {
+            "medianMS": 112.694,
+            "firstUseMS": 2.226125,
+            "lines": 10000
+          }
+        },
+        {
+          "scenario": "Highlight YAML",
+          "measurements": {
+            "medianMS": 90.265583,
+            "lines": 10000,
+            "firstUseMS": 4.718916
+          }
+        },
+        {
+          "scenario": "Short answer",
+          "measurements": {
+            "characters": 466,
+            "medianMS": 0.338
+          }
+        },
+        {
+          "scenario": "Typical answer",
+          "measurements": {
+            "characters": 1458,
+            "medianMS": 0.943167
+          }
+        },
+        {
+          "scenario": "Long answer (~4000 tokens)",
+          "measurements": {
+            "characters": 16058,
+            "medianMS": 9.618875
+          }
+        },
+        {
+          "scenario": "Mixed answer",
+          "measurements": {
+            "p50MS": 0.769042,
+            "chunks": 1236,
+            "totalMS": 1093.0988619999998,
+            "maxMS": 18.642333,
+            "characters": 16058,
+            "chunkCharacters": 13,
+            "p95MS": 1.483791
+          }
+        },
+        {
+          "scenario": "Long unclosed Swift block",
+          "measurements": {
+            "p50MS": 5.971542,
+            "chunks": 887,
+            "totalMS": 5787.890041999998,
+            "maxMS": 29.124167,
+            "characters": 11529,
+            "chunkCharacters": 13,
+            "p95MS": 15.605875
+          }
+        },
+        {
+          "scenario": "Transcript items",
+          "measurements": {
+            "totalMS": 1111.579583,
+            "items": 1000
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -91,3 +91,5 @@ The measurements in ADR-0007 are historical: its streaming input and scrolling a
 callback, `Dropped` counted long intervals, and `Open` measured synchronous setup with warm grammars.
 The new scheduled streaming results are not directly comparable to those numbers. This changes the
 measurement method, not the accepted choice of A′. Revisit that choice only after reviewing new evidence.
+
+Recorded validation: [2026-10-07 results and raw samples](benchmarks/2026-10-07/README.md).

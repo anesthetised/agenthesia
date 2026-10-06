@@ -50,6 +50,7 @@ lab-build:
 lab: lab-build
     open .build/xcode-lab/Build/Products/Debug/Agenthesia.app
 
+# Leave the Mac alone while it runs: a window behind others gets a throttled display link.
 # Run lab scenarios unattended and print the results, e.g. `just lab-run lines+colors,lines,plain`
 lab-run runs: lab-build
     AGENTHESIA_LAB_RUNS={{runs}} .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia \

@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "AgenthesiaUI", targets: ["AgenthesiaUI"]),
         .executable(name: "acp-cli", targets: ["acp-cli"]),
         .executable(name: "MockAgent", targets: ["MockAgent"]),
+        .executable(name: "rendering-bench", targets: ["rendering-bench"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
@@ -90,6 +91,7 @@ let package = Package(
             ],
             swiftSettings: swiftSettings
         ),
+        .executableTarget(name: "rendering-bench", dependencies: ["Rendering"], swiftSettings: swiftSettings),
         .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
 

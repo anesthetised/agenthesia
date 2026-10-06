@@ -41,6 +41,10 @@ run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
 # Build an optimized Debug build, which has the Rendering Lab, for measurements
+# Time Markdown rendering and highlighting in a release build; leave the Mac alone while it runs
+bench:
+    swift run -c release --package-path {{package}} rendering-bench
+
 lab-build:
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
         -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build -quiet \

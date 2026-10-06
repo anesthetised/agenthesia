@@ -28,6 +28,7 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 - `just format` — format the code in place.
 - `just app` — build the app with `xcodebuild`.
 - `just run` — build and launch the app.
+- `just bench` — time Markdown rendering and highlighting in a release build (not run in CI).
 
 Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
 above the thresholds in the `justfile`.

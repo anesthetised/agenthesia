@@ -69,6 +69,21 @@ import Testing
         #expect(!colored)
     }
 
+    @Test func replacedTextIsNotHighlightedLate() async {
+        let view = SourceView()
+        view.setText("let x = 1", language: .swift)
+        view.setText("let x = 1", language: nil)
+        // The grammar loads in the background; give it time to arrive for the first text.
+        try? await Task.sleep(for: .milliseconds(300))
+        let manager = view.textView.textLayoutManager
+        var colored = false
+        manager.enumerateRenderingAttributes(from: manager.documentRange.location, reverse: false) { _, attributes, _ in
+            colored = colored || attributes[.foregroundColor] != nil
+            return true
+        }
+        #expect(!colored)
+    }
+
     @Test func themeChangesTheFont() {
         let view = SourceView()
         view.setText("let x = 1", language: .swift)

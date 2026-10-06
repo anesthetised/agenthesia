@@ -24,7 +24,9 @@ public final class SourceView: NSView {
     /// Offsets where each line starts, in UTF-16 units.
     private(set) var lineStarts = [0]
     private var client: TreeSitterClient?
-    private var styler: TextSystemStyler<TextLayoutManagerSystemInterface>?
+    private var styler: TextSystemStyler<ColoredTokens>?
+    /// Counts texts shown, so that a grammar loaded for an earlier text is not applied.
+    private var generation = 0
 
     public init(theme: Theme = .standard) {
         self.theme = theme
@@ -103,12 +105,25 @@ public final class SourceView: NSView {
     private func startHighlighting() {
         client = nil
         styler = nil
-        guard let configuration = language?.configuration else { return }
-
-        let interface = TextLayoutManagerSystemInterface(textLayoutManager: textView.textLayoutManager) {
-            [theme] token in
-            theme.color(forCapture: token.name).map { [.foregroundColor: $0] } ?? [:]
+        generation += 1
+        guard let language else { return }
+        let generation = generation
+        // The first time, compiling a grammar's highlight query takes a few hundred ms: show the text meanwhile.
+        Task {
+            let configuration = await Task.detached(priority: .userInitiated) { language.configuration }.value
+            guard generation == self.generation, let configuration else { return }
+            highlight(with: configuration)
         }
+    }
+
+    private func highlight(with configuration: LanguageConfiguration) {
+        let theme = theme
+        let interface = ColoredTokens(
+            theme: theme,
+            base: TextLayoutManagerSystemInterface(textLayoutManager: textView.textLayoutManager) { token in
+                theme.color(forCapture: token.name).map { [.foregroundColor: $0] } ?? [:]
+            }
+        )
         let snapshot = LanguageLayer.ContentSnapshot(string: text)
         let length = text.utf16.count
         let lineStarts = lineStarts
@@ -179,6 +194,21 @@ public final class SourceView: NSView {
         }
         return low
     }
+}
+
+/// Applies only tokens the theme colors. Several captures can cover the same text (`comment` and `spell`), and
+/// an uncolored one would otherwise clear the color of the one before it.
+@MainActor
+private struct ColoredTokens: TextSystemInterface {
+    let theme: Theme
+    let base: TextLayoutManagerSystemInterface
+
+    func applyStyles(for application: TokenApplication) {
+        let tokens = application.tokens.filter { theme.color(forCapture: $0.name) != nil }
+        base.applyStyles(for: TokenApplication(tokens: tokens, range: application.range, action: application.action))
+    }
+
+    var content: NSTextContentManager { base.content }
 }
 
 /// ``SourceView`` for SwiftUI.

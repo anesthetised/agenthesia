@@ -1,0 +1,9 @@
+{
+  "object" : [
+    {
+      "mirror" : "https://github.com/ChimeHQ/SwiftTreeSitter",
+      "original" : "https://github.com/tree-sitter/swift-tree-sitter"
+    }
+  ],
+  "version" : 1
+}

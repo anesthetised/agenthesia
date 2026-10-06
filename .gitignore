@@ -3,7 +3,8 @@
 
 # SwiftPM
 .build/
-.swiftpm/
+.swiftpm/*
+!.swiftpm/configuration/
 Package.resolved.orig
 
 # Xcode

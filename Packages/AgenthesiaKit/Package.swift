@@ -18,7 +18,36 @@ let package = Package(
         .executable(name: "MockAgent", targets: ["MockAgent"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
+        .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.9.0"),
+        .package(url: "https://github.com/krzyzanowskim/STTextView", from: "2.4.1"),
+        // SwiftTreeSitter moved to tree-sitter/swift-tree-sitter; grammars and Neon still use the old URL or a
+        // branch, so it is required by branch here and the new URL is mirrored to the old one
+        // (.swiftpm/configuration/mirrors.json). Package.resolved pins the exact revisions.
+        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", branch: "main"),
+        .package(url: "https://github.com/ChimeHQ/Neon", branch: "main"),
+        .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", exact: "0.7.4-with-generated-files"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-json", exact: "0.24.8"),
+        .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", exact: "0.5.3"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.25.1"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-rust", exact: "0.24.2"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-go", exact: "0.25.0"),
+        // JavaScript, Python and YAML come from forks: upstream manifests look for src/scanner.c with a relative
+        // fileExists check that fails under Xcode 27, dropping the scanner. Each fork is the release tag plus a
+        // one-line manifest fix; switch back once upstream regenerates its manifests with tree-sitter 0.27.
+        .package(
+            url: "https://github.com/anesthetised/tree-sitter-javascript",
+            revision: "a8b8b717dd0b3a88749bf884a20fff8fddf2960e"  // v0.25.0
+        ),
+        .package(
+            url: "https://github.com/anesthetised/tree-sitter-python",
+            revision: "cf0f4cb2fbe190fc8a2eca06d3e35d055b216786"  // v0.25.0
+        ),
+        .package(
+            url: "https://github.com/anesthetised/tree-sitter-yaml",
+            revision: "87306950722bff366a1281009da3bab77c9dbed8"  // v0.7.2
+        ),
     ],
     targets: [
         .target(name: "JSONRPC", swiftSettings: swiftSettings),
@@ -26,7 +55,26 @@ let package = Package(
         .target(name: "AgentRuntime", dependencies: ["ACP"], swiftSettings: swiftSettings),
         .target(name: "Workspace", swiftSettings: swiftSettings),
         .target(name: "Persistence", swiftSettings: swiftSettings),
-        .target(name: "Rendering", swiftSettings: swiftSettings),
+        .target(
+            name: "Rendering",
+            dependencies: [
+                .product(name: "Markdown", package: "swift-markdown"),
+                .product(name: "STTextView", package: "STTextView"),
+                .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
+                .product(name: "Neon", package: "Neon"),
+                .product(name: "TreeSitterSwift", package: "tree-sitter-swift"),
+                .product(name: "TreeSitterTypeScript", package: "tree-sitter-typescript"),
+                .product(name: "TreeSitterJavaScript", package: "tree-sitter-javascript"),
+                .product(name: "TreeSitterPython", package: "tree-sitter-python"),
+                .product(name: "TreeSitterJSON", package: "tree-sitter-json"),
+                .product(name: "TreeSitterMarkdown", package: "tree-sitter-markdown"),
+                .product(name: "TreeSitterBash", package: "tree-sitter-bash"),
+                .product(name: "TreeSitterRust", package: "tree-sitter-rust"),
+                .product(name: "TreeSitterGo", package: "tree-sitter-go"),
+                .product(name: "TreeSitterYAML", package: "tree-sitter-yaml"),
+            ],
+            swiftSettings: swiftSettings
+        ),
         .target(
             name: "AgenthesiaCore",
             dependencies: ["ACP", "AgentRuntime", "Workspace", "Persistence"],

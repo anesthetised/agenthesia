@@ -1,15 +1,12 @@
 public import AppKit
-import Neon
 public import STTextView
-import SwiftTreeSitter
-import SwiftTreeSitterLayer
 public import SwiftUI
-import TreeSitterClient
 
 /// A read-only source file viewer with line numbers and syntax highlighting.
 ///
-/// Highlighting is lazy: Neon queries tree-sitter only for the visible text, as it scrolls into view, and applies
-/// colors as rendering attributes, so the text itself is never restyled.
+/// The text shows at once; the whole file is highlighted in the background and its colors applied to the text in
+/// one pass. Colors as text attributes draw as fast as plain text, unlike Neon's rendering attributes, which cost
+/// ~8 ms a frame when scrolling a 10 000-line file.
 @MainActor
 public final class SourceView: NSView {
     public let textView: STTextView
@@ -23,9 +20,7 @@ public final class SourceView: NSView {
     public private(set) var language: CodeLanguage?
     /// Offsets where each line starts, in UTF-16 units.
     private(set) var lineStarts = [0]
-    private var client: TreeSitterClient?
-    private var styler: TextSystemStyler<ColoredTokens>?
-    /// Counts texts shown, so that a grammar loaded for an earlier text is not applied.
+    /// Counts texts shown, so that colors computed for an earlier text are not applied.
     private var generation = 0
 
     public init(theme: Theme = .standard) {
@@ -69,6 +64,10 @@ public final class SourceView: NSView {
         )
     }
 
+    @objc private func visibleTextChanged() {
+        gutter.needsDisplay = true
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
@@ -96,82 +95,31 @@ public final class SourceView: NSView {
         textView.textColor = theme.textColor
         gutter.font = theme.codeFont
         gutter.color = theme.secondaryTextColor
-        styler?.invalidate(.all)
-        styler?.validate(.range(visibleRange))
+        startHighlighting()
     }
 
     // MARK: - Highlighting
 
     private func startHighlighting() {
-        client = nil
-        styler = nil
         generation += 1
-        guard let language else { return }
+        guard let language, !text.isEmpty else { return }
         let generation = generation
-        // The first time, compiling a grammar's highlight query takes a few hundred ms: show the text meanwhile.
+        let text = text
+        let highlighter = Highlighter(theme: theme)
         Task {
-            let configuration = await Task.detached(priority: .userInitiated) { language.configuration }.value
-            guard generation == self.generation, let configuration else { return }
-            await highlight(with: configuration, generation: generation)
-        }
-    }
-
-    private func highlight(with configuration: LanguageConfiguration, generation: Int) async {
-        let theme = theme
-        let interface = ColoredTokens(
-            theme: theme,
-            base: TextLayoutManagerSystemInterface(textLayoutManager: textView.textLayoutManager) { token in
-                theme.color(forCapture: token.name).map { [.foregroundColor: $0] } ?? [:]
-            }
-        )
-        let snapshot = LanguageLayer.ContentSnapshot(string: text)
-        let length = text.utf16.count
-        let lineStarts = lineStarts
-        do {
-            let client = try TreeSitterClient(
-                rootLanguageConfig: configuration,
-                configuration: .init(
-                    contentSnapshopProvider: { _ in snapshot },
-                    lengthProvider: { length },
-                    invalidationHandler: { [weak self] in self?.invalidate($0) },
-                    locationTransformer: { Self.point(at: $0, lineStarts: lineStarts) }
-                )
-            )
-            self.client = client
-            // Neon parses documents under 1 MB on the main thread, a piece at a time as validation reaches further
-            // down, which stalls scrolling. Asking for the end of the text once parses it all, in the background.
-            if length > 0 {
-                let end = NSRange(location: length - 1, length: 1)
-                _ = try await client.highlights(in: end, provider: text.predicateTextProvider, mode: .required)
+            // The colored text is created on a background queue and handed over whole, so it is never shared.
+            let colored: NSAttributedString = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: highlighter.highlight(text, language: language))
+                }
             }
             guard generation == self.generation else { return }
-            let tokens = client.tokenProvider(with: text.predicateTextProvider)
-            styler = TextSystemStyler(textSystem: interface, tokenProvider: tokens)
-            styler?.validate(.range(visibleRange))
-        } catch {
-            Log.rendering.error("Cannot highlight \(configuration.name, privacy: .public): \(error, privacy: .public)")
+            // Replacing the whole text costs about as much as showing it; coloring it in place took up to 300 ms.
+            let origin = scrollView.contentView.bounds.origin
+            textView.attributedText = colored
+            scrollView.contentView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
-    }
-
-    private func invalidate(_ set: IndexSet) {
-        styler?.invalidate(.set(set))
-        styler?.validate(.range(visibleRange))
-    }
-
-    @objc private func visibleTextChanged() {
-        gutter.needsDisplay = true
-        styler?.validate(.range(visibleRange))
-    }
-
-    /// The text in the viewport; before the first layout, a screenful from the top.
-    var visibleRange: NSRange {
-        let manager = textView.textContentManager
-        guard let viewport = textView.textLayoutManager.textViewportLayoutController.viewportRange else {
-            return NSRange(0..<min(text.utf16.count, 8_000))
-        }
-        let start = manager.offset(from: manager.documentRange.location, to: viewport.location)
-        let end = manager.offset(from: manager.documentRange.location, to: viewport.endLocation)
-        return NSRange(start..<end)
     }
 
     // MARK: - Lines
@@ -184,13 +132,6 @@ public final class SourceView: NSView {
         return starts
     }
 
-    /// The tree-sitter point of a UTF-16 offset: tree-sitter parses UTF-16, so columns are in bytes.
-    static func point(at offset: Int, lineStarts: [Int]) -> Point? {
-        guard offset >= 0 else { return nil }
-        let row = line(at: offset, lineStarts: lineStarts)
-        return Point(row: row, column: (offset - lineStarts[row]) * 2)
-    }
-
     /// The zero-based line that contains a UTF-16 offset.
     static func line(at offset: Int, lineStarts: [Int]) -> Int {
         var low = 0
@@ -201,21 +142,6 @@ public final class SourceView: NSView {
         }
         return low
     }
-}
-
-/// Applies only tokens the theme colors. Several captures can cover the same text (`comment` and `spell`), and
-/// an uncolored one would otherwise clear the color of the one before it.
-@MainActor
-private struct ColoredTokens: TextSystemInterface {
-    let theme: Theme
-    let base: TextLayoutManagerSystemInterface
-
-    func applyStyles(for application: TokenApplication) {
-        let tokens = application.tokens.filter { theme.color(forCapture: $0.name) != nil }
-        base.applyStyles(for: TokenApplication(tokens: tokens, range: application.range, action: application.action))
-    }
-
-    var content: NSTextContentManager { base.content }
 }
 
 /// ``SourceView`` for SwiftUI.

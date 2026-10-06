@@ -6,22 +6,30 @@ import Testing
 
 @MainActor
 @Suite struct SourceViewTests {
-    /// The highlight color rendered at the first occurrence of `token`, waiting for background parsing.
+    /// The text color at the first occurrence of `token`, waiting for background highlighting to replace the plain
+    /// text color.
     private func renderedColor(of token: String, in view: SourceView) async -> NSColor? {
         let offset = (view.text as NSString).range(of: token).location
-        let manager = view.textView.textLayoutManager
-        let content = view.textView.textContentManager
-        guard let location = content.location(content.documentRange.location, offsetBy: offset) else { return nil }
         for _ in 0..<200 {
-            var color: NSColor?
-            manager.enumerateRenderingAttributes(from: location, reverse: false) { _, attributes, range in
-                if range.contains(location) { color = attributes[.foregroundColor] as? NSColor }
-                return false
-            }
-            if let color { return color }
+            if let color = color(at: offset, in: view), color != view.theme.textColor { return color }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        return nil
+        return color(at: offset, in: view)
+    }
+
+    private func color(at offset: Int, in view: SourceView) -> NSColor? {
+        view.textView.textContentStorage.textStorage?.attribute(.foregroundColor, at: offset, effectiveRange: nil)
+            as? NSColor
+    }
+
+    /// Whether any text has a color other than the plain text color.
+    private func isColored(_ view: SourceView) -> Bool {
+        guard let storage = view.textView.textContentStorage.textStorage else { return false }
+        var colored = false
+        storage.enumerateAttribute(.foregroundColor, in: NSRange(0..<storage.length)) { value, _, _ in
+            colored = colored || (value as? NSColor).map { $0 != view.theme.textColor } ?? false
+        }
+        return colored
     }
 
     @Test func loadsTextAndCountsLines() {
@@ -60,13 +68,7 @@ import Testing
         let view = SourceView()
         view.setText("let x = 1", language: nil)
         #expect(view.language == nil)
-        let manager = view.textView.textLayoutManager
-        var colored = false
-        manager.enumerateRenderingAttributes(from: manager.documentRange.location, reverse: false) { _, attributes, _ in
-            colored = colored || attributes[.foregroundColor] != nil
-            return true
-        }
-        #expect(!colored)
+        #expect(!isColored(view))
     }
 
     @Test func replacedTextIsNotHighlightedLate() async {
@@ -75,13 +77,7 @@ import Testing
         view.setText("let x = 1", language: nil)
         // The grammar loads in the background; give it time to arrive for the first text.
         try? await Task.sleep(for: .milliseconds(300))
-        let manager = view.textView.textLayoutManager
-        var colored = false
-        manager.enumerateRenderingAttributes(from: manager.documentRange.location, reverse: false) { _, attributes, _ in
-            colored = colored || attributes[.foregroundColor] != nil
-            return true
-        }
-        #expect(!colored)
+        #expect(!isColored(view))
     }
 
     @Test func themeChangesTheFont() {
@@ -127,12 +123,6 @@ import Testing
         let text = "ab\nçd\n\nlast"
         let starts = SourceView.lineStarts(of: text)
         #expect(starts == [0, 3, 6, 7])
-        #expect(SourceView.point(at: 0, lineStarts: starts) == .init(row: 0, column: 0))
-        #expect(SourceView.point(at: 2, lineStarts: starts) == .init(row: 0, column: 4))
-        #expect(SourceView.point(at: 4, lineStarts: starts) == .init(row: 1, column: 2))
-        #expect(SourceView.point(at: 6, lineStarts: starts) == .init(row: 2, column: 0))
-        #expect(SourceView.point(at: 9, lineStarts: starts) == .init(row: 3, column: 4))
-        #expect(SourceView.point(at: -1, lineStarts: starts) == nil)
         #expect(SourceView.line(at: 5, lineStarts: starts) == 1)
     }
 }

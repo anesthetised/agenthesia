@@ -21,11 +21,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.9.0"),
         .package(url: "https://github.com/krzyzanowskim/STTextView", from: "2.4.1"),
-        // SwiftTreeSitter moved to tree-sitter/swift-tree-sitter; grammars and Neon still use the old URL or a
-        // branch, so it is required by branch here and the new URL is mirrored to the old one
-        // (.swiftpm/configuration/mirrors.json). Package.resolved pins the exact revisions.
-        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", branch: "main"),
-        .package(url: "https://github.com/ChimeHQ/Neon", branch: "main"),
+        // SwiftTreeSitter moved to tree-sitter/swift-tree-sitter; grammars use both URLs, so the new one is mirrored
+        // to the old one (.swiftpm/configuration/mirrors.json).
+        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", from: "0.9.0"),
         .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", exact: "0.7.4-with-generated-files"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", exact: "0.24.8"),
@@ -61,7 +59,6 @@ let package = Package(
                 .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "STTextView", package: "STTextView"),
                 .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
-                .product(name: "Neon", package: "Neon"),
                 .product(name: "TreeSitterSwift", package: "tree-sitter-swift"),
                 .product(name: "TreeSitterTypeScript", package: "tree-sitter-typescript"),
                 .product(name: "TreeSitterJavaScript", package: "tree-sitter-javascript"),

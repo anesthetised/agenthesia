@@ -66,28 +66,17 @@ def clean(package: str) -> int:
 def test(package: str) -> int:
     """Runs the tests with coverage instrumentation.
 
-    SwiftPM's own coverage export can fail after all tests passed ("Unable to export code coverage", with no
-    details) on packages with C targets. It is not used — `report` exports coverage itself — so that failure
-    alone is ignored; any failed test still fails the run.
+    Not `swift test --enable-code-coverage`: after the tests SwiftPM exports coverage of every binary itself,
+    which takes over 4 GB of memory with the tree-sitter grammars and then fails with no details. `report`
+    exports what it needs, so instrumentation is enabled by hand and SwiftPM never exports. Only Swift code is
+    instrumented: the report covers Swift modules only.
     """
-    process = subprocess.Popen(
-        ["swift", "test", "--package-path", package, "--enable-code-coverage"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    output = []
-    for line in process.stdout:
-        sys.stdout.write(line)
-        output.append(line)
-    if process.wait() == 0:
-        return 0
-    text = "".join(output)
-    failed = "✘" in text or re.search(r"error: (?!Unable to export code coverage)", text)
-    if failed or "Unable to export code coverage" not in text:
-        return 1
-    print("\nIgnoring SwiftPM's failed coverage export; coverage.py exports coverage itself.")
-    return 0
+    directory = codecov_dir(package)
+    os.makedirs(directory, exist_ok=True)
+    env = dict(os.environ, LLVM_PROFILE_FILE=os.path.join(directory, "%p.profraw"))
+    command = ["swift", "test", "--package-path", package]
+    command += ["-Xswiftc", "-profile-generate", "-Xswiftc", "-profile-coverage-mapping"]
+    return subprocess.run(command, env=env).returncode
 
 
 def report(package: str, args: list[str]) -> int:

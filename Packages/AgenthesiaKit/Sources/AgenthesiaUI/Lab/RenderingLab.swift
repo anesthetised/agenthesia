@@ -23,6 +23,7 @@
                     .fixedSize()
                     Button("S1: Stream") { Task { await lab.runStream() } }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
+                    Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
                     Spacer()
                     Button("Copy as Markdown") {
@@ -171,27 +172,37 @@
             }
         }
 
-        /// S2: open a 10 000-item transcript, then scroll it from top to bottom in about 3000 frames.
+        /// S2: open a 10 000-item transcript at its end, then scroll up 120 points a frame (a fast flick) for 3000
+        /// frames.
         func runScroll() async {
             var generator = TranscriptGenerator(seed: 2)
             let transcript = LabTranscript(items: generator.items(10_000))
             let view = await present(prototype.make())
+            guard let scrollView = view.scrollView else { return }
             let start = ContinuousClock.now
             view.show(transcript)
             view.view.layoutSubtreeIfNeeded()
+            scrollToEnd(scrollView)
             let open = milliseconds(since: start)
-            guard let scrollView = view.scrollView else { return }
             let clip = scrollView.contentView
-            var frame = 0.0
+            var frames = 0
             await measure("S2 10k items, \(prototype.title)", open: open, in: view.view) {
-                frame += 1
-                // Heights are estimated until laid out, so the end is recomputed on every frame.
-                let end = (clip.documentView?.frame.height ?? 0) - clip.bounds.height
-                let y = min(max(clip.bounds.origin.y + 60, end * frame / 3000), end)
+                frames += 1
+                let y = max(clip.bounds.origin.y - 120, 0)
                 clip.scroll(to: NSPoint(x: 0, y: y))
                 scrollView.reflectScrolledClipView(clip)
-                return y < end
+                return y > 0 && frames < 3000
             }
+        }
+
+        /// S3: show a 200-item transcript to select and copy text by hand.
+        func showForSelection() async {
+            var generator = TranscriptGenerator(seed: 1)
+            let view = await present(prototype.make())
+            view.show(LabTranscript(items: generator.items(200)))
+            view.view.layoutSubtreeIfNeeded()
+            if let scrollView = view.scrollView { scrollToEnd(scrollView) }
+            isRunning = false
         }
 
         /// S5: switch between light and dark appearance ten times on a 200-item transcript.

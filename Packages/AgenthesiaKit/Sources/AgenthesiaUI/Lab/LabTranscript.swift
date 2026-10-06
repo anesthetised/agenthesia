@@ -6,7 +6,7 @@
     final class LabTranscript {
         private(set) var items: [TranscriptGenerator.Item]
         private var texts: [NSAttributedString?]
-        private let renderer = MarkdownRenderer()
+        let renderer = MarkdownRenderer()
         private var stream = StreamingMarkdown()
         private let streamed = NSMutableAttributedString()
 
@@ -30,22 +30,8 @@
             return text
         }
 
-        /// Renders every item at once, on all cores, for prototypes that show them all.
-        func renderAll() {
-            let items = items
-            let renderer = renderer
-            var rendered = [NSAttributedString?](repeating: nil, count: items.count)
-            rendered.withUnsafeMutableBufferPointer { buffer in
-                // Safe: each iteration writes only its own element, and all of them finish before the buffer is read.
-                nonisolated(unsafe) let buffer = buffer
-                DispatchQueue.concurrentPerform(iterations: items.count) { index in
-                    buffer[index] = Self.render(items[index], renderer)
-                }
-            }
-            texts = rendered
-        }
-
-        nonisolated private static func render(
+        /// The text of `item`; tool calls have none.
+        nonisolated static func render(
             _ item: TranscriptGenerator.Item,
             _ renderer: MarkdownRenderer
         ) -> NSAttributedString {
@@ -115,6 +101,12 @@
         func didAppend()
         /// The last item streamed: `update` replaced the tail of its text.
         func didStream(_ update: StreamingMarkdown.Update)
+        /// Whether every item is shown; a prototype may show the last ones first.
+        var isComplete: Bool { get }
+    }
+
+    extension TranscriptPrototype {
+        var isComplete: Bool { true }
     }
 
     /// The card for a tool call, in AppKit prototypes.

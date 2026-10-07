@@ -105,6 +105,9 @@ measurement method, not the accepted choice of A′. Revisit that choice only af
 Recorded validation: [2026-10-07 results and raw samples](benchmarks/2026-10-07/README.md).
 ## CPU profiling
 
+The [SourceView attribute-update comparison](benchmarks/2026-10-07/source-attributes/README.md) records a
+measured prototype, its rejected unbatched variant, and the remaining whole-scenario outliers.
+
 Use `just lab-profile S6:A2 .build/stream-code.trace` or
 `just lab-profile S4:lines+colors .build/source-colors.trace` for a single scenario under Xcode's Time
 Profiler. Recordings stop after 30 seconds or when the app exits; use a new output path for each run.

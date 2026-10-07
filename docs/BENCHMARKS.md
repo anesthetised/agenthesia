@@ -80,6 +80,9 @@ after other work in the same lab process is not cold.
   its duration as a fallback.
 - **Setup:** synchronous content installation and layout. It excludes view construction and fixture
   generation. It is not an end-to-end opening time.
+- **Viewport geometry (S4):** `viewportWidth`/`viewportHeight` describe the outer SourceView;
+  `textViewportWidth`/`textViewportHeight` describe the actual scroll clip. The gutter currently reserves
+  width even when hidden. `documentWidth`/`documentHeight` record the final text-view extent.
 - **First callback after setup (S4):** time from setup start to the following callback; a first-frame
   proxy only. The monitor starts before content installation so setup stalls are included.
 - **Highlight complete (S4):** time from setup start until background highlighting has finished and its

@@ -8,6 +8,8 @@ import os
 @MainActor
 final class ScrollProbe: NSObject, NSApplicationDelegate {
     let renderer: String
+    let geometry: String
+    let reservedLeadingWidth: CGFloat
     let fixture: String
     let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 868, height: 340),
@@ -36,9 +38,14 @@ final class ScrollProbe: NSObject, NSApplicationDelegate {
     var callbackIntervals: [Double] = []
     var longFrames: [[String: Double]] = []
 
-    init(renderer: String) throws {
+    init(renderer: String, geometry: String) throws {
         self.renderer = renderer
+        self.geometry = geometry
         let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
+        // SourceView retains its hidden 5-digit gutter width for this 10,000-line fixture.
+        reservedLeadingWidth =
+            geometry == "source"
+            ? (5 * ("0" as NSString).size(withAttributes: [.font: font]).width + 16).rounded(.up) : 0
         if renderer == "sttextview" {
             let text = STTextView()
             text.isEditable = false
@@ -82,18 +89,30 @@ final class ScrollProbe: NSObject, NSApplicationDelegate {
         super.init()
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // Match SourceView's scroll view, without its container, gutter or application context.
+    // Configure geometry without activating a window or starting measurement, also used by integration tests.
+    func configureWindow() {
         scroll.clipsToBounds = true
         scroll.wantsLayer = true
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.drawsBackground = false
         scroll.autoresizingMask = [.width, .height]
+        let host = NSView(frame: scroll.frame)
+        scroll.frame.origin.x = reservedLeadingWidth
+        scroll.frame.size.width -= reservedLeadingWidth
         document.frame = scroll.bounds
         scroll.documentView = document
         window.isReleasedWhenClosed = false
-        window.contentView = scroll
+        if geometry == "source" {
+            host.addSubview(scroll)
+            window.contentView = host
+        } else {
+            window.contentView = scroll
+        }
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        configureWindow()
         window.title = "Standalone \(renderer) scroll control"
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -154,7 +173,8 @@ final class ScrollProbe: NSObject, NSApplicationDelegate {
         var load = 0.0
         _ = getloadavg(&load, 1)
         let result: [String: Any] = [
-            "renderer": renderer, "setupMS": setupMS, "frames": displayIntervals.count,
+            "renderer": renderer, "geometry": geometry, "reservedLeadingWidth": reservedLeadingWidth,
+            "setupMS": setupMS, "frames": displayIntervals.count,
             "maxDisplayMS": displayIntervals.max() ?? 0, "maxCallbackMS": callbackIntervals.max() ?? 0,
             "p95DisplayMS": percentile(displayIntervals, fraction: 0.95),
             "elapsedSeconds": now - (start ?? now), "timedOut": timedOut,
@@ -195,10 +215,15 @@ struct Main {
             print("PROBE_ERROR=SCROLL_PROBE_RENDERER must be sttextview or native")
             exit(EXIT_FAILURE)
         }
+        let geometry = ProcessInfo.processInfo.environment["SCROLL_PROBE_GEOMETRY"] ?? "source"
+        guard ["source", "full"].contains(geometry) else {
+            print("PROBE_ERROR=SCROLL_PROBE_GEOMETRY must be source or full")
+            exit(EXIT_FAILURE)
+        }
         do {
             let app = NSApplication.shared
             app.setActivationPolicy(.regular)
-            let delegate = try ScrollProbe(renderer: renderer)
+            let delegate = try ScrollProbe(renderer: renderer, geometry: geometry)
             app.delegate = delegate
             withExtendedLifetime(delegate) { app.run() }
         } catch {

@@ -332,6 +332,11 @@
             }
             let index = results.count - 1
             results[index].open = setup
+            // The outer SourceView includes the gutter's reserved width, even when it is hidden.
+            results[index].measurements["textViewportWidth"] = clip.bounds.width
+            results[index].measurements["textViewportHeight"] = clip.bounds.height
+            results[index].measurements["documentWidth"] = sourceView.textView.frame.width
+            results[index].measurements["documentHeight"] = sourceView.textView.frame.height
             results[index].measurements["firstCallbackAfterSetupMS"] = firstCallback
             if let start, let completed = sourceView.highlightCompletedAt {
                 results[index].measurements["highlightCompleteMS"] = milliseconds(since: start, until: completed)

@@ -25,9 +25,10 @@ metadata = {
 report = directory / "report.json"
 try:
     # Input validation must fail before launching an application window.
-    invalid = subprocess.run([str(binary)], env={**os.environ, "SCROLL_PROBE_RENDERER": "invalid"},
-                             capture_output=True, text=True, timeout=10)
-    assert invalid.returncode != 0 and "PROBE_ERROR=" in invalid.stdout
+    for invalid_key in ("SCROLL_PROBE_RENDERER", "SCROLL_PROBE_GEOMETRY"):
+        invalid = subprocess.run([str(binary)], env={**os.environ, invalid_key: "invalid"},
+                                 capture_output=True, text=True, timeout=10)
+        assert invalid.returncode != 0 and "PROBE_ERROR=" in invalid.stdout
     for index, renderer in enumerate(order, start=1):
         print(f"Run {index}/{len(order)}: {renderer}", flush=True)
         log = directory / f"run-{index}-{renderer}.log"
@@ -44,6 +45,8 @@ try:
         assert result["reachedEnd"] and not result["timedOut"], "Incomplete traversal"
         assert result["frames"] > 100 and result["documentHeight"] > 100_000, "Insufficient workload"
         assert result["windowWidth"] == 868 and result["windowHeight"] == 340
+        assert result["viewportWidth"] == result["windowWidth"] - result["reservedLeadingWidth"]
+        assert result["viewportHeight"] == result["windowHeight"]
         assert result["firstLineHeight"] > 0, "Missing laid-out first line"
         report.write_text(json.dumps(metadata, indent=2) + "\n")
 except BaseException as error:

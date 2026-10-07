@@ -4,7 +4,23 @@ Follow-up to #83 and the rejected cached-fragment prototype. This executable con
 modules and constructs no SwiftUI views. It compares unmodified STTextView 2.4.1 with NSTextView using
 TextKit 2, in separate fresh processes. It is an isolation harness, not a replacement renderer proposal.
 
-## Workload and checks
+## Geometry correction after the measurements
+
+A later S4 control, completed before further benchmarks were stopped, exposed the difference:
+outer SourceView width **868 pt**, actual text viewport **814 pt**, reserved hidden gutter **54 pt**.
+[Source geometry report](source-geometry.json) retains the measurement. Its 260 ms whole-scenario
+maximum is not a located late-scroll event; that run did not record an event timeline.
+
+S4 now reports `textViewportWidth`, `textViewportHeight`, `documentWidth` and `documentHeight` in
+addition to the existing outer-view measurements. The probe's default `source` geometry reserves the
+same gutter width; `SCROLL_PROBE_GEOMETRY=full` retains the 868 pt control. Hidden-window tests check
+both renderers and both layouts without starting a display link or a benchmark.
+
+**No performance run of the corrected source-width geometry has been performed.** The recorded six
+runs and four profiles below use the earlier full-width geometry from source commit `4fdd34e`, identified
+by the saved source/binary hashes. Do not present these data as a matched comparison with S4.
+
+## Recorded workload and checks
 
 - Identical 10,000-line text, verified against the **actual** `TranscriptGenerator.swiftFile` compiled
   from the application. SHA-256: `36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7`;
@@ -17,16 +33,17 @@ TextKit 2, in separate fresh processes. It is an isolation harness, not a replac
   scroll update, like S4. The process stops at 25 seconds even if traversal is incomplete; the runner
   rejects incomplete results. Unlike lab autorun, this harness has no one-second activation delay.
 - The runner validates renderer selection, fixture identity, window dimensions, a laid-out
-  first line, nontrivial frame/document counts and completion. Invalid renderer input must fail.
+  first line, nontrivial frame/document counts and completion. Actual clip dimensions were also checked
+  in the saved results. Invalid renderer input must fail.
 
 STTextView's package product links SwiftUI, so **both modes have SwiftUI loaded** despite constructing
 no SwiftUI hierarchy. The native control therefore also shares the dependency's loaded code; it is not
 the earlier pure-AppKit executable. The views retain their respective internal layer/layout behavior.
-The two controls match each other's actual viewport. S4 currently reports the outer SourceView bounds,
-while its hidden gutter retains an active width constraint; these 868 pt clip widths must not be
+The two controls match each other's actual viewport. S4 originally reported only the outer SourceView
+bounds, while its hidden gutter retained an active width constraint; these 868 pt clip widths must not be
 assumed to match S4's text viewport. This geometry difference is a further limit on comparison to the
-application. See [identity.json](identity.json) and [Package.resolved](Package.resolved) for binary/source identities,
-frameworks and dependency pins. The dependency checkout was clean at the pinned revision.
+application. See [identity.json](identity.json) and [Package.resolved](Package.resolved) for binary/source
+identities, frameworks and dependency pins. The dependency checkout was clean at the pinned revision.
 
 ## Six unprofiled runs
 
@@ -67,8 +84,8 @@ The native profile's 195 ms opening interval contains about 185 ms of main-threa
 under that method and 325 ms under view layout. Neither interval contains the earlier
 `CA::Render::Context::wait_for_synchronize` stack. These are startup layout observations, not evidence
 of the previously observed late synchronization wait. An intervening 86 ms gap also contains window
-activation and backing-store activity, without `wait_for_synchronize` samples. Sample weights with waiting-thread recording
-enabled must not be relabeled as CPU time or summed as non-overlapping durations.
+activation and backing-store activity, without `wait_for_synchronize` samples. Sample weights with
+waiting-thread recording enabled must not be relabeled as CPU time or summed as non-overlapping durations.
 
 ## Decision and next step
 
@@ -90,7 +107,13 @@ just --working-directory . --justfile docs/benchmarks/2026-10-07/source-scroll/r
 just --working-directory . --justfile docs/benchmarks/2026-10-07/source-scroll/reproduce.just standalone-profile sttextview .build/standalone-st-new.trace
 just --working-directory . --justfile docs/benchmarks/2026-10-07/source-scroll/reproduce.just standalone-profile native .build/standalone-native-new.trace
 just --working-directory . --justfile docs/benchmarks/2026-10-07/source-scroll/reproduce.just standalone-lint
+just --working-directory . --justfile docs/benchmarks/2026-10-07/source-scroll/reproduce.just standalone-test
 ```
+
+`standalone-build`, `standalone-test` and `standalone-lint` do not run benchmarks. The default
+`source` geometry computes the reserved width with the same font/digit/padding formula as SourceView.
+Set `SCROLL_PROBE_GEOMETRY=full` for the wider control; the runner records the geometry and checks
+that clip width plus reserved width equals the outer width.
 
 `standalone-run` builds, computes the application's fixture identity, then runs exactly six fresh
 processes. Each process has an external 40-second timeout. It preserves logs and reports failures,

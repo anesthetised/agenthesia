@@ -28,10 +28,10 @@ standalone-build:
     swift build -c release --package-path docs/benchmarks/2026-10-07/source-scroll/standalone --scratch-path .build/standalone-scroll --product ScrollProbe
 
 standalone-format:
-    swift format format --in-place --recursive docs/benchmarks/2026-10-07/source-scroll/standalone/Package.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Sources docs/benchmarks/2026-10-07/source-scroll/standalone/fixture-identity.swift
+    swift format format --in-place --recursive docs/benchmarks/2026-10-07/source-scroll/standalone/Package.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Sources docs/benchmarks/2026-10-07/source-scroll/standalone/fixture-identity.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Tests
 
 standalone-lint:
-    swift format lint --strict --recursive docs/benchmarks/2026-10-07/source-scroll/standalone/Package.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Sources docs/benchmarks/2026-10-07/source-scroll/standalone/fixture-identity.swift
+    swift format lint --strict --recursive docs/benchmarks/2026-10-07/source-scroll/standalone/Package.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Sources docs/benchmarks/2026-10-07/source-scroll/standalone/fixture-identity.swift docs/benchmarks/2026-10-07/source-scroll/standalone/Tests
 
 [positional-arguments]
 standalone-profile renderer="sttextview" output=".build/standalone-scroll.trace": standalone-build
@@ -52,3 +52,6 @@ standalone-fixture:
 standalone-run output=".build/standalone-results": standalone-build standalone-fixture
     python3 docs/benchmarks/2026-10-07/source-scroll/standalone/run.py \
         .build/standalone-scroll/release/ScrollProbe .build/standalone-scroll/fixture.json "$1"
+
+standalone-test:
+    swift test -c release --package-path docs/benchmarks/2026-10-07/source-scroll/standalone --scratch-path .build/standalone-scroll

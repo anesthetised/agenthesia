@@ -106,7 +106,10 @@ wait. These maxima cannot be treated as comparable late-scrolling stalls.
 
 Three standalone STTextView profiles did not capture a late >50 ms gap. A 60 ms startup gap instead
 contained input-method activation and window/Space transitions. The 81 ms late event therefore remains
-uncorrelated with a blocking stack. See the [matched control, checks, raw results and limits](standalone/README.md).
+uncorrelated with a blocking stack. A later geometry check found S4's actual clip width is 814 pt while
+its outer view is 868 pt. The standalone controls used a full 868 pt clip, so they match each other but
+are not geometrically identical to S4. Actual text/document dimensions are now recorded, and the
+probe has a corrected geometry mode covered by tests; that mode has not been benchmarked. See the [matched control, checks, raw results and limits](standalone/README.md).
 
 ## Next investigation
 

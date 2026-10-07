@@ -14,6 +14,7 @@ let package = Package(
         .executableTarget(
             name: "ScrollProbe",
             dependencies: [.product(name: "STTextView", package: "STTextView")]
-        )
+        ),
+        .testTarget(name: "ScrollProbeTests", dependencies: ["ScrollProbe"]),
     ]
 )

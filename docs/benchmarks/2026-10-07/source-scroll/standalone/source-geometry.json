@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261007T010053.150074Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "4fdd34ee324858eeef715a0ba3fb5289917853fd",
+  "workingTree": "M Packages/AgenthesiaKit/Sources/AgenthesiaUI/Lab/RenderingLab.swift",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S4:"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S4:",
+      "log": "run-1-1.log",
+      "wallSeconds": 22.36570062499959,
+      "samples": [
+        {
+          "id": "6DCF3CF9-A0F4-4F43-A6BD-569CD000991A",
+          "open": 13.814584,
+          "measurements": {
+            "textViewportWidth": 814,
+            "backingScale": 2,
+            "documentWidth": 814,
+            "documentHeight": 150000.5,
+            "viewportWidth": 868,
+            "textViewportHeight": 340,
+            "firstCallbackAfterSetupMS": 21.154334,
+            "screenMaximumFPS": 120,
+            "viewportHeight": 340
+          },
+          "report": {
+            "excessMilliseconds": 2330.6381708971458,
+            "max": 260.2740000002086,
+            "p95": 8.333333345944993,
+            "hitches": 31,
+            "frames": 2218,
+            "p50": 8.333333331393078,
+            "load": 5.62158203125,
+            "estimatedMissed": 278,
+            "freeMemory": 65,
+            "memory": 58.84471130371094,
+            "p99": 19.02062499721069
+          },
+          "scenario": "S4 SourceView, warm"
+        }
+      ]
+    }
+  ]
+}

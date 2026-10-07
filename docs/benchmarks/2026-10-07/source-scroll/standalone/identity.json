@@ -48,5 +48,7 @@
     "Both renderers share the same standalone executable and loaded dependencies. No Agenthesia modules or SwiftUI view hierarchy are constructed.",
     "STTextView package product links SwiftUI; this is not a test with SwiftUI absent from the process.",
     "No rejected cached-fragment patch is applied."
-  ]
+  ],
+  "recordedSourceCommit": "4fdd34e",
+  "geometry": "full-width (868 pt clip); predates the source-width correction"
 }

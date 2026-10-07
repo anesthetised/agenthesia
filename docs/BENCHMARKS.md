@@ -58,6 +58,7 @@ document), and `C` (SwiftUI). Examples:
 | `S4:lines+colors` | Warm Swift grammar, 10,000-line file; scroll at 7,200 points/s |
 | `S4:cold+lines+colors` | Same file, no grammar prewarming in a fresh process |
 | `S4:` | Plain file, no line numbers or highlighting |
+| `S4:appkit+lines+colors` | SourceView in a separate AppKit window, without SwiftUI hosting ancestors |
 
 S1 and S6 use deterministic 2–24-character chunks. The producer is a virtual arrival schedule: elapsed
 time determines how many chunks are due, even if the main thread stalls. Each callback coalesces all due
@@ -69,7 +70,8 @@ after other work in the same lab process is not cold.
 ## Interpreting metrics
 
 - **Callbacks, p50/p95/p99/max:** intervals between display-link timestamps. They are a responsiveness
-  proxy, not CPU rendering durations or proof of pixel presentation.
+  proxy, not CPU rendering durations or proof of pixel presentation. A whole-scenario maximum includes
+  setup and initial layout; locate the interval before calling it a scrolling stall.
 - **Hitches:** intervals longer than 1.5 times the expected refresh interval.
 - **Estimated missed intervals:** `max(0, round(interval / budget) - 1)`, summed across callbacks. A long
   pause can count as one hitch and many missed intervals. Variable refresh makes this an estimate.
@@ -78,6 +80,9 @@ after other work in the same lab process is not cold.
   its duration as a fallback.
 - **Setup:** synchronous content installation and layout. It excludes view construction and fixture
   generation. It is not an end-to-end opening time.
+- **Viewport geometry (S4):** `viewportWidth`/`viewportHeight` describe the outer SourceView;
+  `textViewportWidth`/`textViewportHeight` describe the actual scroll clip. The gutter currently reserves
+  width even when hidden. `documentWidth`/`documentHeight` record the final text-view extent.
 - **First callback after setup (S4):** time from setup start to the following callback; a first-frame
   proxy only. The monitor starts before content installation so setup stalls are included.
 - **Highlight complete (S4):** time from setup start until background highlighting has finished and its
@@ -110,10 +115,23 @@ measured prototype, its rejected unbatched variant, and the remaining whole-scen
 
 Use `just lab-profile S6:A2 .build/stream-code.trace` or
 `just lab-profile S4:lines+colors .build/source-colors.trace` for a single scenario under Xcode's Time
-Profiler. Recordings stop after 30 seconds or when the app exits; use a new output path for each run.
+Profiler with Points of Interest. Recordings stop after 30 seconds or when the app exits; use a new output path for each run.
 Run profiling sequentially, separately from ordinary benchmarks. Profiler overhead changes timing and
 memory consumption. Inspect the trace in Instruments or export its first recording's CPU samples with
 `just lab-profile-export .build/stream-code.trace .build/stream-code.xml`.
 
+The optional third argument to `lab-profile` is an xctrace recording-options JSON file. To distinguish
+CPU work from blocking, enable waiting-thread recording and context-switch sampling; those sample
+weights must not be interpreted as CPU time. The optional third argument to `lab-profile-export`
+selects a table, such as `PointsOfInterestEvents`. `LongFrame` events mark display or callback gaps
+above 50 ms for timeline correlation; they do not alter the refresh-budget hitch metrics.
+
+The `appkit` S4 flag is a diagnostic hosting control, not an alternative product architecture. It uses
+a separate 868 x 340 pt window and closes it after measurement. Do not combine its results with the
+default SwiftUI-hosted scenario when reporting repeated runs.
+
 See the [2026-10-07 diagnostic profiles](benchmarks/2026-10-07/profiling/README.md) for localized costs and
 the implementation choices that remain to be discussed.
+
+The [SourceView scroll-wait investigation](benchmarks/2026-10-07/source-scroll/README.md) correlates long
+callback gaps with Core Animation synchronization waits and includes AppKit and native TextKit 2 controls.

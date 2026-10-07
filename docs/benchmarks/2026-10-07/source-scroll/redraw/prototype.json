@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261007T003531.993679Z",
+  "mode": "lab",
+  "runs": 3,
+  "timeoutSeconds": 180,
+  "commit": "59db59af9064a561bd642bde8e328342d9c56345",
+  "workingTree": "M Packages/AgenthesiaKit/Package.swift",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S4:lines+colors"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S4:lines+colors",
+      "log": "run-1-1.log",
+      "wallSeconds": 22.645162041008007,
+      "samples": [
+        {
+          "measurements": {
+            "highlightCompleteMS": 230.969834,
+            "screenMaximumFPS": 120,
+            "viewportHeight": 340,
+            "backingScale": 2,
+            "viewportWidth": 868,
+            "firstCallbackAfterSetupMS": 24.977459
+          },
+          "open": 12.527667,
+          "report": {
+            "memory": 79.43848419189453,
+            "load": 8.880859375,
+            "max": 71.11900000018068,
+            "p95": 8.333333345944993,
+            "hitches": 67,
+            "p50": 8.333333331393078,
+            "excessMilliseconds": 1044.4090461096494,
+            "frames": 2375,
+            "freeMemory": 58,
+            "estimatedMissed": 123,
+            "p99": 20.198208338115364
+          },
+          "scenario": "S4 SourceView, warm (lines, colors)",
+          "id": "BB2DAAA3-4D86-4399-8FCB-921FCD9EE759"
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "S4:lines+colors",
+      "log": "run-2-1.log",
+      "wallSeconds": 22.670288957990124,
+      "samples": [
+        {
+          "open": 11.766375,
+          "measurements": {
+            "backingScale": 2,
+            "highlightCompleteMS": 235.374875,
+            "firstCallbackAfterSetupMS": 17.685875,
+            "viewportWidth": 868,
+            "screenMaximumFPS": 120,
+            "viewportHeight": 340
+          },
+          "report": {
+            "frames": 2460,
+            "hitches": 30,
+            "estimatedMissed": 35,
+            "p50": 8.333333331393078,
+            "excessMilliseconds": 313.25392132566776,
+            "memory": 63.90723419189453,
+            "load": 7.67431640625,
+            "p95": 8.333333345944993,
+            "p99": 16.699166677426547,
+            "max": 44.67774998920504,
+            "freeMemory": 62
+          },
+          "id": "0D2D27C1-712B-4505-903C-5D1B5B754B3B",
+          "scenario": "S4 SourceView, warm (lines, colors)"
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "S4:lines+colors",
+      "log": "run-3-1.log",
+      "wallSeconds": 22.47254483299912,
+      "samples": [
+        {
+          "report": {
+            "p95": 8.333333345944993,
+            "p99": 16.804916667751968,
+            "frames": 2437,
+            "memory": 65.29785919189453,
+            "p50": 8.333333331393078,
+            "excessMilliseconds": 510.478546275408,
+            "max": 75.26354167202953,
+            "load": 6.5556640625,
+            "estimatedMissed": 60,
+            "hitches": 32,
+            "freeMemory": 62
+          },
+          "scenario": "S4 SourceView, warm (lines, colors)",
+          "id": "95F0E3F2-AF32-48DF-8ED0-8669D393A5ED",
+          "open": 10.916375,
+          "measurements": {
+            "screenMaximumFPS": 120,
+            "firstCallbackAfterSetupMS": 16.130375,
+            "viewportWidth": 868,
+            "backingScale": 2,
+            "highlightCompleteMS": 221.749208,
+            "viewportHeight": 340
+          }
+        }
+      ]
+    }
+  ]
+}

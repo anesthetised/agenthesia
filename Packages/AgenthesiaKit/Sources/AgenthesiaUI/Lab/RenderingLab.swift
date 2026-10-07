@@ -161,7 +161,7 @@
                     let flags = argument.split(separator: "+")
                     lineNumbers = flags.contains("lines")
                     highlighting = flags.contains("colors")
-                    await runSourceView(cold: flags.contains("cold"))
+                    await runSourceView(cold: flags.contains("cold"), appKitHost: flags.contains("appkit"))
                 }
             }
             print(markdown)
@@ -272,11 +272,33 @@
 
         /// S4: open a 10 000-line Swift file, observing setup and asynchronous highlight completion separately.
         /// A cold run must be the only scenario in a fresh process (the benchmark runner enforces this).
-        func runSourceView(cold: Bool = false) async {
+        func runSourceView(cold: Bool = false, appKitHost: Bool = false) async {
             let text = TranscriptGenerator.swiftFile(lines: 10_000)
             if !cold, highlighting { _ = Highlighter().highlight("x", language: .swift) }
-            let sourceView = await present(SourceView())
-            let flags = [lineNumbers ? "lines" : nil, highlighting ? "colors" : nil].compactMap(\.self)
+            let sourceView: SourceView
+            var controlWindow: NSWindow?
+            if appKitHost {
+                // Diagnostic control: keep SourceView intact, removing its SwiftUI hosting ancestors.
+                isRunning = true
+                sourceView = SourceView()
+                let window = NSWindow(
+                    contentRect: NSRect(x: 0, y: 0, width: 868, height: 340),
+                    styleMask: [.titled, .closable],
+                    backing: .buffered,
+                    defer: false
+                )
+                window.isReleasedWhenClosed = false
+                window.contentView = sourceView
+                window.title = "SourceView AppKit hosting control"
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+                controlWindow = window
+            } else {
+                sourceView = await present(SourceView())
+            }
+            defer { controlWindow?.close() }
+            let flags = [lineNumbers ? "lines" : nil, highlighting ? "colors" : nil, appKitHost ? "appkit" : nil]
+                .compactMap(\.self)
             let options = flags.isEmpty ? "" : " (\(flags.joined(separator: ", ")))"
             let name = "S4 SourceView, \(cold ? "cold" : "warm")\(options)"
             let scrollView = sourceView.scrollView
@@ -310,6 +332,11 @@
             }
             let index = results.count - 1
             results[index].open = setup
+            // The outer SourceView includes the gutter's reserved width, even when it is hidden.
+            results[index].measurements["textViewportWidth"] = clip.bounds.width
+            results[index].measurements["textViewportHeight"] = clip.bounds.height
+            results[index].measurements["documentWidth"] = sourceView.textView.frame.width
+            results[index].measurements["documentHeight"] = sourceView.textView.frame.height
             results[index].measurements["firstCallbackAfterSetupMS"] = firstCallback
             if let start, let completed = sourceView.highlightCompletedAt {
                 results[index].measurements["highlightCompleteMS"] = milliseconds(since: start, until: completed)

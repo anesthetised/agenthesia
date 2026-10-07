@@ -75,16 +75,21 @@ lab-run *args:
 
 # Profile one lab scenario; profiled timings are not benchmark results
 [positional-arguments]
-lab-profile scenario="S6:A2" output=".build/rendering.trace": lab-build
-    xcrun xctrace record --template 'Time Profiler' --time-limit 30s \
+lab-profile scenario="S6:A2" output=".build/rendering.trace" options="": lab-build
+    #!/usr/bin/env bash
+    set -eo pipefail
+    recording_options=()
+    if [[ -n "$3" ]]; then recording_options=(--recording-options "$3"); fi
+    xcrun xctrace record --template 'Time Profiler' --instrument 'Points of Interest' --time-limit 30s \
+        "${recording_options[@]}" \
         --output "$2" --env "AGENTHESIA_LAB_RUNS=$1" --target-stdout - \
         --no-prompt --launch -- .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia
 
 # Export CPU samples for inspection; the trace also opens directly in Instruments
 [positional-arguments]
-lab-profile-export trace output:
+lab-profile-export trace output schema="time-profile":
     xcrun xctrace export --input "$1" --output "$2" \
-        --xpath '/trace-toc/run[@number="1"]/data/table[@schema="time-profile"]'
+        --xpath "/trace-toc/run[@number='1']/data/table[@schema='$3']"
 
 # Run acp-cli, e.g. `just cli chat -- npx -y @agentclientprotocol/claude-agent-acp`
 [positional-arguments]

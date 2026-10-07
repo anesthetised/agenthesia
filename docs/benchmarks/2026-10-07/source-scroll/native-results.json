@@ -1,0 +1,35 @@
+[
+  {
+    "documentHeight": 150001,
+    "elapsedSeconds": 20.78633658333274,
+    "frames": 2484,
+    "maxDisplayMS": 35.99283333460335,
+    "reachedEnd": true,
+    "screenMaximumFPS": 120,
+    "usesTextKit2": true,
+    "viewportHeight": 340,
+    "viewportWidth": 868
+  },
+  {
+    "documentHeight": 150001,
+    "elapsedSeconds": 20.78716145834187,
+    "frames": 2487,
+    "maxDisplayMS": 24.523125000996515,
+    "reachedEnd": true,
+    "screenMaximumFPS": 120,
+    "usesTextKit2": true,
+    "viewportHeight": 340,
+    "viewportWidth": 868
+  },
+  {
+    "documentHeight": 150001,
+    "elapsedSeconds": 20.791331125001307,
+    "frames": 2464,
+    "maxDisplayMS": 49.464000010630116,
+    "reachedEnd": true,
+    "screenMaximumFPS": 120,
+    "usesTextKit2": true,
+    "viewportHeight": 340,
+    "viewportWidth": 868
+  }
+]

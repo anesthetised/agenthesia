@@ -1,0 +1,100 @@
+[
+  {
+    "endSeconds": 2.990636,
+    "displayMS": 155.81,
+    "callbackMS": 157.43,
+    "mainSampleMS": 9.0,
+    "allThreadsSampleMS": 9.0
+  },
+  {
+    "endSeconds": 3.063161,
+    "displayMS": 55.03,
+    "callbackMS": 47.56,
+    "mainSampleMS": 9.0,
+    "allThreadsSampleMS": 9.0
+  },
+  {
+    "endSeconds": 5.390788,
+    "displayMS": 132.65,
+    "callbackMS": 132.63,
+    "mainSampleMS": 4.0,
+    "allThreadsSampleMS": 4.0
+  },
+  {
+    "endSeconds": 5.465619,
+    "displayMS": 57.36,
+    "callbackMS": 49.6,
+    "mainSampleMS": 8.0,
+    "allThreadsSampleMS": 8.0
+  },
+  {
+    "endSeconds": 8.34893,
+    "displayMS": 63.5,
+    "callbackMS": 65.45,
+    "mainSampleMS": 8.0,
+    "allThreadsSampleMS": 8.0
+  },
+  {
+    "endSeconds": 8.398925,
+    "displayMS": 51.88,
+    "callbackMS": 50.0,
+    "mainSampleMS": 11.0,
+    "allThreadsSampleMS": 11.0
+  },
+  {
+    "endSeconds": 8.513348,
+    "displayMS": 114.48,
+    "callbackMS": 114.42,
+    "mainSampleMS": 11.0,
+    "allThreadsSampleMS": 11.0
+  },
+  {
+    "endSeconds": 8.816193,
+    "displayMS": 64.28,
+    "callbackMS": 64.25,
+    "mainSampleMS": 8.0,
+    "allThreadsSampleMS": 8.0
+  },
+  {
+    "endSeconds": 8.960252,
+    "displayMS": 144.05,
+    "callbackMS": 144.06,
+    "mainSampleMS": 11.0,
+    "allThreadsSampleMS": 11.0
+  },
+  {
+    "endSeconds": 14.875185,
+    "displayMS": 108.72,
+    "callbackMS": 108.37,
+    "mainSampleMS": 4.0,
+    "allThreadsSampleMS": 4.0
+  },
+  {
+    "endSeconds": 15.408223,
+    "displayMS": 150.09,
+    "callbackMS": 150.07,
+    "mainSampleMS": 4.0,
+    "allThreadsSampleMS": 4.0
+  },
+  {
+    "endSeconds": 15.491571,
+    "displayMS": 58.11,
+    "callbackMS": 58.14,
+    "mainSampleMS": 8.0,
+    "allThreadsSampleMS": 8.0
+  },
+  {
+    "endSeconds": 15.598858,
+    "displayMS": 105.61,
+    "callbackMS": 107.29,
+    "mainSampleMS": 11.0,
+    "allThreadsSampleMS": 11.0
+  },
+  {
+    "endSeconds": 23.245744,
+    "displayMS": 170.98,
+    "callbackMS": 170.9,
+    "mainSampleMS": 5.0,
+    "allThreadsSampleMS": 5.0
+  }
+]

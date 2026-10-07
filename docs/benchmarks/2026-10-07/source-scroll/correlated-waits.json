@@ -1,0 +1,178 @@
+[
+  {
+    "recording": "source-waits",
+    "events": [
+      {
+        "eventTimeSeconds": 13.030859666,
+        "displayMS": 153.363374993,
+        "callbackMS": 153.09404167,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 13.030185875,
+            "sampleWeightMS": 140.125125,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      },
+      {
+        "eventTimeSeconds": 14.214734291,
+        "displayMS": 170.562708328,
+        "callbackMS": 169.347916671,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 14.21409875,
+            "sampleWeightMS": 141.907459,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "recording": "plain-waits",
+    "events": [
+      {
+        "eventTimeSeconds": 5.115494458,
+        "displayMS": 81.902583333,
+        "callbackMS": 81.872249997,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 5.114993,
+            "sampleWeightMS": 79.19475,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      },
+      {
+        "eventTimeSeconds": 8.85006225,
+        "displayMS": 124.808166656,
+        "callbackMS": 118.466916654,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 8.849494833,
+            "sampleWeightMS": 115.883917,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      },
+      {
+        "eventTimeSeconds": 11.142215458,
+        "displayMS": 75.302208337,
+        "callbackMS": 68.957291674,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 11.14170025,
+            "sampleWeightMS": 61.419542,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      },
+      {
+        "eventTimeSeconds": 15.57489675,
+        "displayMS": 157.974874993,
+        "callbackMS": 151.674416658,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 15.574290166,
+            "sampleWeightMS": 149.062583,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "recording": "appkit-host-waits",
+    "events": [
+      {
+        "eventTimeSeconds": 18.889622083,
+        "displayMS": 68.39366666,
+        "callbackMS": 67.508041669,
+        "synchronizationWaits": [
+          {
+            "sampleTimeSeconds": 18.88808325,
+            "sampleWeightMS": 61.389,
+            "stack": [
+              "mach_msg2_trap",
+              "mach_msg2_internal",
+              "mach_msg_overwrite",
+              "mach_msg",
+              "CA::Render::Context::wait_for_synchronize(unsigned int, unsigned int*, unsigned int*, unsigned int*, int)",
+              "CA::Context::synchronize(unsigned int, int, bool)",
+              "CABackingStoreSynchronize(CABackingStore*, CA::GenericContext*, unsigned int, int)",
+              "CABackingStorePrepareUpdates_(CABackingStore*, unsigned long, unsigned long, unsigned int, unsigned int, unsigned int, unsigned long long, CA::GenericContext*, UpdateState*)",
+              "CABackingStoreUpdate_",
+              "invocation function for block in CA::Layer::display_()"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

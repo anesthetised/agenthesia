@@ -33,6 +33,7 @@ The app opens a clearly labeled demo session: a native sidebar, selectable Markd
 and a composer with a deterministic streamed response and Stop action. This is an interface preview,
 not a connected coding agent. Demo messages are temporary and disappear when the window is recreated;
 no project files are changed. Sending another prompt while a demo response streams is disabled.
+Use Shift-Return for a new line, Command-Return to send, and Command-period to stop.
 
 Live sessions, durable history, worktree isolation, and the production prompt queue remain separate
 implementation steps. The existing ACP command-line client is available via `just cli` and

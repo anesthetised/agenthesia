@@ -1,3 +1,4 @@
+import AppKit
 public import SwiftUI
 
 /// The main window's temporary demo interface.
@@ -34,6 +35,12 @@ public struct RootView: View {
                         .lineLimit(2...6)
                         .textFieldStyle(.plain)
                         .focused($composerFocused)
+                        .onKeyPress(keys: [.return], phases: .down) { press in
+                            Self.handleComposerReturn(
+                                modifiers: press.modifiers,
+                                responder: NSApp.keyWindow?.firstResponder
+                            )
+                        }
                         .onSubmit(send)
                         .accessibilityLabel("Demo prompt")
                     HStack {
@@ -79,6 +86,12 @@ public struct RootView: View {
         session.send(prompt)
         prompt = ""
         composerFocused = true
+    }
+
+    static func handleComposerReturn(modifiers: EventModifiers, responder: NSResponder?) -> KeyPress.Result {
+        guard modifiers == .shift, let editor = responder as? NSTextView else { return .ignored }
+        editor.insertNewlineIgnoringFieldEditor(nil)
+        return .handled
     }
 }
 

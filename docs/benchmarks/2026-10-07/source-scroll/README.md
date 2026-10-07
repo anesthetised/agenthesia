@@ -87,20 +87,22 @@ of the refresh-budget hitch metric; it does not change the benchmark's scoring. 
 and gap events use the Points of Interest category so the profiling recipe actually captures them.
 Inspect a marked interval in Instruments, including waiting stacks, before attributing it to a CPU hotspot.
 
-## Next decision
+## Cached-fragment prototype
 
-STTextView 2.4.1 (`bbdcfd9d413ad3055dafd23a223be9bd39742f89`) assigns the layout fragment back to a
-cached fragment view in `configureRenderingSurfaceFor`. The fragment property's setter unconditionally
-sets `needsDisplay` and `needsLayout`, even for the same object. This is a candidate source of redundant
-backing-store updates, **not an established cause of these waits**. A same-object guard alone may leave
-stale rendering because a fragment can change internally; text edits, color changes, selection,
-attachments and spelling decorations require explicit validation.
+The owner approved a local experiment in STTextView 2.4.1. Removing same-object reassignment stops the
+redundant invalidation, but fails regression checks for both adding and removing temporary color
+attributes on a cached fragment. Three unprofiled runs per variant did not demonstrate an improvement:
+per-run maxima were 49/25/76 ms upstream and 71/45/75 ms with the deletion. The prototype is rejected as
+a fix; no dependency override is retained. See the [experiment, tests, patch and raw results](redraw/README.md).
 
-Recommend a bounded, dependency-focused prototype to test redraw invalidation and identify the affected
-layer before proposing an upstream fix or pinning a fork. Alternative local layer-policy changes may
-reduce waits but require their own correctness and performance evidence. Replacing STTextView with
-NSTextView would be a larger architectural change and is not justified by this control alone.
+## Next investigation
 
-Discuss the implementation path with the owner. Keep #83 open: this investigation localizes observed
-stalls and improves the diagnostics; it does not fix scrolling or prove every historical outlier has
-the same cause.
+Do not pin a fork or add a broader invalidation mechanism on the strength of this experiment. A useful
+next isolation control is standalone STTextView, outside the Agenthesia process, with matched content,
+viewport and scroll workload. This can distinguish dependency/platform behavior from the remaining
+application context before changing layer policy. The earlier separate AppKit window still ran inside
+Agenthesia and did not provide that isolation.
+
+Discuss any rendering-strategy change with the owner. Keep #83 open: this investigation localizes
+observed stalls and rejects an unsafe candidate; it does not fix scrolling or prove every historical
+outlier has the same cause.

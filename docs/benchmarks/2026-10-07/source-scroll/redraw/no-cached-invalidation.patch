@@ -1,0 +1,12 @@
+diff --git a/Sources/STTextViewAppKit/STTextView+NSTextViewportLayoutControllerDelegate.swift b/Sources/STTextViewAppKit/STTextView+NSTextViewportLayoutControllerDelegate.swift
+index 81bc7e5..1c58fe1 100644
+--- a/Sources/STTextViewAppKit/STTextView+NSTextViewportLayoutControllerDelegate.swift
++++ b/Sources/STTextViewAppKit/STTextView+NSTextViewportLayoutControllerDelegate.swift
+@@ -66,7 +66,6 @@ extension STTextView: NSTextViewportLayoutControllerDelegate {
+         let layoutFragmentFrame = textLayoutFragment.layoutFragmentFrame
+         let fragmentView: STTextLayoutFragmentView
+         if let cachedFragmentView = fragmentViewMap.object(forKey: textLayoutFragment) {
+-            cachedFragmentView.layoutFragment = textLayoutFragment
+             fragmentView = cachedFragmentView
+             lastUsedFragmentViews.remove(cachedFragmentView)
+         } else {

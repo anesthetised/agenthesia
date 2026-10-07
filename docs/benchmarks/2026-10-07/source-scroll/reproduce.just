@@ -14,3 +14,12 @@ format:
 
 lint:
     swift format lint --strict docs/benchmarks/2026-10-07/source-scroll/native-probe.swift
+
+# Diagnostic tests intentionally expose different failures on upstream and the rejected prototype.
+[positional-arguments]
+redraw-test checkout:
+    cp docs/benchmarks/2026-10-07/source-scroll/redraw/CachedFragmentRedrawTests.swift "$1/Tests/STTextViewAppKitTests/"
+    swift test --package-path "$1" --filter CachedFragmentRedrawTests
+
+redraw-lint:
+    swift format lint --strict docs/benchmarks/2026-10-07/source-scroll/redraw/CachedFragmentRedrawTests.swift

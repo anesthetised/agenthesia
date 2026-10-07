@@ -1,4 +1,6 @@
 import AppKit
+import Observation
+import SwiftUI
 import Testing
 
 @testable import AgenthesiaUI
@@ -79,7 +81,7 @@ struct DemoSessionTests {
         #expect(textView(in: try #require(controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true))) === text)
     }
 
-    @Test func streamingPreservesReaderScrollAndFollowsTheBottom() throws {
+    @Test func streamingPreservesReaderScrollAndFollowsTheBottom() async throws {
         let session = DemoSession()
         let token = try #require(session.begin("Hello"))
         session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
@@ -96,17 +98,19 @@ struct DemoSessionTests {
         let origin = controller.scroll.contentView.bounds.origin
         session.receive("Another paragraph.\n\n", for: token)
         controller.update(session)
+        await nextMainTurn()
         #expect(abs(controller.scroll.contentView.bounds.origin.y - origin.y) < 1)
         let bottom = max(0, controller.table.frame.height - controller.scroll.contentView.bounds.height)
         controller.scroll.contentView.scroll(to: NSPoint(x: 0, y: bottom))
         NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: controller.scroll)
         session.receive("Last paragraph.\n\n", for: token)
         controller.update(session)
+        await nextMainTurn()
         #expect(abs(controller.scroll.contentView.bounds.maxY - controller.table.frame.height) < 1)
         session.stop()
     }
 
-    @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() throws {
+    @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() async throws {
         let session = DemoSession()
         let controller = DemoTranscriptController()
         let window = host(controller)
@@ -136,6 +140,7 @@ struct DemoSessionTests {
         #expect(abs(controller.scroll.contentView.bounds.origin.y - end) < 1)
         // A further deferred height change must not discard follow intent.
         controller.table.setFrameSize(NSSize(width: 600, height: controller.table.frame.height + 80))
+        await nextMainTurn()
         #expect(abs(controller.scroll.contentView.bounds.maxY - controller.table.frame.height) < 1)
     }
 
@@ -193,6 +198,112 @@ struct DemoSessionTests {
         return view.subviews.lazy.compactMap { messageField(in: $0) }.first
     }
 
+    @Test func deferredHeightChangesScrollOnlyAfterAppKitReturns() async throws {
+        let session = DemoSession()
+        let token = try #require(session.begin("Hello"))
+        session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
+        let controller = DemoTranscriptController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(session)
+        _ = controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true)
+        controller.table.noteHeightOfRows(withIndexesChanged: [3])
+        controller.table.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        let origin = controller.scroll.contentView.bounds.origin
+        controller.table.setFrameSize(NSSize(width: 600, height: controller.table.frame.height + 80))
+        #expect(controller.scroll.contentView.bounds.origin == origin)
+        await nextMainTurn()
+        #expect(abs(controller.scroll.contentView.bounds.maxY - controller.table.frame.height) < 1)
+        session.stop()
+    }
+
+    @Test(arguments: [false, true])
+    func sidebarWidthChangesKeepRowsAttachedAndReadable(completed: Bool) async throws {
+        let session = DemoSession()
+        let token = try #require(session.begin("Hello"))
+        for chunk in DemoSession.responseChunks { session.receive(chunk, for: token) }
+        if completed { session.finish(token) }
+        let controller = DemoTranscriptController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(session)
+        for width in [600.0, 840.0, 600.0, 840.0, 400.0, 840.0, 600.0] {
+            window.setContentSize(NSSize(width: width, height: 300))
+            controller.scroll.layoutSubtreeIfNeeded()
+            for rowIndex in session.messages.indices {
+                let row = try #require(controller.table.view(atColumn: 0, row: rowIndex, makeIfNecessary: true))
+                row.layoutSubtreeIfNeeded()
+                #expect(row.superview != nil)
+            }
+            controller.table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: session.messages.indices))
+            controller.table.layoutSubtreeIfNeeded()
+            await nextMainTurn()
+            let finalRow = try #require(controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true))
+            if completed {
+                #expect(messageField(in: finalRow)?.attributedStringValue.string == session.messages[3].text.string)
+            } else {
+                #expect(textView(in: finalRow)?.string == session.messages[3].text.string)
+            }
+        }
+        session.stop()
+    }
+
+    @Test func hostedSidebarToggleAcrossCompletionKeepsNativeCells() async throws {
+        let session = DemoSession()
+        let presentation = SidebarPresentation()
+        let hosting = NSHostingView(rootView: SidebarHarness(session: session, presentation: presentation))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        defer { window.close() }
+        hosting.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        let token = try #require(session.begin("Hello"))
+        session.receive("## Demo response\n\nA partial response.", for: token)
+        hosting.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        let streamingTable = try #require(demoTable(in: hosting))
+        let streamingRow = try #require(streamingTable.view(atColumn: 0, row: 3, makeIfNecessary: true))
+        presentation.visibility = .detailOnly
+        hosting.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        session.receive("\n\n" + DemoSession.responseChunks.joined(), for: token)
+        session.finish(token)
+        hosting.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        presentation.visibility = .all
+        hosting.layoutSubtreeIfNeeded()
+        await nextMainTurn()
+        let table = try #require(demoTable(in: hosting))
+        for rowIndex in session.messages.indices {
+            let row = try #require(table.view(atColumn: 0, row: rowIndex, makeIfNecessary: true))
+            #expect(row is NSTableCellView)
+            #expect(row.identifier != nil)
+        }
+        #expect(table.numberOfRows == session.messages.count)
+        let finalRow = try #require(table.view(atColumn: 0, row: 3, makeIfNecessary: true))
+        #expect(table === streamingTable)
+        #expect(finalRow === streamingRow)
+        #expect(messageField(in: finalRow)?.attributedStringValue.string == session.messages[3].text.string)
+    }
+
+    private func demoTable(in view: NSView) -> DemoTableView? {
+        if let table = view as? DemoTableView { return table }
+        return view.subviews.lazy.compactMap { demoTable(in: $0) }.first
+    }
+
+    private func nextMainTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
     private func host(_ controller: DemoTranscriptController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
@@ -232,5 +343,24 @@ struct DemoSessionTests {
                 visibleRect: NSRect(x: 0, y: 100, width: 500, height: 400)
             )
         )
+    }
+}
+
+@MainActor @Observable
+private final class SidebarPresentation {
+    var visibility: NavigationSplitViewVisibility = .all
+}
+
+private struct SidebarHarness: View {
+    let session: DemoSession
+    @Bindable var presentation: SidebarPresentation
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $presentation.visibility) {
+            List { Text("Demo session") }
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } detail: {
+            DemoTranscript(session: session)
+        }
     }
 }

@@ -27,6 +27,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
     private var wasStreaming = false
     private var followingBottom = true
     private var adjustingScroll = false
+    private var followScheduled = false
 
     override init() {
         super.init()
@@ -46,7 +47,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
-        table.didLayout = { [weak self] in self?.followEnd() }
+        table.didLayout = { [weak self] in self?.scheduleFollowEnd() }
         table.willNavigate = { [weak self] in self?.followingBottom = false }
         table.didNavigate = { [weak self] in self?.userDidScroll(nil) }
         scroll.willNavigate = { [weak self] in self?.followingBottom = false }
@@ -90,7 +91,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
             let visibleRow = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? DemoMessageRow
             let keepsSelection = visibleRow?.streamingCell?.textView.selectedRange().length ?? 0 > 0
             if wasStreaming != session.isStreaming, !keepsSelection {
-                table.reloadData(forRowIndexes: [row], columnIndexes: [0])
+                visibleRow?.showFinished(session.messages[row], width: table.tableColumns[0].width - 48)
             } else if let rowView = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? DemoMessageRow,
                 let cell = rowView.streamingCell
             {
@@ -122,6 +123,17 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
 
     @objc private func userDidScroll(_ notification: Notification?) {
         followingBottom = Self.followsBottom(documentHeight: table.frame.height, visibleRect: scroll.contentView.bounds)
+    }
+
+    private func scheduleFollowEnd() {
+        guard !followScheduled else { return }
+        followScheduled = true
+        // Scrolling can materialize rows. Never do that while NSTableView changes row constraints.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.followScheduled = false
+            self.followEnd()
+        }
     }
 
     /// Row heights settle during AppKit layout, sometimes after the SwiftUI update.
@@ -167,6 +179,9 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         stack.spacing = 6
         let rowView = DemoMessageRow(markdown: message.markdown)
         rowView.streamingCell = content as? TextKitCell
+        rowView.stack = stack
+        let contentWidth = content.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        rowView.contentWidth = contentWidth
         copy.target = rowView
         copy.action = #selector(DemoMessageRow.copyMessage(_:))
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -177,7 +192,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
             stack.topAnchor.constraint(equalTo: rowView.topAnchor, constant: 8),
             stack.bottomAnchor.constraint(equalTo: rowView.bottomAnchor, constant: -8),
             header.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            content.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            contentWidth,
         ])
         return rowView
     }
@@ -224,13 +239,32 @@ final class DemoScrollView: NSScrollView {
     }
 }
 
-private final class DemoMessageRow: NSView {
+private final class DemoMessageRow: NSTableCellView {
+    static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
     var streamingCell: TextKitCell?
+    var stack: NSStackView?
+    var contentWidth: NSLayoutConstraint?
 
     init(markdown: String) {
         self.markdown = markdown
         super.init(frame: .zero)
+        identifier = Self.id
+    }
+
+    func showFinished(_ message: DemoSession.Message, width: CGFloat) {
+        markdown = message.markdown
+        guard let old = streamingCell, let stack else { return }
+        let cell = TextCell()
+        cell.field.preferredMaxLayoutWidth = max(1, width)
+        cell.field.attributedStringValue = message.text
+        contentWidth?.isActive = false
+        stack.removeArrangedSubview(old)
+        old.removeFromSuperview()
+        stack.addArrangedSubview(cell)
+        contentWidth = cell.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        contentWidth?.isActive = true
+        streamingCell = nil
     }
 
     @available(*, unavailable)

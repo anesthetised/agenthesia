@@ -4,9 +4,11 @@
 
     /// Measures frame times while a scenario runs, from the display link of the view's screen.
     final class FrameMonitor: NSObject {
-        struct Report {
+        struct Report: Codable {
             var frames = 0
-            var dropped = 0
+            var hitches = 0
+            var estimatedMissed = 0
+            var excessMilliseconds = 0.0
             var p50 = 0.0
             var p95 = 0.0
             var p99 = 0.0
@@ -23,8 +25,7 @@
 
         private var link: CADisplayLink?
         private var last: CFTimeInterval?
-        private var intervals: [Double] = []
-        private var dropped = 0
+        private var samples = FrameSamples()
         private var onFrame: () -> Bool = { false }
         private var completion: (Report) -> Void = { _ in }
         private var signpost: OSSignpostIntervalState?
@@ -43,9 +44,8 @@
         @objc private func tick(_ link: CADisplayLink) {
             if let last {
                 let interval = link.timestamp - last
-                intervals.append(interval * 1000)
-                // A frame took longer than one refresh: the next one was missed.
-                if interval > link.duration * 1.5 { dropped += 1 }
+                let budget = link.targetTimestamp - link.timestamp
+                samples.record(interval: interval, budget: budget > 0 ? budget : link.duration)
             }
             last = link.timestamp
             if !onFrame() {
@@ -54,17 +54,15 @@
         }
 
         private func finish() -> Report {
-            let sorted = intervals.sorted()
-            func percentile(_ p: Double) -> Double {
-                sorted.isEmpty ? 0 : sorted[Int((Double(sorted.count - 1) * p).rounded())]
-            }
             let report = Report(
-                frames: sorted.count,
-                dropped: dropped,
-                p50: percentile(0.5),
-                p95: percentile(0.95),
-                p99: percentile(0.99),
-                max: sorted.last ?? 0,
+                frames: samples.intervals.count,
+                hitches: samples.hitches,
+                estimatedMissed: samples.estimatedMissed,
+                excessMilliseconds: samples.excessMilliseconds,
+                p50: samples.percentile(0.5),
+                p95: samples.percentile(0.95),
+                p99: samples.percentile(0.99),
+                max: samples.intervals.max() ?? 0,
                 memory: Self.memoryFootprint(),
                 freeMemory: Self.freeMemory(),
                 load: Self.load()
@@ -77,8 +75,7 @@
             link?.invalidate()
             link = nil
             last = nil
-            intervals = []
-            dropped = 0
+            samples = FrameSamples()
             if let signpost { Self.signposter.endInterval("Scenario", signpost) }
             signpost = nil
         }

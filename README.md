@@ -25,6 +25,7 @@ Cross-agent memory is deferred until after the MVP ([ADR-0012](docs/adr/0012-def
 
 See [docs/VISION.md](docs/VISION.md) for the principles behind the product and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it is built.
+Rendering workloads, metrics and repeatable measurements are described in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Requirements
 

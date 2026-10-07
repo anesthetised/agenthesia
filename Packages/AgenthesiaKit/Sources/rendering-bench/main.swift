@@ -8,7 +8,7 @@ import Rendering
 func median(_ iterations: Int, _ body: () -> Void) -> Double {
     var times: [Double] = []
     for _ in 0..<iterations {
-        times.append(milliseconds { body() })
+        times.append(autoreleasepool { milliseconds { body() } })
     }
     return times.sorted()[times.count / 2]
 }
@@ -20,6 +20,12 @@ func milliseconds(_ body: () -> Void) -> Double {
 
 func format(_ value: Double) -> String {
     value.formatted(.number.precision(.fractionLength(value < 10 ? 2 : 1)))
+}
+
+/// A machine-readable companion to the human-readable tables, saved by the benchmark runner.
+func record(_ scenario: String, _ measurements: [String: Double]) throws {
+    let data = try JSONSerialization.data(withJSONObject: ["scenario": scenario, "measurements": measurements])
+    print("BENCHMARK_RESULT=" + String(decoding: data, as: UTF8.self))
 }
 
 /// Free memory in percent, as `memory_pressure` reports it, and the load average over the last minute.
@@ -169,10 +175,12 @@ let highlighter = Highlighter()
 print("| Language | First highlight (grammar load), ms | 10 000 lines, ms | Lines / ms |")
 print("|---|--:|--:|--:|")
 for language in CodeLanguage.allCases {
-    let load = milliseconds { _ = highlighter.highlight("x", language: language) }
+    let load = autoreleasepool { milliseconds { _ = highlighter.highlight("x", language: language) } }
     let file = sourceFile(language, lines: 10_000)
     let time = median(5) { _ = highlighter.highlight(file, language: language) }
-    print("| \(language.displayName) | \(format(load)) | \(format(time)) | \(format(10_000 / time)) |")
+    let lineCount = Double(file.split(separator: "\n", omittingEmptySubsequences: false).count)
+    print("| \(language.displayName) | \(format(load)) | \(format(time)) | \(format(lineCount / time)) |")
+    try record("Highlight \(language.displayName)", ["firstUseMS": load, "medianMS": time, "lines": lineCount])
 }
 
 print("\n| Markdown | Characters | Median, ms |")
@@ -181,35 +189,48 @@ for (name, characters) in [("Short answer", 400), ("Typical answer", 1_400), ("L
     let markdown = answer(characters: characters)
     let time = median(20) { _ = renderer.render(markdown) }
     print("| \(name) | \(markdown.count) | \(format(time)) |")
+    try record(name, ["characters": Double(markdown.count), "medianMS": time])
 }
 
-// Streaming: the long answer in chunks of 13 characters, the average chunk agents send.
-let long = answer(characters: 16_000)
-var stream = StreamingMarkdown(renderer: renderer)
-let text = NSMutableAttributedString()
-var chunkTimes: [Double] = []
-var rest = Substring(long)
-while !rest.isEmpty {
-    let chunk = String(rest.prefix(13))
-    rest = rest.dropFirst(13)
-    chunkTimes.append(milliseconds { stream.append(chunk).apply(to: text) })
-}
-chunkTimes.sort()
-print("\n| Streaming the long answer | Chunks | Total, ms | p50, ms | p95, ms | Max, ms |")
+// Fixed chunk size isolates rendering work; the GUI lab measures scheduled arrivals and UI latency.
+print("\n| Streaming | Chunks | Total, ms | p50, ms | p95, ms | Max, ms |")
 print("|---|--:|--:|--:|--:|--:|")
-print(
-    "| 13-character chunks | \(chunkTimes.count) | \(format(chunkTimes.reduce(0, +))) "
-        + "| \(format(chunkTimes[chunkTimes.count / 2])) | \(format(chunkTimes[chunkTimes.count * 95 / 100])) "
-        + "| \(format(chunkTimes.last ?? 0)) |"
-)
+for (name, source) in [
+    ("Mixed answer", answer(characters: 16_000)),
+    ("Long unclosed Swift block", "```swift\n" + sourceFile(.swift, lines: 400)),
+] {
+    var stream = StreamingMarkdown(renderer: renderer)
+    let text = NSMutableAttributedString()
+    var times: [Double] = []
+    var rest = Substring(source)
+    while !rest.isEmpty {
+        let chunk = String(rest.prefix(13))
+        rest = rest.dropFirst(13)
+        times.append(autoreleasepool { milliseconds { stream.append(chunk).apply(to: text) } })
+    }
+    times.sort()
+    let total = times.reduce(0, +)
+    let p50 = times[times.count / 2]
+    let p95 = times[times.count * 95 / 100]
+    let max = times.last ?? 0
+    print("| \(name) | \(times.count) | \(format(total)) | \(format(p50)) | \(format(p95)) | \(format(max)) |")
+    try record(
+        name,
+        [
+            "characters": Double(source.count), "chunks": Double(times.count), "chunkCharacters": 13,
+            "totalMS": total, "p50MS": p50, "p95MS": p95, "maxMS": max,
+        ]
+    )
+}
 
 // Transcript items: rendering many typical answers, as opening a session does.
 let items = (0..<1_000).map { answer(characters: 800 + ($0 % 5) * 300) }
 let itemsTime = milliseconds {
-    for item in items { _ = renderer.render(item) }
+    for item in items { autoreleasepool { _ = renderer.render(item) } }
 }
 print("\n| Transcript items | Items | Total, ms | Per item, ms |")
 print("|---|--:|--:|--:|")
 print("| Typical answers, one thread | \(items.count) | \(format(itemsTime)) | \(format(itemsTime / 1_000)) |")
+try record("Transcript items", ["items": Double(items.count), "totalMS": itemsTime])
 
 print("\nSystem at end: \(systemLoad())")

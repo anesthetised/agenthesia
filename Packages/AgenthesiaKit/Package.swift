@@ -121,5 +121,6 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "AgenthesiaCoreTests", dependencies: ["AgenthesiaCore"], swiftSettings: swiftSettings),
+        .testTarget(name: "AgenthesiaUITests", dependencies: ["AgenthesiaUI"], swiftSettings: swiftSettings),
     ]
 )

@@ -343,7 +343,7 @@ struct DemoSessionTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
-        controller.scroll.frame = window.contentView!.bounds
+        controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = 600
         window.contentView = controller.scroll
         window.contentView?.layoutSubtreeIfNeeded()

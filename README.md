@@ -27,6 +27,17 @@ See [docs/VISION.md](docs/VISION.md) for the principles behind the product and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it is built.
 Rendering workloads, metrics and repeatable measurements are described in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
+## Interface preview
+
+The app opens a clearly labeled demo session: a native sidebar, selectable Markdown transcript,
+and a composer with a deterministic streamed response and Stop action. This is an interface preview,
+not a connected coding agent. Demo messages are temporary and disappear when the window is recreated;
+no project files are changed. Sending another prompt while a demo response streams is disabled.
+
+Live sessions, durable history, worktree isolation, and the production prompt queue remain separate
+implementation steps. The existing ACP command-line client is available via `just cli` and
+`just mock-chat` for real protocol interaction.
+
 ## Requirements
 
 - macOS 26 or later, Apple silicon.

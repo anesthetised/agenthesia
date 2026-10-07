@@ -7,6 +7,7 @@ struct AgenthesiaApp: App {
         WindowGroup {
             RootView()
         }
+        .defaultSize(width: 1000, height: 700)
         #if DEBUG
             .commands { RenderingLabCommands() }
         #endif

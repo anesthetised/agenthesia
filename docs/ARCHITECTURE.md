@@ -39,6 +39,18 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
 
+## Current interface preview
+
+`AgenthesiaUI` contains a temporary demo session model and a native session screen. The screen uses
+an `NSTableView` transcript with a TextKit 2 streaming row, following ADR-0007, and the existing
+`Rendering` module. The debug Rendering Lab remains independent so its recorded workloads are not
+changed by the interface preview.
+
+The demo does not launch agents, modify a workspace, or persist sessions. It disables sending while
+streaming; it does not implement or supersede ADR-0010's production queue and steering behavior.
+`AgenthesiaCore` and `Persistence` are still placeholders. The data flow below describes the intended
+live-session architecture, not functionality supplied by the demo.
+
 ## Data flow
 
 ```

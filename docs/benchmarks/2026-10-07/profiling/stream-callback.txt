@@ -1,0 +1,68 @@
+Total sampled main-thread CPU milliseconds: 1780.0
+INCLUSIVE (overlapping)
+  1780.0 100.0% closure #1 in RenderingLab.runStream(longCode:)
+  1780.0 100.0% FrameMonitor.tick(_:)
+  1780.0 100.0% @objc FrameMonitor.tick(_:)
+  1780.0 100.0% -[_NSDisplayLinkForwarder displayLinkDidFire:]
+  1780.0 100.0% CA::Display::DisplayLinkItem::dispatch_(CA::SignPost::Interval<(CA::SignPost::CAEventCode)835322056>&)
+  1780.0 100.0% CA::Display::DisplayLink::dispatch_items(unsigned long long, unsigned long long, unsigned long long)
+  1780.0 100.0% CA::Display::DisplayLink::dispatch_deferred_display_links(unsigned int)
+  1780.0 100.0% stepTransactionFlush
+  1780.0 100.0% UC::DriverCore::continueProcessing()
+  1780.0 100.0% _CFRunLoopRunSpecificWithOptions
+  1780.0 100.0% RunCurrentEventLoopInMode
+  1780.0 100.0% ReceiveNextEventCommon
+  1780.0 100.0% _BlockUntilNextEventMatchingListInMode
+  1780.0 100.0% _DPSBlockUntilNextEventMatchingListInMode
+  1780.0 100.0% _DPSNextEvent
+  1780.0 100.0% -[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]
+  1780.0 100.0% -[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]
+  1780.0 100.0% -[NSApplication run]
+  1780.0 100.0% NSApplicationMain
+  1780.0 100.0% specialized runApp(_:)
+  1780.0 100.0% runApp<A>(_:)
+  1780.0 100.0% static App.main()
+  1780.0 100.0% static AgenthesiaApp.$main()
+  1780.0 100.0% main
+  1780.0 100.0% start
+  1752.0  98.4% __CFRunLoopRun
+  1359.0  76.3% __CFMachPortPerform
+  1359.0  76.3% __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__
+  1359.0  76.3% __CFRunLoopDoSource1
+  1288.0  72.4% LabTranscript.stream(_:)
+  1248.0  70.1% StreamingMarkdown.append(_:)
+  1198.0  67.3% MarkdownRenderer.codeBlock(_:_:)
+  1198.0  67.3% MarkdownRenderer.render(_:_:)
+  1198.0  67.3% MarkdownRenderer.render(block:)
+  1093.0  61.4% Highlighter.highlight(_:language:)
+   873.0  49.0% specialized Highlighter.captures(in:language:)
+   873.0  49.0% Highlighter.captures(in:language:)
+   571.0  32.1% Sequence<>.highlights()
+   469.0  26.3% TableTranscript.didStream(_:)
+   460.0  25.8% Sequence<>.captures.getter
+   440.0  24.7% SizingTextView.apply(_:)
+   431.0  24.2% Sequence.map<A, B>(_:)
+   429.0  24.1% __NSConcreteTextStorageLockedForwarding
+   429.0  24.1% -[NSConcreteTextStorage replaceCharactersInRange:withAttributedString:]
+   415.0  23.3% ResolvingQueryMatchSequence.next()
+SELF
+    72.0   4.0% _platform_memmove
+    66.0   3.7% objc_msgSend
+    44.0   2.5% _xzm_free_main
+    42.0   2.4% weak_entry_for_referent
+    39.0   2.2% _xzm_xzone_malloc_tiny
+    35.0   2.0% ts_query_cursor__advance
+    33.0   1.9% ts_language_lookup
+    32.0   1.8% hashProbe
+    31.0   1.7% swift_retain
+    30.0   1.7% ts_lex
+    28.0   1.6% swift_release
+    26.0   1.5% specialized static String._uncheckedFromUTF8(_:isASCII:precalculatedUTF16Count:)
+    23.0   1.3% Substring.subscript.getter
+    23.0   1.3% Substring.index(_:offsetBy:)
+    19.0   1.1% swift_bridgeObjectRelease
+    18.0   1.0% _allASCII(_:)
+    17.0   1.0% <deduplicated_symbol>
+    17.0   1.0% _stringCompareWithSmolCheck(_:_:expecting:)
+    16.0   0.9% swift_arrayDestroy
+    16.0   0.9% String._uncheckedIndex(after:)

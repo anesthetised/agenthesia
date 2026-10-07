@@ -103,3 +103,14 @@ The new scheduled streaming results are not directly comparable to those numbers
 measurement method, not the accepted choice of A′. Revisit that choice only after reviewing new evidence.
 
 Recorded validation: [2026-10-07 results and raw samples](benchmarks/2026-10-07/README.md).
+## CPU profiling
+
+Use `just lab-profile S6:A2 .build/stream-code.trace` or
+`just lab-profile S4:lines+colors .build/source-colors.trace` for a single scenario under Xcode's Time
+Profiler. Recordings stop after 30 seconds or when the app exits; use a new output path for each run.
+Run profiling sequentially, separately from ordinary benchmarks. Profiler overhead changes timing and
+memory consumption. Inspect the trace in Instruments or export its first recording's CPU samples with
+`just lab-profile-export .build/stream-code.trace .build/stream-code.xml`.
+
+See the [2026-10-07 diagnostic profiles](benchmarks/2026-10-07/profiling/README.md) for localized costs and
+the implementation choices that remain to be discussed.

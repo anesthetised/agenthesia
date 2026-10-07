@@ -1,0 +1,252 @@
+{
+  "startedAt": "2026-10-07T00:47:13.561520+00:00",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "commit": "878043ca589f6d5bbaff7153ec7eb718f054299e",
+  "workingTree": "M docs/benchmarks/2026-10-07/source-scroll/reproduce.just\n?? docs/benchmarks/2026-10-07/source-scroll/standalone/",
+  "binarySHA256": "4283dc996c770a01c55788bf644d8156bc897a6129f43b1de344c3564ea30e66",
+  "build": "SwiftPM Release",
+  "order": [
+    "native",
+    "sttextview",
+    "sttextview",
+    "native",
+    "native",
+    "sttextview"
+  ],
+  "fixture": {
+    "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+    "fixtureUTF16Count": 243399
+  },
+  "runs": [
+    {
+      "log": "run-1-native.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150001,
+        "documentWidth": 868,
+        "elapsedSeconds": 20.97862837499997,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2467,
+        "load": 6.48974609375,
+        "longFrames": [
+          {
+            "callbackMS": 260.32454166852403,
+            "displayMS": 260.3591666702414,
+            "elapsedSeconds": 0.26032454166852403
+          },
+          {
+            "callbackMS": 61.97470832557883,
+            "displayMS": 61.97574999532662,
+            "elapsedSeconds": 0.32229924999410287
+          }
+        ],
+        "maxCallbackMS": 260.32454166852403,
+        "maxDisplayMS": 260.3591666702414,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "native",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 183.9837083389284,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    },
+    {
+      "log": "run-2-sttextview.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150000.5,
+        "documentWidth": 868,
+        "elapsedSeconds": 20.81090270834102,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2472,
+        "load": 6.9033203125,
+        "longFrames": [
+          {
+            "callbackMS": 45.77100000460632,
+            "displayMS": 52.23008333996404,
+            "elapsedSeconds": 0.3547565000044415
+          }
+        ],
+        "maxCallbackMS": 45.77100000460632,
+        "maxDisplayMS": 52.23008333996404,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "sttextview",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 10.64583333209157,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    },
+    {
+      "log": "run-3-sttextview.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150000.5,
+        "documentWidth": 868,
+        "elapsedSeconds": 20.811300166664296,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2465,
+        "load": 6.908203125,
+        "longFrames": [],
+        "maxCallbackMS": 38.44095833483152,
+        "maxDisplayMS": 41.58662499685306,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "sttextview",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 10.834541666554287,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    },
+    {
+      "log": "run-4-native.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150001,
+        "documentWidth": 868,
+        "elapsedSeconds": 21.026996291664545,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2452,
+        "load": 5.87109375,
+        "longFrames": [
+          {
+            "callbackMS": 190.65029165358283,
+            "displayMS": 190.65241666976362,
+            "elapsedSeconds": 0.19065029165358283
+          },
+          {
+            "callbackMS": 185.01591666426975,
+            "displayMS": 185.02158332557883,
+            "elapsedSeconds": 0.4160333333275048
+          },
+          {
+            "callbackMS": 175.89545833470766,
+            "displayMS": 175.89054166455753,
+            "elapsedSeconds": 0.5919287916622125
+          }
+        ],
+        "maxCallbackMS": 190.65029165358283,
+        "maxDisplayMS": 190.65241666976362,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "native",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 184.17629165924154,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    },
+    {
+      "log": "run-5-native.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150001,
+        "documentWidth": 868,
+        "elapsedSeconds": 21.000450708335848,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2447,
+        "load": 5.12451171875,
+        "longFrames": [
+          {
+            "callbackMS": 199.18633333873004,
+            "displayMS": 199.1814999928465,
+            "elapsedSeconds": 0.19918633333873004
+          },
+          {
+            "callbackMS": 56.2988333258545,
+            "displayMS": 56.29704167949967,
+            "elapsedSeconds": 0.25548516666458454
+          },
+          {
+            "callbackMS": 347.34424999624025,
+            "displayMS": 347.34783333260566,
+            "elapsedSeconds": 0.6028294166608248
+          }
+        ],
+        "maxCallbackMS": 347.34424999624025,
+        "maxDisplayMS": 347.34783333260566,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "native",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 187.80662499193568,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    },
+    {
+      "log": "run-6-sttextview.log",
+      "result": {
+        "backingScale": 2,
+        "documentHeight": 150000.5,
+        "documentWidth": 868,
+        "elapsedSeconds": 20.809389625006588,
+        "firstLineHeight": 15,
+        "fixtureSHA256": "36c2cd063a34aaaa8d33617de58ca65820cce45f6cc944a2c2b7fb75d4011ce7",
+        "fixtureUTF16Count": 243399,
+        "fontSize": 12,
+        "frames": 2475,
+        "load": 4.79931640625,
+        "longFrames": [
+          {
+            "callbackMS": 80.54929166974034,
+            "displayMS": 81.1730416608043,
+            "elapsedSeconds": 4.840551458342816
+          }
+        ],
+        "maxCallbackMS": 80.54929166974034,
+        "maxDisplayMS": 81.1730416608043,
+        "p95DisplayMS": 8.333333345944993,
+        "reachedEnd": true,
+        "renderer": "sttextview",
+        "screenMaximumFPS": 120,
+        "scrollPointsPerSecond": 7200,
+        "setupMS": 10.995916672982275,
+        "timedOut": false,
+        "viewportHeight": 340,
+        "viewportWidth": 868,
+        "windowHeight": 340,
+        "windowWidth": 868
+      }
+    }
+  ]
+}

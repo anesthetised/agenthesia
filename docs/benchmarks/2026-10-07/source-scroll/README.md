@@ -95,14 +95,26 @@ attributes on a cached fragment. Three unprofiled runs per variant did not demon
 per-run maxima were 49/25/76 ms upstream and 71/45/75 ms with the deletion. The prototype is rejected as
 a fix; no dependency override is retained. See the [experiment, tests, patch and raw results](redraw/README.md).
 
+## Standalone isolation control
+
+A separate executable now runs unmodified STTextView and native NSTextView / TextKit 2 with matched
+fixture, font, actual clip viewport, line height and scroll speed. All six fresh-process traversals
+completed. STTextView exhibited one unprofiled 81 ms interval at elapsed 4.841 s, without Agenthesia.
+The three native runs had larger full-scenario maxima (191–347 ms), all within the first 0.603 seconds;
+the native profile localizes its largest gaps to initial text layout, not the earlier synchronization
+wait. These maxima cannot be treated as comparable late-scrolling stalls.
+
+Three standalone STTextView profiles did not capture a late >50 ms gap. A 60 ms startup gap instead
+contained input-method activation and window/Space transitions. The 81 ms late event therefore remains
+uncorrelated with a blocking stack. See the [matched control, checks, raw results and limits](standalone/README.md).
+
 ## Next investigation
 
-Do not pin a fork or add a broader invalidation mechanism on the strength of this experiment. A useful
-next isolation control is standalone STTextView, outside the Agenthesia process, with matched content,
-viewport and scroll workload. This can distinguish dependency/platform behavior from the remaining
-application context before changing layer policy. The earlier separate AppKit window still ran inside
-Agenthesia and did not provide that isolation.
+Record window activity and occlusion changes alongside S4 gap events, then capture a repeatable late
+gap with stable window conditions before changing layer policy. Retain and label affected intervals;
+do not hide them from the benchmark. Startup window transitions are an observed confound in the new
+control, not a proven explanation of the earlier late synchronization waits.
 
-Discuss any rendering-strategy change with the owner. Keep #83 open: this investigation localizes
-observed stalls and rejects an unsafe candidate; it does not fix scrolling or prove every historical
-outlier has the same cause.
+Discuss any rendering-strategy change with the owner. Keep #83 open: these controls reject an unsafe
+candidate and narrow what the evidence supports; they do not establish a scrolling fix or justify a
+fork or replacement renderer.

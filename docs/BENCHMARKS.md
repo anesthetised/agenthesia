@@ -70,7 +70,8 @@ after other work in the same lab process is not cold.
 ## Interpreting metrics
 
 - **Callbacks, p50/p95/p99/max:** intervals between display-link timestamps. They are a responsiveness
-  proxy, not CPU rendering durations or proof of pixel presentation.
+  proxy, not CPU rendering durations or proof of pixel presentation. A whole-scenario maximum includes
+  setup and initial layout; locate the interval before calling it a scrolling stall.
 - **Hitches:** intervals longer than 1.5 times the expected refresh interval.
 - **Estimated missed intervals:** `max(0, round(interval / budget) - 1)`, summed across callbacks. A long
   pause can count as one hitch and many missed intervals. Variable refresh makes this an estimate.

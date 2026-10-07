@@ -109,7 +109,7 @@ struct ConnectedAgent {
     static func exitedEarly(_ status: ExitStatus, log: [String]) -> String {
         var message = "The agent \(status) before it finished initializing."
         if !log.isEmpty {
-            message += " Its last output:\n" + log.map { "  " + $0 }.joined(separator: "\n")
+            message += " Its last output:\n" + log.suffix(10).map { "  " + $0 }.joined(separator: "\n")
         }
         return message
     }

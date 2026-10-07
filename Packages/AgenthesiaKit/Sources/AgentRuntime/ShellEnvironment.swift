@@ -1,6 +1,5 @@
 import Darwin
 public import Foundation
-import Synchronization
 
 /// Resolves the user's interactive login-shell environment once for agent launches.
 public actor ShellEnvironment {
@@ -74,22 +73,22 @@ public actor ShellEnvironment {
         let start = "__AGENTHESIA_ENV_START_\(marker)__"
         let end = "__AGENTHESIA_ENV_END_\(marker)__"
         let script = "printf '\\n\(start)\\n'; /usr/bin/env -0; printf '\\n\(end)\\n'"
-        let process = Process()
-        process.executableURL = URL(filePath: shell)
-        process.arguments = ["-l", "-i", "-c", script]
-        process.environment = essentials(inherited, shell: shell, home: userHome, user: userName)
-        process.standardInput = FileHandle.nullDevice
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        let collector = ShellOutputCollector(
-            process: process,
-            stdout: stdout,
-            stderr: stderr,
-            limit: max(1, outputLimit)
-        )
-        let outcome = await collector.run(timeout: timeout)
+        let launchEnvironment = essentials(inherited, shell: shell, home: userHome, user: userName)
+        let outcome = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(
+                    returning: ShellOutputCollector.run(
+                        shell: shell,
+                        script: script,
+                        environment: launchEnvironment,
+                        start: start,
+                        end: end,
+                        timeout: timeout,
+                        limit: max(1, outputLimit)
+                    )
+                )
+            }
+        }
         if case .success(let bytes, let status) = outcome, status == 0,
             let environment = parse(bytes, start: start, end: end)
         {
@@ -152,7 +151,7 @@ public actor ShellEnvironment {
         return result
     }
 
-    private nonisolated static func parse(_ data: Data, start: String, end: String) -> [String: String]? {
+    fileprivate nonisolated static func parse(_ data: Data, start: String, end: String) -> [String: String]? {
         let startBytes = Data("\n\(start)\n".utf8)
         let endBytes = Data("\n\(end)\n".utf8)
         guard let startRange = data.range(of: startBytes),
@@ -180,195 +179,201 @@ private enum ShellOutput: Sendable {
     case launchFailed
 }
 
-/// Mutable callback state is protected by the mutex.
-private final class ShellOutputCollector: Sendable {
-    private struct State: Sendable {
+/// The blocking capture stays off Swift's cooperative executor.
+private enum ShellOutputCollector {
+    static func run(
+        shell: String,
+        script: String,
+        environment: [String: String],
+        start: String,
+        end: String,
+        timeout: Duration,
+        limit: Int
+    ) -> ShellOutput {
+        var stdout = [Int32](repeating: -1, count: 2)
+        var stderr = [Int32](repeating: -1, count: 2)
+        guard pipe(&stdout) == 0 else { return .launchFailed }
+        defer { for fd in stdout where fd >= 0 { Darwin.close(fd) } }
+        guard pipe(&stderr) == 0 else { return .launchFailed }
+        defer { for fd in stderr where fd >= 0 { Darwin.close(fd) } }
+        guard moveAboveStdio(&stdout[0]), moveAboveStdio(&stdout[1]),
+            moveAboveStdio(&stderr[0]), moveAboveStdio(&stderr[1])
+        else { return .launchFailed }
+        guard makeNonblocking(stdout[0]), makeNonblocking(stderr[0]) else { return .launchFailed }
+
+        var actions: posix_spawn_file_actions_t?
+        guard posix_spawn_file_actions_init(&actions) == 0 else { return .launchFailed }
+        defer { posix_spawn_file_actions_destroy(&actions) }
+        guard posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0) == 0,
+            posix_spawn_file_actions_adddup2(&actions, stdout[1], STDOUT_FILENO) == 0,
+            posix_spawn_file_actions_adddup2(&actions, stderr[1], STDERR_FILENO) == 0,
+            posix_spawn_file_actions_addclose(&actions, stdout[0]) == 0,
+            posix_spawn_file_actions_addclose(&actions, stderr[0]) == 0,
+            posix_spawn_file_actions_addclose(&actions, stdout[1]) == 0,
+            posix_spawn_file_actions_addclose(&actions, stderr[1]) == 0
+        else { return .launchFailed }
+
+        var attributes: posix_spawnattr_t?
+        guard posix_spawnattr_init(&attributes) == 0 else { return .launchFailed }
+        defer { posix_spawnattr_destroy(&attributes) }
+        var emptyMask = sigset_t()
+        var defaultSignals = sigset_t()
+        sigemptyset(&emptyMask)
+        sigemptyset(&defaultSignals)
+        for signal in [SIGTERM, SIGPIPE, SIGINT, SIGTTIN, SIGTTOU, SIGHUP, SIGQUIT, SIGCHLD] {
+            sigaddset(&defaultSignals, signal)
+        }
+        let flags = Int16(
+            POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF
+        )
+        guard posix_spawnattr_setflags(&attributes, flags) == 0,
+            posix_spawnattr_setsigmask(&attributes, &emptyMask) == 0,
+            posix_spawnattr_setsigdefault(&attributes, &defaultSignals) == 0
+        else { return .launchFailed }
+
+        let arguments = [shell, "-l", "-i", "-c", script]
+        let variables = environment.map { "\($0.key)=\($0.value)" }
+        var argv = arguments.map { strdup($0) }
+        var envp = variables.map { strdup($0) }
+        defer {
+            for pointer in argv { free(pointer) }
+            for pointer in envp { free(pointer) }
+        }
+        guard argv.allSatisfy({ $0 != nil }), envp.allSatisfy({ $0 != nil }) else { return .launchFailed }
+        argv.append(nil)
+        envp.append(nil)
+        var pid: pid_t = 0
+        let spawnStatus = argv.withUnsafeMutableBufferPointer { args in
+            envp.withUnsafeMutableBufferPointer { vars in
+                shell.withCString { path in
+                    posix_spawn(&pid, path, &actions, &attributes, args.baseAddress, vars.baseAddress)
+                }
+            }
+        }
+        guard spawnStatus == 0 else { return .launchFailed }
+        Darwin.close(stdout[1])
+        Darwin.close(stderr[1])
+        stdout[1] = -1
+        stderr[1] = -1
+
+        let outcome = capture(
+            pid: pid,
+            stdout: stdout[0],
+            stderr: stderr[0],
+            start: start,
+            end: end,
+            timeout: timeout,
+            limit: limit
+        )
+        return outcome
+    }
+
+    private static func capture(
+        pid: pid_t,
+        stdout: Int32,
+        stderr: Int32,
+        start: String,
+        end: String,
+        timeout: Duration,
+        limit: Int
+    ) -> ShellOutput {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
         var bytes = Data()
-        var exited: Int32?
+        var status: Int32 = 0
+        var reaped = false
         var stdoutEnded = false
-        var finished = false
-        var group = false
-        var deadline: Task<Void, Never>?
-        var continuation: CheckedContinuation<ShellOutput, Never>?
-    }
-
-    private let state = Mutex(State())
-    private let process: Process
-    private let stdout: Pipe
-    private let stderr: Pipe
-    private let stdoutFD: Mutex<Int32?>
-    private let stderrFD: Mutex<Int32?>
-    private let limit: Int
-
-    init(process: Process, stdout: Pipe, stderr: Pipe, limit: Int) {
-        self.process = process
-        self.stdout = stdout
-        self.stderr = stderr
-        stdoutFD = Mutex(stdout.fileHandleForReading.fileDescriptor)
-        stderrFD = Mutex(stderr.fileHandleForReading.fileDescriptor)
-        self.limit = limit
-    }
-
-    func run(timeout: Duration) async -> ShellOutput {
-        await withCheckedContinuation { continuation in
-            state.withLock { $0.continuation = continuation }
-            Self.makeNonblocking(stdout.fileHandleForReading.fileDescriptor)
-            Self.makeNonblocking(stderr.fileHandleForReading.fileDescriptor)
-            process.terminationHandler = { [weak self] finished in
-                self?.completeExit(finished.terminationStatus)
-            }
-            do {
-                try process.run()
-                stdout.fileHandleForWriting.closeFile()
-                stderr.fileHandleForWriting.closeFile()
-                let pid = process.processIdentifier
-                // Foundation may create a separate group. Never signal an inherited group.
-                let group = pid != getpgrp() && (getpgid(pid) == pid || kill(-pid, 0) == 0)
-                state.withLock { $0.group = group }
-                // The child may already have exited; pipes retain its output until handlers start.
-                stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                    guard let self, let chunk = read(from: stderrFD) else { return }
-                    if chunk.isEmpty { handle.readabilityHandler = nil }
+        var stderrEnded = false
+        var outcome: ShellOutput = .timedOut
+        while true {
+            reap(pid, status: &status, reaped: &reaped)
+            if reaped {
+                if ShellEnvironment.parse(bytes, start: start, end: end) != nil || stdoutEnded {
+                    outcome = .success(bytes, status)
+                    break
                 }
-                stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                    guard let self, let chunk = read(from: stdoutFD) else { return }
-                    if chunk.isEmpty {
-                        handle.readabilityHandler = nil
-                        completeStdout()
-                    } else {
-                        append(chunk)
+            }
+            if clock.now >= deadline { break }
+            var descriptors = [
+                pollfd(fd: stdoutEnded ? -1 : stdout, events: Int16(POLLIN), revents: 0),
+                pollfd(fd: stderrEnded ? -1 : stderr, events: Int16(POLLIN), revents: 0),
+            ]
+            let ready = descriptors.withUnsafeMutableBufferPointer { poll($0.baseAddress, nfds_t($0.count), 20) }
+            if ready < 0 && errno != EINTR { break }
+            if descriptors[0].revents != 0 {
+                var chunk = [UInt8](repeating: 0, count: 65_536)
+                let count = Darwin.read(stdout, &chunk, chunk.count)
+                if count == 0 {
+                    stdoutEnded = true
+                } else if count > 0 {
+                    if count > limit - bytes.count {
+                        outcome = .tooMuchOutput
+                        break
                     }
+                    bytes.append(contentsOf: chunk.prefix(count))
+                } else if errno != EAGAIN && errno != EINTR {
+                    stdoutEnded = true
                 }
-                let deadline = Task.detached { [self] in
-                    do {
-                        try await Task.sleep(for: timeout)
-                        _ = finish(.timedOut)
-                    } catch {}
-                }
-                state.withLock { state in
-                    if state.finished { deadline.cancel() } else { state.deadline = deadline }
-                }
-            } catch {
-                try? stdout.fileHandleForWriting.close()
-                try? stderr.fileHandleForWriting.close()
-                _ = finish(.launchFailed)
+            }
+            if descriptors[1].revents != 0 {
+                var discarded = [UInt8](repeating: 0, count: 65_536)
+                let count = Darwin.read(stderr, &discarded, discarded.count)
+                if count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR) { stderrEnded = true }
+            }
+        }
+        cleanUpGroup(pid, status: &status, reaped: &reaped)
+        return outcome
+    }
+
+    private static func reap(_ pid: pid_t, status: inout Int32, reaped: inout Bool) {
+        guard !reaped else { return }
+        var result: pid_t
+        repeat { result = waitpid(pid, &status, WNOHANG) } while result < 0 && errno == EINTR
+        if result == pid { reaped = true }
+        if result < 0 && errno == ECHILD {
+            status = -1
+            reaped = true
+        }
+    }
+
+    private static func cleanUpGroup(_ pid: pid_t, status: inout Int32, reaped: inout Bool) {
+        // POSIX_SPAWN_SETSID makes pid the session and process-group leader.
+        if kill(-pid, 0) == 0 || errno == EPERM { kill(-pid, SIGTERM) }
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(200))
+        while ContinuousClock.now < deadline {
+            reap(pid, status: &status, reaped: &reaped)
+            if kill(-pid, 0) != 0 && errno == ESRCH { break }
+            usleep(10_000)
+        }
+        if kill(-pid, 0) == 0 || errno == EPERM { kill(-pid, SIGKILL) }
+        let reapDeadline = ContinuousClock.now.advanced(by: .milliseconds(100))
+        while !reaped && ContinuousClock.now < reapDeadline {
+            reap(pid, status: &status, reaped: &reaped)
+            if !reaped { usleep(10_000) }
+        }
+        if !reaped {
+            // Keep the capture deadline bounded; the utility queue owns the final reap.
+            DispatchQueue.global(qos: .utility).async {
+                var finalStatus: Int32 = 0
+                var result: pid_t
+                repeat { result = waitpid(pid, &finalStatus, 0) } while result < 0 && errno == EINTR
             }
         }
     }
 
-    private func append(_ chunk: Data) {
-        let overflow = state.withLock { state in
-            guard !state.finished else { return false }
-            if chunk.count > limit - state.bytes.count { return true }
-            state.bytes.append(chunk)
-            return false
+    private static func moveAboveStdio(_ fd: inout Int32) -> Bool {
+        guard fd >= STDERR_FILENO + 1 else {
+            let moved = fcntl(fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1)
+            guard moved >= 0 else { return false }
+            Darwin.close(fd)
+            fd = moved
+            return true
         }
-        if overflow { _ = finish(.tooMuchOutput) }
-    }
-
-    private func completeStdout() {
-        let result = state.withLock { state -> ShellOutput? in
-            state.stdoutEnded = true
-            if let status = state.exited, !state.finished { return .success(state.bytes, status) }
-            return nil
-        }
-        if let result { _ = finish(result) }
-    }
-
-    private func completeExit(_ status: Int32) {
-        let result = state.withLock { state -> ShellOutput? in
-            state.exited = status
-            if state.stdoutEnded && !state.finished { return .success(state.bytes, status) }
-            return nil
-        }
-        if let result { _ = finish(result) }
-    }
-
-    @discardableResult
-    private func finish(_ result: ShellOutput) -> Bool {
-        let completed = state.withLock {
-            state -> (CheckedContinuation<ShellOutput, Never>, Bool, Task<Void, Never>?)? in
-            guard !state.finished else { return nil }
-            state.finished = true
-            guard let continuation = state.continuation else { return nil }
-            state.continuation = nil
-            let deadline = state.deadline
-            state.deadline = nil
-            return (continuation, state.group, deadline)
-        }
-        guard let (continuation, group, deadline) = completed else { return false }
-        deadline?.cancel()
-        let cleanupScheduled: Bool
-        if case .success = result {
-            if group, kill(-process.processIdentifier, 0) == 0 {
-                Self.signal(process: process, group: true, continuation: continuation, result: result)
-                cleanupScheduled = true
-            } else {
-                cleanupScheduled = false
-            }
-        } else if process.processIdentifier > 0 {
-            let group = group || (process.isRunning && getpgid(process.processIdentifier) == process.processIdentifier)
-            Self.signal(process: process, group: group, continuation: continuation, result: result)
-            cleanupScheduled = true
-        } else {
-            cleanupScheduled = false
-        }
-        stdout.fileHandleForReading.readabilityHandler = nil
-        stderr.fileHandleForReading.readabilityHandler = nil
-        process.terminationHandler = nil
-        close(stdout.fileHandleForReading, descriptor: stdoutFD)
-        close(stderr.fileHandleForReading, descriptor: stderrFD)
-        if !cleanupScheduled { continuation.resume(returning: result) }
         return true
     }
 
-    private static func signal(
-        process: Process,
-        group: Bool,
-        continuation: CheckedContinuation<ShellOutput, Never>,
-        result: ShellOutput
-    ) {
-        let pid = process.processIdentifier
-        if group {
-            kill(-pid, SIGTERM)
-        } else if process.isRunning {
-            kill(pid, SIGTERM)
-        }
-        Task.detached {
-            try? await Task.sleep(for: .milliseconds(200))
-            if group {
-                // The original group may outlive its leader because startup scripts fork.
-                if kill(-pid, 0) == 0 { kill(-pid, SIGKILL) }
-            } else if process.isRunning {
-                kill(pid, SIGKILL)
-            }
-            for _ in 0..<5 where process.isRunning {
-                try? await Task.sleep(for: .milliseconds(20))
-            }
-            continuation.resume(returning: result)
-        }
-    }
-
-    private static func makeNonblocking(_ descriptor: Int32) {
-        let flags = fcntl(descriptor, F_GETFL)
-        if flags >= 0 { _ = fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) }
-    }
-
-    private func read(from descriptor: borrowing Mutex<Int32?>) -> Data? {
-        descriptor.withLock { descriptor in
-            guard let fd = descriptor else { return nil }
-            var bytes = [UInt8](repeating: 0, count: 65_536)
-            let count = Darwin.read(fd, &bytes, bytes.count)
-            if count < 0 { return nil }
-            return Data(bytes.prefix(count))
-        }
-    }
-
-    private func close(_ handle: FileHandle, descriptor: borrowing Mutex<Int32?>) {
-        descriptor.withLock { descriptor in
-            guard descriptor != nil else { return }
-            descriptor = nil
-            try? handle.close()
-        }
+    private static func makeNonblocking(_ fd: Int32) -> Bool {
+        let flags = fcntl(fd, F_GETFL)
+        return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0
     }
 }

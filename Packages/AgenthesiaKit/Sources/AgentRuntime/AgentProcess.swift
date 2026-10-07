@@ -47,6 +47,7 @@ public actor AgentProcess {
     private let stderrCapture: StderrCapture
     private var exitStatus: ExitStatus?
     private var exitWaiters: [CheckedContinuation<ExitStatus, Never>] = []
+    private var groupCleanupDeadline: ContinuousClock.Instant?
     private var groupCleanupTask: Task<Void, Never>?
     private var terminationTask: Task<ExitStatus, Never>?
 
@@ -128,7 +129,7 @@ public actor AgentProcess {
     }
 
     public var isRunning: Bool { exitStatus == nil }
-    /// Last 64 KiB of stderr. After a normal exit, call waitForStderr first.
+    /// Last 64 KiB of stderr. For a finalized snapshot, call waitForStderr first.
     public var stderrLog: String { stderrCapture.snapshot }
 
     public func waitForExit() async -> ExitStatus {
@@ -136,16 +137,19 @@ public actor AgentProcess {
         return await withCheckedContinuation { exitWaiters.append($0) }
     }
 
-    /// Awaits stderr EOF, or closes a pipe retained by detached descendants.
+    /// Waits for the leader to exit, then waits up to 500 ms for stderr EOF.
+    /// A descendant retaining the pipe cannot keep this suspended indefinitely.
     public func waitForStderr() async {
+        _ = await waitForExit()
         await stderrCapture.waitForDrain()
     }
 
-    /// Idempotent SIGTERM/SIGKILL group cleanup. Caller cancellation does not stop it.
+    /// Idempotent SIGTERM/SIGKILL group cleanup. Later calls can shorten, but never
+    /// extend, the grace period. Caller cancellation does not stop cleanup.
     @discardableResult
     public func terminate(gracePeriod: Duration = .seconds(3)) async -> ExitStatus {
-        if let terminationTask { return await terminationTask.value }
         let cleanup = ensureGroupCleanup(gracePeriod: gracePeriod)
+        if let terminationTask { return await terminationTask.value }
         let task = Task { await performTermination(cleanup: cleanup) }
         terminationTask = task
         return await task.value
@@ -160,25 +164,29 @@ public actor AgentProcess {
     }
 
     private func ensureGroupCleanup(gracePeriod: Duration) -> Task<Void, Never> {
+        let requestedDeadline = ContinuousClock.now.advanced(by: gracePeriod)
+        if let groupCleanupDeadline {
+            self.groupCleanupDeadline = min(groupCleanupDeadline, requestedDeadline)
+        } else {
+            groupCleanupDeadline = requestedDeadline
+        }
         if let groupCleanupTask { return groupCleanupTask }
-        let task = Task { await performGroupCleanup(gracePeriod: gracePeriod) }
+        let task = Task { await performGroupCleanup() }
         groupCleanupTask = task
         return task
     }
 
-    private func performGroupCleanup(gracePeriod: Duration) async {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: gracePeriod)
+    private func performGroupCleanup() async {
         if let processGroup {
             if groupExists(processGroup) { kill(-processGroup, SIGTERM) }
-            while groupExists(processGroup) && clock.now < deadline {
+            while groupExists(processGroup) && ContinuousClock.now < (groupCleanupDeadline ?? .now) {
                 do { try await Task.sleep(for: .milliseconds(20)) } catch { break }
             }
             if groupExists(processGroup) { kill(-processGroup, SIGKILL) }
         } else if process.isRunning {
             // The child has no verified private group; signal only its live leader.
             kill(processIdentifier, SIGTERM)
-            while process.isRunning && clock.now < deadline {
+            while process.isRunning && ContinuousClock.now < (groupCleanupDeadline ?? .now) {
                 do { try await Task.sleep(for: .milliseconds(20)) } catch { break }
             }
             if process.isRunning { kill(processIdentifier, SIGKILL) }

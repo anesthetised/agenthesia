@@ -130,6 +130,11 @@ import Testing
                 == "The agent exited with code 127 before it finished initializing."
         )
         #expect(ConnectedAgent.exitedEarly(.exited(1), log: ["boom"]).hasSuffix("Its last output:\n  boom"))
+        let lines = (0..<12).map { "line \($0)" }
+        let message = ConnectedAgent.exitedEarly(.exited(1), log: lines)
+        #expect(!message.contains("line 1\n"))
+        #expect(message.contains("  line 2\n"))
+        #expect(message.hasSuffix("  line 11"))
     }
 
     @Test func agentOptionsBuildTheCommand() throws {

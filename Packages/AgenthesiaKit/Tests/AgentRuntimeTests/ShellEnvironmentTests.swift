@@ -186,15 +186,17 @@ import Testing
         #expect(kill(pid, 0) == -1 && errno == ESRCH)
     }
 
-    @Test func validSnapshotAlsoCleansDescendantHoldingStderr() async throws {
+    @Test(arguments: [false, true])
+    func validSnapshotAlsoCleansDescendantHoldingPipe(holdsStdout: Bool) async throws {
         let childFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-shell-stderr-\(UUID().uuidString)"
         )
         defer { try? FileManager.default.removeItem(at: childFile) }
+        let child = holdsStdout ? "/bin/sleep 30 &" : "/bin/sleep 30 1>&2 &"
         let fixture = try shell(
             """
             trap '' TERM
-            /bin/sleep 30 1>&2 &
+            \(child)
             echo $! > "$AGENTHESIA_TEST_CHILD_FILE"
             export AGENTHESIA_TEST_VALID=yes
             while [ "$#" -gt 0 ]; do

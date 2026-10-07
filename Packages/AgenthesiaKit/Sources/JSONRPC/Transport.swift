@@ -1,3 +1,4 @@
+import Darwin
 public import Foundation
 import Synchronization
 
@@ -14,16 +15,24 @@ public protocol MessageTransport: Sendable {
 }
 
 /// A transport over a pair of file handles, typically a child process's stdout and stdin.
+/// A disconnected writer throws an I/O error instead of terminating the host with SIGPIPE.
 public final class FileHandleTransport: MessageTransport {
     public let messages: AsyncThrowingStream<Data, any Error>
     private let reading: FileHandle
     private let writing: FileHandle
+    private let writeSetupError: POSIXError?
     private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
     private let writeQueue = DispatchQueue(label: "io.github.anesthetised.Agenthesia.FileHandleTransport.write")
 
     public init(reading: FileHandle, writing: FileHandle) {
         self.reading = reading
         self.writing = writing
+        // A disconnected peer must produce EPIPE, not terminate the host. Keep signal policy descriptor-local.
+        if fcntl(writing.fileDescriptor, F_SETNOSIGPIPE, 1) == -1 {
+            writeSetupError = POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        } else {
+            writeSetupError = nil
+        }
         let (messages, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
         self.messages = messages
         self.continuation = continuation
@@ -46,6 +55,7 @@ public final class FileHandleTransport: MessageTransport {
     }
 
     public func send(_ message: Data) async throws {
+        if let writeSetupError { throw writeSetupError }
         let line = message + [0x0A]
         let writing = writing
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in

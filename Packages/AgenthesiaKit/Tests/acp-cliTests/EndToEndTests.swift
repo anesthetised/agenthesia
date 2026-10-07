@@ -131,7 +131,8 @@ struct EndToEndTests {
         try process.run()
         let text = String(decoding: try output.fileHandleForReading.readToEnd() ?? Data(), as: UTF8.self)
         process.waitUntilExit()
-        #expect(process.terminationStatus != 0)
+        #expect(process.terminationReason == .exit)
+        #expect(process.terminationStatus == 1)
         #expect(text.contains("exited with code 127 before it finished initializing"))
         #expect(text.contains("No such file or directory"))
     }

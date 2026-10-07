@@ -277,7 +277,8 @@
             if !cold, highlighting { _ = Highlighter().highlight("x", language: .swift) }
             let sourceView = await present(SourceView())
             let flags = [lineNumbers ? "lines" : nil, highlighting ? "colors" : nil].compactMap(\.self)
-            let name = "S4 SourceView, \(cold ? "cold" : "warm") (\(flags.joined(separator: ", ")))"
+            let options = flags.isEmpty ? "" : " (\(flags.joined(separator: ", ")))"
+            let name = "S4 SourceView, \(cold ? "cold" : "warm")\(options)"
             let scrollView = sourceView.scrollView
             let clip = scrollView.contentView
             var start: ContinuousClock.Instant?

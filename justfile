@@ -17,7 +17,7 @@ build:
 test: test-scripts
     swift test --package-path {{package}}
 
-# Test the benchmark runner without launching benchmarks
+# Test benchmark and coverage tooling without launching benchmarks
 test-scripts:
     python3 -m unittest discover -s scripts -p 'test_*.py'
 

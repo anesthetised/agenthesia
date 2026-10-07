@@ -41,8 +41,8 @@ def positive(value):
     return value
 
 
-def read_results(output):
-    results = [json.loads(line[len(RESULT_PREFIX):]) for line in output.splitlines() if line.startswith(RESULT_PREFIX)]
+def read_results(lines):
+    results = [json.loads(line[len(RESULT_PREFIX):]) for line in lines if line.startswith(RESULT_PREFIX)]
     if not results:
         raise ValueError("Benchmark produced no structured results; see the saved log")
     return results
@@ -53,17 +53,21 @@ def run_once(command, environment, log, timeout):
     with log.open("w") as output:
         subprocess.run(command, cwd=ROOT, env=environment, stdout=output, stderr=subprocess.STDOUT,
                        check=True, timeout=timeout)
-    return read_results(log.read_text())
+    with log.open() as output:
+        return read_results(output)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["micro", "lab"])
-    parser.add_argument("scenarios", nargs="?", type=scenarios, default=["S1:A2"])
+    parser.add_argument("scenarios", nargs="?", type=scenarios)
     parser.add_argument("--runs", type=positive, default=3, help="Fresh-process repetitions per scenario (default: 3)")
     parser.add_argument("--timeout", type=positive, default=180, help="Seconds per benchmark process (default: 180)")
     parser.add_argument("--output", type=Path, help="New result directory (default: .build/benchmarks/<timestamp>)")
     args = parser.parse_args()
+    if args.mode == "micro" and args.scenarios is not None:
+        parser.error("Scenarios are only supported by lab mode; use just lab-run <scenarios>")
+    args.scenarios = args.scenarios or ["S1:A2"]
 
     base = ROOT / ".build/benchmarks"
     base.mkdir(parents=True, exist_ok=True)

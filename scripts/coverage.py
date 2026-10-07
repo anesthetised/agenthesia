@@ -21,8 +21,8 @@ from collections import defaultdict
 # Executables that tests launch as child processes; their profiles land next to the test runner's.
 EXECUTABLES = ["acp-cli", "MockAgent"]
 
-# Test support modules: reported, but not part of the total.
-TEST_SUPPORT = {"ACPTesting", "MockAgent"}
+# Test support and debug lab scopes: reported, but not part of the product total.
+NON_PRODUCT = {"ACPTesting", "MockAgent", "RenderingLab"}
 
 # Badge colors by minimum percentage, as on shields.io.
 BADGE_COLORS = [(90, "#4c1"), (80, "#97ca00"), (70, "#a4a61d"), (60, "#dfb317"), (50, "#fe7d37"), (0, "#e05d44")]
@@ -114,12 +114,15 @@ def report(package: str, args: list[str]) -> int:
         match = re.search(r"/Packages/AgenthesiaKit/Sources/([^/]+)/", entry["filename"])
         if not match:
             continue
+        module = match.group(1)
+        if module == "AgenthesiaUI" and entry["filename"][match.end():].startswith("Lab/"):
+            module = "RenderingLab"
         lines = entry["summary"]["lines"]
-        totals[match.group(1)][0] += lines["covered"]
-        totals[match.group(1)][1] += lines["count"]
+        totals[module][0] += lines["covered"]
+        totals[module][1] += lines["count"]
 
     failures = []
-    print(f"{'Module':<20} {'Lines':>13} {'Coverage':>9} {'Required':>9}")
+    print(f"{'Scope':<20} {'Lines':>13} {'Coverage':>9} {'Required':>9}")
     for module in sorted(totals):
         covered, count = totals[module]
         percent = 100.0 * covered / count if count else 100.0
@@ -132,10 +135,10 @@ def report(package: str, args: list[str]) -> int:
                 status += "  FAIL"
         print(f"{module:<20} {covered:>6}/{count:<6} {percent:>8.1f}% {status}")
 
-    product = [totals[module] for module in totals if module not in TEST_SUPPORT]
+    product = [totals[module] for module in totals if module not in NON_PRODUCT]
     covered, count = sum(c for c, _ in product), sum(n for _, n in product)
     total = 100.0 * covered / count if count else 100.0
-    print(f"{'Total':<20} {covered:>6}/{count:<6} {total:>8.1f}%")
+    print(f"{'Product total':<20} {covered:>6}/{count:<6} {total:>8.1f}%")
     if badge_path:
         os.makedirs(os.path.dirname(os.path.abspath(badge_path)), exist_ok=True)
         with open(badge_path, "w") as file:

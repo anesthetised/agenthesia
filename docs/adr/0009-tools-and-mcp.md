@@ -1,6 +1,7 @@
 # 0009. Tools and MCP
 
-- Status: Accepted, amended by [0011](0011-cross-agent-memory.md)
+- Status: Accepted; original MCP scope restored by [0012](0012-defer-cross-agent-memory.md),
+  superseding the amendment in [0011](0011-cross-agent-memory.md)
 - Date: 2026-10-05
 
 ## Context

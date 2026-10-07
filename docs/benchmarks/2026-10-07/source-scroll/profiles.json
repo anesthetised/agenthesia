@@ -1,0 +1,121 @@
+[
+  {
+    "recording": "cpu-only",
+    "waitingThreads": false,
+    "sample": {
+      "id": "E064ED42-E63B-46D7-AA6C-5C03290D240E",
+      "measurements": {
+        "screenMaximumFPS": 120,
+        "firstCallbackAfterSetupMS": 17.8745,
+        "backingScale": 2,
+        "viewportWidth": 868,
+        "highlightCompleteMS": 233.894917,
+        "viewportHeight": 340
+      },
+      "open": 12.516792,
+      "scenario": "S4 SourceView, warm (lines, colors)",
+      "report": {
+        "p95": 8.333333345944993,
+        "max": 170.98091666412074,
+        "load": 6.63330078125,
+        "estimatedMissed": 224,
+        "p99": 27.118333338876255,
+        "freeMemory": 65,
+        "frames": 2281,
+        "hitches": 46,
+        "memory": 69.73533630371094,
+        "excessMilliseconds": 1877.8430875827326,
+        "p50": 8.333333331393078
+      }
+    }
+  },
+  {
+    "recording": "source-waits",
+    "waitingThreads": true,
+    "sample": {
+      "id": "CD24648B-6ABC-4B46-BF9B-BD6B21FD8D63",
+      "measurements": {
+        "viewportWidth": 868,
+        "firstCallbackAfterSetupMS": 18.642333,
+        "viewportHeight": 340,
+        "highlightCompleteMS": 233.501458,
+        "screenMaximumFPS": 120,
+        "backingScale": 2
+      },
+      "scenario": "S4 SourceView, warm (lines, colors)",
+      "open": 12.278667,
+      "report": {
+        "max": 170.56270832836162,
+        "p99": 8.333333345944993,
+        "p95": 8.333333345944993,
+        "frames": 2437,
+        "excessMilliseconds": 516.6730046476005,
+        "estimatedMissed": 61,
+        "hitches": 20,
+        "freeMemory": 66,
+        "p50": 8.333333331393078,
+        "memory": 68.37598419189453,
+        "load": 4.98388671875
+      }
+    }
+  },
+  {
+    "recording": "plain-waits",
+    "waitingThreads": true,
+    "sample": {
+      "id": "A5184D6C-3532-4A4A-BA38-260577EBA24A",
+      "report": {
+        "p95": 8.333333345944993,
+        "estimatedMissed": 149,
+        "frames": 2348,
+        "p50": 8.333333331393078,
+        "max": 157.9748749936698,
+        "excessMilliseconds": 1251.307254526182,
+        "freeMemory": 66,
+        "memory": 44.73535919189453,
+        "p99": 24.818333331495523,
+        "load": 7.8232421875,
+        "hitches": 31
+      },
+      "open": 17.518208,
+      "measurements": {
+        "screenMaximumFPS": 120,
+        "viewportHeight": 340,
+        "backingScale": 2,
+        "firstCallbackAfterSetupMS": 23.098625,
+        "viewportWidth": 868
+      },
+      "scenario": "S4 SourceView, warm"
+    }
+  },
+  {
+    "recording": "appkit-host-waits",
+    "waitingThreads": true,
+    "sample": {
+      "id": "28CE510C-28D6-434B-BAF1-2BEE8D6F57C2",
+      "scenario": "S4 SourceView, warm (lines, colors, appkit)",
+      "open": 12.198208,
+      "measurements": {
+        "screenMaximumFPS": 120,
+        "viewportWidth": 868,
+        "viewportHeight": 340,
+        "backingScale": 2,
+        "firstCallbackAfterSetupMS": 25.014958,
+        "highlightCompleteMS": 235.788125
+      },
+      "report": {
+        "excessMilliseconds": 1305.274296173593,
+        "estimatedMissed": 153,
+        "load": 5.91162109375,
+        "hitches": 38,
+        "p99": 21.29629167029634,
+        "frames": 2342,
+        "max": 308.20345833490137,
+        "freeMemory": 66,
+        "memory": 77.45408630371094,
+        "p95": 8.333333345944993,
+        "p50": 8.333333331393078
+      }
+    }
+  }
+]

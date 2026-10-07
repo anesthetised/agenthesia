@@ -21,10 +21,14 @@
             var load = 0.0
         }
 
-        static let signposter = OSSignposter(subsystem: "io.github.anesthetised.Agenthesia", category: "RenderingLab")
+        static let signposter = OSSignposter(
+            subsystem: "io.github.anesthetised.Agenthesia",
+            category: .pointsOfInterest
+        )
 
         private var link: CADisplayLink?
         private var last: CFTimeInterval?
+        private var lastCallback: TimeInterval?
         private var samples = FrameSamples()
         private var onFrame: () -> Bool = { false }
         private var completion: (Report) -> Void = { _ in }
@@ -42,12 +46,22 @@
         }
 
         @objc private func tick(_ link: CADisplayLink) {
+            let callback = ProcessInfo.processInfo.systemUptime
             if let last {
                 let interval = link.timestamp - last
                 let budget = link.targetTimestamp - link.timestamp
                 samples.record(interval: interval, budget: budget > 0 ? budget : link.duration)
+                let callbackInterval = callback - (lastCallback ?? callback)
+                // Diagnostic only: locate long gaps in Instruments, including deferred work between callbacks.
+                if max(interval, callbackInterval) > 0.05 {
+                    Self.signposter.emitEvent(
+                        "LongFrame",
+                        "displayMS=\(interval * 1000) callbackMS=\(callbackInterval * 1000)"
+                    )
+                }
             }
             last = link.timestamp
+            lastCallback = callback
             if !onFrame() {
                 completion(finish())
             }
@@ -75,6 +89,7 @@
             link?.invalidate()
             link = nil
             last = nil
+            lastCallback = nil
             samples = FrameSamples()
             if let signpost { Self.signposter.endInterval("Scenario", signpost) }
             signpost = nil

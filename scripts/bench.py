@@ -28,7 +28,7 @@ def scenarios(value):
             continue
         if part.startswith("S4:"):
             flags = part[3:].split("+") if part[3:] else []
-            if len(flags) == len(set(flags)) and set(flags) <= {"cold", "lines", "colors"}:
+            if len(flags) == len(set(flags)) and set(flags) <= {"cold", "lines", "colors", "appkit"}:
                 continue
         raise argparse.ArgumentTypeError(f"Invalid scenario: {part!r}")
     return parts

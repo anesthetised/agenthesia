@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261007T000554.308228Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 90,
+  "commit": "6f4c8a9c86e23e0d32f823ea4616d1393706507f",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S4:lines+colors",
+    "S4:colors",
+    "S4:lines",
+    "S4:"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S4:lines+colors",
+      "log": "run-1-1.log",
+      "wallSeconds": 22.772507333007525,
+      "samples": [
+        {
+          "id": "98C19B93-A484-4CA3-A6A7-5A0F88D13856",
+          "report": {
+            "max": 123.60937499033753,
+            "p95": 8.333333345944993,
+            "estimatedMissed": 91,
+            "frames": 2406,
+            "excessMilliseconds": 768.7952546111774,
+            "freeMemory": 69,
+            "p99": 8.333333345944993,
+            "p50": 8.333333331393078,
+            "memory": 69.00098419189453,
+            "load": 12.5771484375,
+            "hitches": 24
+          },
+          "open": 12.243042,
+          "scenario": "S4 SourceView, warm (lines, colors)",
+          "measurements": {
+            "backingScale": 2,
+            "viewportWidth": 868,
+            "viewportHeight": 340,
+            "firstCallbackAfterSetupMS": 18.129125,
+            "screenMaximumFPS": 120,
+            "highlightCompleteMS": 233.793083
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "S4:colors",
+      "log": "run-1-2.log",
+      "wallSeconds": 22.501933542007464,
+      "samples": [
+        {
+          "scenario": "S4 SourceView, warm (colors)",
+          "measurements": {
+            "viewportHeight": 340,
+            "screenMaximumFPS": 120,
+            "firstCallbackAfterSetupMS": 16.683042,
+            "backingScale": 2,
+            "highlightCompleteMS": 230.415917,
+            "viewportWidth": 868
+          },
+          "report": {
+            "p99": 16.666666662786156,
+            "load": 11.666015625,
+            "excessMilliseconds": 733.7071712681791,
+            "p95": 8.333333345944993,
+            "frames": 2410,
+            "hitches": 28,
+            "estimatedMissed": 87,
+            "p50": 8.333333331393078,
+            "memory": 61.079132080078125,
+            "freeMemory": 69,
+            "max": 105.56958333472721
+          },
+          "open": 11.290125,
+          "id": "93BF5815-DFA2-4116-8045-874FF9E5510D"
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "S4:lines",
+      "log": "run-1-3.log",
+      "wallSeconds": 22.270440541993594,
+      "samples": [
+        {
+          "id": "2342907C-CF89-49CB-B0A9-2EA997D9E46D",
+          "scenario": "S4 SourceView, warm (lines)",
+          "report": {
+            "p50": 8.333333331393078,
+            "freeMemory": 69,
+            "excessMilliseconds": 459.14883793739136,
+            "max": 128.3487916662125,
+            "p95": 8.333333345944993,
+            "estimatedMissed": 52,
+            "load": 9.310546875,
+            "p99": 8.333333345944993,
+            "hitches": 15,
+            "memory": 46.37596130371094,
+            "frames": 2444
+          },
+          "open": 17.433667,
+          "measurements": {
+            "viewportWidth": 868,
+            "screenMaximumFPS": 120,
+            "firstCallbackAfterSetupMS": 24.920042,
+            "viewportHeight": 340,
+            "backingScale": 2
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "S4:",
+      "log": "run-1-4.log",
+      "wallSeconds": 22.222084166001878,
+      "samples": [
+        {
+          "measurements": {
+            "viewportWidth": 868,
+            "viewportHeight": 340,
+            "backingScale": 2,
+            "firstCallbackAfterSetupMS": 22.475583,
+            "screenMaximumFPS": 120
+          },
+          "id": "847F9ECE-C1F0-4D0F-B21E-D0746AA74779",
+          "scenario": "S4 SourceView, warm",
+          "open": 16.151167,
+          "report": {
+            "frames": 2476,
+            "p95": 8.333333345944993,
+            "estimatedMissed": 22,
+            "max": 42.01108333654702,
+            "memory": 56.53221130371094,
+            "excessMilliseconds": 191.47950470505748,
+            "hitches": 15,
+            "p50": 8.333333331393078,
+            "p99": 8.333333345944993,
+            "freeMemory": 69,
+            "load": 8.01171875
+          }
+        }
+      ]
+    }
+  ]
+}

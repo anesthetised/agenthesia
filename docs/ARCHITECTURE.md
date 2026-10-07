@@ -51,6 +51,32 @@ streaming; it does not implement or supersede ADR-0010's production queue and st
 `AgenthesiaCore` and `Persistence` are still placeholders. The data flow below describes the intended
 live-session architecture, not functionality supplied by the demo.
 
+## Runtime implementation
+
+`ShellEnvironment` resolves the login-shell environment once per resolver instance. Concurrent callers
+share the same resolution, and the application uses the shared instance. The resolver runs the shell
+with `-l -i -c`, extracts NUL-separated environment entries between unique markers, and bounds both
+the captured output (1 MiB) and the wait (5 seconds, plus bounded process cleanup). Failed resolution
+returns a fallback environment and a diagnostic
+without exposing environment values. The CLI passes the resulting environment explicitly to the agent
+and reuses it for terminal authentication; constructing `AgentProcess` does not implicitly run a shell.
+
+`AgentProcess` retains Foundation's `Process` and verifies process-group isolation before using group
+signals. Shutdown is shared by concurrent callers: SIGTERM targets the group, followed by SIGKILL
+after the grace period if necessary, including when descendants outlive the group leader. This covers
+processes that remain in the group; it is not containment for processes that deliberately detach.
+Natural leader exit also starts group cleanup without closing the ACP transport before its final
+messages are read. The retained stderr tail (64 KiB), pending line (16 KiB), and live notification
+stream (64 lines) all have bounded storage; truncation of retained output is marked.
+Process exit and stderr completion are separate events, so diagnostics wait for a bounded final drain
+(up to 500 ms) rather than sleeping for an arbitrary interval.
+
+The session log view will be connected with live sessions in
+[#17](https://github.com/anesthetised/agenthesia/issues/17); the demo does not launch a process.
+Registry installation and the managed Node runtime are also still planned. A possible explicit
+`posix_spawn` launcher is tracked separately in
+[#91](https://github.com/anesthetised/agenthesia/issues/91), not adopted by this implementation.
+
 ## Data flow
 
 ```

@@ -167,9 +167,36 @@ final class Output: Sendable {
 /// runner's when coverage is enabled, and to a temporary directory otherwise, never to the working directory.
 func childEnvironment() -> [String: String] {
     var environment = ProcessInfo.processInfo.environment
+    environment["HOME"] = CLIShellFixture.directory.path(percentEncoded: false)
+    environment["SHELL"] = CLIShellFixture.shell.path(percentEncoded: false)
+    environment.removeValue(forKey: "ENV")
+    environment.removeValue(forKey: "BASH_ENV")
+    environment.removeValue(forKey: "ZDOTDIR")
     if environment["LLVM_PROFILE_FILE"] == nil {
         environment["LLVM_PROFILE_FILE"] = FileManager.default.temporaryDirectory
             .appending(path: "agenthesia-child-%p.profraw").path(percentEncoded: false)
     }
     return environment
+}
+
+private enum CLIShellFixture {
+    static let directory: URL = {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "agenthesia-cli-shell-\(UUID().uuidString)"
+        )
+        try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }()
+
+    static let shell: URL = {
+        let shell = directory.appending(path: "shell")
+        // Ignore -l/-i and run only the supplied -c script without user startup files.
+        try! "#!/bin/sh\nfor argument do script=$argument; done\nexec /bin/sh -c \"$script\"\n"
+            .write(to: shell, atomically: true, encoding: .utf8)
+        try! FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: shell.path(percentEncoded: false)
+        )
+        return shell
+    }()
 }

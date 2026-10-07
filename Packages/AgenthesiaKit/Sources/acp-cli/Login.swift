@@ -38,7 +38,7 @@ struct Login: AsyncParsableCommand {
             await connected.shutDown()
         case .terminal(let terminal):
             await connected.shutDown()
-            let status = try Self.runInTerminal(agent.agentCommand, adding: terminal)
+            let status = try Self.runInTerminal(connected.command, adding: terminal)
             guard status == 0 else { throw ExitCode(status) }
             await console.line("Signed in.")
         case .unknown:

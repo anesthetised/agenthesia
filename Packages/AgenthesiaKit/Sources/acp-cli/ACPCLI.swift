@@ -55,6 +55,7 @@ struct ConnectedAgent {
     let process: AgentProcess
     let connection: ACP.V1.AgentConnectionAdapter
     let profile: ACP.AgentProfile
+    let command: AgentCommand
 
     static func launch(
         _ options: AgentOptions,
@@ -62,13 +63,17 @@ struct ConnectedAgent {
         console: Console,
         terminalAuth: Bool = false
     ) async throws -> ConnectedAgent {
-        let process = try AgentProcess(launching: options.agentCommand)
+        let resolution = await ShellEnvironment.shared.resolve()
+        if let diagnostic = resolution.diagnostic {
+            await console.error("Warning: \(diagnostic)")
+        }
+        var command = options.agentCommand
+        command.environment = resolution.environment
+        let process = try AgentProcess(launching: command)
         let showLog = options.agentLog
-        let log = AgentLog()
-        Task {
-            for await line in process.stderr {
-                await log.append(line)
-                if showLog {
+        if showLog {
+            Task {
+                for await line in process.stderr {
                     await console.error("agent: \(line)")
                 }
             }
@@ -89,11 +94,11 @@ struct ConnectedAgent {
         )
         do {
             let profile = try await connection.initialize(client: ACPCLI.clientInfo)
-            return ConnectedAgent(process: process, connection: connection, profile: profile)
+            return ConnectedAgent(process: process, connection: connection, profile: profile, command: command)
         } catch ConnectionError.closed {
             let status = await process.terminate()
-            try? await Task.sleep(for: .milliseconds(100))
-            throw CLIError(Self.exitedEarly(status, log: await log.lines))
+            let log = await process.stderrLog.split(separator: "\n").map(String.init)
+            throw CLIError(Self.exitedEarly(status, log: log))
         } catch {
             await process.terminate()
             throw error
@@ -126,18 +131,6 @@ struct CLIError: Error, CustomStringConvertible {
 
     init(_ description: String) {
         self.description = description
-    }
-}
-
-/// The last lines an agent wrote to stderr.
-actor AgentLog {
-    private(set) var lines: [String] = []
-
-    func append(_ line: String) {
-        lines.append(line)
-        if lines.count > 10 {
-            lines.removeFirst()
-        }
     }
 }
 

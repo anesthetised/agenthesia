@@ -32,6 +32,21 @@ jobs:
       - name: Lint
         run: just lint
 
+      # TEMPORARY: diagnose the test-process stall in #100; revert before merge.
+      - name: Diagnose stall
+        continue-on-error: true
+        working-directory: Packages/AgenthesiaKit
+        run: |
+          sysctl hw.ncpu
+          swift build --build-tests 2>&1 | tail -1
+          xcrun --kill-cache
+          time /usr/bin/git --version
+          time /usr/bin/git --version
+          xcrun --kill-cache
+          swift test --skip-build --skip SessionWorkspaceTests --skip missingExecutableFailsBeforeCreatingAWorktree 2>&1 \
+            | grep -E "✘|moduleLoads\(\) passed|Test run with" || true
+          xcrun --kill-cache
+
       - name: Test with coverage
         run: just coverage --badge .build/badges/coverage.svg
 

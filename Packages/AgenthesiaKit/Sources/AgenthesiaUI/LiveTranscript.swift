@@ -10,6 +10,19 @@ struct TranscriptMessage {
     var text: NSAttributedString
     var previousMarkdown: String?
     var update: StreamingMarkdown.Update?
+    var tool: ToolCardHeader?
+}
+
+/// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
+struct ToolCardHeader: Equatable {
+    enum Tone: Equatable { case neutral, running, success, failure }
+    var symbol: String
+    var kind: String
+    var status: String
+    var tone: Tone
+    /// The body exceeds its collapsed bound.
+    var expandable = false
+    var expanded = false
 }
 
 protocol TranscriptSource: AnyObject {
@@ -17,6 +30,11 @@ protocol TranscriptSource: AnyObject {
     var messageCount: Int { get }
     func message(at row: Int) -> TranscriptMessage
     func isStreaming(at row: Int) -> Bool
+    func toggleExpansion(at row: Int)
+}
+
+extension TranscriptSource {
+    func toggleExpansion(at row: Int) {}
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
@@ -30,6 +48,8 @@ final class LiveTranscriptSource: TranscriptSource {
         var stream: StreamingMarkdown
     }
     private var cache: [Int64: Cached] = [:]
+    /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
+    private var expanded: Set<Int64> = []
     var messageCount: Int { state.items.count }
 
     func update(_ controller: SessionController) {
@@ -45,8 +65,20 @@ final class LiveTranscriptSource: TranscriptSource {
 
     func message(at row: Int) -> TranscriptMessage {
         let item = state.items[row]
+        if let tool = item.toolCall {
+            let card = Self.toolCard(tool, permission: item.permission, expanded: expanded.contains(item.id))
+            var message = render(id: item.id, role: "Tool", markdown: card.markdown)
+            message.tool = card.header
+            return message
+        }
         let (role, markdown) = Self.content(item)
         return render(id: item.id, role: role, markdown: markdown)
+    }
+
+    func toggleExpansion(at row: Int) {
+        let id = state.items[row].id
+        if expanded.remove(id) == nil { expanded.insert(id) }
+        revision += 1
     }
 
     func render(id: Int64, role: String, markdown: String) -> TranscriptMessage {
@@ -86,20 +118,106 @@ final class LiveTranscriptSource: TranscriptSource {
                 case .thought: "Thinking"
                 }
             let text = message.content.map { block -> String in
-                switch block {
-                case .text(let text): return text.text
-                case .image: return "\n\n[Image attachment]\n\n"
-                case .audio: return "\n\n[Audio attachment]\n\n"
-                default: return "\n\n[Resource attachment]\n\n"
-                }
+                if case .text(let text) = block { return text.text }
+                return "\n\n\(placeholder(block))\n\n"
             }.joined()
             return (role, text)
         }
         if let tool = item.toolCall {
-            let permission = item.permission == nil ? "" : "\n\nPermission request declined."
-            return ("Tool", "\(tool.title)\n\nStatus: \(tool.status?.rawValue ?? "pending")" + permission)
+            return ("Tool", toolCard(tool, permission: item.permission, expanded: false).markdown)
         }
-        return ("Session", item.notice ?? "Permission request declined")
+        return ("Session", item.notice ?? "")
+    }
+
+    static func placeholder(_ block: ACP.ContentBlock) -> String {
+        switch block {
+        case .text(let text): text.text
+        case .image: "[Image attachment]"
+        case .audio: "[Audio attachment]"
+        case .resourceLink, .resource: "[Resource attachment]"
+        case .unknown: "[Unsupported content]"
+        }
+    }
+
+    static let collapsedLines = 12
+    static let collapsedCharacters = 2_000
+
+    /// Shows only what the agent reported. Specialized diff and terminal views are #20 and #31.
+    static func toolCard(
+        _ tool: ACP.ToolCall,
+        permission: ACP.PermissionOutcome?,
+        expanded: Bool
+    ) -> (header: ToolCardHeader, markdown: String) {
+        let (symbol, kind) = kind(tool.kind)
+        let (status, tone) = status(tool.status)
+        var header = ToolCardHeader(symbol: symbol, kind: kind, status: status, tone: tone)
+        var sections = [tool.title.isEmpty ? "_Untitled tool call_" : "**\(tool.title)**"]
+        var details: [String] = []
+        if let locations = tool.locations, !locations.isEmpty {
+            details.append(locations.map { "- `\($0.path)\($0.line.map { ":\($0)" } ?? "")`" }.joined(separator: "\n"))
+        }
+        for content in tool.content ?? [] {
+            switch content {
+            case .content(let block): details.append(placeholder(block.content))
+            case .diff(let diff): details.append("[Diff: `\(diff.path)`\(diff.oldText == nil ? ", new file" : "")]")
+            case .terminal(let terminal): details.append("[Terminal: `\(terminal.terminalId)`]")
+            case .unknown: details.append("[Unsupported content]")
+            }
+        }
+        if !details.isEmpty {
+            let body = details.joined(separator: "\n\n")
+            let collapsed = collapse(body)
+            header.expandable = collapsed != nil
+            header.expanded = expanded && collapsed != nil
+            sections.append(header.expanded ? body : collapsed ?? body)
+        }
+        switch permission {
+        case nil: break
+        case .cancelled: sections.append("Permission request cancelled.")
+        case .selected(let option): sections.append("Permission answered with option “\(option)”.")
+        case .unknown: sections.append("Unrecognized permission outcome.")
+        }
+        return (header, sections.joined(separator: "\n\n"))
+    }
+
+    /// The body bounded to its collapsed size, or `nil` when it already fits.
+    static func collapse(_ body: String) -> String? {
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+        guard lines.count > collapsedLines || body.count > collapsedCharacters else { return nil }
+        var kept = String(lines.prefix(collapsedLines).joined(separator: "\n").prefix(collapsedCharacters))
+        let keptLines = kept.split(separator: "\n", omittingEmptySubsequences: false)
+        // Close a fence the cut left open, so the note below is not shown as code.
+        if let fence = MarkdownRenderer.closingCodeFence(in: kept) { kept += "\n" + fence }
+        let hidden = lines.count - keptLines.count
+        return kept + (hidden > 0 ? "\n\n_… \(hidden) more line\(hidden == 1 ? "" : "s")_" : "\n\n_… truncated_")
+    }
+
+    static func kind(_ kind: ACP.ToolKind?) -> (symbol: String, label: String) {
+        switch kind {
+        case .read: ("doc.text", "Read")
+        case .edit: ("pencil", "Edit")
+        case .delete: ("trash", "Delete")
+        case .move: ("arrow.right.doc.on.clipboard", "Move")
+        case .search: ("magnifyingglass", "Search")
+        case .execute: ("terminal", "Execute")
+        case .think: ("brain", "Think")
+        case .fetch: ("network", "Fetch")
+        case .switchMode: ("arrow.triangle.2.circlepath", "Switch mode")
+        case .other: ("wrench.and.screwdriver", "Other")
+        case .unknown(let value): ("wrench.and.screwdriver", value)
+        case nil: ("wrench.and.screwdriver", "Tool")
+        }
+    }
+
+    static func status(_ status: ACP.ToolCallStatus?) -> (String, ToolCardHeader.Tone) {
+        switch status {
+        case .pending: ("Pending", .neutral)
+        case .inProgress: ("Running", .running)
+        case .completed: ("Completed", .success)
+        case .failed: ("Failed", .failure)
+        case .unknown(let value): (value, .neutral)
+        case nil: ("Status not reported", .neutral)
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 #if DEBUG
+    import ACP
     import AppKit
     import Rendering
 
@@ -8,6 +9,8 @@
         private let table = TranscriptTableController()
         private let rendering = LiveTranscriptSource()
         private var items: [(String, String)] = []
+        /// Tool cards by item index, rendered as the live transcript renders them.
+        private var tools: [Int: ACP.ToolCall] = [:]
         private var streaming = false
         var revision = 0
         var messageCount: Int { items.count }
@@ -26,6 +29,20 @@
             revision += 1
             table.update(self)
         }
+        /// Adds tool cards; call before ``didAppend()`` so the streamed answer stays last.
+        func appendTools(_ calls: [ACP.ToolCall]) {
+            for call in calls {
+                tools[items.count] = call
+                items.append(("Tool", ""))
+            }
+        }
+
+        /// Changes a card without updating the table; the next ``append(_:)`` publishes it.
+        func replaceTool(_ call: ACP.ToolCall) {
+            guard let index = tools.first(where: { $0.value.toolCallId == call.toolCallId })?.key else { return }
+            tools[index] = call
+        }
+
         func didAppend() {
             items.append(("Agent", ""))
             streaming = true
@@ -39,7 +56,13 @@
         }
         func didStream(_ update: StreamingMarkdown.Update) {}
         func message(at row: Int) -> TranscriptMessage {
-            rendering.render(id: Int64(row), role: items[row].0, markdown: items[row].1)
+            guard let tool = tools[row] else {
+                return rendering.render(id: Int64(row), role: items[row].0, markdown: items[row].1)
+            }
+            let card = LiveTranscriptSource.toolCard(tool, permission: nil, expanded: false)
+            var message = rendering.render(id: Int64(row), role: "Tool", markdown: card.markdown)
+            message.tool = card.header
+            return message
         }
         func isStreaming(at row: Int) -> Bool { streaming && row == items.count - 1 }
     }

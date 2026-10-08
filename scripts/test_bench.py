@@ -15,10 +15,11 @@ class BenchmarkRunnerTests(unittest.TestCase):
         self.assertEqual(bench.scenarios("S1:A2,S6:B,S4:cold+lines+colors"),
                          ["S1:A2", "S6:B", "S4:cold+lines+colors"])
         self.assertEqual(bench.scenarios("S1:App"), ["S1:App"])
+        self.assertEqual(bench.scenarios("S7:App"), ["S7:App"])
         self.assertEqual(bench.scenarios("S4:"), ["S4:"])
         self.assertEqual(bench.scenarios("S4:appkit,S4:appkit+lines+colors"),
                          ["S4:appkit", "S4:appkit+lines+colors"])
-        for invalid in ["S1:A′", "S3:A", "S7:A", "S4:colours", "S4:cold+cold", "S1:A2,"]:
+        for invalid in ["S1:A′", "S3:A", "S7:A", "S7:A2", "S4:colours", "S4:cold+cold", "S1:A2,"]:
             with self.assertRaises(argparse.ArgumentTypeError):
                 bench.scenarios(invalid)
 

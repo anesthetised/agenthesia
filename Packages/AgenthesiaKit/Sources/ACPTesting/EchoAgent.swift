@@ -6,6 +6,8 @@ public import JSONRPC
 /// - `read <path>` reads a file through `fs/read_text_file` and echoes it.
 /// - `write <path> <text>` asks for permission, then writes through `fs/write_text_file`.
 /// - `plan` reports a plan, `think` reports a thought.
+/// - `tools` streams a long answer while earlier tool calls change: an update before its call,
+///   several calls, a failure, long output, and diff, terminal and unknown content.
 /// - `slow` streams slowly, so the turn can be cancelled.
 /// - `fail` fails the turn with an internal error.
 public final class EchoAgent: Sendable {
@@ -273,6 +275,8 @@ extension EchoAgent {
                 if try await write(path: words[1], content: words[2]) == .cancelled {
                     return .init(stopReason: .cancelled)
                 }
+            case "tools":
+                return .init(stopReason: await tools())
             case "plan":
                 await send(
                     .plan(
@@ -310,6 +314,79 @@ extension EchoAgent {
         private func send(_ update: ACP.SessionUpdate) async {
             await state.record(update, in: sessionID)
             try? await connection.notify(ACP.V1.Method.SessionUpdate.self, .init(sessionId: sessionID, update: update))
+        }
+
+        private func tools() async -> ACP.StopReason {
+            let output = (1...40).map { "Sources/File\($0).swift:\($0): // TODO" }.joined(separator: "\n")
+            let changes: [(Int, ACP.SessionUpdate)] = [
+                (
+                    0,
+                    .toolCallUpdate(
+                        .init(toolCallId: "search", status: .inProgress, locations: [.init(path: "Sources")])
+                    )
+                ),
+                (0, .toolCall(.init(toolCallId: "search", title: "Search for TODO", kind: .search))),
+                (
+                    0,
+                    .toolCall(
+                        .init(
+                            toolCallId: "test",
+                            title: "Run tests",
+                            kind: .execute,
+                            status: .inProgress,
+                            content: [.terminal(.init(terminalId: "term-1"))]
+                        )
+                    )
+                ),
+                (
+                    0,
+                    .toolCall(
+                        .init(
+                            toolCallId: "edit",
+                            title: "Edit README.md",
+                            kind: .edit,
+                            status: .pending,
+                            content: [
+                                .diff(.init(path: "README.md", oldText: "Old", newText: "New")),
+                                .unknown(["type": "future", "value": 1]),
+                            ],
+                            locations: [.init(path: "README.md", line: 1)]
+                        )
+                    )
+                ),
+                (
+                    10,
+                    .toolCallUpdate(
+                        .init(
+                            toolCallId: "search",
+                            status: .completed,
+                            content: [.content(.init(content: .init(text: "```\n\(output)\n```")))]
+                        )
+                    )
+                ),
+                (
+                    20,
+                    .toolCallUpdate(
+                        .init(
+                            toolCallId: "test",
+                            status: .failed,
+                            content: [.content(.init(content: .init(text: "1 test failed")))]
+                        )
+                    )
+                ),
+                (30, .toolCallUpdate(.init(toolCallId: "edit", status: .completed))),
+            ]
+            var pending = changes[...]
+            for chunk in 0..<40 {
+                while let (at, update) = pending.first, at <= chunk {
+                    pending.removeFirst()
+                    await send(update)
+                }
+                if await state.takeCancellation(sessionID) { return .cancelled }
+                await send(.agentMessageChunk(.init(content: .init(text: "Paragraph \(chunk + 1) of the answer.\n\n"))))
+                if options.chunkDelay > .zero { try? await Task.sleep(for: options.chunkDelay * 3) }
+            }
+            return .endTurn
         }
 
         private func read(path: String) async throws {

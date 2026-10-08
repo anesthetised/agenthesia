@@ -85,6 +85,34 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         #expect(throws: TranscriptState.ReplayError.self) { try state.apply(stored[0]) }
     }
 
+    @Test func earlyToolUpdatesSurviveTheFullToolCall() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        let location = ACP.ToolCallLocation(path: "/tmp/a.swift", line: 3)
+        let updates: [ACP.SessionUpdate] = [
+            .toolCallUpdate(.init(toolCallId: "t", status: .inProgress, locations: [location])),
+            .toolCallUpdate(.init(toolCallId: "u", status: .failed)),
+            .toolCall(.init(toolCallId: "t", title: "Read", kind: .read)),
+            .toolCallUpdate(.init(toolCallId: "t", content: [.content(.init(content: .init(text: "body")))])),
+        ]
+        let stored = try await fixture.store.append(
+            try updates.map { NewEvent(kind: SessionEvent.updateKind, payload: try rawUpdate($0)) },
+            to: session.id
+        )
+        var state = TranscriptState()
+        for event in stored { try state.apply(event) }
+        let tools = state.items.compactMap(\.toolCall)
+        #expect(tools.map(\.toolCallId) == ["t", "u"])
+        #expect(tools[0].title == "Read")
+        #expect(tools[0].kind == .read)
+        #expect(tools[0].status == .inProgress)
+        #expect(tools[0].locations == [location])
+        #expect(tools[0].content == [.content(.init(content: .init(text: "body")))])
+        // A call known only from updates has no title yet; the UI must not present its identifier as one.
+        #expect(tools[1].title.isEmpty)
+    }
+
     @Test func chunkBoundariesRespectRolesMessageIDsAndAttachments() async throws {
         let fixture = try Fixture()
         let session = try await fixture.seed()
@@ -322,6 +350,26 @@ extension SessionControllerTests {
         #expect(controller.transcript.items.contains { $0.permission == .selected("reject") })
         #expect(controller.transcript.lastStopReason == .endTurn)
         #expect(controller.status == .idle)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test func toolCallsUpdateInPlaceAndReplayIdentically() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        try await controller.send([.init(text: "tools")])
+        let items = controller.transcript.items
+        let tools = items.compactMap(\.toolCall)
+        #expect(tools.map(\.toolCallId) == ["search", "test", "edit"])
+        #expect(tools.map(\.status) == [.completed, .failed, .completed])
+        #expect(tools[0].title == "Search for TODO")
+        #expect(tools[0].locations == [.init(path: "Sources")])
+        #expect(tools[2].content?.contains(.unknown(["type": "future", "value": 1])) == true)
+        // Cards keep their position while the answer streams after them.
+        let firstTool = try #require(items.firstIndex { $0.toolCall != nil })
+        #expect(firstTool < (try #require(items.firstIndex { $0.message?.role == .assistant })))
+        #expect(items.filter { $0.message?.role == .assistant }.count == 1)
         let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
         #expect(replay.transcript == controller.transcript)
         await controller.close()

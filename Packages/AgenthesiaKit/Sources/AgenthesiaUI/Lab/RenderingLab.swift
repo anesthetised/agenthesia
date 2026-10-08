@@ -1,4 +1,5 @@
 #if DEBUG
+    import ACP
     import AppKit
     import Rendering
     public import SwiftUI
@@ -23,6 +24,7 @@
                     .fixedSize()
                     Button("S1: Stream") { Task { await lab.runStream() } }
                     Button("S6: Long code") { Task { await lab.runStream(longCode: true) } }
+                    Button("S7: Tool updates") { Task { await lab.runStream(toolUpdates: true) } }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
                     Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
@@ -158,6 +160,7 @@
                 switch parts[0] {
                 case "S1": await runStream()
                 case "S6": await runStream(longCode: true)
+                case "S7": await runStream(toolUpdates: true)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
                 default:
@@ -177,7 +180,9 @@
         }
 
         /// S1: stream a ~4000-token answer into a 200-item transcript, following its end.
-        func runStream(longCode: Bool = false) async {
+        /// S7 adds five tool cards above the answer; every 100 ms one changes status and gains an output line.
+        func runStream(longCode: Bool = false, toolUpdates: Bool = false) async {
+            if toolUpdates { prototype = .app }
             var generator = TranscriptGenerator(seed: 1)
             let transcript = LabTranscript(items: generator.items(200))
             let answer =
@@ -190,16 +195,24 @@
             view.show(transcript)
             view.view.layoutSubtreeIfNeeded()
             if let scrollView = view.scrollView { scrollToEnd(scrollView) }
+            var cards = toolUpdates ? Self.toolCards() : []
+            var toolTicks = 0
+            (view as? AppTranscriptPrototype)?.appendTools(cards)
             transcript.startStreaming()
             view.didAppend()
             // The virtual producer emits 100 chunks/s even when the UI stalls. No timer can silently slow it.
             let start = ContinuousClock.now
-            let name = longCode ? "S6 Long unclosed code" : "S1 Stream"
+            let name = longCode ? "S6 Long unclosed code" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
             await measure("\(name), \(prototype.title), warm", in: view.view) {
                 guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
                 let batch = schedule.due(at: milliseconds(since: start) / 1000)
                 guard !batch.isEmpty else { return true }
                 if let app = view as? AppTranscriptPrototype {
+                    while !cards.isEmpty, toolTicks < batch.upperBound / 10 {
+                        Self.advance(&cards[toolTicks % cards.count], tick: toolTicks)
+                        app.replaceTool(cards[toolTicks % cards.count])
+                        toolTicks += 1
+                    }
                     app.append(chunks[batch].joined())
                 } else {
                     view.didStream(transcript.stream(chunks[batch].joined()))
@@ -212,7 +225,32 @@
                 "chunks": Double(chunks.count), "characters": Double(answer.count),
                 "elapsedMS": milliseconds(since: start), "peakBacklogChunks": Double(schedule.peakBacklog),
                 "applyLatencyP95MS": schedule.p95Latency, "applyLatencyMaxMS": schedule.latencies.max() ?? 0,
+                "toolUpdates": Double(toolTicks),
             ]) { _, new in new }
+        }
+
+        /// The first card starts with output beyond its collapsed bound.
+        static func toolCards() -> [ACP.ToolCall] {
+            let kinds: [ACP.ToolKind] = [.search, .read, .execute, .edit, .fetch]
+            return kinds.enumerated().map { index, kind in
+                let lines = index == 0 ? (1...40).map { "Sources/File\($0).swift:\($0): match" } : []
+                return ACP.ToolCall(
+                    toolCallId: "tool-\(index)",
+                    title: "\(kind.rawValue.capitalized) step \(index + 1)",
+                    kind: kind,
+                    status: .pending,
+                    content: [.content(.init(content: .init(text: lines.joined(separator: "\n"))))],
+                    locations: [.init(path: "Sources/File\(index).swift", line: index + 1)]
+                )
+            }
+        }
+
+        static func advance(_ call: inout ACP.ToolCall, tick: Int) {
+            let statuses: [ACP.ToolCallStatus] = [.inProgress, .completed, .failed, .pending]
+            call.status = statuses[tick / 5 % statuses.count]
+            guard case .content(let block) = call.content?.first, case .text(let text) = block.content else { return }
+            let line = "output \(tick)"
+            call.content = [.content(.init(content: .init(text: text.text.isEmpty ? line : text.text + "\n" + line)))]
         }
 
         /// S2: open 10 000 items, then scroll at 14 400 points/s for at most 25 seconds.

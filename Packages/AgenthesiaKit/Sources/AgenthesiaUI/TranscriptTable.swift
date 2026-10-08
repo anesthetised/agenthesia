@@ -101,10 +101,17 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let message = session.message(at: row)
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if visible.markdown == message.markdown, !(finished && visible.streamingCell != nil && !keepsSelection) {
+            if visible.markdown == message.markdown, visible.tool == message.tool,
+                !(finished && visible.streamingCell != nil && !keepsSelection)
+            {
                 continue
             }
-            if finished, !keepsSelection {
+            if visible.tool != message.tool, visible.markdown == message.markdown {
+                visible.showHeader(message, controller: self)
+            } else if visible.tool != message.tool {
+                // The header and body changed; rebuild the row's content in place.
+                visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
+            } else if finished, !keepsSelection {
                 visible.showFinished(message, width: table.tableColumns[0].width - 48)
             } else if let cell = visible.streamingCell {
                 if let update = message.update, visible.markdown == message.previousMarkdown {
@@ -122,7 +129,9 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                     cell.textView.invalidateIntrinsicContentSize()
                 }
             } else {
-                table.reloadData(forRowIndexes: [row], columnIndexes: [0])
+                // `reloadData(forRowIndexes:)` leaves AppKit width constraints pointing at the replaced cell,
+                // which throws on the next table resize.
+                visible.show(message, streaming: true, width: table.tableColumns[0].width - 48, controller: self)
             }
             visible.markdown = message.markdown
             changed.insert(row)
@@ -172,49 +181,21 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let session else { return nil }
-        let message = session.message(at: row)
-        let content: NSView
-        if session.isStreaming(at: row) {
-            let cell = TextKitCell()
-            cell.textView.textStorage?.setAttributedString(message.text)
-            cell.textView.invalidateIntrinsicContentSize()
-            content = cell
-        } else {
-            let cell = TextCell()
-            cell.field.preferredMaxLayoutWidth = max(1, tableView.tableColumns[0].width - 48)
-            cell.field.attributedStringValue = message.text
-            content = cell
-        }
-        let role = NSTextField(labelWithString: message.role)
-        role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        role.textColor = .secondaryLabelColor
-        let copy = NSButton(title: "Copy", target: nil, action: nil)
-        copy.bezelStyle = .inline
-        copy.toolTip = "Copy message as Markdown"
-        let header = NSStackView(views: [role, NSView(), copy])
-        header.distribution = .fill
-        let stack = NSStackView(views: [header, content])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 6
-        let rowView = TranscriptMessageRow(markdown: message.markdown)
-        rowView.streamingCell = content as? TextKitCell
-        rowView.stack = stack
-        let contentWidth = content.widthAnchor.constraint(equalTo: stack.widthAnchor)
-        rowView.contentWidth = contentWidth
-        copy.target = rowView
-        copy.action = #selector(TranscriptMessageRow.copyMessage(_:))
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        rowView.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: rowView.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: rowView.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: rowView.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: rowView.bottomAnchor, constant: -8),
-            header.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            contentWidth,
-        ])
+        let rowView = TranscriptMessageRow(markdown: "")
+        rowView.show(
+            session.message(at: row),
+            streaming: session.isStreaming(at: row),
+            width: tableView.tableColumns[0].width - 48,
+            controller: self
+        )
         return rowView
+    }
+
+    @objc func toggleExpansion(_ sender: NSView) {
+        let row = table.row(for: sender)
+        guard let session, row >= 0, row < session.messageCount else { return }
+        session.toggleExpansion(at: row)
+        update(session)
     }
 }
 
@@ -262,6 +243,7 @@ final class TranscriptScrollView: NSScrollView {
 private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
+    var tool: ToolCardHeader?
     var streamingCell: TextKitCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
@@ -270,6 +252,104 @@ private final class TranscriptMessageRow: NSTableCellView {
         self.markdown = markdown
         super.init(frame: .zero)
         identifier = Self.id
+    }
+
+    /// Replaces the row's header and body.
+    func show(_ message: TranscriptMessage, streaming: Bool, width: CGFloat, controller: TranscriptTableController) {
+        stack?.removeFromSuperview()
+        markdown = message.markdown
+        tool = message.tool
+        let content: NSView
+        if streaming {
+            let cell = TextKitCell()
+            cell.textView.textStorage?.setAttributedString(message.text)
+            cell.textView.invalidateIntrinsicContentSize()
+            content = cell
+        } else {
+            let cell = TextCell()
+            cell.field.preferredMaxLayoutWidth = max(1, width)
+            cell.field.attributedStringValue = message.text
+            content = cell
+        }
+        let header = makeHeader(message, controller: controller)
+        let stack = NSStackView(views: [header, content])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        streamingCell = content as? TextKitCell
+        self.stack = stack
+        let contentWidth = content.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        self.contentWidth = contentWidth
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+            header.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            contentWidth,
+        ])
+    }
+
+    /// Keep the text field and its field editor attached when only native metadata changes.
+    func showHeader(_ message: TranscriptMessage, controller: TranscriptTableController) {
+        guard let stack, let old = stack.arrangedSubviews.first else { return }
+        stack.removeArrangedSubview(old)
+        old.removeFromSuperview()
+        let header = makeHeader(message, controller: controller)
+        stack.insertArrangedSubview(header, at: 0)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        tool = message.tool
+    }
+
+    private func makeHeader(_ message: TranscriptMessage, controller: TranscriptTableController) -> NSStackView {
+        let role = NSTextField(labelWithString: message.tool?.kind ?? message.role)
+        role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        role.textColor = .secondaryLabelColor
+        let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
+        copy.bezelStyle = .inline
+        copy.toolTip = "Copy message as Markdown"
+        let header = NSStackView(
+            views: Self.toolHeader(message.tool, role: role, controller: controller) + [NSView(), copy]
+        )
+        header.distribution = .fill
+        return header
+    }
+
+    private static func toolHeader(
+        _ tool: ToolCardHeader?,
+        role: NSTextField,
+        controller: TranscriptTableController
+    ) -> [NSView] {
+        guard let tool else { return [role] }
+        var views: [NSView] = []
+        if tool.expandable {
+            let disclosure = NSButton(
+                title: "",
+                target: controller,
+                action: #selector(TranscriptTableController.toggleExpansion(_:))
+            )
+            disclosure.bezelStyle = .disclosure
+            disclosure.setButtonType(.pushOnPushOff)
+            disclosure.state = tool.expanded ? .on : .off
+            disclosure.setAccessibilityLabel(tool.expanded ? "Show less" : "Show all")
+            views.append(disclosure)
+        }
+        let icon = NSImageView(
+            image: NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.kind) ?? NSImage()
+        )
+        icon.contentTintColor = .secondaryLabelColor
+        let status = NSTextField(labelWithString: tool.status)
+        status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        status.textColor =
+            switch tool.tone {
+            case .neutral: .secondaryLabelColor
+            case .running: .controlAccentColor
+            case .success: .systemGreen
+            case .failure: .systemRed
+            }
+        return views + [icon, role, status]
     }
 
     func showFinished(_ message: DemoSession.Message, width: CGFloat) {

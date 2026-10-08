@@ -30,6 +30,21 @@ import Testing
         try #require(try attrs(of: token, in: text)[.paragraphStyle] as? NSParagraphStyle)
     }
 
+    @Test(arguments: ["\n", "\r\n", "\r"])
+    func closingFenceRespectsBlockStructure(newline: String) {
+        func closing(_ lines: [String]) -> String? {
+            MarkdownRenderer.closingCodeFence(in: lines.joined(separator: newline))
+        }
+        #expect(closing(["Text", "", "  ````swift", "let value = 1"]) == "````")
+        #expect(closing(["~~~", "```", "~~~ trailing"]) == "~~~")
+        #expect(closing(["```", "code", "```` \t"]) == nil)
+        #expect(closing(["- ```", "  code", "  ```"]) == nil)
+        #expect(closing(["> ~~~", "> code"]) == nil)
+        #expect(closing(["    ```", "    code"]) == nil)
+        #expect(closing(["``` invalid ` info", "text"]) == nil)
+        #expect(MarkdownRenderer.closingCodeFence(in: "") == nil)
+    }
+
     // MARK: Blocks
 
     @Test func emptyInputRendersNothing() {

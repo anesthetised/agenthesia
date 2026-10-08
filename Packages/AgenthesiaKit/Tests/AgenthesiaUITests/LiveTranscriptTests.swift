@@ -184,6 +184,45 @@ import Testing
         #expect(controller.table.selectedRowIndexes == [0])
     }
 
+    @Test func changedToolHeaderSurvivesTableResize() async throws {
+        let recorded = try await RecordedTranscript()
+        let turn = UUID()
+        let output = (1...40).map { "line \($0)" }.joined(separator: "\n")
+        try await recorded.append(try SessionEvent.prompt(id: turn, content: [.init(text: "tools")]).storedEvent())
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "t",
+                    title: "Run",
+                    kind: .execute,
+                    status: .inProgress,
+                    content: [.content(.init(content: .init(text: output)))]
+                )
+            )
+        )
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Earlier paragraph.\n\nStreaming"))))
+        let source = LiveTranscriptSource()
+        source.running = true
+        func publish() { source.state = recorded.state; source.revision += 1 }
+        publish()
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        _ = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        try await recorded.apply(.toolCallUpdate(.init(toolCallId: "t", status: .completed)))
+        publish()
+        controller.update(source)
+        for width in [500.0, 700, 450, 800] {
+            window.setContentSize(NSSize(width: width, height: 500))
+            controller.scroll.frame = window.contentLayoutRect
+            window.contentView?.layoutSubtreeIfNeeded()
+        }
+        // A replaced cell once left AppKit width constraints behind, which threw during this resize.
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(labels(in: row).contains("Completed"))
+    }
+
     private func host(_ controller: TranscriptTableController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),

@@ -30,7 +30,7 @@ final class CLIRun: Sendable {
         process.executableURL = try #require(Binaries.cli)
         let agent = try #require(Binaries.mockAgent).path(percentEncoded: false)
         process.arguments = arguments + ["--cwd", cwd.path(percentEncoded: false), "--", agent]
-        process.environment = try childEnvironment()
+        process.environment = try childEnvironment(in: cwd)
         let input = Pipe()
         let stdout = Pipe()
         process.standardInput = input
@@ -76,14 +76,23 @@ final class CLIRun: Sendable {
 }
 
 @Suite(.timeLimit(.minutes(1)), .enabled(if: Binaries.available, "acp-cli and MockAgent have not been built"))
-struct EndToEndTests {
+final class EndToEndTests: Sendable {
     let directory: URL
 
     init() throws {
         directory = FileManager.default.temporaryDirectory.appending(path: "acp-cli-e2e-\(UUID().uuidString)")
             .resolvingSymlinksInPath()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try "from disk".write(to: directory.appending(path: "in.txt"), atomically: true, encoding: .utf8)
+        do {
+            try "from disk".write(to: directory.appending(path: "in.txt"), atomically: true, encoding: .utf8)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: directory)
     }
 
     private func path(_ name: String) -> String {
@@ -124,7 +133,7 @@ struct EndToEndTests {
         let process = Process()
         process.executableURL = try #require(Binaries.cli)
         process.arguments = ["chat", "--", "definitely-not-an-agent-agenthesia"]
-        process.environment = try childEnvironment()
+        process.environment = try childEnvironment(in: directory)
         let output = Pipe()
         process.standardOutput = output
         process.standardError = output
@@ -165,9 +174,7 @@ final class Output: Sendable {
 
 /// The environment for instrumented child processes: they write coverage profiles next to the test
 /// runner's when coverage is enabled, and to a temporary directory otherwise, never to the working directory.
-func childEnvironment() throws -> [String: String] {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "agenthesia-cli-shell-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+func childEnvironment(in directory: URL) throws -> [String: String] {
     let shell = directory.appending(path: "shell")
     // Ignore -l/-i and run only the supplied -c script without user startup files.
     try "#!/bin/sh\nfor argument do script=$argument; done\nexec /bin/sh -c \"$script\"\n"

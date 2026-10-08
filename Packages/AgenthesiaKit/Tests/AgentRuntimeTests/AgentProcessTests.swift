@@ -107,7 +107,8 @@ import Testing
         _ = await process.terminate(gracePeriod: .milliseconds(50))
     }
 
-    @Test func terminatesDescendantsAfterLeaderExits() async throws {
+    @Test(arguments: [Duration.milliseconds(150), .seconds(4)])
+    func terminatesDescendantsAfterLeaderExits(gracePeriod: Duration) async throws {
         let pidFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-child-\(UUID().uuidString).pid"
         )
@@ -125,7 +126,9 @@ import Testing
         }
         defer { kill(child, SIGKILL) }
         #expect(getpgid(child) == process.processIdentifier)
-        #expect(await process.terminate(gracePeriod: .milliseconds(150)) == .exited(0))
+        let start = ContinuousClock.now
+        #expect(await process.terminate(gracePeriod: gracePeriod) == .exited(0))
+        #expect(ContinuousClock.now - start >= gracePeriod - .milliseconds(100))
         #expect(try await waitUntilInactive(child))
     }
 

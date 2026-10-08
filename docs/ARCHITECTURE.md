@@ -69,7 +69,9 @@ signals. Shutdown is shared by concurrent callers: SIGTERM targets the group, fo
 after the grace period if necessary, including when descendants outlive the group leader. This covers
 processes that remain in the group; it is not containment for processes that deliberately detach.
 Natural leader exit also starts group cleanup without closing the ACP transport before its final
-messages are read. A later explicit termination can shorten the cleanup deadline, but never extend it.
+messages are read. Its default grace period applies only when cleanup has not started; leader exit
+preserves an explicit termination deadline. A later explicit termination can shorten the cleanup
+deadline, but never extend it.
 The retained stderr tail (64 KiB), pending line (16 KiB), and live notification stream (64 lines) all
 have bounded storage; truncation of retained output is marked.
 Process exit and stderr completion are separate events. Waiting for stderr first awaits leader exit,

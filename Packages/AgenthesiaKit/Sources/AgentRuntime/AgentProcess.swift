@@ -203,7 +203,7 @@ public actor AgentProcess {
         exitStatus = status
         for waiter in exitWaiters { waiter.resume(returning: status) }
         exitWaiters.removeAll()
-        if processGroup != nil {
+        if processGroup != nil && groupCleanupTask == nil {
             _ = ensureGroupCleanup(gracePeriod: .seconds(3))
         }
     }

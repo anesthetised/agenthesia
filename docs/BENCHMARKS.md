@@ -72,7 +72,8 @@ exit. A forcibly killed process can leave an `agenthesia-bench-*` directory in t
 directory. Do not run other builds, tests or measurements alongside this workload. These short,
 fresh-database runs do not establish long-session, multi-session, WAL or crash-durability behavior.
 
-Recorded comparison: [2026-10-08 persistence review fixes and raw samples](benchmarks/2026-10-08/persistence/README.md).
+Recorded comparisons: [initial persistence review fixes](benchmarks/2026-10-08/persistence/README.md)
+and [rowid storage with resource snapshots](benchmarks/2026-10-08/persistence-rowid/README.md).
 
 ## Rendering workloads
 

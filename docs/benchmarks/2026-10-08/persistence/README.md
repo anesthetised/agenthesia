@@ -7,6 +7,8 @@ The fixed implementation preserves the Foundation reference epoch and rejects ma
 the append transaction. The new tests also verify rollback, unchanged sequence allocation, and valid
 Unicode / escaped NUL payloads.
 
+Follow-up: [rowid storage comparison with system-load snapshots](../persistence-rowid/README.md).
+
 ## Method
 
 - Before: Persistence implementation at `424c6a7`, with the new benchmark harness added locally.

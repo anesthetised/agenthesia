@@ -1,0 +1,1028 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261008T021635.876130Z",
+  "mode": "persistence",
+  "runs": 3,
+  "timeoutSeconds": 15,
+  "commit": "27bebeda826ad4cda71981065fc20814670d551a",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Release",
+  "scenarios": [
+    "1:100",
+    "1:1000",
+    "1:0",
+    "16:100",
+    "16:1000",
+    "16:0",
+    "64:100",
+    "64:1000",
+    "64:0"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "1:100",
+      "log": "run-1-1.log",
+      "wallSeconds": 2.459007625002414,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.4384765625
+          },
+          "scenario": "1:100",
+          "measurements": {
+            "appendMaxMS": 13.967625,
+            "completionDelayP95MS": 6.771624999999935,
+            "appendP50MS": 1.287334,
+            "payloadBytes": 1024,
+            "windowSeconds": 2,
+            "eventsPerSecond": 99.91877642631815,
+            "databaseBytes": 987136,
+            "offeredEventsPerSecond": 100,
+            "eventLimitReached": 0,
+            "scheduledEvents": 200,
+            "appendP95MS": 4.747917,
+            "events": 200,
+            "batchSize": 1,
+            "elapsedSeconds": 2.001625792
+          },
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 79,
+            "loadAverage1Minute": 5.56396484375
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "1:1000",
+      "log": "run-1-2.log",
+      "wallSeconds": 2.0556607919861563,
+      "samples": [
+        {
+          "measurements": {
+            "appendP50MS": 0.5396249999999999,
+            "scheduledEvents": 2000,
+            "payloadBytes": 1024,
+            "appendMaxMS": 1.482667,
+            "events": 2000,
+            "offeredEventsPerSecond": 1000,
+            "appendP95MS": 0.800875,
+            "batchSize": 1,
+            "elapsedSeconds": 2.000931625,
+            "eventsPerSecond": 999.5344043802595,
+            "completionDelayP95MS": 1.736,
+            "eventLimitReached": 0,
+            "databaseBytes": 9412608,
+            "windowSeconds": 2
+          },
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 79,
+            "loadAverage1Minute": 5.4384765625
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.4384765625
+          },
+          "scenario": "1:1000"
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "1:0",
+      "log": "run-1-3.log",
+      "wallSeconds": 2.0783116669917945,
+      "samples": [
+        {
+          "systemLoadBefore": {
+            "freeMemoryPercent": 79,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.4384765625
+          },
+          "measurements": {
+            "appendMaxMS": 6.981833,
+            "appendP95MS": 0.606167,
+            "batchSize": 1,
+            "offeredEventsPerSecond": 0,
+            "databaseBytes": 20418560,
+            "events": 4351,
+            "payloadBytes": 1024,
+            "appendP50MS": 0.41875,
+            "windowSeconds": 2,
+            "eventsPerSecond": 2175.44806117754,
+            "completionDelayP95MS": 0.606458,
+            "elapsedSeconds": 2.00004775,
+            "scheduledEvents": 0,
+            "eventLimitReached": 0
+          },
+          "scenario": "1:0",
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.4384765625
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "16:100",
+      "log": "run-1-4.log",
+      "wallSeconds": 1.969781082996633,
+      "samples": [
+        {
+          "scenario": "16:100",
+          "measurements": {
+            "offeredEventsPerSecond": 100,
+            "windowSeconds": 2,
+            "appendP50MS": 6.293,
+            "completionDelayP95MS": 21.549542000000002,
+            "eventsPerSecond": 99.32843589237832,
+            "appendMaxMS": 10.428417000000001,
+            "scheduledEvents": 192,
+            "batchSize": 16,
+            "databaseBytes": 950272,
+            "eventLimitReached": 0,
+            "payloadBytes": 1024,
+            "events": 192,
+            "appendP95MS": 10.428417000000001,
+            "elapsedSeconds": 1.932981208
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.4384765625,
+            "activeProcessorCount": 10
+          },
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 6.0439453125
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "16:1000",
+      "log": "run-1-5.log",
+      "wallSeconds": 2.0813687080226373,
+      "samples": [
+        {
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 6.0439453125
+          },
+          "measurements": {
+            "windowSeconds": 2,
+            "appendP95MS": 2.6651249999999997,
+            "appendMaxMS": 4.455375,
+            "eventLimitReached": 0,
+            "events": 2000,
+            "appendP50MS": 2.0027500000000003,
+            "offeredEventsPerSecond": 1000,
+            "elapsedSeconds": 2.005891584,
+            "payloadBytes": 1024,
+            "eventsPerSecond": 997.0628602029171,
+            "scheduledEvents": 2000,
+            "completionDelayP95MS": 5.6465,
+            "databaseBytes": 9412608,
+            "batchSize": 16
+          },
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 6.0439453125,
+            "activeProcessorCount": 10
+          },
+          "scenario": "16:1000"
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "16:0",
+      "log": "run-1-6.log",
+      "wallSeconds": 2.123732999985805,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.7197265625
+          },
+          "measurements": {
+            "appendMaxMS": 3.414083,
+            "offeredEventsPerSecond": 0,
+            "batchSize": 16,
+            "appendP50MS": 1.2218330000000002,
+            "windowSeconds": 2,
+            "elapsedSeconds": 2.000745208,
+            "scheduledEvents": 0,
+            "completionDelayP95MS": 1.617959,
+            "events": 25280,
+            "databaseBytes": 118386688,
+            "payloadBytes": 1024,
+            "eventsPerSecond": 12635.292039644859,
+            "appendP95MS": 1.617334,
+            "eventLimitReached": 0
+          },
+          "scenario": "16:0",
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 6.0439453125
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "64:100",
+      "log": "run-1-7.log",
+      "wallSeconds": 1.970690249989275,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "freeMemoryPercent": 79,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.7197265625
+          },
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.7197265625,
+            "freeMemoryPercent": 80
+          },
+          "scenario": "64:100",
+          "measurements": {
+            "completionDelayP95MS": 36.266833,
+            "databaseBytes": 950272,
+            "eventsPerSecond": 99.67224102120863,
+            "appendP50MS": 4.259375,
+            "batchSize": 64,
+            "windowSeconds": 2,
+            "events": 192,
+            "payloadBytes": 1024,
+            "scheduledEvents": 192,
+            "elapsedSeconds": 1.926313666,
+            "appendMaxMS": 4.61825,
+            "eventLimitReached": 0,
+            "appendP95MS": 4.61825,
+            "offeredEventsPerSecond": 100
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "64:1000",
+      "log": "run-1-8.log",
+      "wallSeconds": 2.0714727920130827,
+      "samples": [
+        {
+          "measurements": {
+            "payloadBytes": 1024,
+            "batchSize": 64,
+            "offeredEventsPerSecond": 1000,
+            "scheduledEvents": 1984,
+            "appendP95MS": 13.57425,
+            "completionDelayP95MS": 19.37245799999987,
+            "eventsPerSecond": 990.969474492479,
+            "appendMaxMS": 14.159041,
+            "windowSeconds": 2,
+            "elapsedSeconds": 2.002079833,
+            "appendP50MS": 7.334666,
+            "databaseBytes": 9338880,
+            "eventLimitReached": 0,
+            "events": 1984
+          },
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.7197265625
+          },
+          "systemLoadBefore": {
+            "loadAverage1Minute": 5.7197265625,
+            "freeMemoryPercent": 79,
+            "activeProcessorCount": 10
+          },
+          "scenario": "64:1000"
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "64:0",
+      "log": "run-1-9.log",
+      "wallSeconds": 2.229993375018239,
+      "samples": [
+        {
+          "measurements": {
+            "elapsedSeconds": 2.000883,
+            "payloadBytes": 1024,
+            "databaseBytes": 184905728,
+            "appendP50MS": 3.169625,
+            "appendP95MS": 3.695375,
+            "events": 39488,
+            "eventLimitReached": 0,
+            "scheduledEvents": 0,
+            "appendMaxMS": 11.767833,
+            "batchSize": 64,
+            "offeredEventsPerSecond": 0,
+            "eventsPerSecond": 19735.28687084652,
+            "windowSeconds": 2,
+            "completionDelayP95MS": 3.6956670000000003
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 5.50146484375,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 79
+          },
+          "scenario": "64:0",
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.7197265625
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "1:100",
+      "log": "run-2-1.log",
+      "wallSeconds": 2.0634742499969434,
+      "samples": [
+        {
+          "scenario": "1:100",
+          "systemLoadBefore": {
+            "loadAverage1Minute": 5.50146484375,
+            "freeMemoryPercent": 79,
+            "activeProcessorCount": 10
+          },
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.50146484375,
+            "activeProcessorCount": 10
+          },
+          "measurements": {
+            "events": 200,
+            "elapsedSeconds": 2.004071792,
+            "databaseBytes": 987136,
+            "offeredEventsPerSecond": 100,
+            "eventLimitReached": 0,
+            "appendP95MS": 1.934833,
+            "appendP50MS": 1.0287499999999998,
+            "eventsPerSecond": 99.79682404511385,
+            "scheduledEvents": 200,
+            "appendMaxMS": 4.1505,
+            "batchSize": 1,
+            "payloadBytes": 1024,
+            "completionDelayP95MS": 3.845875,
+            "windowSeconds": 2
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "1:1000",
+      "log": "run-2-2.log",
+      "wallSeconds": 2.0483130420034286,
+      "samples": [
+        {
+          "scenario": "1:1000",
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.50146484375,
+            "freeMemoryPercent": 80
+          },
+          "measurements": {
+            "completionDelayP95MS": 1.732833,
+            "appendP95MS": 0.752875,
+            "events": 2000,
+            "elapsedSeconds": 2.001688041,
+            "databaseBytes": 9412608,
+            "batchSize": 1,
+            "scheduledEvents": 2000,
+            "appendMaxMS": 1.696542,
+            "windowSeconds": 2,
+            "appendP50MS": 0.516208,
+            "offeredEventsPerSecond": 1000,
+            "eventLimitReached": 0,
+            "eventsPerSecond": 999.1566912698561,
+            "payloadBytes": 1024
+          },
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.4609375
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "1:0",
+      "log": "run-2-3.log",
+      "wallSeconds": 2.0676960829878226,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "freeMemoryPercent": 79,
+            "loadAverage1Minute": 5.4609375,
+            "activeProcessorCount": 10
+          },
+          "scenario": "1:0",
+          "measurements": {
+            "appendMaxMS": 3.0590420000000003,
+            "elapsedSeconds": 2.000819542,
+            "batchSize": 1,
+            "databaseBytes": 18882560,
+            "completionDelayP95MS": 0.716042,
+            "offeredEventsPerSecond": 0,
+            "events": 4023,
+            "appendP50MS": 0.47591700000000003,
+            "payloadBytes": 1024,
+            "appendP95MS": 0.714792,
+            "windowSeconds": 2,
+            "eventsPerSecond": 2010.6760832506905,
+            "scheduledEvents": 0,
+            "eventLimitReached": 0
+          },
+          "systemLoadBefore": {
+            "loadAverage1Minute": 5.4609375,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "16:100",
+      "log": "run-2-4.log",
+      "wallSeconds": 2.0155213749967515,
+      "samples": [
+        {
+          "scenario": "16:100",
+          "measurements": {
+            "scheduledEvents": 192,
+            "payloadBytes": 1024,
+            "batchSize": 16,
+            "offeredEventsPerSecond": 100,
+            "eventsPerSecond": 99.29414533016919,
+            "completionDelayP95MS": 18.157959000000062,
+            "databaseBytes": 950272,
+            "elapsedSeconds": 1.9336487500000001,
+            "windowSeconds": 2,
+            "appendMaxMS": 7.472124999999999,
+            "appendP95MS": 7.472124999999999,
+            "events": 192,
+            "appendP50MS": 2.770833,
+            "eventLimitReached": 0
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 5.50390625,
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 79,
+            "loadAverage1Minute": 5.4609375,
+            "activeProcessorCount": 10
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "16:1000",
+      "log": "run-2-5.log",
+      "wallSeconds": 2.118836250010645,
+      "samples": [
+        {
+          "scenario": "16:1000",
+          "measurements": {
+            "scheduledEvents": 2000,
+            "windowSeconds": 2,
+            "elapsedSeconds": 2.021575542,
+            "offeredEventsPerSecond": 1000,
+            "batchSize": 16,
+            "events": 1984,
+            "eventsPerSecond": 981.4127440605928,
+            "payloadBytes": 1024,
+            "appendP95MS": 7.469957999999999,
+            "appendMaxMS": 35.002041999999996,
+            "completionDelayP95MS": 11.262624999999936,
+            "eventLimitReached": 0,
+            "appendP50MS": 3.448,
+            "databaseBytes": 9338880
+          },
+          "systemLoadBefore": {
+            "loadAverage1Minute": 5.50390625,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 5.50390625,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "16:0",
+      "log": "run-2-6.log",
+      "wallSeconds": 2.126789624977391,
+      "samples": [
+        {
+          "measurements": {
+            "completionDelayP95MS": 1.421083,
+            "scheduledEvents": 0,
+            "eventLimitReached": 0,
+            "appendMaxMS": 2.796292,
+            "batchSize": 16,
+            "eventsPerSecond": 13233.815394733225,
+            "payloadBytes": 1024,
+            "offeredEventsPerSecond": 0,
+            "databaseBytes": 124010496,
+            "windowSeconds": 2,
+            "appendP50MS": 1.192083,
+            "events": 26480,
+            "appendP95MS": 1.420875,
+            "elapsedSeconds": 2.000934667
+          },
+          "scenario": "16:0",
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.50390625,
+            "freeMemoryPercent": 80
+          },
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.50390625
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "64:100",
+      "log": "run-2-7.log",
+      "wallSeconds": 2.0266596250003204,
+      "samples": [
+        {
+          "scenario": "64:100",
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 5.06298828125
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.50390625,
+            "activeProcessorCount": 10
+          },
+          "measurements": {
+            "databaseBytes": 950272,
+            "eventLimitReached": 0,
+            "events": 192,
+            "appendMaxMS": 10.853625000000001,
+            "batchSize": 64,
+            "payloadBytes": 1024,
+            "elapsedSeconds": 1.968183792,
+            "completionDelayP95MS": 53.438874999999996,
+            "appendP95MS": 10.853625000000001,
+            "offeredEventsPerSecond": 100,
+            "appendP50MS": 8.923874999999999,
+            "scheduledEvents": 192,
+            "windowSeconds": 2,
+            "eventsPerSecond": 97.55186521727032
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "64:1000",
+      "log": "run-2-8.log",
+      "wallSeconds": 2.0740077090158593,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.06298828125
+          },
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.06298828125
+          },
+          "scenario": "64:1000",
+          "measurements": {
+            "eventsPerSecond": 992.0092380860297,
+            "eventLimitReached": 0,
+            "offeredEventsPerSecond": 1000,
+            "scheduledEvents": 1984,
+            "windowSeconds": 2,
+            "appendP95MS": 14.20775,
+            "completionDelayP95MS": 19.420459,
+            "events": 1984,
+            "databaseBytes": 9338880,
+            "elapsedSeconds": 1.999981375,
+            "appendMaxMS": 14.964708,
+            "appendP50MS": 9.730875,
+            "batchSize": 64,
+            "payloadBytes": 1024
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "64:0",
+      "log": "run-2-9.log",
+      "wallSeconds": 2.2028785420116037,
+      "samples": [
+        {
+          "measurements": {
+            "elapsedSeconds": 2.00048125,
+            "completionDelayP95MS": 3.553875,
+            "offeredEventsPerSecond": 0,
+            "payloadBytes": 1024,
+            "windowSeconds": 2,
+            "events": 39744,
+            "databaseBytes": 186105856,
+            "eventLimitReached": 0,
+            "eventsPerSecond": 19867.219450319768,
+            "appendP95MS": 3.5535829999999997,
+            "appendMaxMS": 9.916208,
+            "batchSize": 64,
+            "appendP50MS": 3.148625,
+            "scheduledEvents": 0
+          },
+          "scenario": "64:0",
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 5.06298828125
+          },
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.8173828125
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "1:100",
+      "log": "run-3-1.log",
+      "wallSeconds": 2.067465959000401,
+      "samples": [
+        {
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.8173828125,
+            "activeProcessorCount": 10
+          },
+          "scenario": "1:100",
+          "measurements": {
+            "windowSeconds": 2,
+            "databaseBytes": 987136,
+            "events": 200,
+            "elapsedSeconds": 2.002989458,
+            "eventLimitReached": 0,
+            "eventsPerSecond": 99.8507501880222,
+            "payloadBytes": 1024,
+            "appendP50MS": 1.97775,
+            "completionDelayP95MS": 8.810957999999937,
+            "appendMaxMS": 14.333166,
+            "batchSize": 1,
+            "offeredEventsPerSecond": 100,
+            "scheduledEvents": 200,
+            "appendP95MS": 6.609667
+          },
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.8173828125
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "1:1000",
+      "log": "run-3-2.log",
+      "wallSeconds": 2.071014125016518,
+      "samples": [
+        {
+          "scenario": "1:1000",
+          "measurements": {
+            "scheduledEvents": 2000,
+            "elapsedSeconds": 2.001598792,
+            "appendP95MS": 0.7895000000000001,
+            "batchSize": 1,
+            "completionDelayP95MS": 1.749708,
+            "offeredEventsPerSecond": 1000,
+            "windowSeconds": 2,
+            "events": 2000,
+            "payloadBytes": 1024,
+            "eventsPerSecond": 999.2012425235317,
+            "appendP50MS": 0.5409160000000001,
+            "appendMaxMS": 1.1949580000000002,
+            "eventLimitReached": 0,
+            "databaseBytes": 9412608
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.8173828125
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 4.8173828125,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "1:0",
+      "log": "run-3-3.log",
+      "wallSeconds": 2.0817334160092287,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.67138671875,
+            "freeMemoryPercent": 80
+          },
+          "measurements": {
+            "payloadBytes": 1024,
+            "eventsPerSecond": 2196.480918072024,
+            "appendP50MS": 0.417958,
+            "offeredEventsPerSecond": 0,
+            "events": 4393,
+            "scheduledEvents": 0,
+            "eventLimitReached": 0,
+            "completionDelayP95MS": 0.60125,
+            "batchSize": 1,
+            "windowSeconds": 2,
+            "elapsedSeconds": 2.000017375,
+            "appendMaxMS": 3.650458,
+            "appendP95MS": 0.600834,
+            "databaseBytes": 20615168
+          },
+          "scenario": "1:0",
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.67138671875
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "16:100",
+      "log": "run-3-4.log",
+      "wallSeconds": 1.9714609580114484,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.67138671875
+          },
+          "measurements": {
+            "events": 192,
+            "eventLimitReached": 0,
+            "batchSize": 16,
+            "offeredEventsPerSecond": 100,
+            "appendP50MS": 4.007541,
+            "elapsedSeconds": 1.932567541,
+            "eventsPerSecond": 99.34969719125588,
+            "completionDelayP95MS": 18.071458,
+            "databaseBytes": 950272,
+            "payloadBytes": 1024,
+            "scheduledEvents": 192,
+            "windowSeconds": 2,
+            "appendP95MS": 8.042417,
+            "appendMaxMS": 8.042417
+          },
+          "scenario": "16:100",
+          "systemLoadBefore": {
+            "loadAverage1Minute": 4.67138671875,
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "16:1000",
+      "log": "run-3-5.log",
+      "wallSeconds": 2.0621084589802194,
+      "samples": [
+        {
+          "scenario": "16:1000",
+          "measurements": {
+            "batchSize": 16,
+            "appendMaxMS": 10.975584,
+            "elapsedSeconds": 2.008263667,
+            "appendP95MS": 7.628916,
+            "scheduledEvents": 2000,
+            "appendP50MS": 3.745333,
+            "eventsPerSecond": 995.8851682994671,
+            "databaseBytes": 9412608,
+            "windowSeconds": 2,
+            "completionDelayP95MS": 10.59024999999992,
+            "eventLimitReached": 0,
+            "events": 2000,
+            "offeredEventsPerSecond": 1000,
+            "payloadBytes": 1024
+          },
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.67138671875,
+            "freeMemoryPercent": 80
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 4.45703125,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "16:0",
+      "log": "run-3-6.log",
+      "wallSeconds": 2.1421477500116453,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.45703125
+          },
+          "scenario": "16:0",
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.45703125
+          },
+          "measurements": {
+            "batchSize": 16,
+            "appendP95MS": 1.397625,
+            "scheduledEvents": 0,
+            "appendP50MS": 1.1820000000000002,
+            "eventLimitReached": 0,
+            "windowSeconds": 2,
+            "payloadBytes": 1024,
+            "completionDelayP95MS": 1.397833,
+            "events": 26176,
+            "offeredEventsPerSecond": 0,
+            "databaseBytes": 122580992,
+            "elapsedSeconds": 2.00038825,
+            "appendMaxMS": 13.372874999999999,
+            "eventsPerSecond": 13085.459785119214
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "64:100",
+      "log": "run-3-7.log",
+      "wallSeconds": 2.0068573750031646,
+      "samples": [
+        {
+          "measurements": {
+            "appendMaxMS": 11.51975,
+            "completionDelayP95MS": 49.516,
+            "scheduledEvents": 192,
+            "appendP50MS": 7.441,
+            "eventLimitReached": 0,
+            "eventsPerSecond": 97.72275443798728,
+            "events": 192,
+            "appendP95MS": 11.51975,
+            "batchSize": 64,
+            "payloadBytes": 1024,
+            "elapsedSeconds": 1.964742,
+            "windowSeconds": 2,
+            "databaseBytes": 950272,
+            "offeredEventsPerSecond": 100
+          },
+          "systemLoadBefore": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.45703125
+          },
+          "systemLoadAfter": {
+            "loadAverage1Minute": 4.82080078125,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          },
+          "scenario": "64:100"
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "64:1000",
+      "log": "run-3-8.log",
+      "wallSeconds": 2.0740811249997932,
+      "samples": [
+        {
+          "scenario": "64:1000",
+          "systemLoadBefore": {
+            "loadAverage1Minute": 4.82080078125,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          },
+          "systemLoadAfter": {
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80,
+            "loadAverage1Minute": 4.82080078125
+          },
+          "measurements": {
+            "scheduledEvents": 1984,
+            "appendMaxMS": 16.010666999999998,
+            "databaseBytes": 9338880,
+            "windowSeconds": 2,
+            "appendP95MS": 14.046041,
+            "payloadBytes": 1024,
+            "eventsPerSecond": 991.7050916983562,
+            "eventLimitReached": 0,
+            "appendP50MS": 8.594249999999999,
+            "offeredEventsPerSecond": 1000,
+            "elapsedSeconds": 2.00059475,
+            "completionDelayP95MS": 19.208541000000064,
+            "events": 1984,
+            "batchSize": 64
+          }
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "64:0",
+      "log": "run-3-9.log",
+      "wallSeconds": 2.2424452080158517,
+      "samples": [
+        {
+          "systemLoadAfter": {
+            "loadAverage1Minute": 4.82080078125,
+            "activeProcessorCount": 10,
+            "freeMemoryPercent": 80
+          },
+          "systemLoadBefore": {
+            "freeMemoryPercent": 80,
+            "activeProcessorCount": 10,
+            "loadAverage1Minute": 4.82080078125
+          },
+          "scenario": "64:0",
+          "measurements": {
+            "scheduledEvents": 0,
+            "appendP50MS": 3.133125,
+            "offeredEventsPerSecond": 0,
+            "windowSeconds": 2,
+            "databaseBytes": 187301888,
+            "elapsedSeconds": 2.003041875,
+            "batchSize": 64,
+            "eventLimitReached": 0,
+            "events": 40000,
+            "eventsPerSecond": 19969.627444758236,
+            "appendP95MS": 3.445042,
+            "payloadBytes": 1024,
+            "completionDelayP95MS": 3.445333,
+            "appendMaxMS": 21.458125000000003
+          }
+        }
+      ]
+    }
+  ]
+}

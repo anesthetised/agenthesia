@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Persistence
 
@@ -10,6 +11,19 @@ func seconds(_ duration: Duration) -> Double {
 
 func percentile(_ sorted: [Double], _ fraction: Double) -> Double {
     sorted[max(0, Int(ceil(Double(sorted.count) * fraction)) - 1)]
+}
+
+// Match the rendering benchmark's resource snapshots, but retain numeric fields in the report.
+func systemLoad() -> [String: Double] {
+    var values = ["activeProcessorCount": Double(ProcessInfo.processInfo.activeProcessorCount)]
+    var level: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    if sysctlbyname("kern.memorystatus_level", &level, &size, nil, 0) == 0 {
+        values["freeMemoryPercent"] = Double(level)
+    }
+    var load = 0.0
+    if getloadavg(&load, 1) == 1 { values["loadAverage1Minute"] = load }
+    return values
 }
 
 guard CommandLine.arguments.count == 3,
@@ -33,6 +47,7 @@ let prefix =
 let suffix = #""}}}"#
 let payload = Data((prefix + String(repeating: "x", count: 1024 - prefix.utf8.count - suffix.utf8.count) + suffix).utf8)
 let batch = Array(repeating: NewEvent(kind: "acp.session/update", payload: payload), count: batchSize)
+let loadBefore = systemLoad()
 let clock = ContinuousClock()
 let start = clock.now
 let end = start.advanced(by: .seconds(2))
@@ -56,6 +71,7 @@ while count + batchSize <= eventLimit {
     completionDelays.append(seconds(due.duration(to: after)) * 1000)
 }
 let elapsed = seconds(start.duration(to: clock.now))
+let loadAfter = systemLoad()
 // Verify persisted bytes and ordering outside the timed region, through the public replay API.
 let reopened = try PersistenceStore(databaseURL: url)
 var cursor: Int64 = 0
@@ -82,5 +98,6 @@ let measurements: [String: Double] = [
 ]
 let data = try JSONSerialization.data(withJSONObject: [
     "scenario": "\(batchSize):\(rate)", "measurements": measurements,
+    "systemLoadBefore": loadBefore, "systemLoadAfter": loadAfter,
 ])
 print("BENCHMARK_RESULT=" + String(decoding: data, as: UTF8.self))

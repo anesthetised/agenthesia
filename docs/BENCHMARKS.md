@@ -56,6 +56,11 @@ batches are scheduled. Work that remains when the window ends is not drained; co
 with `scheduledEvents` to detect a writer that falls behind. Saturation stops at the time or event
 limit, whichever comes first. `eventLimitReached` identifies runs that hit the cap.
 
+Each result includes system-load snapshots immediately before and after the timed region: the
+one-minute load average, active core count and free-memory percentage (`kern.memorystatus_level`),
+matching the rendering benchmark. Unavailable OS counters are omitted, not reported as zero. These
+snapshots expose background contention but do not isolate its effect on timings.
+
 Results include achieved events/second, append p50/p95/max, p95 delay from the scheduled batch-ready
 time to commit completion, event counts, elapsed time and final database size. Append latency excludes
 waiting to fill a batch: at 100 events/second, batching 64 adds up to 630 ms of waiting for the first

@@ -23,7 +23,10 @@ import SwiftUI
     }
 
     func refresh() async {
-        do { history = try await library.history() } catch { errorMessage = error.localizedDescription }
+        do {
+            history = try await library.history()
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
     }
     func start(directory: URL, executable: String, arguments: [String]) async {
         guard canStart else { return }
@@ -66,6 +69,7 @@ import SwiftUI
 public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     static var windows: [UUID: SessionWindowModel] = [:]
     private var terminating = false
+    var terminationReply: (NSApplication) -> Void = { $0.reply(toApplicationShouldTerminate: true) }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !Self.windows.isEmpty else { return .terminateNow }
@@ -74,7 +78,7 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
             Task {
                 let models = Array(Self.windows.values)
                 for model in models { await model.close() }
-                sender.reply(toApplicationShouldTerminate: true)
+                terminationReply(sender)
             }
         }
         return .terminateLater

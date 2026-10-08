@@ -44,4 +44,32 @@ import Testing
         }
         #expect(retained == nil)
     }
+
+    @Test func successfulRefreshClearsPreviousFailure() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-model-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try "obstruction".write(to: directory, atomically: true, encoding: .utf8)
+        let model = SessionWindowModel(
+            library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
+        )
+        await model.refresh()
+        #expect(model.errorMessage != nil)
+        try FileManager.default.removeItem(at: directory)
+        await model.refresh()
+        #expect(model.errorMessage == nil)
+        #expect(model.history.isEmpty)
+    }
+
+    @Test func launchInputExpandsHomeAndPreservesLiteralArguments() {
+        let command = RootView.launchCommand(
+            executable: " ~/bin/my agent \n",
+            arguments: "--label\n  spaced value  \n \n\n--flag"
+        )
+        #expect(
+            command.executable == FileManager.default.homeDirectoryForCurrentUser.appending(path: "bin/my agent").path
+        )
+        #expect(command.arguments == ["--label", "  spaced value  ", " ", "--flag"])
+        #expect(RootView.launchCommand(executable: "agent", arguments: "").executable == "agent")
+        #expect(RootView.launchCommand(executable: "/opt/my agent", arguments: "").executable == "/opt/my agent")
+    }
 }

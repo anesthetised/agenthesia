@@ -30,7 +30,8 @@ Rendering workloads, metrics and repeatable measurements are described in [docs/
 ## Live sessions
 
 The app opens a native session screen. Choose a project directory and an installed ACP agent command;
-enter arguments one per line. Agents must already be authenticated. Git projects receive a fresh
+enter literal arguments one per line (blank lines are ignored; spaces are preserved). Project and
+executable paths accept `~` for your home directory. Agents must already be authenticated. Git projects receive a fresh
 `agenthesia/<uuid>` branch and worktree under `~/.agenthesia/worktrees`; only committed HEAD content is
 copied. Non-Git directories are used directly. Worktrees remain on disk after closing, including failed
 startup, so changes are not discarded.

@@ -134,12 +134,14 @@ public struct RootView: View {
                 .font(.caption).foregroundStyle(.secondary)
                 Button("Start Session") {
                     showingSetup = false
-                    let command = executable.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let args = arguments.split(separator: "\n")
-                        .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    let command = Self.launchCommand(executable: executable, arguments: arguments)
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
                     Task {
-                        await model.start(directory: URL(filePath: path), executable: command, arguments: args)
+                        await model.start(
+                            directory: URL(filePath: path),
+                            executable: command.executable,
+                            arguments: command.arguments
+                        )
                     }
                 }.buttonStyle(.borderedProminent)
                     .disabled(directory.isEmpty || executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -184,6 +186,11 @@ public struct RootView: View {
         let text = prompt
         prompt = ""
         Task { await model.owner?.send(text) }
+    }
+
+    static func launchCommand(executable: String, arguments: String) -> (executable: String, arguments: [String]) {
+        let path = (executable.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        return (path, arguments.split(separator: "\n").map(String.init))
     }
 
     static func handleComposerReturn(modifiers: EventModifiers, responder: NSResponder?) -> KeyPress.Result {

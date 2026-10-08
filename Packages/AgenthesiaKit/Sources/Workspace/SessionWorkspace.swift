@@ -61,9 +61,14 @@ public struct SessionWorkspace: Sendable {
         // Keep the selected subdirectory, e.g. one package of a monorepo.
         let prefix = try git(["rev-parse", "--show-prefix"], in: directory)
         try git(["worktree", "add", "--quiet", "-b", "agenthesia/\(slug)", destination.path, "HEAD"], in: root)
-        let working = prefix.isEmpty ? destination : destination.appending(path: prefix).standardizedFileURL
-        guard FileManager.default.fileExists(atPath: working.path) else {
-            throw WorkspaceError(message: "The selected directory has no committed files at HEAD.")
+        let worktree = destination.resolvingSymlinksInPath().standardizedFileURL
+        let working = (prefix.isEmpty ? worktree : worktree.appending(path: prefix))
+            .resolvingSymlinksInPath().standardizedFileURL
+        guard working.path == worktree.path || working.path.hasPrefix(worktree.path + "/") else {
+            throw WorkspaceError(message: "The selected directory resolves outside the session worktree at HEAD.")
+        }
+        guard (try? working.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+            throw WorkspaceError(message: "The selected path is not a committed directory at HEAD.")
         }
         return SessionWorkspace(projectDirectory: root, workingDirectory: working)
     }

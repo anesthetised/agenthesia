@@ -53,7 +53,8 @@ Agents must already be authenticated; authentication failures are displayed.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
-`~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree. Dirty and untracked files are not copied.
+`~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.
+After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
 Non-Git directories are used directly; bare, broken, or unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
 part of the worktree milestone.

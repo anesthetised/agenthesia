@@ -38,12 +38,14 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored private var startupUpdates: [(ACP.SessionID, ACP.SessionUpdate, Data)] = []
     @ObservationIgnored private var startupBytes = 0
     // Internal seam for deterministic disk-failure and suspended-write tests; production uses the store.
+    @ObservationIgnored var createSession: @Sendable (SessionRecord) async throws -> Void
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
 
     /// The project and agent install must already exist. The draft session is inserted after session/new succeeds.
     public init(session: SessionRecord, store: PersistenceStore) {
         self.session = session
         self.store = store
+        createSession = { try await store.createSession($0) }
         appendEvents = { try await store.append($0, to: $1) }
     }
 
@@ -72,7 +74,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 createdAt: session.createdAt
             )
             do {
-                try await store.createSession(session)
+                try await createSession(session)
             } catch {
                 failure = failure ?? error
                 throw error

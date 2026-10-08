@@ -560,6 +560,41 @@ extension SessionControllerTests {
         await peer.close()
     }
 
+    @Test(arguments: [false, true]) func sessionCreationFailureSurvivesClose(closing: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let gate = Gate()
+        let diskError = CocoaError(.fileWriteOutOfSpace)
+        controller.createSession = { _ in
+            await gate.suspend()
+            throw diskError
+        }
+        controller.appendEvents = { _, _ in
+            Issue.record("Startup events must not be written after session creation fails")
+            return []
+        }
+        let (server, client) = InMemoryTransport.pair()
+        Task { await EchoAgent().serve(server) }
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let start = Task {
+            try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        await gate.waitUntilEntered()
+        if closing { await controller.close() }
+        await gate.open()
+        do {
+            try await start.value
+            Issue.record("Expected the session creation error")
+        } catch {
+            #expect((error as? CocoaError)?.code == .fileWriteOutOfSpace)
+            #expect(controller.errorMessage == String(describing: error))
+        }
+        #expect(controller.status == (closing ? .closed : .failed))
+        #expect(controller.transcript.sequence == 0)
+        #expect(try await fixture.store.session(id: controller.session.id) == nil)
+        await controller.close()
+    }
+
     @Test(arguments: [false, true]) func closeDuringStartupWritePreservesDiskFailure(failing: Bool) async throws {
         let fixture = try Fixture()
         let controller = SessionController(session: try await fixture.seed(), store: fixture.store)

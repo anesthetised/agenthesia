@@ -35,7 +35,8 @@ struct CLIFileSystem: ACP.FileSystemProvider {
         case .notText(let path): .invalidParams("Not a UTF-8 text file: \(path)")
         case .invalidPath: .invalidParams("Path contains a NUL byte")
         case .notRegularFile(let path): .invalidParams("Not a regular file: \(path)")
-        case .io(let path, let code): RPCError(code: -32603, message: "File operation failed (\(code)): \(path)")
+        case .io(let path, let code):
+            RPCError(code: RPCError.internalErrorCode, message: "File operation failed (\(code)): \(path)")
         }
     }
 }

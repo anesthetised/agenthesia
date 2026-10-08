@@ -106,6 +106,9 @@ run on Dispatch queues. Accepted operations are serialized per session. Closing 
 controller stops admission synchronously and waits for accepted operations to finish. Cancellation
 before admission does no I/O; cancellation after admission does not roll back or abandon an accepted
 operation. Thus a completed close cannot be followed by an outstanding filesystem write.
+Stop also prevents admission while the turn is stopping, even if its tool permission was granted
+earlier; the ACP file request must already have been accepted to finish. The controller continues
+recording agent updates until the prompt response arrives, then permits file requests again when idle.
 
 Roots are the actual session working directory (the worktree directory for Git projects), plus explicit
 `additionalDirectories`. The launch API accepts additional directories and passes the same list to
@@ -121,8 +124,10 @@ regular file; `O_NONBLOCK` avoids hanging on a substituted FIFO. Writes open the
 directories without following symlinks, create missing directories, and atomically rename a temporary
 file relative to the retained parent descriptor. Existing ordinary permission bits are preserved.
 Replacing a final symlink after validation cannot redirect the write, and replacing a hard link does
-not overwrite its other names. Temporary files are removed on failure. NUL paths are rejected and line
-range arithmetic cannot overflow.
+not overwrite its other names. Temporary files are removed on handled failures, but a process crash
+can leave a `.agenthesia-<UUID>` file in the worktree. NUL paths are rejected and line range arithmetic
+cannot overflow. Reads currently load the whole file even for a line range; incremental reads and
+resource limits remain follow-up work for large files.
 
 These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox:
 an agent's own tools remain outside this provider, reads can see existing hard-linked files, and an

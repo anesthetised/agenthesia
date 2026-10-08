@@ -131,6 +131,20 @@ import Testing
         await owner.close()
     }
 
+    @Test func invalidAdditionalDirectoryHasAReadableLaunchFailure() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "not-a-directory.txt")
+        try "text".write(to: file, atomically: true, encoding: .utf8)
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: try mock(), additionalDirectories: [file])
+        #expect(owner.errorMessage?.contains("existing directories") == true)
+        #expect(owner.errorMessage?.contains(file.lastPathComponent) == true)
+        #expect(try await library.history().isEmpty)
+        await owner.close()
+    }
+
     @Test func executablesResolveLikeTheRuntime() {
         #expect(LiveSession.isExecutable("/bin/sh", path: nil))
         #expect(LiveSession.isExecutable("sh", path: "/does-not-exist:/bin"))

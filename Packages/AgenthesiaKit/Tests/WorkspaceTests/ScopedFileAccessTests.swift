@@ -173,4 +173,13 @@ import Testing
         }
         #expect(try String(contentsOf: secret, encoding: .utf8) == "secret")
     }
+
+    @Test func extractsPOSIXErrorsWithoutMistakingCocoaCodesForErrno() {
+        let posix = NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))
+        let cocoa = NSError(domain: NSCocoaErrorDomain, code: 512, userInfo: [NSUnderlyingErrorKey: posix])
+        #expect(ScopedFileAccess.posixCode(from: posix) == ENOSPC)
+        #expect(ScopedFileAccess.posixCode(from: cocoa) == ENOSPC)
+        #expect(ScopedFileAccess.posixCode(from: NSError(domain: NSCocoaErrorDomain, code: 512)) == EIO)
+        #expect(ScopedFileAccess.posixCode(from: NSError(domain: NSPOSIXErrorDomain, code: Int.max)) == EIO)
+    }
 }

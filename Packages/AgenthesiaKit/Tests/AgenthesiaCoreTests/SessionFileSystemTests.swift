@@ -38,7 +38,11 @@ import Testing
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 
-    func start(supportsAdditionalRoots: Bool = true, queue: DispatchQueue? = nil) async throws -> SessionFileSystem {
+    func start(
+        supportsAdditionalRoots: Bool = true,
+        queue: DispatchQueue? = nil,
+        prompt: (@Sendable () async -> ACP.StopReason)? = nil
+    ) async throws -> SessionFileSystem {
         var router = Router()
         router.on(ACP.V1.Method.Initialize.self) { request in
             #expect(request.clientCapabilities?.fs?.readTextFile == true)
@@ -54,6 +58,9 @@ import Testing
         router.on(ACP.V1.Method.NewSession.self) { request in
             #expect(request.additionalDirectories ?? [] == roots)
             return .init(sessionId: "s")
+        }
+        if let prompt {
+            router.on(ACP.V1.Method.Prompt.self) { _ in .init(stopReason: await prompt()) }
         }
         await server.start(handler: router)
         let files = try await SessionFileSystem(controller: controller, queue: queue)
@@ -155,10 +162,57 @@ import Testing
         await fixture.controller.close()
     }
 
+    @Test func stopRejectsNewFileRequestsButFinishesAcceptedWritesAndKeepsUpdates() async throws {
+        let fixture = try await FileSessionFixture()
+        let queue = DispatchQueue(label: "session-files-stop-test")
+        let gate = FileTurnGate()
+        let files = try await fixture.start(queue: queue, prompt: { await gate.wait() })
+        let turn = Task { try await fixture.controller.send([.init(text: "work")]) }
+        while await !gate.entered { await Task.yield() }
+        let acceptedPath = fixture.root.appending(path: "accepted.txt").path
+        let latePath = fixture.root.appending(path: "late.txt").path
+        let write: Task<Void, any Error>
+        queue.suspend()
+        do {
+            defer { queue.resume() }
+            write = Task { try await files.writeTextFile(at: acceptedPath, content: "accepted", in: "s") }
+            while files.pendingOperations == 0 { await Task.yield() }
+            try await fixture.controller.stop()
+            #expect(fixture.controller.status == .stopping)
+            try await fixture.server.notify(
+                ACP.V1.Method.SessionUpdate.self,
+                .init(sessionId: "s", update: .agentMessageChunk(.init(content: .init(text: "Stopping"))))
+            )
+            await #expect(throws: RPCError.self) {
+                _ = try await fixture.server.request(
+                    ACP.V1.Method.WriteTextFile.self,
+                    .init(sessionId: "s", path: latePath, content: "late")
+                )
+            }
+            await #expect(throws: RPCError.self) {
+                _ = try await fixture.server.request(
+                    ACP.V1.Method.ReadTextFile.self,
+                    .init(sessionId: "s", path: acceptedPath)
+                )
+            }
+        }
+        try await write.value
+        #expect(try String(contentsOfFile: acceptedPath, encoding: .utf8) == "accepted")
+        #expect(!FileManager.default.fileExists(atPath: latePath))
+        await gate.release()
+        try await turn.value
+        #expect(fixture.controller.status == .idle)
+        #expect(fixture.controller.transcript.items.last?.message?.text == "Stopping")
+        try await files.writeTextFile(at: latePath, content: "next turn", in: "s")
+        await fixture.controller.close()
+    }
+
     @Test(arguments: ["relative", "/dev/null", "/agenthesia-missing-directory", "/tmp/invalid\0root"])
     func rejectsInvalidRoots(path: String) async throws {
         let fixture = try await FileSessionFixture(additionalPaths: [path])
-        await #expect(throws: (any Error).self) { _ = try await SessionFileSystem(controller: fixture.controller) }
+        await #expect(throws: LiveSession.LaunchError.self) {
+            _ = try await SessionFileSystem(controller: fixture.controller)
+        }
     }
 
     @Test func acceptsAnExplicitDirectorySymlinkAsAnAdditionalRoot() async throws {
@@ -197,5 +251,20 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: path))
         #expect(SessionFileSystem.rpcError(.io(path, 13)).code == RPCError.internalErrorCode)
         await fixture.controller.close()
+    }
+}
+
+private actor FileTurnGate {
+    private(set) var entered = false
+    private var waiter: CheckedContinuation<ACP.StopReason, Never>?
+
+    func wait() async -> ACP.StopReason {
+        entered = true
+        return await withCheckedContinuation { waiter = $0 }
+    }
+
+    func release() {
+        waiter?.resume(returning: .cancelled)
+        waiter = nil
     }
 }

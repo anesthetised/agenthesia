@@ -17,7 +17,7 @@ import Workspace
         self.queue = queue ?? DispatchQueue(label: "Agenthesia.SessionFileSystem", qos: .userInitiated)
         let paths = [controller.session.workingDirectory] + controller.additionalDirectories
         guard paths.allSatisfy({ $0.hasPrefix("/") && !$0.utf8.contains(0) }) else {
-            throw RPCError.invalidParams("Filesystem roots must be absolute paths without NUL bytes")
+            throw LiveSession.LaunchError(message: "Filesystem roots must be absolute paths without NUL bytes")
         }
         let roots = paths.map {
             URL(filePath: $0, directoryHint: .isDirectory)
@@ -28,9 +28,9 @@ import Workspace
                     with: Result {
                         let access = ScopedFileAccess(roots: roots)
                         for root in access.roots {
-                            guard try root.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
-                                throw RPCError.invalidParams(
-                                    "Filesystem roots must be existing directories: \(root.path)"
+                            guard (try? root.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                                throw LiveSession.LaunchError(
+                                    message: "Filesystem roots must be existing directories: \(root.path)"
                                 )
                             }
                         }

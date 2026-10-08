@@ -53,7 +53,7 @@ public struct ScopedFileAccess: Sendable {
         do {
             data = try FileHandle(fileDescriptor: descriptor, closeOnDealloc: false).readToEnd() ?? Data()
         } catch {
-            throw .io(path, Int32((error as NSError).code))
+            throw .io(path, Self.posixCode(from: error))
         }
         guard let text = String(data: data, encoding: .utf8) else { throw .notText(path) }
         guard line != nil || limit != nil else { return text }
@@ -91,7 +91,7 @@ public struct ScopedFileAccess: Sendable {
         do {
             try FileHandle(fileDescriptor: descriptor, closeOnDealloc: false).write(contentsOf: Data(content.utf8))
         } catch {
-            throw .io(path, Int32((error as NSError).code))
+            throw .io(path, Self.posixCode(from: error))
         }
         guard renameat(parent, temporary, parent, name) == 0 else { throw failure(path) }
     }
@@ -130,6 +130,16 @@ public struct ScopedFileAccess: Sendable {
 
     private func failure(_ path: String) -> Failure {
         errno == ENOENT ? .notFound(path) : .io(path, errno)
+    }
+
+    static func posixCode(from error: any Error) -> Int32 {
+        let error = error as NSError
+        if error.domain == NSPOSIXErrorDomain { return Int32(exactly: error.code) ?? EIO }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? any Error {
+            return posixCode(from: underlying)
+        }
+        // FileHandle may omit its underlying POSIX error. A Cocoa code is never an errno value.
+        return EIO
     }
 
     private static func canonicalURL(_ url: URL) -> URL {

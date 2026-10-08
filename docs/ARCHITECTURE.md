@@ -51,6 +51,40 @@ streaming; it does not implement or supersede ADR-0010's production queue and st
 `AgenthesiaCore` and `Persistence` are still placeholders. The data flow below describes the intended
 live-session architecture, not functionality supplied by the demo.
 
+## Runtime implementation
+
+`ShellEnvironment` resolves the login-shell environment once per resolver instance. Concurrent callers
+share the same resolution, and the application uses the shared instance. The resolver runs the shell
+with `-l -i -c` in a new session using `posix_spawn`, so interactive shells cannot stop while trying to
+acquire the CLI's controlling terminal. It extracts NUL-separated environment entries between unique
+markers and bounds both the captured output (1 MiB) and the wait (5 seconds, plus bounded process
+cleanup). Failed resolution returns a fallback environment and a diagnostic without exposing
+environment values. The CLI passes the resulting environment explicitly to the agent
+and reuses it for terminal authentication; constructing `AgentProcess` does not implicitly run a shell.
+A complete, valid snapshot and successful shell exit suffice even when a descendant retains stdout;
+the resolver still cleans up the remaining process group.
+
+`AgentProcess` retains Foundation's `Process` and verifies process-group isolation before using group
+signals. Shutdown is shared by concurrent callers: SIGTERM targets the group, followed by SIGKILL
+after the grace period if necessary, including when descendants outlive the group leader. This covers
+processes that remain in the group; it is not containment for processes that deliberately detach.
+Natural leader exit also starts group cleanup without closing the ACP transport before its final
+messages are read. Its default grace period applies only when cleanup has not started; leader exit
+preserves an explicit termination deadline. A later explicit termination can shorten the cleanup
+deadline, but never extend it.
+The retained stderr tail (64 KiB), pending line (16 KiB), and live notification stream (64 lines) all
+have bounded storage; truncation of retained output is marked.
+Process exit and stderr completion are separate events. Waiting for stderr first awaits leader exit,
+then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
+CLI initialization errors display at most the last ten retained lines.
+
+The session log view will be connected with live sessions in
+[#17](https://github.com/anesthetised/agenthesia/issues/17); the demo does not launch a process.
+Registry installation and the managed Node runtime are also still planned. The shell-only
+`posix_spawn` adoption addresses a terminal interaction found while reviewing
+[#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
+remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).
+
 ## Data flow
 
 ```

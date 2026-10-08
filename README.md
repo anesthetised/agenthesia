@@ -59,6 +59,12 @@ just cli chat -- <agent>  # talk to any ACP agent from the terminal
 just mock-chat            # try it with the bundled mock agent
 ```
 
+The CLI resolves the login-shell environment once and passes it to the agent and terminal
+authentication. If resolution fails or times out, it warns and uses a fallback environment. Add
+`--agent-log` before `--` to stream the agent's stderr; up to the last ten retained lines are also included
+when an agent exits before initialization. Process shutdown cleans up its process group, including
+descendants that outlive the agent.
+
 Coverage measures Swift sources in the package, including product UI. The badge and product total
 exclude test support (`ACPTesting`, `MockAgent`) and the debug-only `AgenthesiaUI/Lab/` directory;
 these are still reported separately, with the latter labeled `RenderingLab`. Per-module thresholds

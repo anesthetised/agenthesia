@@ -138,6 +138,10 @@ let package = Package(
             dependencies: ["AgenthesiaCore", "ACPTesting", "JSONRPC", "MockAgent"],
             swiftSettings: swiftSettings
         ),
-        .testTarget(name: "AgenthesiaUITests", dependencies: ["AgenthesiaUI"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "AgenthesiaUITests",
+            dependencies: ["AgenthesiaUI", "MockAgent"],
+            swiftSettings: swiftSettings
+        ),
     ]
 )

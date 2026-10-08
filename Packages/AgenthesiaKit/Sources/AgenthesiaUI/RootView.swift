@@ -159,11 +159,8 @@ public struct RootView: View {
                 }.onSubmit(send)
                 .accessibilityLabel("Message")
             HStack {
-                Text(
-                    session.status == .readOnly
-                        ? "Saved history · read-only" : String(describing: session.status).capitalized
-                )
-                .font(.caption).foregroundStyle(.secondary)
+                Text(Self.statusText(session))
+                    .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if session.status == .running || session.status == .stopping {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
@@ -176,7 +173,29 @@ public struct RootView: View {
                         )
                 }
             }
-        }.padding(16).background(.bar)
+        }.padding(16).background(.bar).background { permissionShortcuts(session) }
+    }
+
+    /// ⌥⌘1… answer the oldest pending request with the option its card lists at that position.
+    private func permissionShortcuts(_ session: SessionController) -> some View {
+        ZStack {
+            if let request = session.pendingPermissions.first {
+                ForEach(Array(request.options.prefix(9).enumerated()), id: \.offset) { index, option in
+                    Button(option.name) { session.answerPermission(request.id, with: option.optionId) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                }
+            }
+        }.frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
+    }
+
+    static func statusText(_ session: SessionController) -> String {
+        if session.status == .readOnly { return "Saved history · read-only" }
+        if let request = session.pendingPermissions.first {
+            let count = min(request.options.count, 9)
+            let keys = count > 1 ? "⌥⌘1–⌥⌘\(count)" : count == 1 ? "⌥⌘1" : "no options offered"
+            return "Waiting for permission · \(keys)"
+        }
+        return String(describing: session.status).capitalized
     }
 
     private func send() {

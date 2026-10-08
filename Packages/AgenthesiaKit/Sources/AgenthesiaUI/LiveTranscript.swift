@@ -23,6 +23,10 @@ struct ToolCardHeader: Equatable {
     /// The body exceeds its collapsed bound.
     var expandable = false
     var expanded = false
+    /// Titles of the options a pending permission request offers, in the agent's order.
+    var actions: [String] = []
+    /// Whether ⌥⌘1… choose `actions`; only the oldest pending request has shortcuts.
+    var shortcuts = false
 }
 
 protocol TranscriptSource: AnyObject {
@@ -31,10 +35,12 @@ protocol TranscriptSource: AnyObject {
     func message(at row: Int) -> TranscriptMessage
     func isStreaming(at row: Int) -> Bool
     func toggleExpansion(at row: Int)
+    func choosePermission(at row: Int, option: Int)
 }
 
 extension TranscriptSource {
     func toggleExpansion(at row: Int) {}
+    func choosePermission(at row: Int, option: Int) {}
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
@@ -42,6 +48,9 @@ final class LiveTranscriptSource: TranscriptSource {
     var state = TranscriptState()
     var running = false
     var revision = 0
+    /// Answers go to the controller, which owns the request's lifetime.
+    weak var controller: SessionController?
+    var pending: [UUID] = []
     private struct Cached {
         var markdown: String
         var text: NSAttributedString
@@ -53,7 +62,9 @@ final class LiveTranscriptSource: TranscriptSource {
     var messageCount: Int { state.items.count }
 
     func update(_ controller: SessionController) {
+        self.controller = controller
         state = controller.transcript
+        pending = controller.pendingPermissions.map(\.id)
         running = controller.status == .running || controller.status == .stopping
         revision += 1
     }
@@ -66,8 +77,22 @@ final class LiveTranscriptSource: TranscriptSource {
     func message(at row: Int) -> TranscriptMessage {
         let item = state.items[row]
         if let tool = item.toolCall {
-            let card = Self.toolCard(tool, permission: item.permission, expanded: expanded.contains(item.id))
+            let card = Self.toolCard(tool, expanded: expanded.contains(item.id))
             var message = render(id: item.id, role: "Tool", markdown: card.markdown)
+            message.tool = card.header
+            return message
+        }
+        if let permission = item.permission {
+            let phase: PermissionPhase =
+                if let id = permission.requestID, let index = pending.firstIndex(of: id) {
+                    .choosing(shortcuts: index == 0)
+                } else if running {
+                    .recording
+                } else {
+                    .ended
+                }
+            let card = Self.permissionCard(permission, phase: phase, expanded: expanded.contains(item.id))
+            var message = render(id: item.id, role: "Permission", markdown: card.markdown)
             message.tool = card.header
             return message
         }
@@ -79,6 +104,13 @@ final class LiveTranscriptSource: TranscriptSource {
         let id = state.items[row].id
         if expanded.remove(id) == nil { expanded.insert(id) }
         revision += 1
+    }
+
+    func choosePermission(at row: Int, option: Int) {
+        guard let permission = state.items[row].permission, let id = permission.requestID,
+            permission.options.indices.contains(option)
+        else { return }
+        controller?.answerPermission(id, with: permission.options[option].optionId)
     }
 
     func render(id: Int64, role: String, markdown: String) -> TranscriptMessage {
@@ -124,7 +156,10 @@ final class LiveTranscriptSource: TranscriptSource {
             return (role, text)
         }
         if let tool = item.toolCall {
-            return ("Tool", toolCard(tool, permission: item.permission, expanded: false).markdown)
+            return ("Tool", toolCard(tool, expanded: false).markdown)
+        }
+        if let permission = item.permission {
+            return ("Permission", permissionCard(permission, phase: .ended, expanded: false).markdown)
         }
         return ("Session", item.notice ?? "")
     }
@@ -143,15 +178,89 @@ final class LiveTranscriptSource: TranscriptSource {
     static let collapsedCharacters = 2_000
 
     /// Shows only what the agent reported. Specialized diff and terminal views are #20 and #31.
-    static func toolCard(
-        _ tool: ACP.ToolCall,
-        permission: ACP.PermissionOutcome?,
-        expanded: Bool
-    ) -> (header: ToolCardHeader, markdown: String) {
+    static func toolCard(_ tool: ACP.ToolCall, expanded: Bool) -> (header: ToolCardHeader, markdown: String) {
         let (symbol, kind) = kind(tool.kind)
         let (status, tone) = status(tool.status)
         var header = ToolCardHeader(symbol: symbol, kind: kind, status: status, tone: tone)
-        var sections = [tool.title.isEmpty ? "_Untitled tool call_" : "**\(tool.title)**"]
+        var sections = [title(tool)]
+        if let body = body(tool, header: &header, expanded: expanded) { sections.append(body) }
+        return (header, sections.joined(separator: "\n\n"))
+    }
+
+    enum PermissionPhase: Equatable {
+        /// The request awaits the user's choice.
+        case choosing(shortcuts: Bool)
+        /// The answer is being committed before it reaches the agent.
+        case recording
+        /// The session ended; no answer can be given any more.
+        case ended
+    }
+
+    /// States only the recorded response, never an inferred approval or decline.
+    static func permissionCard(
+        _ permission: TranscriptState.Permission,
+        phase: PermissionPhase,
+        expanded: Bool
+    ) -> (header: ToolCardHeader, markdown: String) {
+        let tool = permission.toolCall
+        var header = ToolCardHeader(symbol: "hand.raised", kind: "Permission", status: "", tone: .neutral)
+        var sections = ["\(kind(tool.kind).label) · \(title(tool))"]
+        if let body = body(tool, header: &header, expanded: expanded) { sections.append(body) }
+        let option = permission.selectedOption
+        switch permission.outcome {
+        case nil:
+            switch phase {
+            case .choosing(let shortcuts):
+                (header.status, header.tone) = ("Waiting for your answer", .running)
+                header.actions = permission.options.map(\.name)
+                header.shortcuts = shortcuts
+                var prompt = "The agent asks for permission to run this tool."
+                if permission.options.contains(where: { $0.kind == .allowAlways || $0.kind == .rejectAlways }) {
+                    prompt += " “Always” choices are remembered by the agent, not by Agenthesia."
+                }
+                sections.append(prompt)
+            case .recording:
+                header.status = "Recording answer"
+                sections.append("Recording the answer before it is sent to the agent…")
+            case .ended:
+                header.status = "No answer"
+                sections.append("No answer was recorded before the session ended.")
+            }
+        case .cancelled:
+            header.status = "Cancelled"
+            sections.append("Request cancelled; no option was returned to the agent.")
+        case .selected(let id):
+            guard let option else {
+                header.status = "Answered"
+                sections.append("Answered with option “\(id)”.")
+                break
+            }
+            (header.status, header.tone) =
+                switch option.kind {
+                case .allowOnce: ("Allowed once", .success)
+                case .allowAlways: ("Always allowed", .success)
+                case .rejectOnce: ("Rejected once", .failure)
+                case .rejectAlways: ("Always rejected", .failure)
+                case .unknown: ("Answered", .neutral)
+                }
+            let remembered = option.kind == .allowAlways || option.kind == .rejectAlways
+            sections.append(
+                "Returned “\(option.name)” to the agent."
+                    + (remembered ? " The agent may apply it to later requests." : "")
+            )
+        case .unknown:
+            header.status = "Unknown outcome"
+            sections.append("Unrecognized permission outcome.")
+        }
+        return (header, sections.joined(separator: "\n\n"))
+    }
+
+    static func title(_ tool: ACP.ToolCall) -> String {
+        tool.title.isEmpty ? "_Untitled tool call_" : "**\(tool.title)**"
+    }
+
+    /// The reported locations and content, bounded unless expanded.
+    static func body(_ tool: ACP.ToolCall, header: inout ToolCardHeader, expanded: Bool) -> String? {
         var details: [String] = []
         if let locations = tool.locations, !locations.isEmpty {
             details.append(locations.map { "- `\($0.path)\($0.line.map { ":\($0)" } ?? "")`" }.joined(separator: "\n"))
@@ -164,20 +273,12 @@ final class LiveTranscriptSource: TranscriptSource {
             case .unknown: details.append("[Unsupported content]")
             }
         }
-        if !details.isEmpty {
-            let body = details.joined(separator: "\n\n")
-            let collapsed = collapse(body)
-            header.expandable = collapsed != nil
-            header.expanded = expanded && collapsed != nil
-            sections.append(header.expanded ? body : collapsed ?? body)
-        }
-        switch permission {
-        case nil: break
-        case .cancelled: sections.append("Permission request cancelled.")
-        case .selected(let option): sections.append("Permission answered with option “\(option)”.")
-        case .unknown: sections.append("Unrecognized permission outcome.")
-        }
-        return (header, sections.joined(separator: "\n\n"))
+        guard !details.isEmpty else { return nil }
+        let body = details.joined(separator: "\n\n")
+        let collapsed = collapse(body)
+        header.expandable = collapsed != nil
+        header.expanded = expanded && collapsed != nil
+        return header.expanded ? body : collapsed ?? body
     }
 
     /// The body bounded to its collapsed size, or `nil` when it already fits.

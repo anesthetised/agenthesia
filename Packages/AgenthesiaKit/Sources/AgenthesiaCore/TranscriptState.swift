@@ -32,13 +32,30 @@ public struct TranscriptState: Equatable, Sendable {
         }
     }
 
+    /// One permission request. Requests that refer to the same tool call remain separate rows.
+    public struct Permission: Equatable, Sendable {
+        /// `nil` for a decision recorded before requests had their own events.
+        public let requestID: UUID?
+        /// The tool call as known when the agent asked.
+        public let toolCall: ACP.ToolCall
+        /// The agent's offered options; empty for decisions recorded before requests had their own events.
+        public let options: [ACP.PermissionOption]
+        /// The response returned to the agent; `nil` while none is recorded.
+        public var outcome: ACP.PermissionOutcome?
+
+        public var selectedOption: ACP.PermissionOption? {
+            guard case .selected(let id) = outcome else { return nil }
+            return options.first { $0.optionId == id }
+        }
+    }
+
     public struct Item: Identifiable, Equatable, Sendable {
         /// Sequence of the first event contributing this row; stable across replay.
         public let id: Int64
         public var message: Message?
         public var toolCall: ACP.ToolCall?
         public var notice: String?
-        public var permission: ACP.PermissionOutcome?
+        public var permission: Permission?
     }
 
     public private(set) var items: [Item] = []
@@ -54,6 +71,7 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var usage: ACP.UsageUpdate?
     public private(set) var unsupportedEvents = 0
     private var toolIndices: [ACP.ToolCallID: Int] = [:]
+    private var permissionIndices: [UUID: Int] = [:]
 
     public init() {}
 
@@ -107,9 +125,33 @@ public struct TranscriptState: Equatable, Sendable {
             stopRequested = false
             items.append(Item(id: sequence, notice: message))
         case .permission(let tool, let outcome):
-            merge(tool, sequence: sequence)
-            if let index = toolIndices[tool.toolCallId] { items[index].permission = outcome }
+            appendPermission(nil, tool: tool, options: [], outcome: outcome, sequence: sequence)
+        case .permissionRequested(let id, let tool, let options):
+            permissionIndices[id] = items.count
+            appendPermission(id, tool: tool, options: options, outcome: nil, sequence: sequence)
+        case .permissionResolved(let id, let outcome):
+            if let index = permissionIndices[id] { items[index].permission?.outcome = outcome }
         }
+    }
+
+    private mutating func appendPermission(
+        _ id: UUID?,
+        tool: ACP.ToolCallUpdate,
+        options: [ACP.PermissionOption],
+        outcome: ACP.PermissionOutcome?,
+        sequence: Int64
+    ) {
+        // A request for an unknown call keeps its context in its own row; a tool row would share its identity.
+        let index = toolIndices[tool.toolCallId]
+        var call = index.flatMap { items[$0].toolCall } ?? .init(toolCallId: tool.toolCallId, title: "")
+        call.apply(tool)
+        if let index { items[index].toolCall = call }
+        items.append(
+            Item(
+                id: sequence,
+                permission: .init(requestID: id, toolCall: call, options: options, outcome: outcome)
+            )
+        )
     }
 
     private mutating func apply(_ update: ACP.SessionUpdate, sequence: Int64) {
@@ -195,14 +237,20 @@ public struct TranscriptState: Equatable, Sendable {
             )
         }
         guard let index = toolIndices[update.toolCallId] else { return }
-        if let value = update.title { items[index].toolCall?.title = value }
-        if let value = update.name { items[index].toolCall?.name = value }
-        if let value = update.kind { items[index].toolCall?.kind = value }
-        if let value = update.status { items[index].toolCall?.status = value }
-        if let value = update.content { items[index].toolCall?.content = value }
-        if let value = update.locations { items[index].toolCall?.locations = value }
-        if let value = update.rawInput { items[index].toolCall?.rawInput = value }
-        if let value = update.rawOutput { items[index].toolCall?.rawOutput = value }
-        if let value = update.meta { items[index].toolCall?.meta = value }
+        items[index].toolCall?.apply(update)
+    }
+}
+
+extension ACP.ToolCall {
+    fileprivate mutating func apply(_ update: ACP.ToolCallUpdate) {
+        if let value = update.title { title = value }
+        if let value = update.name { name = value }
+        if let value = update.kind { kind = value }
+        if let value = update.status { status = value }
+        if let value = update.content { content = value }
+        if let value = update.locations { locations = value }
+        if let value = update.rawInput { rawInput = value }
+        if let value = update.rawOutput { rawOutput = value }
+        if let value = update.meta { meta = value }
     }
 }

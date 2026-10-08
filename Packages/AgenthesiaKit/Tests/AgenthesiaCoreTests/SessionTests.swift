@@ -343,18 +343,6 @@ extension SessionControllerTests {
         await controller.close()
     }
 
-    @Test func permissionsAreRecordedAndNeverImplicitlyGranted() async throws {
-        let fixture = try Fixture()
-        let controller = try await fixture.live()
-        try await controller.send([.init(text: "write /tmp/unwritten.txt content")])
-        #expect(controller.transcript.items.contains { $0.permission == .selected("reject") })
-        #expect(controller.transcript.lastStopReason == .endTurn)
-        #expect(controller.status == .idle)
-        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
-        #expect(replay.transcript == controller.transcript)
-        await controller.close()
-    }
-
     @Test func toolCallsUpdateInPlaceAndReplayIdentically() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
@@ -720,86 +708,9 @@ extension SessionControllerTests {
         await controller.close()
     }
 
-    @Test(arguments: [false, true]) func permissionCancellationAndMissingRejectOption(stopping: Bool) async throws {
-        let fixture = try Fixture()
-        let controller = try await fixture.live()
-        let gate = Gate()
-        let store = fixture.store
-        controller.appendEvents = { events, id in
-            if events.contains(where: {
-                guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
-                if case .prompt = event { return true }; return false
-            }) {
-                await gate.suspend()
-            }
-            return try await store.append(events, to: id)
-        }
-        let turn = Task { try await controller.send([.init(text: "hello")]) }
-        await gate.waitUntilEntered()
-        let stop = stopping ? Task { try await controller.stop() } : nil
-        if stopping { while controller.status != .stopping { await Task.yield() } }
-        let permission = Task {
-            await controller.requestPermission(
-                for: .init(toolCallId: "t"),
-                options: stopping ? [.init(optionId: "reject", name: "Reject", kind: .rejectOnce)] : [],
-                in: try #require(controller.session.agentSessionID)
-            )
-        }
-        await gate.open()
-        #expect(try await permission.value == .cancelled)
-        try await stop?.value
-        try await turn.value
-        await controller.close()
-    }
 }
 
 extension SessionControllerTests {
-    @Test func stopDuringPermissionWriteReturnsAndRecordsCancellation() async throws {
-        let fixture = try Fixture()
-        let controller = try await fixture.live()
-        let (updates, received) = AsyncStream<Void>.makeStream()
-        let gate = Gate()
-        let gated = Mutex(false)
-        let store = fixture.store
-        controller.appendEvents = { events, id in
-            let isPermission = events.contains {
-                guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
-                if case .permission = event { return true }; return false
-            }
-            if isPermission,
-                gated.withLock({ value in
-                    if value { return false }; value = true; return true
-                })
-            {
-                await gate.suspend()
-            }
-            let stored = try await store.append(events, to: id)
-            if events.contains(where: { $0.kind == SessionEvent.updateKind }) { received.yield(()) }
-            return stored
-        }
-        let turn = Task { try await controller.send([.init(text: "slow")]) }
-        var iterator = updates.makeAsyncIterator()
-        _ = await iterator.next()
-        let permission = Task {
-            await controller.requestPermission(
-                for: .init(toolCallId: "blocked"),
-                options: [.init(optionId: "reject", name: "Reject", kind: .rejectOnce)],
-                in: try #require(controller.session.agentSessionID)
-            )
-        }
-        await gate.waitUntilEntered()
-        let stop = Task { try await controller.stop() }
-        while controller.status != .stopping { await Task.yield() }
-        await gate.open()
-        #expect(try await permission.value == .cancelled)
-        try await stop.value
-        try await turn.value
-        let replay = try await SessionController.restore(id: controller.session.id, store: store)
-        #expect(replay.transcript.items.first { $0.toolCall?.toolCallId == "blocked" }?.permission == .cancelled)
-        #expect(replay.transcript == controller.transcript)
-        await controller.close()
-    }
-
     @Test(arguments: [false, true])
     func diskFailureRacingWithCloseIsNotReportedAsCancellation(failOnFinish: Bool) async throws {
         let fixture = try Fixture()
@@ -826,5 +737,313 @@ extension SessionControllerTests {
             #expect((error as? CocoaError)?.code == .fileWriteOutOfSpace)
         }
         #expect(controller.errorMessage != nil)
+    }
+}
+
+private let choices: [ACP.PermissionOption] = [
+    .init(optionId: "allow", name: "Allow", kind: .allowOnce),
+    .init(optionId: "reject", name: "Reject", kind: .rejectOnce),
+]
+
+@MainActor private func pending(
+    _ controller: SessionController,
+    count: Int = 1
+) async -> [SessionController
+    .PendingPermission]
+{
+    while controller.pendingPermissions.count < count { await Task.yield() }
+    return controller.pendingPermissions
+}
+
+private func resolution(_ event: NewEvent) -> ACP.PermissionOutcome? {
+    guard let local = try? JSONDecoder().decode(SessionEvent.self, from: event.payload),
+        case .permissionResolved(_, let outcome) = local
+    else { return nil }
+    return outcome
+}
+
+extension TranscriptTests {
+    @MainActor @Test func legacyDecisionsAndUnansweredRequestsReplayReadOnly() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        let id = UUID()
+        let events = [
+            try SessionEvent.permission(toolCall: .init(toolCallId: "old", title: "Old"), outcome: .selected("reject"))
+                .storedEvent(),
+            NewEvent(
+                kind: SessionEvent.updateKind,
+                payload: try rawUpdate(.toolCall(.init(toolCallId: "new", title: "New", kind: .edit)))
+            ),
+            try SessionEvent.permissionRequested(
+                id: id,
+                toolCall: .init(toolCallId: "new", status: .pending),
+                options: choices
+            ).storedEvent(),
+            // A resolution of an unknown request changes nothing.
+            try SessionEvent.permissionResolved(id: UUID(), outcome: .selected("allow")).storedEvent(),
+        ]
+        _ = try await fixture.store.append(events, to: session.id)
+        let restored = try await SessionController.restore(id: session.id, store: fixture.store)
+        let items = restored.transcript.items
+        let rows = items.compactMap(\.permission)
+        #expect(rows.count == 2)
+        #expect(rows[0].requestID == nil)
+        #expect(rows[0].toolCall.title == "Old")
+        #expect(rows[0].outcome == .selected("reject"))
+        #expect(rows[0].selectedOption == nil)
+        #expect(rows[1].requestID == id)
+        #expect(rows[1].toolCall.title == "New")
+        #expect(rows[1].toolCall.kind == .edit)
+        #expect(rows[1].outcome == nil)
+        // The request patched the existing tool row; the legacy decision did not invent one.
+        #expect(items.compactMap(\.toolCall).map(\.toolCallId) == ["new"])
+        #expect(items.compactMap(\.toolCall).first?.status == .pending)
+        #expect(Set(items.map(\.id)).count == items.count)
+        #expect(restored.pendingPermissions.isEmpty)
+        #expect(!restored.answerPermission(id, with: "allow"))
+        await restored.close()
+    }
+}
+
+extension SessionControllerTests {
+    @Test(arguments: ["allow", "reject"]) func permissionWaitsForAnExplicitOfferedAnswer(option: String) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        let request = try #require(await pending(controller).first)
+        #expect(request.options == choices)
+        let row = try #require(controller.transcript.items.last?.permission)
+        #expect(row.requestID == request.id)
+        #expect(row.outcome == nil)
+        #expect(row.toolCall.title == "Write /tmp/unwritten.txt")
+        #expect(!controller.answerPermission(request.id, with: "missing"))
+        #expect(!controller.answerPermission(UUID(), with: option))
+        #expect(controller.answerPermission(request.id, with: option))
+        #expect(!controller.answerPermission(request.id, with: option))
+        #expect(controller.pendingPermissions.isEmpty)
+        try await turn.value
+        let permission = try #require(controller.transcript.items.compactMap(\.permission).first)
+        #expect(permission.outcome == .selected(option))
+        #expect(permission.selectedOption?.name == option.capitalized)
+        // The client offers no fs capability, so even an allowed write fails instead of happening.
+        #expect(controller.transcript.items.compactMap(\.toolCall).first?.status == .failed)
+        #expect(controller.transcript.lastStopReason == .endTurn)
+        #expect(controller.status == .idle)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test func concurrentRequestsStayDistinctAndWrongSessionsAreIgnored() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        let agentRequest = try #require(await pending(controller).first)
+        let agentID = try #require(controller.session.agentSessionID)
+        let sequence = controller.transcript.sequence
+        #expect(
+            await controller.requestPermission(for: .init(toolCallId: "t"), options: choices, in: "other") == .cancelled
+        )
+        #expect(controller.transcript.sequence == sequence)
+        let first = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t", title: "First"),
+                options: choices,
+                in: agentID
+            )
+        }
+        _ = await pending(controller, count: 2)
+        let second = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t", title: "Second"),
+                options: choices,
+                in: agentID
+            )
+        }
+        let requests = await pending(controller, count: 3)
+        #expect(Set(requests.map(\.id)).count == 3)
+        #expect(controller.answerPermission(requests[2].id, with: "reject"))
+        #expect(await second.value == .selected("reject"))
+        #expect(controller.pendingPermissions.map(\.id) == [agentRequest.id, requests[1].id])
+        #expect(controller.answerPermission(requests[1].id, with: "allow"))
+        #expect(await first.value == .selected("allow"))
+        #expect(controller.answerPermission(agentRequest.id, with: "reject"))
+        try await turn.value
+        let items = controller.transcript.items
+        let rows = items.compactMap(\.permission)
+        #expect(rows.map(\.toolCall.title) == ["Write /tmp/unwritten.txt", "First", "Second"])
+        #expect(rows.map(\.outcome) == [.selected("reject"), .selected("allow"), .selected("reject")])
+        #expect(Set(items.map(\.id)).count == items.count)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test(arguments: ["stop", "close", "withdraw"]) func pendingRequestsSettleWithoutHanging(
+        ending: String
+    ) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        let agentRequest = try #require(await pending(controller).first)
+        let agentID = try #require(controller.session.agentSessionID)
+        let extra = Task {
+            await controller.requestPermission(for: .init(toolCallId: "t"), options: choices, in: agentID)
+        }
+        let extraRequest = await pending(controller, count: 2)[1]
+        switch ending {
+        case "stop":
+            try await controller.stop()
+            try await turn.value
+            #expect(controller.transcript.lastStopReason == .cancelled)
+        case "close":
+            await controller.close()
+            _ = try? await turn.value
+        default:
+            // The agent withdraws one request with `$/cancel_request`; the other remains answerable.
+            extra.cancel()
+            #expect(await extra.value == .cancelled)
+            #expect(controller.pendingPermissions.map(\.id) == [agentRequest.id])
+            #expect(controller.answerPermission(agentRequest.id, with: "reject"))
+            try await turn.value
+        }
+        #expect(await extra.value == .cancelled)
+        #expect(controller.pendingPermissions.isEmpty)
+        #expect(!controller.answerPermission(extraRequest.id, with: "allow"))
+        let outcomes = controller.transcript.items.compactMap(\.permission).map(\.outcome)
+        #expect(outcomes == (ending == "withdraw" ? [.selected("reject"), .cancelled] : [.cancelled, .cancelled]))
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript.items == controller.transcript.items)
+        await controller.close()
+    }
+
+    @Test(arguments: ["stop", "close", "withdraw"])
+    func cancellationDuringDecisionWriteSupersedesTheDecision(ending: String) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let gated = Mutex(false)
+        let written = Mutex<[ACP.PermissionOutcome]>([])
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            let outcomes = events.compactMap(resolution)
+            if outcomes.contains(where: { $0 != .cancelled }),
+                gated.withLock({ value in
+                    if value { return false }; value = true; return true
+                })
+            {
+                await gate.suspend()
+            }
+            written.withLock { $0 += outcomes }
+            return try await store.append(events, to: id)
+        }
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        let agentRequest = try #require(await pending(controller).first)
+        let agentID = try #require(controller.session.agentSessionID)
+        let request = Task {
+            await controller.requestPermission(for: .init(toolCallId: "t"), options: choices, in: agentID)
+        }
+        let id = await pending(controller, count: 2)[1].id
+        #expect(controller.answerPermission(id, with: "allow"))
+        await gate.waitUntilEntered()
+        var closing: Task<Void, Never>?
+        switch ending {
+        case "stop":
+            let stop = Task { try await controller.stop() }
+            while controller.status != .stopping { await Task.yield() }
+            await gate.open()
+            try await stop.value
+        case "close":
+            closing = Task { await controller.close() }
+            while controller.status != .closed { await Task.yield() }
+            await gate.open()
+        default:
+            request.cancel()
+            await gate.open()
+        }
+        // The decision was committed, but cancellation won: the agent must not receive the approval.
+        #expect(await request.value == .cancelled)
+        if ending == "withdraw" { #expect(controller.answerPermission(agentRequest.id, with: "reject")) }
+        _ = try? await turn.value
+        await closing?.value
+        #expect(written.withLock { $0 }.prefix(2) == [.selected("allow"), .cancelled])
+        let replay = try await SessionController.restore(id: controller.session.id, store: store)
+        let row = replay.transcript.items.compactMap(\.permission).first { $0.requestID == id }
+        #expect(row?.outcome == .cancelled)
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func storageFailureNeverSendsAnApproval(failDecision: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        _ = await pending(controller)
+        let agentID = try #require(controller.session.agentSessionID)
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            let failing = events.contains {
+                guard let local = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
+                switch local {
+                case .permissionRequested: return !failDecision
+                case .permissionResolved(_, let outcome): return failDecision && outcome != .cancelled
+                default: return false
+                }
+            }
+            if failing { throw CocoaError(.fileWriteOutOfSpace) }
+            return try await store.append(events, to: id)
+        }
+        let request = Task {
+            await controller.requestPermission(for: .init(toolCallId: "t"), options: choices, in: agentID)
+        }
+        if failDecision {
+            let id = await pending(controller, count: 2)[1].id
+            #expect(controller.answerPermission(id, with: "allow"))
+        }
+        #expect(await request.value == .cancelled)
+        #expect(controller.status == .failed)
+        #expect(controller.pendingPermissions.isEmpty)
+        await #expect(throws: CocoaError.self) { try await turn.value }
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func requestsDuringStopOrWithoutOptionsAreCancelled(stopping: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            if events.contains(where: {
+                guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
+                if case .prompt = event { return true }; return false
+            }) {
+                await gate.suspend()
+            }
+            return try await store.append(events, to: id)
+        }
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        await gate.waitUntilEntered()
+        let stop = stopping ? Task { try await controller.stop() } : nil
+        if stopping { while controller.status != .stopping { await Task.yield() } }
+        let permission = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t"),
+                options: stopping ? choices : [],
+                in: try #require(controller.session.agentSessionID)
+            )
+        }
+        await gate.open()
+        if !stopping {
+            // Nothing can be chosen, so the request waits until the turn is stopped.
+            while !controller.pendingPermissions.contains(where: \.options.isEmpty) { await Task.yield() }
+            try await controller.stop()
+        }
+        #expect(try await permission.value == .cancelled)
+        try await stop?.value
+        try await turn.value
+        let outcomes = controller.transcript.items.compactMap(\.permission).map(\.outcome)
+        #expect(!outcomes.isEmpty)
+        #expect(outcomes.allSatisfy { $0 == .cancelled })
+        await controller.close()
     }
 }

@@ -46,6 +46,39 @@ import Testing
         #expect(restored.status == .readOnly)
     }
 
+    @Test func mockAgentPermissionAnswerContinuesTheTurnAndReplays() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: try mock())
+        let controller = try #require(owner.controller)
+        let path = directory.appending(path: "unwritten.txt").path
+        let turn = Task { await owner.send("write \(path) text") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        let request = controller.pendingPermissions[0]
+        #expect(request.options.map(\.kind) == [.allowOnce, .rejectOnce])
+        #expect(controller.answerPermission(request.id, with: "allow"))
+        await turn.value
+        #expect(controller.status == .idle)
+        #expect(controller.transcript.lastStopReason == .endTurn)
+        // The agent received the answer: without an fs capability its write then fails visibly.
+        #expect(controller.transcript.items.compactMap(\.toolCall).first?.status == .failed)
+        #expect(!FileManager.default.fileExists(atPath: path))
+        await owner.send("hello")
+        #expect(controller.transcript.items.last?.message?.text == "Echo: hello")
+        let pendingTurn = Task { await owner.send("write \(path) again") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        await owner.close()
+        await pendingTurn.value
+        let rows = controller.transcript.items.compactMap(\.permission)
+        #expect(rows.map(\.outcome) == [.selected("allow"), .cancelled])
+        #expect(rows.first?.selectedOption?.kind == .allowOnce)
+        let restored = try await SessionController.restore(id: controller.session.id, store: library.store())
+        #expect(restored.transcript == controller.transcript)
+        #expect(restored.pendingPermissions.isEmpty)
+    }
+
     @Test func failedLaunchAndAuthenticationAreVisible() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

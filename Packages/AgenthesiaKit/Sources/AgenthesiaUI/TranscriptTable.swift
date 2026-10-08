@@ -197,6 +197,13 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         session.toggleExpansion(at: row)
         update(session)
     }
+
+    /// The button's tag is the option's index; the controller ignores answers to settled requests.
+    @objc func choosePermission(_ sender: NSButton) {
+        let row = table.row(for: sender)
+        guard let session, row >= 0, row < session.messageCount else { return }
+        session.choosePermission(at: row, option: sender.tag)
+    }
 }
 
 final class TranscriptTableView: NSTableView {
@@ -247,6 +254,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     var streamingCell: TextKitCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
+    var actions: NSView?
 
     init(markdown: String) {
         self.markdown = markdown
@@ -257,6 +265,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Replaces the row's header and body.
     func show(_ message: TranscriptMessage, streaming: Bool, width: CGFloat, controller: TranscriptTableController) {
         stack?.removeFromSuperview()
+        actions = nil
         markdown = message.markdown
         tool = message.tool
         let content: NSView
@@ -290,6 +299,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             header.widthAnchor.constraint(equalTo: stack.widthAnchor),
             contentWidth,
         ])
+        showActions(message, controller: controller)
     }
 
     /// Keep the text field and its field editor attached when only native metadata changes.
@@ -301,6 +311,32 @@ private final class TranscriptMessageRow: NSTableCellView {
         stack.insertArrangedSubview(header, at: 0)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         tool = message.tool
+        showActions(message, controller: controller)
+    }
+
+    /// Option buttons stay below the body, so finishing a streamed body does not touch them.
+    private func showActions(_ message: TranscriptMessage, controller: TranscriptTableController) {
+        if let actions {
+            stack?.removeArrangedSubview(actions)
+            actions.removeFromSuperview()
+            self.actions = nil
+        }
+        guard let tool = message.tool, !tool.actions.isEmpty, let stack else { return }
+        let buttons = tool.actions.enumerated().map { index, title in
+            let button = NSButton(
+                title: title,
+                target: controller,
+                action: #selector(TranscriptTableController.choosePermission(_:))
+            )
+            button.tag = index
+            button.bezelStyle = .push
+            if tool.shortcuts, index < 9 { button.toolTip = "⌥⌘\(index + 1)" }
+            return button
+        }
+        let actions = NSStackView(views: buttons)
+        actions.setAccessibilityLabel("Permission options")
+        stack.addArrangedSubview(actions)
+        self.actions = actions
     }
 
     private func makeHeader(_ message: TranscriptMessage, controller: TranscriptTableController) -> NSStackView {
@@ -359,11 +395,13 @@ private final class TranscriptMessageRow: NSTableCellView {
         cell.field.preferredMaxLayoutWidth = max(1, width)
         cell.field.attributedStringValue = message.text
         contentWidth?.isActive = false
-        if let old = stack.arrangedSubviews.last {
+        // The body follows the header; option buttons, if any, stay after it.
+        if stack.arrangedSubviews.count > 1 {
+            let old = stack.arrangedSubviews[1]
             stack.removeArrangedSubview(old)
             old.removeFromSuperview()
         }
-        stack.addArrangedSubview(cell)
+        stack.insertArrangedSubview(cell, at: min(1, stack.arrangedSubviews.count))
         contentWidth = cell.widthAnchor.constraint(equalTo: stack.widthAnchor)
         contentWidth?.isActive = true
         streamingCell = nil

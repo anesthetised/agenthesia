@@ -44,7 +44,7 @@ import Testing
 
     @Test func toolCardShowsOnlyWhatTheAgentReported() {
         let unknown = ACP.ToolCall(toolCallId: "t", title: "")
-        let (bare, bareMarkdown) = LiveTranscriptSource.toolCard(unknown, permission: nil, expanded: false)
+        let (bare, bareMarkdown) = LiveTranscriptSource.toolCard(unknown, expanded: false)
         #expect(
             bare
                 == ToolCardHeader(
@@ -69,7 +69,7 @@ import Testing
             ],
             locations: [.init(path: "/src/main.swift", line: 4), .init(path: "/src/other.swift")]
         )
-        let (header, markdown) = LiveTranscriptSource.toolCard(call, permission: nil, expanded: false)
+        let (header, markdown) = LiveTranscriptSource.toolCard(call, expanded: false)
         #expect(header == ToolCardHeader(symbol: "pencil", kind: "Edit", status: "Failed", tone: .failure))
         #expect(
             markdown == """
@@ -98,14 +98,116 @@ import Testing
     }
 
     @Test func permissionOutcomesClaimOnlyWhatWasRecorded() {
-        let call = ACP.ToolCall(toolCallId: "t", title: "Write")
-        func text(_ outcome: ACP.PermissionOutcome) -> String {
-            LiveTranscriptSource.toolCard(call, permission: outcome, expanded: false).markdown
+        let call = ACP.ToolCall(toolCallId: "t", title: "Write", kind: .edit)
+        let options: [ACP.PermissionOption] = [
+            .init(optionId: "once", name: "Allow", kind: .allowOnce),
+            .init(optionId: "always", name: "Always allow", kind: .allowAlways),
+            .init(optionId: "no", name: "Reject", kind: .rejectOnce),
+            .init(optionId: "never", name: "Never", kind: .rejectAlways),
+            .init(optionId: "later", name: "Ask later", kind: .unknown("ask_later")),
+        ]
+        func card(
+            _ outcome: ACP.PermissionOutcome?,
+            options: [ACP.PermissionOption] = options,
+            phase: LiveTranscriptSource.PermissionPhase = .ended
+        ) -> (header: ToolCardHeader, markdown: String) {
+            LiveTranscriptSource.permissionCard(
+                .init(requestID: UUID(), toolCall: call, options: options, outcome: outcome),
+                phase: phase,
+                expanded: false
+            )
         }
-        #expect(text(.cancelled).hasSuffix("Permission request cancelled."))
-        #expect(text(.selected("reject")).hasSuffix("Permission answered with option “reject”."))
-        #expect(text(.unknown(["outcome": "later"])).hasSuffix("Unrecognized permission outcome."))
-        #expect(![text(.cancelled), text(.selected("allow"))].contains { $0.contains("declined") })
+        #expect(card(nil).markdown.hasPrefix("Edit · **Write**"))
+        #expect(card(.selected("once")).header.status == "Allowed once")
+        #expect(card(.selected("once")).markdown.hasSuffix("Returned “Allow” to the agent."))
+        #expect(card(.selected("always")).header.status == "Always allowed")
+        #expect(card(.selected("always")).markdown.hasSuffix("The agent may apply it to later requests."))
+        #expect(card(.selected("no")).header.status == "Rejected once")
+        #expect(card(.selected("never")).header.status == "Always rejected")
+        #expect(card(.selected("later")).header.status == "Answered")
+        #expect(card(.selected("later")).header.tone == .neutral)
+        // Decisions recorded before requests had their own events name only the option identifier.
+        #expect(card(.selected("reject"), options: []).markdown.hasSuffix("Answered with option “reject”."))
+        #expect(card(.cancelled).markdown.hasSuffix("Request cancelled; no option was returned to the agent."))
+        #expect(card(.unknown(["outcome": "later"])).markdown.hasSuffix("Unrecognized permission outcome."))
+        #expect(card(nil).header.status == "No answer")
+        #expect(card(nil).header.actions.isEmpty)
+        #expect(card(nil, phase: .recording).header.status == "Recording answer")
+        #expect(card(nil, phase: .recording).header.actions.isEmpty)
+        let choosing = card(nil, phase: .choosing(shortcuts: true))
+        #expect(choosing.header.actions == options.map(\.name))
+        #expect(choosing.header.shortcuts)
+        #expect(choosing.markdown.contains("remembered by the agent, not by Agenthesia"))
+        let once = card(nil, options: [options[0], options[2]], phase: .choosing(shortcuts: false))
+        #expect(!once.header.shortcuts)
+        #expect(!once.markdown.contains("Always"))
+        #expect(
+            !options.map(\.optionId).map { card(.selected($0)).markdown }.contains { $0.contains("declined") }
+        )
+        let untitled = LiveTranscriptSource.permissionCard(
+            .init(requestID: nil, toolCall: .init(toolCallId: "u", title: ""), options: [], outcome: nil),
+            phase: .ended,
+            expanded: false
+        )
+        #expect(untitled.markdown.hasPrefix("Tool · _Untitled tool call_"))
+        let item = TranscriptState.Item(
+            id: 1,
+            permission: .init(requestID: nil, toolCall: call, options: [], outcome: .cancelled)
+        )
+        #expect(LiveTranscriptSource.content(item).0 == "Permission")
+    }
+
+    @Test func pendingPermissionRowsOfferOptionsUntilAnswered() async throws {
+        let recorded = try await RecordedTranscript()
+        let first = UUID()
+        let second = UUID()
+        let options: [ACP.PermissionOption] = [
+            .init(optionId: "allow", name: "Allow", kind: .allowOnce),
+            .init(optionId: "reject", name: "Reject", kind: .rejectOnce),
+        ]
+        try await recorded.apply(.toolCall(.init(toolCallId: "t", title: "Write file", kind: .edit)))
+        for id in [first, second] {
+            try await recorded.append(
+                try SessionEvent.permissionRequested(id: id, toolCall: .init(toolCallId: "t"), options: options)
+                    .storedEvent()
+            )
+        }
+        let source = ChoiceRecorder()
+        source.live.running = true
+        source.live.pending = [first, second]
+        source.live.state = recorded.state
+        source.live.revision += 1
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
+        let buttons = views(NSButton.self, in: row).filter {
+            $0.action == #selector(TranscriptTableController.choosePermission(_:))
+        }
+        #expect(buttons.map(\.title) == ["Allow", "Reject"])
+        // Only the oldest pending request answers to ⌥⌘1….
+        #expect(buttons.map(\.toolTip) == [nil, nil])
+        let oldest = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(views(NSButton.self, in: oldest).compactMap(\.toolTip).contains("⌥⌘2"))
+        buttons[1].performClick(nil)
+        #expect(source.choices.count == 1)
+        #expect(source.choices.first?.row == 2)
+        #expect(source.choices.first?.option == 1)
+
+        try await recorded.append(
+            try SessionEvent.permissionResolved(id: second, outcome: .selected("reject")).storedEvent()
+        )
+        source.live.pending = [first]
+        source.live.state = recorded.state
+        source.live.revision += 1
+        controller.update(source)
+        let answered = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
+        #expect(!views(NSButton.self, in: answered).contains { $0.title == "Reject" })
+        #expect(labels(in: answered).contains("Rejected once"))
+        // Without a controller, an answer has nowhere to go and must not crash.
+        source.live.choosePermission(at: 1, option: 0)
+        source.live.choosePermission(at: 0, option: 0)
     }
 
     @Test func largeToolContentIsBoundedUntilExpanded() throws {
@@ -115,11 +217,11 @@ import Testing
             title: "Search",
             content: [.content(.init(content: .init(text: "```\n\(output)\n```")))]
         )
-        let (collapsedHeader, collapsed) = LiveTranscriptSource.toolCard(call, permission: nil, expanded: false)
+        let (collapsedHeader, collapsed) = LiveTranscriptSource.toolCard(call, expanded: false)
         #expect(collapsedHeader.expandable && !collapsedHeader.expanded)
         #expect(collapsed.contains("line 11\n```\n\n_… 30 more lines_"))
         #expect(!collapsed.contains("line 12"))
-        let (expandedHeader, expanded) = LiveTranscriptSource.toolCard(call, permission: nil, expanded: true)
+        let (expandedHeader, expanded) = LiveTranscriptSource.toolCard(call, expanded: true)
         #expect(expandedHeader.expanded)
         #expect(expanded.hasSuffix("line 40\n```"))
         let wide = try #require(LiveTranscriptSource.collapse(String(repeating: "x", count: 3_000)))
@@ -145,10 +247,14 @@ import Testing
             title: "Read",
             content: [.content(.init(content: .init(text: output)))]
         )
-        let card = LiveTranscriptSource.toolCard(call, permission: .cancelled, expanded: false)
-        let rendered = LiveTranscriptSource().render(id: 1, role: "Tool", markdown: card.markdown).text
+        let card = LiveTranscriptSource.permissionCard(
+            .init(requestID: nil, toolCall: call, options: [], outcome: .cancelled),
+            phase: .ended,
+            expanded: false
+        )
+        let rendered = LiveTranscriptSource().render(id: 1, role: "Permission", markdown: card.markdown).text
         #expect(!rendered.string.contains("_…"))
-        let permission = (rendered.string as NSString).range(of: "Permission request cancelled.")
+        let permission = (rendered.string as NSString).range(of: "Request cancelled; no option was returned")
         #expect(permission.location != NSNotFound)
         if permission.location != NSNotFound {
             let font = rendered.attribute(.font, at: permission.location, effectiveRange: nil) as? NSFont
@@ -306,6 +412,18 @@ import Testing
     }
 
     private func labels(in view: NSView) -> [String] { views(NSTextField.self, in: view).map(\.stringValue) }
+}
+
+/// Records answers instead of sending them to a session controller.
+private final class ChoiceRecorder: TranscriptSource {
+    let live = LiveTranscriptSource()
+    var choices: [(row: Int, option: Int)] = []
+    var revision: Int { live.revision }
+    var messageCount: Int { live.messageCount }
+    func message(at row: Int) -> TranscriptMessage { live.message(at: row) }
+    func isStreaming(at row: Int) -> Bool { live.isStreaming(at: row) }
+    func toggleExpansion(at row: Int) { live.toggleExpansion(at: row) }
+    func choosePermission(at row: Int, option: Int) { choices.append((row, option)) }
 }
 
 /// Builds transcript state from stored events, exactly as live sessions and replay do.

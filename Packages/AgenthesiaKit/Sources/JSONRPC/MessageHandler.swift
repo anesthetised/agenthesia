@@ -1,3 +1,5 @@
+public import Foundation
+
 /// Handles requests and notifications arriving on a `Connection`.
 public protocol MessageHandler: Sendable {
     /// Handles a request and returns its result. Throw an `RPCError` to reply with a specific error.
@@ -5,6 +7,15 @@ public protocol MessageHandler: Sendable {
 
     /// Handles a notification.
     @concurrent func handleNotification(method: String, params: JSONValue?) async
+
+    /// The original wire message, without its line terminator, for lossless event recording.
+    @concurrent func handleNotification(method: String, params: JSONValue?, rawMessage: Data) async
+}
+
+extension MessageHandler {
+    @concurrent public func handleNotification(method: String, params: JSONValue?, rawMessage: Data) async {
+        await handleNotification(method: method, params: params)
+    }
 }
 
 /// A `MessageHandler` that dispatches typed requests and notifications to registered closures.
@@ -17,6 +28,7 @@ public struct Router: MessageHandler {
 
     private var requests: [String: RequestHandler] = [:]
     private var notifications: [String: NotificationHandler] = [:]
+    private var rawNotifications: [String: @Sendable (JSONValue?, Data) async -> Void] = [:]
 
     public init() {}
 
@@ -24,7 +36,7 @@ public struct Router: MessageHandler {
     public var requestMethods: Set<String> { Set(requests.keys) }
 
     /// The methods with a registered notification handler.
-    public var notificationMethods: Set<String> { Set(notifications.keys) }
+    public var notificationMethods: Set<String> { Set(notifications.keys).union(rawNotifications.keys) }
 
     public mutating func on<R: RPCRequest>(
         _ request: R.Type,
@@ -54,6 +66,29 @@ public struct Router: MessageHandler {
             throw RPCError.methodNotFound(method)
         }
         return try await handler(params)
+    }
+
+    /// Registers a raw handler without requiring the typed params to decode first.
+    /// The handler validates its envelope; failures are logged without including the payload.
+    public mutating func onRawNotification<N: RPCNotification>(
+        _ notification: N.Type,
+        _ handler: @escaping @Sendable (Data) async throws -> Void
+    ) {
+        rawNotifications[N.method] = { _, rawMessage in
+            do {
+                try await handler(rawMessage)
+            } catch {
+                Log.connection.error("Dropping \(N.method, privacy: .public): invalid params")
+            }
+        }
+    }
+
+    @concurrent public func handleNotification(method: String, params: JSONValue?, rawMessage: Data) async {
+        if let handler = rawNotifications[method] {
+            await handler(params, rawMessage)
+        } else {
+            await handleNotification(method: method, params: params)
+        }
     }
 
     @concurrent public func handleNotification(method: String, params: JSONValue?) async {

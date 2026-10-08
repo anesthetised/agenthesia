@@ -35,9 +35,10 @@ not a connected coding agent. Demo messages are temporary and disappear when the
 no project files are changed. Sending another prompt while a demo response streams is disabled.
 Use Shift-Return for a new line, Command-Return to send, and Command-period to stop.
 
-Live sessions, durable history, worktree isolation, and the production prompt queue remain separate
-implementation steps. The existing ACP command-line client is available via `just cli` and
-`just mock-chat` for real protocol interaction.
+The package now includes a live session controller, durable transcript replay and frame-coalesced
+publication, covered by MockAgent integration tests. The app preview is not yet wired to that controller.
+Worktree isolation and the production prompt queue remain separate implementation steps. The existing
+ACP command-line client is available via `just cli` and `just mock-chat` for real protocol interaction.
 
 ## Requirements
 

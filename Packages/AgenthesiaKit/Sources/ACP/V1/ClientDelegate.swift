@@ -1,4 +1,6 @@
+public import Foundation
 public import JSONRPC
+import os
 
 extension ACP.V1 {
     /// Handles what an ACP v1 agent asks of the client.
@@ -7,6 +9,7 @@ extension ACP.V1 {
     /// only implements what it advertises in its capabilities.
     public protocol ClientDelegate: Sendable {
         func sessionUpdate(_ notification: SessionNotification) async
+        func sessionUpdate(_ notification: SessionNotification, rawNotification: Data) async
         func requestPermission(_ request: RequestPermissionRequest) async throws -> RequestPermissionResponse
         func readTextFile(_ request: ReadTextFileRequest) async throws -> ReadTextFileResponse
         func writeTextFile(_ request: WriteTextFileRequest) async throws -> EmptyMessage
@@ -21,6 +24,10 @@ extension ACP.V1 {
 }
 
 extension ACP.V1.ClientDelegate {
+    public func sessionUpdate(_ notification: ACP.V1.SessionNotification, rawNotification: Data) async {
+        await sessionUpdate(notification)
+    }
+
     public func sessionUpdate(_ notification: ACP.V1.SessionNotification) async {}
 
     public func requestPermission(
@@ -69,6 +76,17 @@ extension ACP.V1 {
     public static func router(for delegate: some ClientDelegate) -> Router {
         var router = Router()
         router.on(Method.SessionUpdate.self) { await delegate.sessionUpdate($0) }
+        router.onRawNotification(Method.SessionUpdate.self) { raw in
+            let recorded = try ACP.RecordedSessionUpdate(rawNotification: raw)
+            if recorded.hadSchemaMismatch {
+                Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "ACP")
+                    .error("Recording session/update as unknown: schema mismatch")
+            }
+            await delegate.sessionUpdate(
+                .init(sessionId: recorded.sessionId, update: recorded.update, meta: recorded.meta),
+                rawNotification: raw
+            )
+        }
         router.on(Method.RequestPermission.self) { try await delegate.requestPermission($0) }
         router.on(Method.ReadTextFile.self) { try await delegate.readTextFile($0) }
         router.on(Method.WriteTextFile.self) { try await delegate.writeTextFile($0) }

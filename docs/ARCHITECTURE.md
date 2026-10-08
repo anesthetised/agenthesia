@@ -48,8 +48,45 @@ changed by the interface preview.
 
 The demo does not launch agents, modify a workspace, or persist sessions. It disables sending while
 streaming; it does not implement or supersede ADR-0010's production queue and steering behavior.
-`AgenthesiaCore` and `Persistence` are still placeholders. The data flow below describes the intended
+`AgenthesiaCore` is still a placeholder. The data flow below describes the intended
 live-session architecture, not functionality supplied by the demo.
+
+## Persistence implementation
+
+`PersistenceStore` owns a GRDB `DatabaseQueue` with async reads and transactional writes. Database
+opening and migrations are synchronous and must run away from the main actor. The caller supplies
+a file URL with an existing parent directory. One shared store serializes access for now; long reads
+can delay writes, so replay uses bounded pages (500 events by default, at most 10,000). Revisit a
+`DatabasePool` if concurrent session reads need to proceed during writes.
+
+The initial `v1` migration creates four tables:
+
+| Table | Stored data |
+|---|---|
+| `project` | Local UUID, name, unique root path and creation time. |
+| `agent_install` | Local UUID, name, executable, argument array and creation time. Agents are configured manually; registry installation metadata belongs to the installer milestone. |
+| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. |
+| `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
+
+Foreign keys reject missing parents and prevent deleting referenced metadata. Local session identity
+is separate from the agent's session ID. The store currently creates and reads metadata; editing,
+deletion and live observation are deferred until their callers need them.
+
+An append commits a whole batch or none of it. Sequences start at one per session and are assigned
+inside the transaction. Concurrent batches receive distinct sequences, but the session controller
+must await appends in ACP arrival order; task scheduling does not establish that order. Replay orders
+by sequence, not wall-clock timestamps. Cancellation follows GRDB's transaction rollback behavior.
+
+Payloads are validated as JSON by SQLite and retained byte-for-byte in a BLOB. Unknown event kinds,
+format versions and JSON fields remain readable. `Persistence` does not depend on ACP and does not
+decode its wire models. The session integration must supply the original payload, not re-encode a
+typed update that may have discarded unknown fields. Event interpretation and transcript reduction
+belong to `AgenthesiaCore` in #17.
+
+SQLite triggers reject event updates, deletes and replacement inserts. Log compaction or history
+deletion will require an explicit migration and policy. Migrations never erase data on schema changes;
+opening a database with unknown migration identifiers fails rather than writing through a newer
+schema. The demo and CLI are not yet connected to this store.
 
 ## Runtime implementation
 
@@ -131,7 +168,7 @@ not allowed (Apple system frameworks are fine).
 
 | Dependency | License | Used by |
 |---|---|---|
-| [GRDB](https://github.com/groue/GRDB.swift) | MIT | `Persistence` |
+| [GRDB](https://github.com/groue/GRDB.swift) (7.11.1+) | MIT | `Persistence` |
 | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) | MIT | `AgenthesiaUI` |
 | [swift-markdown](https://github.com/swiftlang/swift-markdown) (with swift-cmark, BSD-2-Clause) | Apache-2.0 | `Rendering` |
 | [STTextView](https://github.com/krzyzanowskim/STTextView) (with STTextKitPlus, BSD-3-Clause, and CoreTextSwift, MIT) | GPL-3.0 or commercial; used under GPL-3.0 | `Rendering` |

@@ -19,6 +19,7 @@ let package = Package(
         .executable(name: "rendering-bench", targets: ["rendering-bench"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.9.0"),
         .package(url: "https://github.com/krzyzanowskim/STTextView", from: "2.4.1"),
@@ -53,7 +54,11 @@ let package = Package(
         .target(name: "ACP", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .target(name: "AgentRuntime", dependencies: ["ACP"], swiftSettings: swiftSettings),
         .target(name: "Workspace", swiftSettings: swiftSettings),
-        .target(name: "Persistence", swiftSettings: swiftSettings),
+        .target(
+            name: "Persistence",
+            dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
+            swiftSettings: swiftSettings
+        ),
         .target(
             name: "Rendering",
             dependencies: [
@@ -114,7 +119,11 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], swiftSettings: swiftSettings),
-        .testTarget(name: "PersistenceTests", dependencies: ["Persistence"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "PersistenceTests",
+            dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(
             name: "RenderingTests",
             dependencies: ["Rendering", .product(name: "STTextView", package: "STTextView")],

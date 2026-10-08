@@ -29,15 +29,32 @@ public final class LiveSession {
 
     public init(library: SessionLibrary = .shared) { self.library = library }
 
-    public func start(directory: URL, agent: AgentInstallRecord, worktreesRoot: URL? = nil) async {
+    public func start(
+        directory: URL,
+        agent: AgentInstallRecord,
+        worktreesRoot: URL? = nil,
+        additionalDirectories: [URL] = []
+    ) async {
         guard startup == nil, controller == nil, !isClosed else { return }
         isStarting = true
-        let task = Task { await launch(directory: directory, agent: agent, worktreesRoot: worktreesRoot) }
+        let task = Task {
+            await launch(
+                directory: directory,
+                agent: agent,
+                worktreesRoot: worktreesRoot,
+                additionalDirectories: additionalDirectories
+            )
+        }
         startup = task
         await task.value
     }
 
-    private func launch(directory: URL, agent: AgentInstallRecord, worktreesRoot: URL?) async {
+    private func launch(
+        directory: URL,
+        agent: AgentInstallRecord,
+        worktreesRoot: URL?,
+        additionalDirectories: [URL]
+    ) async {
         defer { isStarting = false }
         do {
             let store = try await library.store()
@@ -73,9 +90,12 @@ public final class LiveSession {
                     title: "\(install.name) · \(project.name)",
                     workingDirectory: workspace.workingDirectory.path
                 ),
-                store: store
+                store: store,
+                additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }
             )
             self.controller = controller
+            controller.fileSystem = try await SessionFileSystem(controller: controller)
+            guard !isClosed else { await controller.close(); return }
             let command = AgentCommand(
                 executable: install.executable,
                 arguments: install.arguments,
@@ -94,6 +114,7 @@ public final class LiveSession {
             let connection = await ACP.V1.AgentConnectionAdapter(
                 transport: process.transport,
                 delegate: controller,
+                fileSystem: controller.fileSystem,
                 options: .init(elicitation: false)
             )
             guard !isClosed else { await connection.close(); await cleanup(); return }

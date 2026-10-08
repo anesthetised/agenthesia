@@ -48,7 +48,7 @@ The main window uses a window-bound `LiveSession` in Core to own the agent proce
 one app database away from the main actor and provides project, install, and saved-session discovery.
 The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
 leaves no worktree behind), prepares the workspace, creates metadata, and starts
-the ACP v1 adapter with filesystem, terminal, terminal-auth, and elicitation capabilities disabled.
+the ACP v1 adapter with filesystem access enabled; terminal, terminal-auth, and elicitation capabilities remain disabled.
 Agents must already be authenticated; authentication failures are displayed.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
@@ -90,6 +90,50 @@ The owner closes ACP and drains controller writes, terminates the process group,
 if it was in flight. Unexpected process exit and observable controller failure also trigger cleanup.
 Closing a transcript view only detaches its display driver; selecting history does not terminate the
 window's live session. Starting another session requires ending the current one (or a startup failure).
+
+## Session filesystem
+
+`LiveSession` creates a `SessionFileSystem` in Core and injects it into the ACP v1 adapter, which
+advertises both [filesystem methods](https://agentclientprotocol.com/protocol/v1/file-system).
+`SessionController` owns its lifetime. Keeping the provider separate leaves blocking file I/O and
+wire error mapping out of the transcript controller; `Workspace.ScopedFileAccess` remains independent
+of ACP. No new external dependency is needed.
+
+The provider accepts requests only for the controller's remote session ID while idle or running.
+Startup, stopping, failure, close, and read-only history do not admit requests. Admission and pending
+operation accounting run on MainActor; path resolution, validation of root directories, and file I/O
+run on Dispatch queues. Accepted operations are serialized per session. Closing or failing the
+controller stops admission synchronously and waits for accepted operations to finish. Cancellation
+before admission does no I/O; cancellation after admission does not roll back or abandon an accepted
+operation. Thus a completed close cannot be followed by an outstanding filesystem write.
+Stop also prevents admission while the turn is stopping, even if its tool permission was granted
+earlier; the ACP file request must already have been accepted to finish. The controller continues
+recording agent updates until the prompt response arrives, then permits file requests again when idle.
+
+Roots are the actual session working directory (the worktree directory for Git projects), plus explicit
+`additionalDirectories`. The launch API accepts additional directories and passes the same list to
+`session/new`; an agent that does not advertise support fails startup rather than silently receiving
+different roots. The current launch form supplies only the working directory. Additional roots are
+launch parameters, not restored permissions; reopening history enables no provider, and reconnection
+must supply its intended root set when implemented in #25.
+
+`ScopedFileAccess` canonicalizes roots and requested paths, including macOS aliases such as `/var`,
+then enforces directory-component boundaries. Internal symlinks may resolve inside any allowed root;
+outside targets are refused. Reads open the canonical path with `O_NOFOLLOW_ANY`, then require a
+regular file; `O_NONBLOCK` avoids hanging on a substituted FIFO. Writes open the root and walk parent
+directories without following symlinks, create missing directories, and atomically rename a temporary
+file relative to the retained parent descriptor. Existing ordinary permission bits are preserved.
+Replacing a final symlink after validation cannot redirect the write, and replacing a hard link does
+not overwrite its other names. Temporary files are removed on handled failures, but a process crash
+can leave a `.agenthesia-<UUID>` file in the worktree. NUL paths are rejected and line range arithmetic
+cannot overflow. Reads currently load the whole file even for a line range; incremental reads and
+resource limits remain follow-up work for large files.
+
+These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox:
+an agent's own tools remain outside this provider, reads can see existing hard-linked files, and an
+open directory descriptor keeps referring to that directory if another process renames it. File
+changes remain in the worktree; specialized diff rendering and changed-file observation remain #20
+and #28. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
 
 ## Persistence implementation
 
@@ -249,8 +293,8 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
                                                    SessionController (MainActor, @Observable)
                                                     ├─ appends events to Persistence (event log)
                                                     ├─ reduces events into TranscriptState
-                                                    └─ answers agent requests (permissions, fs,
-                                                       terminals, elicitation) via the UI
+                                                    ├─ answers permission requests via the UI
+                                                    └─ owns SessionFileSystem (ACP fs → Workspace)
                                                                               │
                                                                               ▼
                                                                      AgenthesiaUI views

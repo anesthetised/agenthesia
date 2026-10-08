@@ -82,7 +82,7 @@ let package = Package(
         ),
         .target(
             name: "AgenthesiaCore",
-            dependencies: ["ACP", "AgentRuntime", "Workspace", "Persistence"],
+            dependencies: ["ACP", "AgentRuntime", "JSONRPC", "Workspace", "Persistence"],
             swiftSettings: swiftSettings
         ),
         .target(

@@ -33,6 +33,10 @@ struct CLIFileSystem: ACP.FileSystemProvider {
         case .outsideScope(let path): .invalidParams("Path is outside the working directory: \(path)")
         case .notFound(let path): RPCError(code: RPCError.resourceNotFoundCode, message: "Not found: \(path)")
         case .notText(let path): .invalidParams("Not a UTF-8 text file: \(path)")
+        case .invalidPath: .invalidParams("Path contains a NUL byte")
+        case .notRegularFile(let path): .invalidParams("Not a regular file: \(path)")
+        case .io(let path, let code):
+            RPCError(code: RPCError.internalErrorCode, message: "File operation failed (\(code)): \(path)")
         }
     }
 }

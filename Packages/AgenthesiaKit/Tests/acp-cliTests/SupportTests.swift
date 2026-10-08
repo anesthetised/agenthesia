@@ -26,6 +26,9 @@ import Testing
         #expect(CLIFileSystem.rpcError(.outsideScope("/a")).message.contains("outside"))
         #expect(CLIFileSystem.rpcError(.notFound("/a")).code == RPCError.resourceNotFoundCode)
         #expect(CLIFileSystem.rpcError(.notText("/a")).message.contains("UTF-8"))
+        #expect(CLIFileSystem.rpcError(.invalidPath("/a\0")).code == RPCError.invalidParamsCode)
+        #expect(CLIFileSystem.rpcError(.notRegularFile("/a")).code == RPCError.invalidParamsCode)
+        #expect(CLIFileSystem.rpcError(.io("/a", 13)).code == RPCError.internalErrorCode)
     }
 }
 

@@ -118,11 +118,26 @@ public struct TranscriptState: Equatable, Sendable {
         case .agentMessageChunk(let chunk): append(chunk, role: .assistant, sequence: sequence)
         case .agentThoughtChunk(let chunk): append(chunk, role: .thought, sequence: sequence)
         case .toolCall(let call):
-            if let index = toolIndices[call.toolCallId] {
-                items[index].toolCall = call
-            } else {
+            if toolIndices[call.toolCallId] == nil {
                 toolIndices[call.toolCallId] = items.count
                 items.append(Item(id: sequence, toolCall: call))
+            } else {
+                // Updates may precede the call; fields it omits keep their reported values.
+                merge(
+                    .init(
+                        toolCallId: call.toolCallId,
+                        title: call.title,
+                        name: call.name,
+                        kind: call.kind,
+                        status: call.status,
+                        content: call.content,
+                        locations: call.locations,
+                        rawInput: call.rawInput,
+                        rawOutput: call.rawOutput,
+                        meta: call.meta
+                    ),
+                    sequence: sequence
+                )
             }
         case .toolCallUpdate(let update): merge(update, sequence: sequence)
         case .plan(let value): plan = value
@@ -174,7 +189,8 @@ public struct TranscriptState: Equatable, Sendable {
             items.append(
                 Item(
                     id: sequence,
-                    toolCall: .init(toolCallId: update.toolCallId, title: update.title ?? update.toolCallId)
+                    // An empty title means none was reported yet.
+                    toolCall: .init(toolCallId: update.toolCallId, title: update.title ?? "")
                 )
             )
         }

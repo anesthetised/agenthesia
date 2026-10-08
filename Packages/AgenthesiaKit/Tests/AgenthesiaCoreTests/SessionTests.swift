@@ -85,6 +85,34 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         #expect(throws: TranscriptState.ReplayError.self) { try state.apply(stored[0]) }
     }
 
+    @Test func earlyToolUpdatesSurviveTheFullToolCall() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        let location = ACP.ToolCallLocation(path: "/tmp/a.swift", line: 3)
+        let updates: [ACP.SessionUpdate] = [
+            .toolCallUpdate(.init(toolCallId: "t", status: .inProgress, locations: [location])),
+            .toolCallUpdate(.init(toolCallId: "u", status: .failed)),
+            .toolCall(.init(toolCallId: "t", title: "Read", kind: .read)),
+            .toolCallUpdate(.init(toolCallId: "t", content: [.content(.init(content: .init(text: "body")))])),
+        ]
+        let stored = try await fixture.store.append(
+            try updates.map { NewEvent(kind: SessionEvent.updateKind, payload: try rawUpdate($0)) },
+            to: session.id
+        )
+        var state = TranscriptState()
+        for event in stored { try state.apply(event) }
+        let tools = state.items.compactMap(\.toolCall)
+        #expect(tools.map(\.toolCallId) == ["t", "u"])
+        #expect(tools[0].title == "Read")
+        #expect(tools[0].kind == .read)
+        #expect(tools[0].status == .inProgress)
+        #expect(tools[0].locations == [location])
+        #expect(tools[0].content == [.content(.init(content: .init(text: "body")))])
+        // A call known only from updates has no title yet; the UI must not present its identifier as one.
+        #expect(tools[1].title.isEmpty)
+    }
+
     @Test func chunkBoundariesRespectRolesMessageIDsAndAttachments() async throws {
         let fixture = try Fixture()
         let session = try await fixture.seed()

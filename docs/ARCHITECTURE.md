@@ -168,7 +168,8 @@ The event format is version 1:
 
 `TranscriptState.apply` is the pure reduction of those stored events. Rows use their first contributing
 sequence as a stable identity. It combines contiguous content chunks, respects explicit message IDs,
-preserves non-text content, patches tool calls (absent fields stay unchanged), and tracks plans,
+preserves non-text content, patches tool calls (absent fields stay unchanged, including when updates
+arrive before the full call, whose untitled placeholder has an empty title), and tracks plans,
 commands, settings, title, usage, stop reason and unfinished turns. Unknown kinds/versions and undecodable ACP update bodies remain stored
 and advance the cursor with an unsupported-event count. Malformed local event payloads, invalid ACP
 envelopes or sequence gaps fail replay explicitly.

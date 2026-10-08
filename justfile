@@ -53,6 +53,15 @@ bench *args:
 bench-build:
     swift build -c release --package-path {{package}} --product rendering-bench
 
+# Measure append throughput and latency in fresh processes; agree on resource use before running
+[positional-arguments]
+bench-persistence *args:
+    python3 scripts/bench.py persistence "$@"
+
+# Build the persistence benchmark without running it
+bench-persistence-build:
+    swift build -c release --package-path {{package}} --product persistence-bench
+
 # Locate the Release executable for the benchmark runner
 bench-path:
     @swift build -c release --package-path {{package}} --show-bin-path

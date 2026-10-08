@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run rendering benchmarks sequentially in fresh processes and retain raw output and metadata."""
+"""Run benchmarks sequentially in fresh processes and retain raw output and metadata."""
 
 import argparse
 from datetime import datetime, timezone
@@ -59,13 +59,13 @@ def run_once(command, environment, log, timeout):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["micro", "lab"])
+    parser.add_argument("mode", choices=["micro", "lab", "persistence"])
     parser.add_argument("scenarios", nargs="?", type=scenarios)
     parser.add_argument("--runs", type=positive, default=3, help="Fresh-process repetitions per scenario (default: 3)")
     parser.add_argument("--timeout", type=positive, default=180, help="Seconds per benchmark process (default: 180)")
     parser.add_argument("--output", type=Path, help="New result directory (default: .build/benchmarks/<timestamp>)")
     args = parser.parse_args()
-    if args.mode == "micro" and args.scenarios is not None:
+    if args.mode != "lab" and args.scenarios is not None:
         parser.error("Scenarios are only supported by lab mode; use just lab-run <scenarios>")
     args.scenarios = args.scenarios or ["S1:A2"]
 
@@ -90,8 +90,10 @@ def run(args):
         "os": platform.platform(), "machine": capture("sysctl", "-n", "hw.model"),
         "architecture": platform.machine(), "memoryBytes": int(capture("sysctl", "-n", "hw.memsize")),
         "cpuCount": os.cpu_count(), "toolchain": capture("xcrun", "swift", "--version"),
-        "build": "Release" if args.mode == "micro" else "Debug with -O",
-        "scenarios": args.scenarios if args.mode == "lab" else ["micro"], "results": [],
+        "build": "Debug with -O" if args.mode == "lab" else "Release",
+        "scenarios": (args.scenarios if args.mode == "lab" else
+                      [f"{batch}:{rate}" for batch in [1, 16, 64] for rate in [100, 1000, 0]]
+                      if args.mode == "persistence" else ["micro"]), "results": [],
     }
     report = directory / "report.json"
 
@@ -101,11 +103,13 @@ def run(args):
     save()
     print(f"Results: {directory}", flush=True)
     try:
-        recipe = "bench-build" if args.mode == "micro" else "lab-build"
+        recipe = {"micro": "bench-build", "lab": "lab-build",
+                  "persistence": "bench-persistence-build"}[args.mode]
         with (directory / "build.log").open("w") as output:
             subprocess.run(["just", recipe], cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, check=True)
-        if args.mode == "micro":
-            binary = Path(capture("just", "bench-path")) / "rendering-bench"
+        if args.mode != "lab":
+            product = "persistence-bench" if args.mode == "persistence" else "rendering-bench"
+            binary = Path(capture("just", "bench-path")) / product
         else:
             binary = ROOT / ".build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia"
         for repetition in range(1, args.runs + 1):
@@ -118,7 +122,10 @@ def run(args):
                 log = directory / f"run-{repetition}-{index}.log"
                 print(f"Run {repetition}/{args.runs}: {scenario}", flush=True)
                 start = time.monotonic()
-                results = run_once([str(binary)], environment, log, args.timeout)
+                command = [str(binary)]
+                if args.mode == "persistence":
+                    command += scenario.split(":")
+                results = run_once(command, environment, log, args.timeout)
                 metadata["results"].append({
                     "repetition": repetition, "scenario": scenario, "log": log.name,
                     "wallSeconds": time.monotonic() - start, "samples": results,

@@ -1,4 +1,4 @@
-# Rendering benchmarks
+# Benchmarks
 
 Obtain the user's approval before running benchmarks. Agree on scenarios and repetitions first: they
 consume CPU and memory, and GUI runs bring the lab window to the foreground. Builds and deterministic
@@ -7,12 +7,14 @@ tests can be run separately without launching benchmarks.
 ## Commands
 
 ```sh
-just bench-build                  # Build the Release microbenchmarks without running them
+just bench-build                  # Build the Release rendering microbenchmarks without running them
+just bench-persistence-build      # Build the Release persistence benchmark without running it
 just lab-build                    # Build the optimized Debug lab without running it
 just test                         # Includes metric, scheduling and runner tests; no benchmark runs
 
 # Run only after approval:
 just bench --runs 1
+just bench-persistence --runs 3
 just lab-run S1:A2,S6:A2,S4:cold+lines+colors --runs 1
 ```
 
@@ -38,7 +40,34 @@ Coverage reports the debug-only `AgenthesiaUI/Lab/` directory separately as `Ren
 and test support are excluded from the product total and badge; the rest of `AgenthesiaUI` remains
 included. Deterministic lab metric and scheduling tests still run in CI.
 
-## Workloads
+## Persistence append workload
+
+`just bench-persistence` measures the public `PersistenceStore.append` API against a new on-disk
+SQLite database per process. It uses the production `DatabaseQueue` configuration (rollback journal,
+FULL synchronous commits); it does not change journal mode or durability settings. The fixed matrix
+is batches of 1, 16 and 64 events at 100 and 1,000 events/second, plus saturation (rate zero). Each
+payload is a 1 KiB synthetic ACP text-chunk JSON object. Schema creation and metadata inserts happen
+before timing; reopening and checking every stored payload and sequence happen after timing.
+
+Each scenario has a two-second arrival window and a cap of 65,536 events (64 MiB of payload).
+The last transaction can finish beyond the window. Paced batches become ready at absolute deadlines
+`start + cumulative events / rate`, so slow commits do not reset the offered rate. Only complete
+batches are scheduled. Work that remains when the window ends is not drained; compare `events`
+with `scheduledEvents` to detect a writer that falls behind. Saturation stops at the time or event
+limit, whichever comes first. `eventLimitReached` identifies runs that hit the cap.
+
+Results include achieved events/second, append p50/p95/max, p95 delay from the scheduled batch-ready
+time to commit completion, event counts, elapsed time and final database size. Append latency excludes
+waiting to fill a batch: at 100 events/second, batching 64 adds up to 630 ms of waiting for the first
+event. This is a storage microbenchmark, not a measurement of the live session controller or UI.
+
+The default three repetitions take about 54 seconds of measurement plus Release compilation and
+replay verification. Processes and database files are sequential; each file is deleted on normal
+exit. A forcibly killed process can leave an `agenthesia-bench-*` directory in the system temporary
+directory. Do not run other builds, tests or measurements alongside this workload. These short,
+fresh-database runs do not establish long-session, multi-session, WAL or crash-durability behavior.
+
+## Rendering workloads
 
 The microbenchmarks measure first use of each grammar, warm whole-file highlighting, Markdown rendering,
 streaming with fixed 13-character chunks, and rendering 1,000 transcript items. Streaming covers both

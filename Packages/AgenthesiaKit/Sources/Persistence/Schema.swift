@@ -1,6 +1,8 @@
 import GRDB
 
 enum Schema {
+    // UUIDs use uppercase uuidString TEXT; bind uuidString, not GRDB's default UUID BLOB.
+    // Date columns store REAL seconds since 2001-01-01 (Foundation's reference date), without epoch conversion.
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in

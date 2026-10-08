@@ -38,6 +38,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
+| `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 
 ## Current interface preview
 
@@ -70,14 +71,19 @@ The initial `v1` migration creates four tables:
 
 Foreign keys reject missing parents and prevent deleting referenced metadata. Local session identity
 is separate from the agent's session ID. The store currently creates and reads metadata; editing,
-deletion and live observation are deferred until their callers need them.
+deletion and live observation are deferred until their callers need them. UUID columns use uppercase
+`uuidString` TEXT, not GRDB's default UUID BLOB binding. Dates use REAL seconds since Foundation's
+reference date (2001-01-01); avoiding epoch conversion preserves their exact `Double` precision.
+Project root uniqueness compares exact strings. The caller must canonicalize directory identity,
+including symlink and case aliases; this layer does not access the filesystem to resolve paths.
 
 An append commits a whole batch or none of it. Sequences start at one per session and are assigned
 inside the transaction. Concurrent batches receive distinct sequences, but the session controller
 must await appends in ACP arrival order; task scheduling does not establish that order. Replay orders
 by sequence, not wall-clock timestamps. Cancellation follows GRDB's transaction rollback behavior.
 
-Payloads are validated as JSON by SQLite and retained byte-for-byte in a BLOB. Unknown event kinds,
+Append rejects raw NUL bytes and invalid UTF-8 before SQLite validates JSON syntax; SQLite alone
+accepts both malformed byte sequences. Payloads are retained byte-for-byte in a BLOB. Unknown event kinds,
 format versions and JSON fields remain readable. `Persistence` does not depend on ACP and does not
 decode its wire models. The session integration must supply the original payload, not re-encode a
 typed update that may have discarded unknown fields. Event interpretation and transcript reduction

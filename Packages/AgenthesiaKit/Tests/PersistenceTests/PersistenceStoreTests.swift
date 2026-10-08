@@ -22,7 +22,8 @@ final class PersistenceStoreTests: Sendable {
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 
-    private func seed() async throws -> (ProjectRecord, AgentInstallRecord, SessionRecord) {
+    private func seed(at timestamp: Date? = nil) async throws -> (ProjectRecord, AgentInstallRecord, SessionRecord) {
+        let date = timestamp ?? self.date
         let project = ProjectRecord(name: "Project ✓", rootPath: "/tmp/project's directory", createdAt: date)
         let agent = AgentInstallRecord(
             name: "Manual agent",
@@ -71,6 +72,19 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await reopened.events(in: session.id) == appended)
         #expect(try await reopened.events(in: session.id).first?.event.payload == payload)
         #expect(try await database.read { try Schema.migrator.appliedMigrations($0) } == ["v1"])
+    }
+
+    @Test(arguments: [Date(timeIntervalSinceReferenceDate: 800_000_000.0.nextUp), Date()])
+    func fractionalDatesRoundTripExactly(timestamp: Date) async throws {
+        let (project, agent, session) = try await seed(at: timestamp)
+        let raw = NewEvent(kind: "date", payload: Data("{}".utf8), timestamp: timestamp)
+        let appended = try await store.append([raw], to: session.id)
+        let reopened = try PersistenceStore(databaseURL: databaseURL)
+        #expect(try await reopened.projects() == [project])
+        #expect(try await reopened.agentInstalls() == [agent])
+        #expect(try await reopened.session(id: session.id) == session)
+        #expect(try await reopened.sessions(in: project.id) == [session])
+        #expect(try await reopened.events(in: session.id) == appended)
     }
 
     @Test func readsIndependentSessionsInSequenceOrderWithPagination() async throws {
@@ -122,20 +136,42 @@ final class PersistenceStoreTests: Sendable {
         #expect(events == batches.flatMap { $0 }.sorted { $0.sequence < $1.sequence })
     }
 
-    @Test(arguments: ["json", "kind", "version"])
+    @Test(arguments: ["json", "kind", "version", "nul", "utf8"])
     func failedBatchRollsBackAndDoesNotConsumeSequences(invalidField: String) async throws {
         let (_, _, session) = try await seed()
         let initial = try await store.append([event()], to: session.id)
+        let payload: Data
+        switch invalidField {
+        case "json": payload = Data("{invalid".utf8)
+        case "nul": payload = Data("{}\0garbage".utf8)
+        case "utf8": payload = Data(#"{"a":""#.utf8) + Data([0xFF, 0xFE]) + Data(#""}"#.utf8)
+        default: payload = Data("{}".utf8)
+        }
         let invalid = NewEvent(
             kind: invalidField == "kind" ? " " : "error",
             formatVersion: invalidField == "version" ? 0 : 1,
-            payload: Data((invalidField == "json" ? "{invalid" : "{}").utf8)
+            payload: payload
         )
-        await #expect(throws: DatabaseError.self) {
-            try await store.append([event(1), invalid, event(2)], to: session.id)
+        if invalidField == "nul" || invalidField == "utf8" {
+            await #expect(throws: PersistenceError.invalidEventPayload) {
+                try await store.append([event(1), invalid, event(2)], to: session.id)
+            }
+        } else {
+            await #expect(throws: DatabaseError.self) {
+                try await store.append([event(1), invalid, event(2)], to: session.id)
+            }
         }
         #expect(try await store.events(in: session.id) == initial)
         #expect(try await store.append([event(3)], to: session.id).map(\.sequence) == [2])
+    }
+
+    @Test(arguments: [#""\u0000""#, #"{"text":"é🙂"}"#])
+    func validUTF8AndEscapedNULRemainUnchanged(json: String) async throws {
+        let (_, _, session) = try await seed()
+        let raw = NewEvent(kind: "json", payload: Data(json.utf8))
+        let appended = try await store.append([raw], to: session.id)
+        #expect(try await store.events(in: session.id) == appended)
+        #expect(appended.first?.event.payload == Data(json.utf8))
     }
 
     @Test func rejectsMissingParentsAndDuplicateMetadata() async throws {

@@ -3,6 +3,8 @@ public import Foundation
 public struct ProjectRecord: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
+    /// Unique by exact string. The caller supplies a canonical path and resolves filesystem aliases
+    /// (including symlinks and case variants on case-insensitive volumes) before creating a project.
     public let rootPath: String
     public let createdAt: Date
 

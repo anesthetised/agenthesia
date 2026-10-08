@@ -4,6 +4,7 @@ import GRDB
 public enum PersistenceError: Error, Equatable {
     case invalidDatabaseURL
     case newerSchema
+    case invalidEventPayload
     case invalidEventPage
     case sequenceExhausted
 }
@@ -31,7 +32,8 @@ public final class PersistenceStore: Sendable {
             try db.execute(
                 sql: "INSERT INTO project (id, name, rootPath, createdAt) VALUES (?, ?, ?, ?)",
                 arguments: [
-                    project.id.uuidString, project.name, project.rootPath, project.createdAt.timeIntervalSince1970,
+                    project.id.uuidString, project.name, project.rootPath,
+                    project.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
         }
@@ -44,7 +46,7 @@ public final class PersistenceStore: Sendable {
                     id: row.decode(forColumn: "id"),
                     name: row.decode(forColumn: "name"),
                     rootPath: row.decode(forColumn: "rootPath"),
-                    createdAt: Date(timeIntervalSince1970: row.decode(forColumn: "createdAt"))
+                    createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
                 )
             }
         }
@@ -56,7 +58,8 @@ public final class PersistenceStore: Sendable {
             try db.execute(
                 sql: "INSERT INTO agent_install (id, name, executable, arguments, createdAt) VALUES (?, ?, ?, ?, ?)",
                 arguments: [
-                    agent.id.uuidString, agent.name, agent.executable, arguments, agent.createdAt.timeIntervalSince1970,
+                    agent.id.uuidString, agent.name, agent.executable, arguments,
+                    agent.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
         }
@@ -70,7 +73,7 @@ public final class PersistenceStore: Sendable {
                     name: row.decode(forColumn: "name"),
                     executable: row.decode(forColumn: "executable"),
                     arguments: JSONDecoder().decode([String].self, from: row.decode(forColumn: "arguments")),
-                    createdAt: Date(timeIntervalSince1970: row.decode(forColumn: "createdAt"))
+                    createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
                 )
             }
         }
@@ -87,7 +90,7 @@ public final class PersistenceStore: Sendable {
                 arguments: [
                     session.id.uuidString, session.projectID.uuidString, session.agentInstallID.uuidString,
                     session.agentSessionID, session.protocolVersion, session.title, session.workingDirectory,
-                    session.createdAt.timeIntervalSince1970,
+                    session.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
         }
@@ -124,6 +127,10 @@ public final class PersistenceStore: Sendable {
             guard last <= Int64.max - Int64(events.count) else { throw PersistenceError.sequenceExhausted }
             var stored: [StoredEvent] = []
             for (index, event) in events.enumerated() {
+                // SQLite JSON validation accepts invalid UTF-8 and ignores bytes after a raw NUL.
+                guard !event.payload.contains(0), String(validating: event.payload, as: UTF8.self) != nil else {
+                    throw PersistenceError.invalidEventPayload
+                }
                 let sequence = last + Int64(index) + 1
                 try db.execute(
                     sql: """
@@ -132,7 +139,7 @@ public final class PersistenceStore: Sendable {
                         """,
                     arguments: [
                         sessionID.uuidString, sequence, event.kind, event.formatVersion, event.payload,
-                        event.timestamp.timeIntervalSince1970,
+                        event.timestamp.timeIntervalSinceReferenceDate,
                     ]
                 )
                 stored.append(StoredEvent(sessionID: sessionID, sequence: sequence, event: event))
@@ -157,7 +164,7 @@ public final class PersistenceStore: Sendable {
                         kind: row.decode(forColumn: "kind"),
                         formatVersion: row.decode(forColumn: "formatVersion"),
                         payload: row.decode(forColumn: "payload"),
-                        timestamp: Date(timeIntervalSince1970: row.decode(forColumn: "timestamp"))
+                        timestamp: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "timestamp"))
                     )
                 )
             }
@@ -173,7 +180,7 @@ public final class PersistenceStore: Sendable {
             protocolVersion: row.decode(forColumn: "protocolVersion"),
             title: row.decode(forColumn: "title"),
             workingDirectory: row.decode(forColumn: "workingDirectory"),
-            createdAt: Date(timeIntervalSince1970: row.decode(forColumn: "createdAt"))
+            createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
         )
     }
 }

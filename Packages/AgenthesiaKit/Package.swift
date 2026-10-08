@@ -17,6 +17,7 @@ let package = Package(
         .executable(name: "acp-cli", targets: ["acp-cli"]),
         .executable(name: "MockAgent", targets: ["MockAgent"]),
         .executable(name: "rendering-bench", targets: ["rendering-bench"]),
+        .executable(name: "persistence-bench", targets: ["persistence-bench"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
@@ -97,6 +98,7 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .executableTarget(name: "rendering-bench", dependencies: ["Rendering"], swiftSettings: swiftSettings),
+        .executableTarget(name: "persistence-bench", dependencies: ["Persistence"], swiftSettings: swiftSettings),
         .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
 

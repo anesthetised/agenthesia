@@ -8,6 +8,7 @@ extension ACP {
         public let sessionId: SessionID
         public let update: SessionUpdate
         public let meta: Meta?
+        let hadSchemaMismatch: Bool
 
         public init(rawNotification: Data) throws {
             struct Envelope: Decodable {
@@ -15,6 +16,7 @@ extension ACP {
                     var sessionId: SessionID
                     var update: SessionUpdate
                     var meta: Meta?
+                    var hadSchemaMismatch = false
 
                     private enum CodingKeys: String, CodingKey {
                         case sessionId, update
@@ -27,6 +29,7 @@ extension ACP {
                         do {
                             update = try container.decode(SessionUpdate.self, forKey: .update)
                         } catch {
+                            hadSchemaMismatch = true
                             // Recording must survive schema mismatches. The strict wire model is unchanged.
                             update = .unknown(try container.decodeIfPresent(JSONValue.self, forKey: .update) ?? .null)
                         }
@@ -44,6 +47,7 @@ extension ACP {
             sessionId = envelope.params.sessionId
             update = envelope.params.update
             meta = envelope.params.meta
+            hadSchemaMismatch = envelope.params.hadSchemaMismatch
         }
     }
 }

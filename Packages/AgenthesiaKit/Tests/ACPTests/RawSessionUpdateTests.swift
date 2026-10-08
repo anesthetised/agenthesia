@@ -1,8 +1,9 @@
-import ACP
 import Foundation
 import JSONRPC
 import Synchronization
 import Testing
+
+@testable import ACP
 
 private final class RawDelegate: ACP.AgentConnectionDelegate {
     let updates = Mutex<[(ACP.SessionUpdate, Data)]>([])
@@ -29,6 +30,10 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
             "vendor_extension":true }
             """.utf8
         )
+        let malformed = Data(
+            #"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"usage_update","used":"invalid"}}}"#
+                .utf8
+        )
         var router = Router()
         router.on(ACP.V1.Method.Initialize.self) { _ in .init(protocolVersion: 1) }
         router.on(ACP.V1.Method.NewSession.self) { _ in
@@ -46,6 +51,7 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
             // No session id: log the invalid envelope, then continue processing the stream.
             try await server.send(Data(#"{"jsonrpc":"2.0","method":"session/update","params":{"update":{}}}"#.utf8))
             try await server.send(raw)
+            try await server.send(malformed)
             return .init(stopReason: .endTurn)
         }
         let serverConnection = Connection(transport: server)
@@ -56,7 +62,9 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
         _ = try await connection.newSession(cwd: "/tmp", additionalDirectories: [], mcpServers: [])
         _ = try await connection.prompt([.init(text: "test")], in: "s")
         let updates = delegate.updates.withLock { $0 }
-        #expect(updates.count == 1)
+        #expect(updates.count == 2)
+        #expect(updates.last?.1 == malformed)
+        guard case .unknown = try #require(updates.last?.0) else { Issue.record("Lost malformed update"); return }
         #expect(updates.first?.1 == raw)
         guard case .configOptions(let options) = try #require(updates.first?.0) else {
             Issue.record("Expected normalized config options"); return
@@ -64,9 +72,21 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
         #expect(options.configOptions.first?.category == .mode)
         let decoded = try ACP.RecordedSessionUpdate(rawNotification: raw)
         #expect(decoded.sessionId == "s")
+        #expect(!decoded.hadSchemaMismatch)
         guard case .currentMode(let mode) = decoded.update else { Issue.record("Lost raw mode"); return }
         #expect(mode.currentModeId == "code")
         await connection.close()
+    }
+
+    @Test func futureUpdateIsNotASchemaMismatch() throws {
+        let recorded = try ACP.RecordedSessionUpdate(
+            rawNotification: Data(
+                #"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"future"}}}"#
+                    .utf8
+            )
+        )
+        guard case .unknown = recorded.update else { Issue.record("Expected opaque update"); return }
+        #expect(!recorded.hadSchemaMismatch)
     }
 
     @Test func rejectsNonUpdateEnvelope() {
@@ -89,6 +109,7 @@ extension RawSessionUpdateTests {
         )
         let recorded = try ACP.RecordedSessionUpdate(rawNotification: raw)
         guard case .unknown = recorded.update else { Issue.record("Expected opaque update"); return }
+        #expect(recorded.hadSchemaMismatch)
         #expect(recorded.meta?["vendor"] == .bool(true))
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(

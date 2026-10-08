@@ -535,6 +535,66 @@ extension SessionControllerTests {
         #expect(controller.errorMessage == nil)
     }
 
+    @Test func closeDuringInitializationCancelsStartup() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let gate = Gate()
+        var router = Router()
+        router.on(ACP.V1.Method.Initialize.self) { _ in
+            await gate.suspend()
+            return .init(protocolVersion: 1)
+        }
+        let peer = Connection(transport: server)
+        await peer.start(handler: router)
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let start = Task {
+            try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        await gate.waitUntilEntered()
+        await controller.close()
+        await gate.open()
+        await #expect(throws: CancellationError.self) { try await start.value }
+        #expect(controller.status == .closed)
+        #expect(controller.errorMessage == nil)
+        await peer.close()
+    }
+
+    @Test(arguments: [false, true]) func closeDuringStartupWritePreservesDiskFailure(failing: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let store = fixture.store
+        let gate = Gate()
+        controller.appendEvents = { events, id in
+            await gate.suspend()
+            if failing { throw CocoaError(.fileWriteOutOfSpace) }
+            return try await store.append(events, to: id)
+        }
+        let (server, client) = InMemoryTransport.pair()
+        Task { await EchoAgent().serve(server) }
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let start = Task {
+            try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        await gate.waitUntilEntered()
+        let closing = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        await gate.open()
+        await closing.value
+        do {
+            try await start.value
+            Issue.record("Expected startup to throw after close")
+        } catch {
+            if failing {
+                #expect((error as? CocoaError)?.code == .fileWriteOutOfSpace)
+            } else {
+                #expect(error is CancellationError)
+            }
+        }
+        #expect(controller.status == .closed)
+        #expect((controller.errorMessage != nil) == failing)
+    }
+
     @Test func startupRethrowsTheFirstFailure() async throws {
         let fixture = try Fixture()
         let controller = SessionController(session: try await fixture.seed(), store: fixture.store)

@@ -30,3 +30,7 @@ higher in this run; these are separate, unpaired measurements, not evidence of a
 significant regression or improvement. Publication counts and final output are unchanged. The
 benchmark does exercise the revised recording decoder, but does not measure the live router,
 permission handling, transaction latency, or the config-only equality check.
+
+Free RAM percentage and load averages were not captured for either measurement set. The system load
+at measurement time is therefore unknown; current readings cannot reconstruct it. Future comparisons
+should record both before each run and use paired measurements before attributing timing changes to code.

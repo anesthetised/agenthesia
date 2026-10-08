@@ -1,5 +1,6 @@
 public import Foundation
 public import JSONRPC
+import os
 
 extension ACP.V1 {
     /// Handles what an ACP v1 agent asks of the client.
@@ -77,6 +78,10 @@ extension ACP.V1 {
         router.on(Method.SessionUpdate.self) { await delegate.sessionUpdate($0) }
         router.onRawNotification(Method.SessionUpdate.self) { raw in
             let recorded = try ACP.RecordedSessionUpdate(rawNotification: raw)
+            if recorded.hadSchemaMismatch {
+                Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "ACP")
+                    .error("Recording session/update as unknown: schema mismatch")
+            }
             await delegate.sessionUpdate(
                 .init(sessionId: recorded.sessionId, update: recorded.update, meta: recorded.meta),
                 rawNotification: raw

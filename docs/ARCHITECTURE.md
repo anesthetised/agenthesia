@@ -116,6 +116,7 @@ cancelling a task waiting on `send` does not cancel that owned turn. `stop` reco
 A stop while the initial prompt write
 is pending prevents sending that prompt. Busy sends are rejected until #65 supplies queue/steering.
 Turn errors are recorded and close the session; deliberate close records cancellation instead.
+Closing during startup also throws `CancellationError`; an earlier failure or a failed persistence write takes precedence.
 The first failure is retained so a subsequent connection-closed error cannot hide its cause.
 A storage failure closes the connection and reports an
 observable error without showing uncommitted text. The caller owns `AgentProcess` and must terminate it

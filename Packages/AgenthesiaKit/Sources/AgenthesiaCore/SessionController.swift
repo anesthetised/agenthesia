@@ -71,7 +71,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 workingDirectory: session.workingDirectory,
                 createdAt: session.createdAt
             )
-            try await store.createSession(session)
+            do {
+                try await store.createSession(session)
+            } catch {
+                failure = failure ?? error
+                throw error
+            }
             guard status == .starting else { throw SessionError.invalidState }
             // Enqueue the baseline and all early updates without yielding, before accepting live writes.
             var events = [try SessionEvent.started(configOptions: remote.configOptions).storedEvent()]
@@ -86,6 +91,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             status = .idle
             publishTranscript()
         } catch {
+            if status == .closed, failure == nil { throw CancellationError() }
             throw await fail(error)
         }
     }

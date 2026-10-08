@@ -1,0 +1,50 @@
+[
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 93.132542,
+    "publications": 10000,
+    "publishEvery": 1,
+    "run": 1
+  },
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 70.625584,
+    "publications": 625,
+    "publishEvery": 16,
+    "run": 1
+  },
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 91.820708,
+    "publications": 10000,
+    "publishEvery": 1,
+    "run": 2
+  },
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 70.816833,
+    "publications": 625,
+    "publishEvery": 16,
+    "run": 2
+  },
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 92.529542,
+    "publications": 10000,
+    "publishEvery": 1,
+    "run": 3
+  },
+  {
+    "characters": 130000,
+    "events": 10000,
+    "milliseconds": 71.22975,
+    "publications": 625,
+    "publishEvery": 16,
+    "run": 3
+  }
+]

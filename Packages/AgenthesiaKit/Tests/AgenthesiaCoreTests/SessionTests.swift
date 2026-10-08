@@ -383,6 +383,7 @@ extension SessionControllerTests {
         let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
         try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
         #expect(controller.transcript.title == "Early title")
+        #expect(controller.title == "Early title")
         try await controller.send([.init(text: "go")])
         #expect(await run.value == nil)
         #expect(controller.transcript.currentModeID == "code")

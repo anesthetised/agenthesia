@@ -75,6 +75,18 @@ fresh-database runs do not establish long-session, multi-session, WAL or crash-d
 Recorded comparisons: [initial persistence review fixes](benchmarks/2026-10-08/persistence/README.md)
 and [rowid storage with resource snapshots](benchmarks/2026-10-08/persistence-rowid/README.md).
 
+## Production transcript table
+
+`just lab-run S1:App --runs 1` runs the existing 200-item, 100-chunks/second streaming workload through
+`TranscriptTableController` and `LiveTranscriptSource`'s Markdown cache. It measures the production
+AppKit table and rendering path. The original `S1:A2` prototype remains available unchanged for a
+reference; its different row presentation is not an identical before/after implementation.
+
+This variant does not include ACP transport, SQLite commits, the session reducer, or SwiftUI observation.
+It cannot establish end-to-end durable streaming throughput; that remains #97. Like other lab runs,
+it requires prior workload/resource approval. `App` also supports the lab's selection, scroll, and
+appearance scenarios; these are separate workloads and were not part of this change's approved run.
+
 ## Rendering workloads
 
 The microbenchmarks measure first use of each grammar, warm whole-file highlighting, Markdown rendering,

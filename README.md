@@ -27,18 +27,29 @@ See [docs/VISION.md](docs/VISION.md) for the principles behind the product and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it is built.
 Rendering workloads, metrics and repeatable measurements are described in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-## Interface preview
+## Live sessions
 
-The app opens a clearly labeled demo session: a native sidebar, selectable Markdown transcript,
-and a composer with a deterministic streamed response and Stop action. This is an interface preview,
-not a connected coding agent. Demo messages are temporary and disappear when the window is recreated;
-no project files are changed. Sending another prompt while a demo response streams is disabled.
-Use Shift-Return for a new line, Command-Return to send, and Command-period to stop.
+The app opens a native session screen. Choose a project directory and an installed ACP agent command;
+enter literal arguments one per line (blank lines are ignored; spaces are preserved). Project and
+executable paths accept `~` for your home directory. Agents must already be authenticated. Git projects receive a fresh
+`agenthesia/<uuid>` branch and worktree under `~/.agenthesia/worktrees`; only committed HEAD content is
+copied. Non-Git directories are used directly. Worktrees remain on disk after closing, including failed
+startup, so changes are not discarded.
 
-The package now includes a live session controller, durable transcript replay and frame-coalesced
-publication, covered by MockAgent integration tests. The app preview is not yet wired to that controller.
-Worktree isolation and the production prompt queue remain separate implementation steps. The existing
-ACP command-line client is available via `just cli` and `just mock-chat` for real protocol interaction.
+Enter or Command-Return sends a text prompt while idle; Shift-Return inserts a newline and Command-period
+stops the turn. You can draft the next message while the agent works; queueing and steering are still
+planned. The Agent Log button shows bounded stderr output. End Session, window close, and app quit
+close ACP, finish pending event writes, and terminate the agent process group.
+
+Sessions are stored in `~/Library/Application Support/Agenthesia/history.sqlite`. The sidebar opens
+saved transcripts read-only after a restart. Agent reconnection, interactive permission cards, client
+filesystem/terminal tools, and attachments are not yet connected. Permission requests are rejected;
+only implemented client capabilities are advertised. Tool calls currently show their title and status.
+Worktree review, merge, and discard controls remain separate work.
+
+For a local smoke test, build with `just test`, then point the app at the package's built `MockAgent`
+executable (the build directory depends on the Swift toolchain). Try `hello`, `slow`, `think`, or `fail`.
+The ACP command-line client remains available via `just cli` and `just mock-chat`.
 
 ## Requirements
 

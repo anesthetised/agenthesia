@@ -4,12 +4,8 @@ import Rendering
 
 /// Temporary presentation state for the demo; never launches an agent or saves a session.
 @Observable
-final class DemoSession {
-    struct Message {
-        let role: String
-        var markdown: String
-        var text: NSAttributedString
-    }
+final class DemoSession: TranscriptSource {
+    typealias Message = TranscriptMessage
 
     private(set) var messages: [Message] = []
     private(set) var revision = 0
@@ -43,6 +39,9 @@ final class DemoSession {
     }
 
     var isStreaming: Bool { turn != nil }
+    var messageCount: Int { messages.count }
+    func message(at row: Int) -> TranscriptMessage { messages[row] }
+    func isStreaming(at row: Int) -> Bool { isStreaming && row == messages.count - 1 }
 
     /// Starts a turn synchronously; the token also rejects delayed chunks after Stop.
     @discardableResult
@@ -75,6 +74,8 @@ final class DemoSession {
         let update = stream.append(chunk)
         let text = NSMutableAttributedString(attributedString: messages[messages.count - 1].text)
         update.apply(to: text)
+        messages[messages.count - 1].previousMarkdown = messages[messages.count - 1].markdown
+        messages[messages.count - 1].update = update
         messages[messages.count - 1].markdown += chunk
         messages[messages.count - 1].text = text
         lastUpdate = update

@@ -3,6 +3,8 @@ import SwiftUI
 
 @main
 struct AgenthesiaApp: App {
+    @NSApplicationDelegateAdaptor(SessionApplicationDelegate.self) private var lifecycle
+
     var body: some Scene {
         WindowGroup {
             RootView()

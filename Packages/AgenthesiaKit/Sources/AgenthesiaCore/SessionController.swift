@@ -21,6 +21,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public private(set) var status: Status = .ready
     public private(set) var transcript = TranscriptState()
+    /// Observed separately so window chrome does not re-render on every published transcript frame.
+    public private(set) var title: String?
     public var errorMessage: String? { failure.map { String(describing: $0) } }
     public private(set) var session: SessionRecord
     public private(set) var profile: ACP.AgentProfile?
@@ -221,6 +223,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public func publishTranscript() {
         guard transcript.sequence != reduced.sequence else { return }
         transcript = reduced
+        if title != reduced.title { title = reduced.title }
     }
 
     @MainActor public func sessionUpdate(_ update: ACP.SessionUpdate, in sessionId: ACP.SessionID) async {

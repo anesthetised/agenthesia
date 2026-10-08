@@ -21,6 +21,8 @@ public final class PersistenceStore: Sendable {
     }
 
     init(database: DatabaseQueue) throws {
+        // REPLACE must fire the delete guard even when the conflict is on the hidden rowid.
+        try database.writeWithoutTransaction { try $0.execute(sql: "PRAGMA recursive_triggers = ON") }
         let migrator = Schema.migrator
         guard try !database.read(migrator.hasBeenSuperseded) else { throw PersistenceError.newerSchema }
         try migrator.migrate(database)

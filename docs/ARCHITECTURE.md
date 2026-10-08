@@ -69,6 +69,10 @@ The initial `v1` migration creates four tables:
 | `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
+The event log uses an ordinary rowid table with a unique composite primary-key index. This keeps
+larger JSON payloads in table leaf pages instead of hitting the early overflow-page threshold of
+`WITHOUT ROWID` index records. The composite index still serves session/sequence lookup and ordering.
+
 Foreign keys reject missing parents and prevent deleting referenced metadata. Local session identity
 is separate from the agent's session ID. The store currently creates and reads metadata; editing,
 deletion and live observation are deferred until their callers need them. UUID columns use uppercase
@@ -89,7 +93,9 @@ decode its wire models. The session integration must supply the original payload
 typed update that may have discarded unknown fields. Event interpretation and transcript reduction
 belong to `AgenthesiaCore` in #17.
 
-SQLite triggers reject event updates, deletes and replacement inserts. Log compaction or history
+SQLite triggers reject event updates, deletes and replacement inserts. Every store connection enables
+recursive triggers so an `INSERT OR REPLACE` collision on the hidden rowid also fires the delete guard.
+Log compaction or history
 deletion will require an explicit migration and policy. Migrations never erase data on schema changes;
 opening a database with unknown migration identifiers fails rather than writing through a newer
 schema. The demo and CLI are not yet connected to this store.

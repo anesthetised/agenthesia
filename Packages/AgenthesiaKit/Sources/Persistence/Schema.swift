@@ -41,7 +41,7 @@ enum Schema {
                         payload BLOB NOT NULL CHECK (typeof(payload) = 'blob' AND json_valid(CAST(payload AS TEXT))),
                         timestamp REAL NOT NULL,
                         PRIMARY KEY (sessionID, sequence)
-                    ) WITHOUT ROWID;
+                    );
                     CREATE TRIGGER event_no_replace BEFORE INSERT ON event
                     WHEN EXISTS (SELECT 1 FROM event WHERE sessionID = NEW.sessionID AND sequence = NEW.sequence)
                     BEGIN

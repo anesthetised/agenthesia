@@ -17,6 +17,8 @@ final class PersistenceStoreTests: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         databaseURL = directory.appending(path: "sessions.sqlite")
         database = try DatabaseQueue(path: databaseURL.path(percentEncoded: false))
+        // Pin page size so the storage-growth regression is independent of SQLite build defaults.
+        try database.writeWithoutTransaction { try $0.execute(sql: "PRAGMA page_size = 4096") }
         store = try PersistenceStore(database: database)
     }
 
@@ -117,6 +119,17 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await store.append([], to: first.id).isEmpty)
     }
 
+    @Test func oneKiBPayloadsDoNotAllocateAnOverflowPagePerEvent() async throws {
+        let (_, _, session) = try await seed()
+        let pagesBefore = try #require(await database.read { try Int.fetchOne($0, sql: "PRAGMA page_count") })
+        let payload = Data(("\"" + String(repeating: "x", count: 1022) + "\"").utf8)
+        let batch = Array(repeating: NewEvent(kind: "acp.session/update", payload: payload), count: 256)
+        _ = try await store.append(batch, to: session.id)
+        let pagesAfter = try #require(await database.read { try Int.fetchOne($0, sql: "PRAGMA page_count") })
+        // Include the primary-key index and table growth, with room for partially filled pages.
+        #expect((pagesAfter - pagesBefore) * 4096 < batch.count * 2048)
+    }
+
     @Test func concurrentBatchesAreAtomicAndGetUniqueSequences() async throws {
         let (_, _, session) = try await seed()
         let batches = try await withThrowingTaskGroup(of: [StoredEvent].self) { group in
@@ -202,6 +215,8 @@ final class PersistenceStoreTests: Sendable {
         for sql in [
             "UPDATE event SET payload = CAST('{}' AS BLOB)",
             "INSERT OR REPLACE INTO event SELECT sessionID, sequence, kind, formatVersion, CAST('{}' AS BLOB), timestamp FROM event",
+            "INSERT OR REPLACE INTO event (rowid, sessionID, sequence, kind, formatVersion, payload, timestamp) "
+                + "SELECT rowid, sessionID, sequence + 1, kind, formatVersion, payload, timestamp FROM event",
             "DELETE FROM event",
             "DELETE FROM session",
             "DELETE FROM project",

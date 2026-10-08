@@ -74,9 +74,10 @@ as placeholders until #20 and #31. Bodies beyond 12 lines or 2,000 characters ar
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
 Each permission request is its own card, even when several refer to one tool call. It shows the tool
-call as known when the agent asked and, while pending, one native button per offered option in the
-agent's order. ⌥⌘1…⌥⌘9 choose an option of the oldest pending request; the composer status shows that
-shortcut range. Return and Escape choose nothing. Agent-provided “always” options are returned verbatim
+call as known when the agent asked and, while pending, a vertical list of native buttons in the
+agent's option order, keeping choices visible in narrow transcripts. ⌥⌘1…⌥⌘9 choose an option of the
+oldest pending request; the composer status shows that shortcut range. Return and Escape choose nothing.
+Agent-provided “always” options are returned verbatim
 and labeled as remembered by the agent; the app keeps no policy of its own. Answered cards state only
 the recorded response (the option's name and kind, or cancellation), never an inferred approval or
 decline. Requests without a recorded response after a restart show that none was recorded and have no

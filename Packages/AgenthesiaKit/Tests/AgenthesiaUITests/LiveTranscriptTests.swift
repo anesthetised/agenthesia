@@ -210,6 +210,53 @@ import Testing
         source.live.choosePermission(at: 0, option: 0)
     }
 
+    @Test(arguments: [440.0, 600.0]) func permissionOptionsRemainVisibleInNarrowTranscripts(width: Double) async throws
+    {
+        let recorded = try await RecordedTranscript()
+        let id = UUID()
+        let names = [
+            "Allow this command once", "Always allow commands like this",
+            "Reject this command", "Always reject commands like this",
+        ]
+        let kinds: [ACP.PermissionOptionKind] = [.allowOnce, .allowAlways, .rejectOnce, .rejectAlways]
+        let options = names.enumerated().map { index, name in
+            ACP.PermissionOption(optionId: "option-\(index)", name: name, kind: kinds[index])
+        }
+        try await recorded.append(
+            try SessionEvent.permissionRequested(
+                id: id,
+                toolCall: .init(toolCallId: "t", title: "Run command"),
+                options: options
+            )
+            .storedEvent()
+        )
+        let source = ChoiceRecorder()
+        source.live.running = true
+        source.live.pending = [id]
+        source.live.state = recorded.state
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        window.setContentSize(NSSize(width: width, height: 600))
+        controller.scroll.frame = window.contentLayoutRect
+        controller.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let buttons = views(NSButton.self, in: row).filter {
+            $0.action == #selector(TranscriptTableController.choosePermission(_:))
+        }
+        #expect(buttons.map(\.title) == names)
+        let viewport = controller.scroll.contentView.bounds
+        for (index, button) in buttons.enumerated() {
+            let rect = button.convert(button.bounds, to: controller.scroll.contentView)
+            #expect(!button.isHiddenOrHasHiddenAncestor)
+            #expect(viewport.contains(rect))
+            button.performClick(nil)
+            #expect(source.choices.last?.row == 0)
+            #expect(source.choices.last?.option == index)
+        }
+    }
+
     @Test func largeToolContentIsBoundedUntilExpanded() throws {
         let output = (1...40).map { "line \($0)" }.joined(separator: "\n")
         let call = ACP.ToolCall(

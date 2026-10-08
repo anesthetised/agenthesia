@@ -334,6 +334,8 @@ private final class TranscriptMessageRow: NSTableCellView {
             return button
         }
         let actions = NSStackView(views: buttons)
+        actions.orientation = .vertical
+        actions.alignment = .leading
         actions.setAccessibilityLabel("Permission options")
         stack.addArrangedSubview(actions)
         self.actions = actions

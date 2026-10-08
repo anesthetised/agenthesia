@@ -39,6 +39,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
+| `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
 
 ## Current interface preview
 
@@ -49,8 +50,8 @@ changed by the interface preview.
 
 The demo does not launch agents, modify a workspace, or persist sessions. It disables sending while
 streaming; it does not implement or supersede ADR-0010's production queue and steering behavior.
-`AgenthesiaCore` is still a placeholder. The data flow below describes the intended
-live-session architecture, not functionality supplied by the demo.
+`AgenthesiaCore` now supplies the live session controller and transcript reducer described below.
+The app still opens the independent demo; wiring a production session screen is a separate integration step.
 
 ## Persistence implementation
 
@@ -91,13 +92,66 @@ accepts both malformed byte sequences. Payloads are retained byte-for-byte in a 
 format versions and JSON fields remain readable. `Persistence` does not depend on ACP and does not
 decode its wire models. The session integration must supply the original payload, not re-encode a
 typed update that may have discarded unknown fields. Event interpretation and transcript reduction
-belong to `AgenthesiaCore` in #17.
+belong to `AgenthesiaCore`.
 
 SQLite triggers reject event updates, deletes and replacement inserts. Every store connection enables
 recursive triggers so an `INSERT OR REPLACE` collision on the hidden rowid also fires the delete guard.
 Log compaction or history deletion will require an explicit migration and policy. Migrations never
 erase data on schema changes; opening a database with unknown migration identifiers fails rather than
 writing through a newer schema. The demo and CLI are not yet connected to this store.
+
+## Session domain implementation
+
+`SessionController` is `@MainActor @Observable`. Its caller creates the project and agent-install
+records, supplies a draft `SessionRecord`, constructs an `AgentConnection` with the controller as
+its delegate, and calls `start(connection:client:)`. Start initializes the connection, creates the
+remote session, persists its local metadata, then records the initial config options. Notifications
+arriving before `session/new` returns are buffered (at most 16 MiB) and committed after the baseline;
+updates for other remote session IDs are ignored. Initialization/authentication failures close the
+connection; authentication UI remains separate work.
+
+The controller owns one prompt task. `send` records the prompt before sending it to the agent;
+cancelling a task waiting on `send` does not cancel that owned turn. `stop` records the intent and sends
+`session/cancel`, retaining updates until the prompt response. A new prompt is not allowed until a pending cancel has been sent.
+A stop while the initial prompt write
+is pending prevents sending that prompt. Busy sends are rejected until #65 supplies queue/steering.
+Turn errors are recorded and close the session. A storage failure closes the connection and reports an
+observable error without showing uncommitted text. The caller owns `AgentProcess` and must terminate it
+when the session fails or closes; closing ACP alone is not process containment.
+
+All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
+across an async SQLite write. Incoming notification handlers await their commit and reduction before
+JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.
+Until #21 provides approval UI, permission requests are recorded with a cancelled outcome and never
+granted. Structured input uses the delegate's default decline behavior.
+
+The event format is version 1:
+
+- `acp.session/update`: the **entire original JSON-RPC notification**, without its line terminator.
+  JSONRPC → ACP → controller forwards these bytes alongside the typed update; the traffic logger is
+  not used as a second event channel. Whitespace, unknown fields and numeric lexemes survive unchanged.
+- `session.event`: a Codable `SessionEvent` containing initial/normalized config options, user prompt
+  and turn UUID, stop intent, turn completion/error, or a permission decision. When an adapter normalizes
+  an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
+  after the raw notification. Replay therefore reproduces live state without discarding original data.
+
+`TranscriptState.apply` is the pure reduction of those stored events. Rows use their first contributing
+sequence as a stable identity. It combines contiguous content chunks, respects explicit message IDs,
+preserves non-text content, patches tool calls (absent fields stay unchanged), and tracks plans,
+commands, settings, title, usage, stop reason and unfinished turns. Unknown kinds/versions remain stored
+and advance the cursor with an unsupported-event count; malformed known payloads or sequence gaps fail
+replay explicitly.
+
+The reduced state is private and unobserved. `publishTranscript()` assigns one snapshot only when the
+sequence changes. `AgenthesiaUI.SessionFrameDriver` calls it from the view's display link, so streaming
+chunks cause at most one transcript publication per frame, with a forced flush at startup, turn end,
+permission response, failure and close. The view owns and stops the driver; it flushes on attach/detach
+and uses a weak session reference. No display timer or rendering dependency is added to Core.
+
+`restore(id:store:)` replays bounded pages into a read-only controller without contacting an agent.
+An unfinished turn remains visible as unfinished; it is not automatically resubmitted. Reattach/resume
+is #25. The controller must be explicitly closed by its owner; that releases the connection/delegate
+cycle and waits for the active turn and pending writes.
 
 ## Runtime implementation
 
@@ -126,8 +180,8 @@ Process exit and stderr completion are separate events. Waiting for stderr first
 then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
 CLI initialization errors display at most the last ten retained lines.
 
-The session log view will be connected with live sessions in
-[#17](https://github.com/anesthetised/agenthesia/issues/17); the demo does not launch a process.
+The session log view remains part of
+[#15](https://github.com/anesthetised/agenthesia/issues/15); the demo does not launch a process.
 Registry installation and the managed Node runtime are also still planned. The shell-only
 `posix_spawn` adoption addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`

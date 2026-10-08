@@ -146,7 +146,7 @@ public actor Connection {
             }
 
         case .notification(let method, let params):
-            await handler.handleNotification(method: method, params: params)
+            await handler.handleNotification(method: method, params: params, rawMessage: data)
 
         case .request(let id, let method, let params):
             inFlight[id] = Task {

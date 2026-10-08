@@ -1,3 +1,4 @@
+import Foundation
 public import JSONRPC
 
 extension ACP.V1 {
@@ -296,20 +297,31 @@ extension ACP.V1.AgentConnectionAdapter {
         let elicitation: Bool
 
         func sessionUpdate(_ notification: ACP.V1.SessionNotification) async {
+            await forward(notification, rawNotification: nil)
+        }
+
+        func sessionUpdate(_ notification: ACP.V1.SessionNotification, rawNotification: Data) async {
+            await forward(notification, rawNotification: rawNotification)
+        }
+
+        private func forward(_ notification: ACP.V1.SessionNotification, rawNotification: Data?) async {
             let sessionId = notification.sessionId
             guard await !state.isSuppressed(sessionId) else { return }
+            let effectiveUpdate: ACP.SessionUpdate
             switch notification.update {
             case .currentMode(let update) where await state.mapsModes(of: sessionId):
                 let options = await state.setCurrentMode(update.currentModeId, in: sessionId)
-                await delegate.sessionUpdate(.configOptions(.init(configOptions: options)), in: sessionId)
+                effectiveUpdate = .configOptions(.init(configOptions: options))
             case .configOptions(let update):
                 let options = await state.setAgentOptions(update.configOptions, in: sessionId)
-                await delegate.sessionUpdate(
-                    .configOptions(.init(configOptions: options, meta: update.meta)),
-                    in: sessionId
-                )
+                effectiveUpdate = .configOptions(.init(configOptions: options, meta: update.meta))
             case let update:
-                await delegate.sessionUpdate(update, in: sessionId)
+                effectiveUpdate = update
+            }
+            if let rawNotification {
+                await delegate.sessionUpdate(effectiveUpdate, in: sessionId, rawNotification: rawNotification)
+            } else {
+                await delegate.sessionUpdate(effectiveUpdate, in: sessionId)
             }
         }
 

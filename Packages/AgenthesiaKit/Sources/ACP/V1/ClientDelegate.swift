@@ -1,3 +1,4 @@
+public import Foundation
 public import JSONRPC
 
 extension ACP.V1 {
@@ -7,6 +8,7 @@ extension ACP.V1 {
     /// only implements what it advertises in its capabilities.
     public protocol ClientDelegate: Sendable {
         func sessionUpdate(_ notification: SessionNotification) async
+        func sessionUpdate(_ notification: SessionNotification, rawNotification: Data) async
         func requestPermission(_ request: RequestPermissionRequest) async throws -> RequestPermissionResponse
         func readTextFile(_ request: ReadTextFileRequest) async throws -> ReadTextFileResponse
         func writeTextFile(_ request: WriteTextFileRequest) async throws -> EmptyMessage
@@ -21,6 +23,10 @@ extension ACP.V1 {
 }
 
 extension ACP.V1.ClientDelegate {
+    public func sessionUpdate(_ notification: ACP.V1.SessionNotification, rawNotification: Data) async {
+        await sessionUpdate(notification)
+    }
+
     public func sessionUpdate(_ notification: ACP.V1.SessionNotification) async {}
 
     public func requestPermission(
@@ -69,6 +75,7 @@ extension ACP.V1 {
     public static func router(for delegate: some ClientDelegate) -> Router {
         var router = Router()
         router.on(Method.SessionUpdate.self) { await delegate.sessionUpdate($0) }
+        router.onRawNotification(Method.SessionUpdate.self) { await delegate.sessionUpdate($0, rawNotification: $1) }
         router.on(Method.RequestPermission.self) { try await delegate.requestPermission($0) }
         router.on(Method.ReadTextFile.self) { try await delegate.readTextFile($0) }
         router.on(Method.WriteTextFile.self) { try await delegate.writeTextFile($0) }

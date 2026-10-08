@@ -172,3 +172,11 @@ the implementation choices that remain to be discussed.
 
 The [SourceView scroll-wait investigation](benchmarks/2026-10-07/source-scroll/README.md) correlates long
 callback gaps with Core Animation synchronization waits and includes AppKit and native TextKit 2 controls.
+
+## Session transcript reduction
+
+`just bench-session` compares publication after each chunk with publication after every 16 chunks,
+using 10,000 recorded text updates and three sequential Release runs. It measures decoding, pure
+reduction and snapshot copies; fixture/database setup, UI rendering and controller scheduling are
+outside the timed loop. Ask for workload/resource approval before running it, like the other benchmarks.
+See [the initial comparison](benchmarks/2026-10-08/session/README.md) for results and limitations.

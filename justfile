@@ -2,7 +2,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 package := "Packages/AgenthesiaKit"
 derived_data := ".build/xcode"
-coverage_thresholds := "JSONRPC=90 ACP=90 AgentRuntime=80 Workspace=90 Persistence=90 Rendering=90 acp-cli=80"
+coverage_thresholds := "JSONRPC=90 ACP=90 AgentRuntime=80 Workspace=90 Persistence=90 Rendering=90 AgenthesiaCore=90 acp-cli=80"
 sources := package + "/Package.swift " + package + "/Sources " + package + "/Tests App"
 
 # List available recipes
@@ -116,3 +116,7 @@ ci: lint test-scripts coverage app
 # Remove build artifacts
 clean:
     rm -rf {{package}}/.build {{derived_data}} .build/xcode-lab
+
+# Compare transcript publication per chunk vs every 16 chunks: 10,000 events, three Release runs
+bench-session:
+    swift run -c release --package-path {{package}} session-bench

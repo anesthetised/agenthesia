@@ -18,6 +18,7 @@ let package = Package(
         .executable(name: "MockAgent", targets: ["MockAgent"]),
         .executable(name: "rendering-bench", targets: ["rendering-bench"]),
         .executable(name: "persistence-bench", targets: ["persistence-bench"]),
+        .executable(name: "session-bench", targets: ["session-bench"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
@@ -99,6 +100,7 @@ let package = Package(
         ),
         .executableTarget(name: "rendering-bench", dependencies: ["Rendering"], swiftSettings: swiftSettings),
         .executableTarget(name: "persistence-bench", dependencies: ["Persistence"], swiftSettings: swiftSettings),
+        .executableTarget(name: "session-bench", dependencies: ["AgenthesiaCore"], swiftSettings: swiftSettings),
         .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
 
@@ -131,7 +133,11 @@ let package = Package(
             dependencies: ["Rendering", .product(name: "STTextView", package: "STTextView")],
             swiftSettings: swiftSettings
         ),
-        .testTarget(name: "AgenthesiaCoreTests", dependencies: ["AgenthesiaCore"], swiftSettings: swiftSettings),
+        .testTarget(
+            name: "AgenthesiaCoreTests",
+            dependencies: ["AgenthesiaCore", "ACPTesting", "JSONRPC", "MockAgent"],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(name: "AgenthesiaUITests", dependencies: ["AgenthesiaUI"], swiftSettings: swiftSettings),
     ]
 )

@@ -1,3 +1,5 @@
+public import Foundation
+
 extension ACP {
     /// How a message reaches an agent that is in the middle of a turn (ADR-0010).
     public enum SteeringStrategy: Sendable, Hashable {
@@ -123,6 +125,8 @@ extension ACP {
     /// Receives what an agent sends or asks for, independent of the ACP version.
     public protocol AgentConnectionDelegate: Sendable {
         func sessionUpdate(_ update: SessionUpdate, in sessionId: SessionID) async
+        /// `update` is normalized by the adapter; `rawNotification` is the unchanged wire notification.
+        func sessionUpdate(_ update: SessionUpdate, in sessionId: SessionID, rawNotification: Data) async
         /// Asks the user to approve a tool call. Return `.cancelled` if the turn was cancelled meanwhile.
         func requestPermission(
             for toolCall: ToolCallUpdate,
@@ -153,6 +157,14 @@ extension ACP {
 }
 
 extension ACP.AgentConnectionDelegate {
+    public func sessionUpdate(
+        _ update: ACP.SessionUpdate,
+        in sessionId: ACP.SessionID,
+        rawNotification: Data
+    ) async {
+        await sessionUpdate(update, in: sessionId)
+    }
+
     public func requestInput(_ request: ACP.ElicitationRequest) async -> ACP.ElicitationResponse {
         .init(action: .decline)
     }

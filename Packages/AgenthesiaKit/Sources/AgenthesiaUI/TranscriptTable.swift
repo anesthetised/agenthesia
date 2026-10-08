@@ -101,10 +101,15 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let message = session.message(at: row)
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if visible.markdown == message.markdown, !(finished && visible.streamingCell != nil && !keepsSelection) {
+            if visible.markdown == message.markdown, visible.tool == message.tool,
+                !(finished && visible.streamingCell != nil && !keepsSelection)
+            {
                 continue
             }
-            if finished, !keepsSelection {
+            if visible.tool != message.tool {
+                // The header is native; rebuild the row rather than only its body.
+                table.reloadData(forRowIndexes: [row], columnIndexes: [0])
+            } else if finished, !keepsSelection {
                 visible.showFinished(message, width: table.tableColumns[0].width - 48)
             } else if let cell = visible.streamingCell {
                 if let update = message.update, visible.markdown == message.previousMarkdown {
@@ -185,19 +190,20 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             cell.field.attributedStringValue = message.text
             content = cell
         }
-        let role = NSTextField(labelWithString: message.role)
+        let role = NSTextField(labelWithString: message.tool?.kind ?? message.role)
         role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         role.textColor = .secondaryLabelColor
         let copy = NSButton(title: "Copy", target: nil, action: nil)
         copy.bezelStyle = .inline
         copy.toolTip = "Copy message as Markdown"
-        let header = NSStackView(views: [role, NSView(), copy])
+        let header = NSStackView(views: toolHeader(message.tool, role: role) + [NSView(), copy])
         header.distribution = .fill
         let stack = NSStackView(views: [header, content])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
         let rowView = TranscriptMessageRow(markdown: message.markdown)
+        rowView.tool = message.tool
         rowView.streamingCell = content as? TextKitCell
         rowView.stack = stack
         let contentWidth = content.widthAnchor.constraint(equalTo: stack.widthAnchor)
@@ -215,6 +221,40 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             contentWidth,
         ])
         return rowView
+    }
+
+    private func toolHeader(_ tool: ToolCardHeader?, role: NSTextField) -> [NSView] {
+        guard let tool else { return [role] }
+        var views: [NSView] = []
+        if tool.expandable {
+            let disclosure = NSButton(title: "", target: self, action: #selector(toggleExpansion(_:)))
+            disclosure.bezelStyle = .disclosure
+            disclosure.setButtonType(.pushOnPushOff)
+            disclosure.state = tool.expanded ? .on : .off
+            disclosure.setAccessibilityLabel(tool.expanded ? "Show less" : "Show all")
+            views.append(disclosure)
+        }
+        let icon = NSImageView(
+            image: NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.kind) ?? NSImage()
+        )
+        icon.contentTintColor = .secondaryLabelColor
+        let status = NSTextField(labelWithString: tool.status)
+        status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        status.textColor =
+            switch tool.tone {
+            case .neutral: .secondaryLabelColor
+            case .running: .controlAccentColor
+            case .success: .systemGreen
+            case .failure: .systemRed
+            }
+        return views + [icon, role, status]
+    }
+
+    @objc func toggleExpansion(_ sender: NSView) {
+        let row = table.row(for: sender)
+        guard let session, row >= 0, row < session.messageCount else { return }
+        session.toggleExpansion(at: row)
+        update(session)
     }
 }
 
@@ -262,6 +302,7 @@ final class TranscriptScrollView: NSScrollView {
 private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
+    var tool: ToolCardHeader?
     var streamingCell: TextKitCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?

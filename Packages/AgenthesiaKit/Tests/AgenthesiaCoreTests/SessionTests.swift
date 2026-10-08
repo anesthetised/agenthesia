@@ -355,6 +355,26 @@ extension SessionControllerTests {
         await controller.close()
     }
 
+    @Test func toolCallsUpdateInPlaceAndReplayIdentically() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        try await controller.send([.init(text: "tools")])
+        let items = controller.transcript.items
+        let tools = items.compactMap(\.toolCall)
+        #expect(tools.map(\.toolCallId) == ["search", "test", "edit"])
+        #expect(tools.map(\.status) == [.completed, .failed, .completed])
+        #expect(tools[0].title == "Search for TODO")
+        #expect(tools[0].locations == [.init(path: "Sources")])
+        #expect(tools[2].content?.contains(.unknown(["type": "future", "value": 1])) == true)
+        // Cards keep their position while the answer streams after them.
+        let firstTool = try #require(items.firstIndex { $0.toolCall != nil })
+        #expect(firstTool < (try #require(items.firstIndex { $0.message?.role == .assistant })))
+        #expect(items.filter { $0.message?.role == .assistant }.count == 1)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
     @Test func failingStreamWriteDoesNotPublishFailedChunk() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()

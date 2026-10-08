@@ -95,10 +95,9 @@ belong to `AgenthesiaCore` in #17.
 
 SQLite triggers reject event updates, deletes and replacement inserts. Every store connection enables
 recursive triggers so an `INSERT OR REPLACE` collision on the hidden rowid also fires the delete guard.
-Log compaction or history
-deletion will require an explicit migration and policy. Migrations never erase data on schema changes;
-opening a database with unknown migration identifiers fails rather than writing through a newer
-schema. The demo and CLI are not yet connected to this store.
+Log compaction or history deletion will require an explicit migration and policy. Migrations never
+erase data on schema changes; opening a database with unknown migration identifiers fails rather than
+writing through a newer schema. The demo and CLI are not yet connected to this store.
 
 ## Runtime implementation
 

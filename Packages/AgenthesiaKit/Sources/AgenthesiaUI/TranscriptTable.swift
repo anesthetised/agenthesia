@@ -106,8 +106,10 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             {
                 continue
             }
-            if visible.tool != message.tool {
-                // The header is native; rebuild the row's content in place.
+            if visible.tool != message.tool, visible.markdown == message.markdown {
+                visible.showHeader(message, controller: self)
+            } else if visible.tool != message.tool {
+                // The header and body changed; rebuild the row's content in place.
                 visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
             } else if finished, !keepsSelection {
                 visible.showFinished(message, width: table.tableColumns[0].width - 48)
@@ -269,16 +271,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             cell.field.attributedStringValue = message.text
             content = cell
         }
-        let role = NSTextField(labelWithString: message.tool?.kind ?? message.role)
-        role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        role.textColor = .secondaryLabelColor
-        let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
-        copy.bezelStyle = .inline
-        copy.toolTip = "Copy message as Markdown"
-        let header = NSStackView(
-            views: Self.toolHeader(message.tool, role: role, controller: controller) + [NSView(), copy]
-        )
-        header.distribution = .fill
+        let header = makeHeader(message, controller: controller)
         let stack = NSStackView(views: [header, content])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -297,6 +290,31 @@ private final class TranscriptMessageRow: NSTableCellView {
             header.widthAnchor.constraint(equalTo: stack.widthAnchor),
             contentWidth,
         ])
+    }
+
+    /// Keep the text field and its field editor attached when only native metadata changes.
+    func showHeader(_ message: TranscriptMessage, controller: TranscriptTableController) {
+        guard let stack, let old = stack.arrangedSubviews.first else { return }
+        stack.removeArrangedSubview(old)
+        old.removeFromSuperview()
+        let header = makeHeader(message, controller: controller)
+        stack.insertArrangedSubview(header, at: 0)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        tool = message.tool
+    }
+
+    private func makeHeader(_ message: TranscriptMessage, controller: TranscriptTableController) -> NSStackView {
+        let role = NSTextField(labelWithString: message.tool?.kind ?? message.role)
+        role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        role.textColor = .secondaryLabelColor
+        let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
+        copy.bezelStyle = .inline
+        copy.toolTip = "Copy message as Markdown"
+        let header = NSStackView(
+            views: Self.toolHeader(message.tool, role: role, controller: controller) + [NSView(), copy]
+        )
+        header.distribution = .fill
+        return header
     }
 
     private static func toolHeader(

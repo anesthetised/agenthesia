@@ -71,7 +71,8 @@ steering remain #65. Tool rows are cards: a native header (kind symbol, kind, st
 Markdown body with the title, reported locations and text content, so selection and copying work as
 for messages. Missing fields are shown as not reported; diff, terminal and unsupported content appear
 as placeholders until #20 and #31. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
-is keyed by row identity and survives streamed updates. A changed header rebuilds only its row.
+is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
+text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
 Permission requests are rejected pending #21; cards state only the recorded outcome (cancelled or the
 selected option identifier), never an inferred approval or decline. Non-text content is identified
 with attachment placeholders rather than silently dropped.

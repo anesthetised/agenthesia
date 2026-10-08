@@ -187,7 +187,7 @@ final class LiveTranscriptSource: TranscriptSource {
         var kept = String(lines.prefix(collapsedLines).joined(separator: "\n").prefix(collapsedCharacters))
         let keptLines = kept.split(separator: "\n", omittingEmptySubsequences: false)
         // Close a fence the cut left open, so the note below is not shown as code.
-        if keptLines.filter({ $0.hasPrefix("```") || $0.hasPrefix("~~~") }).count % 2 == 1 { kept += "\n```" }
+        if let fence = MarkdownRenderer.closingCodeFence(in: kept) { kept += "\n" + fence }
         let hidden = lines.count - keptLines.count
         return kept + (hidden > 0 ? "\n\n_… \(hidden) more line\(hidden == 1 ? "" : "s")_" : "\n\n_… truncated_")
     }

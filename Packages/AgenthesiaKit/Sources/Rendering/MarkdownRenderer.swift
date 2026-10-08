@@ -17,6 +17,35 @@ public struct MarkdownRenderer: Sendable {
         join(blocks(in: markdown).map { render(block: $0) })
     }
 
+    /// The delimiter needed before appending prose after an unfinished top-level code fence.
+    /// Nested fences end with their container; appending a root fence would open a new block instead.
+    public static func closingCodeFence(in markdown: String) -> String? {
+        guard markdown.contains("```") || markdown.contains("~~~"),
+            let code = Array(Document(parsing: markdown).children).last as? CodeBlock,
+            let range = code.range
+        else { return nil }
+        let lines = markdown.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r" || $0 == "\r\n" }
+        let first = lines[range.lowerBound.line - 1]
+        let indent = first.prefix { $0 == " " }
+        guard indent.count <= 3 else { return nil }  // Indented code needs no closing fence.
+        let opening = first.dropFirst(indent.count)
+        guard let marker = opening.first, marker == "`" || marker == "~" else { return nil }
+        let fence = opening.prefix { $0 == marker }
+        guard fence.count >= 3 else { return nil }
+        if range.upperBound.line > range.lowerBound.line {
+            let last = lines[range.upperBound.line - 1]
+            let closingIndent = last.prefix { $0 == " " }
+            let closing = last.dropFirst(closingIndent.count)
+            let run = closing.prefix { $0 == marker }
+            if closingIndent.count <= 3, run.count >= fence.count,
+                closing.dropFirst(run.count).allSatisfy({ $0 == " " || $0 == "\t" })
+            {
+                return nil
+            }
+        }
+        return String(fence)
+    }
+
     // MARK: - Blocks
 
     /// The top-level blocks of `markdown`. Smart punctuation is off: agents write code and dashes that must stay.

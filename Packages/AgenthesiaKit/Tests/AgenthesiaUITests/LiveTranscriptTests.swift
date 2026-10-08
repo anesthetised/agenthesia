@@ -132,6 +132,69 @@ import Testing
         )
     }
 
+    @Test(arguments: [
+        "```", "~~~", "````", "  ```", "   ~~~~text",
+        "````\n```\n~~~\n```` trailing", "~~~\n    ~~~",
+        "```\ncode\n```` \t", "~~~\ncode\n~~~", "``` invalid ` info",
+        "- ```\n  code\n  ```", "- list\n  ```\n  code",
+    ])
+    func collapsedCodeFencesKeepNotesOutsideCode(prefix: String) {
+        let output = prefix + "\n" + (1...40).map { "line \($0)" }.joined(separator: "\n")
+        let call = ACP.ToolCall(
+            toolCallId: "t",
+            title: "Read",
+            content: [.content(.init(content: .init(text: output)))]
+        )
+        let card = LiveTranscriptSource.toolCard(call, permission: .cancelled, expanded: false)
+        let rendered = LiveTranscriptSource().render(id: 1, role: "Tool", markdown: card.markdown).text
+        #expect(!rendered.string.contains("_…"))
+        let permission = (rendered.string as NSString).range(of: "Permission request cancelled.")
+        #expect(permission.location != NSNotFound)
+        if permission.location != NSNotFound {
+            let font = rendered.attribute(.font, at: permission.location, effectiveRange: nil) as? NSFont
+            #expect(font?.isFixedPitch == false)
+        }
+    }
+
+    @Test func headerOnlyUpdatesPreserveToolBodySelection() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "t",
+                    title: "Run",
+                    kind: .execute,
+                    status: .inProgress,
+                    content: [.content(.init(content: .init(text: "Stable output to select")))]
+                )
+            )
+        )
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let field = try #require(views(NSTextField.self, in: row).first { $0.isSelectable })
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let selection = NSRange(location: 4, length: 6)
+        editor.setSelectedRange(selection)
+        for status in [ACP.ToolCallStatus.completed, .failed] {
+            try await recorded.apply(.toolCallUpdate(.init(toolCallId: "t", status: status)))
+            source.state = recorded.state
+            source.revision += 1
+            controller.update(source)
+            let updatedRow = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+            let updatedField = try #require(views(NSTextField.self, in: updatedRow).first { $0.isSelectable })
+            #expect(labels(in: updatedRow).contains(LiveTranscriptSource.status(status).0))
+            #expect(updatedField.stringValue == field.stringValue)
+            #expect(updatedField.currentEditor()?.selectedRange == selection)
+        }
+    }
+
     @Test func toolCardChangesInPlaceAndKeepsExpansionAndSelection() async throws {
         let recorded = try await RecordedTranscript()
         let turn = UUID()

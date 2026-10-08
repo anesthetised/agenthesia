@@ -11,6 +11,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case ready, starting, idle, running, stopping, readOnly, failed, closed
     }
 
+    /// A request awaiting the user's choice, oldest first. Its transcript row carries the tool context.
+    public struct PendingPermission: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public let options: [ACP.PermissionOption]
+    }
+
     public enum SessionError: Error, Equatable {
         case invalidState
         case emptyPrompt
@@ -26,6 +32,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public var errorMessage: String? { failure.map { String(describing: $0) } }
     public private(set) var session: SessionRecord
     public private(set) var profile: ACP.AgentProfile?
+    public private(set) var pendingPermissions: [PendingPermission] = []
 
     private var failure: (any Error)?
     @ObservationIgnored private let store: PersistenceStore
@@ -39,6 +46,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored private var recording = false
     @ObservationIgnored private var startupUpdates: [(ACP.SessionID, ACP.SessionUpdate, Data)] = []
     @ObservationIgnored private var startupBytes = 0
+    @ObservationIgnored private var permissions: [UUID: Permission] = [:]
     // Internal seam for deterministic disk-failure and suspended-write tests; production uses the store.
     @ObservationIgnored var createSession: @Sendable (SessionRecord) async throws -> Void
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
@@ -159,6 +167,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             turnTask = nil
             stopTask = nil
             promptStarted = false
+            // The agent ended the turn without waiting for an answer.
+            cancelPermissions()
             publishTranscript()
         }
         do {
@@ -197,6 +207,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let event = try SessionEvent.stopRequested(id: id).storedEvent()
         status = .stopping
         let committed = enqueue([event])
+        // ACP: after session/cancel, every pending request is answered with `cancelled`.
+        cancelPermissions()
         let task = Task {
             do {
                 try await committed.value
@@ -212,6 +224,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public func close() async {
         guard status != .closed else { return }
         status = .closed
+        cancelPermissions()
         await connection?.close()
         _ = try? await turnTask?.value
         _ = try? await tail?.value
@@ -257,29 +270,91 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         options: [ACP.PermissionOption],
         in sessionId: ACP.SessionID
     ) async -> ACP.PermissionOutcome {
-        // Approval UI is #21. Never grant a permission implicitly while the domain is being connected.
         guard recording, sessionId == session.agentSessionID, status == .running || status == .stopping else {
             return .cancelled
         }
-        let outcome: ACP.PermissionOutcome =
-            status == .running && !Task.isCancelled
-            ? options.first(where: { $0.kind == .rejectOnce }).map { .selected($0.optionId) } ?? .cancelled
-            : .cancelled
+        let id = UUID()
         do {
-            try await record([try SessionEvent.permission(toolCall: toolCall, outcome: outcome).storedEvent()])
+            try await record([
+                try SessionEvent.permissionRequested(id: id, toolCall: toolCall, options: options).storedEvent()
+            ])
         } catch {
-            await fail(error)
             return .cancelled
         }
-        publishTranscript()
-        // Stop may arrive while the decision is being committed. Record the actual response too.
-        if outcome != .cancelled, status != .running || Task.isCancelled {
-            if status != .failed, failure == nil {
-                try? await record([try SessionEvent.permission(toolCall: toolCall, outcome: .cancelled).storedEvent()])
+        permissions[id] = Permission(options: options)
+        if status == .running, !Task.isCancelled {
+            pendingPermissions.append(PendingPermission(id: id, options: options))
+            publishTranscript()
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    if permissions[id]?.response == nil {
+                        permissions[id]?.waiter = continuation
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            } onCancel: {
+                // The agent withdrew this request with `$/cancel_request`, or the connection closed.
+                Task { @MainActor in self.cancelPermission(id) }
             }
-            return .cancelled
+        } else {
+            cancelPermission(id)
         }
-        return outcome
+        // A cancellation may supersede a decision while it is committed. Respond only after the last write.
+        while let committed = permissions[id]?.committed {
+            do { try await committed.value } catch {
+                await fail(error)
+                break
+            }
+            guard permissions[id]?.committed == committed else { continue }
+            if Task.isCancelled, case .selected = permissions[id]?.response {
+                cancelPermission(id)
+                continue
+            }
+            break
+        }
+        let response = permissions.removeValue(forKey: id)?.response
+        publishTranscript()
+        guard status != .failed, case .selected(let option) = response else { return .cancelled }
+        return .selected(option)
+    }
+
+    /// Answers a pending request with one of its offered options. Returns `false` for stale or repeated answers.
+    @discardableResult public func answerPermission(_ id: UUID, with option: ACP.PermissionOptionID) -> Bool {
+        guard status == .running, let permission = permissions[id], permission.response == nil,
+            permission.options.contains(where: { $0.optionId == option })
+        else { return false }
+        resolvePermission(id, .selected(option))
+        return true
+    }
+
+    /// Settles a request with `cancelled`. Supersedes a decision that has not been returned yet.
+    private func cancelPermission(_ id: UUID) {
+        guard let permission = permissions[id], permission.response != .cancelled else { return }
+        resolvePermission(id, .cancelled)
+    }
+
+    private func cancelPermissions() {
+        for id in permissions.keys { cancelPermission(id) }
+    }
+
+    /// Enqueues the outcome synchronously, so closing waits for it and later writes are ordered after it.
+    private func resolvePermission(_ id: UUID, _ outcome: ACP.PermissionOutcome) {
+        permissions[id]?.response = outcome
+        if status != .failed, let event = try? SessionEvent.permissionResolved(id: id, outcome: outcome).storedEvent() {
+            permissions[id]?.committed = enqueue([event])
+        }
+        permissions[id]?.waiter?.resume()
+        permissions[id]?.waiter = nil
+        pendingPermissions.removeAll { $0.id == id }
+    }
+
+    private struct Permission {
+        let options: [ACP.PermissionOption]
+        var response: ACP.PermissionOutcome?
+        var waiter: CheckedContinuation<Void, Never>?
+        /// The latest resolution write.
+        var committed: Task<Void, any Error>?
     }
 
     private func updateEvents(_ update: ACP.SessionUpdate, raw: Data) throws -> [NewEvent] {
@@ -329,6 +404,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let cause = failure ?? error
         failure = cause
         status = .failed
+        cancelPermissions()
         startupUpdates.removeAll()
         startupBytes = 0
         publishTranscript()

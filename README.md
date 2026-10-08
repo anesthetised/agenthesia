@@ -42,9 +42,10 @@ planned. The Agent Log button shows bounded stderr output. End Session, window c
 close ACP, finish pending event writes, and terminate the agent process group.
 
 Sessions are stored in `~/Library/Application Support/Agenthesia/history.sqlite`. The sidebar opens
-saved transcripts read-only after a restart. Agent reconnection, interactive permission cards, client
-filesystem/terminal tools, and attachments are not yet connected. Permission requests are rejected;
-only implemented client capabilities are advertised. Tool calls currently show their title and status.
+saved transcripts read-only after a restart. A permission request appears as a card with the agent's
+options; choose one with the mouse or ⌥⌘1…⌥⌘9. Nothing is allowed implicitly, and stopping or closing
+answers pending requests with `cancelled`. Agent reconnection, client filesystem/terminal tools, and
+attachments are not yet connected; only implemented client capabilities are advertised.
 Worktree review, merge, and discard controls remain separate work.
 
 For a local smoke test, build with `just test`, then point the app at the package's built `MockAgent`

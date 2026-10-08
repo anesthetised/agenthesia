@@ -59,7 +59,7 @@
             guard let tool = tools[row] else {
                 return rendering.render(id: Int64(row), role: items[row].0, markdown: items[row].1)
             }
-            let card = LiveTranscriptSource.toolCard(tool, permission: nil, expanded: false)
+            let card = LiveTranscriptSource.toolCard(tool, expanded: false)
             var message = rendering.render(id: Int64(row), role: "Tool", markdown: card.markdown)
             message.tool = card.header
             return message

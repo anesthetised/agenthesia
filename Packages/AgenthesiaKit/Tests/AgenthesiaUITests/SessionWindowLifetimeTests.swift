@@ -78,6 +78,42 @@ import Testing
         while models.contains(where: { SessionApplicationDelegate.windows[$0.id] != nil }) { await Task.yield() }
     }
 
+    @Test(arguments: [false, true]) func closingOrQuittingSettlesAPendingPermission(quit: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-permission-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let model = SessionWindowModel(
+            library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
+        )
+        let owner = LiveSession(library: model.library)
+        model.owner = owner
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: try mockAgent())
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("write \(directory.appending(path: "unwritten.txt").path) text") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        let request = controller.pendingPermissions[0]
+        let window = host(model)
+        defer { SessionApplicationDelegate.windows.removeValue(forKey: model.id) }
+        if quit {
+            let delegate = SessionApplicationDelegate()
+            var replies = 0
+            delegate.terminationReply = { _ in replies += 1 }
+            #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
+            while replies == 0 { await Task.yield() }
+        } else {
+            window.close()
+            while SessionApplicationDelegate.windows[model.id] != nil { await Task.yield() }
+        }
+        await turn.value
+        #expect(controller.status == .closed)
+        #expect(controller.pendingPermissions.isEmpty)
+        #expect(controller.transcript.items.compactMap(\.permission).map(\.outcome) == [.cancelled])
+        // A click that arrives after shutdown is stale.
+        #expect(!controller.answerPermission(request.id, with: "allow"))
+        window.close()
+    }
+
     @Test func quittingWithoutWindowsIsImmediate() {
         #expect(SessionApplicationDelegate.windows.isEmpty)
         let delegate = SessionApplicationDelegate()
@@ -99,6 +135,15 @@ import Testing
         window.contentView = view
         return window
     }
+}
+
+private func mockAgent() throws -> AgentInstallRecord {
+    let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
+    let binary = try #require(
+        [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
+            .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    )
+    return AgentInstallRecord(name: "Mock", executable: binary.path)
 }
 
 @MainActor private final class StartupGate {

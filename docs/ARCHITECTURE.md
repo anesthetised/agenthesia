@@ -73,9 +73,15 @@ for messages. Missing fields are shown as not reported; diff, terminal and unsup
 as placeholders until #20 and #31. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
-Permission requests are rejected pending #21; cards state only the recorded outcome (cancelled or the
-selected option identifier), never an inferred approval or decline. Non-text content is identified
-with attachment placeholders rather than silently dropped.
+Each permission request is its own card, even when several refer to one tool call. It shows the tool
+call as known when the agent asked and, while pending, a vertical list of native buttons in the
+agent's option order, keeping choices visible in narrow transcripts. ⌥⌘1…⌥⌘9 choose an option of the
+oldest pending request; the composer status shows that shortcut range. Return and Escape choose nothing.
+Agent-provided “always” options are returned verbatim
+and labeled as remembered by the agent; the app keeps no policy of its own. Answered cards state only
+the recorded response (the option's name and kind, or cancellation), never an inferred approval or
+decline. Requests without a recorded response after a restart show that none was recorded and have no
+controls. Non-text content is identified with attachment placeholders rather than silently dropped.
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
 A window-close notification starts asynchronous owner shutdown. An AppKit application delegate retains
@@ -157,9 +163,15 @@ when the session fails or closes; closing ACP alone is not process containment.
 All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
 across an async SQLite write. Incoming notification handlers await their commit and reduction before
 JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.
-Until #21 provides approval UI, permission requests select and record `reject_once` when available;
-otherwise they return `cancelled`. Requests during cancellation also return `cancelled`. A stop racing
-with the decision write records a superseding cancellation before responding. Permissions are never granted. Structured input uses the delegate's default decline behavior.
+`SessionController` owns pending permission requests and their responses; views only submit a request
+identifier and an offered option identifier through `answerPermission`, which rejects stale, repeated
+and unknown answers. A request is committed before it is shown, and its response is committed before
+it is returned to the agent. Stop, `$/cancel_request`, the end of the turn, close and failure settle
+pending requests with `cancelled`. Each resolution is enqueued synchronously, so close drains it with
+the other writes. If a cancellation arrives while a decision is being committed, a superseding
+cancellation is recorded and returned instead. A storage failure fails the session and returns
+`cancelled`, never an approval. Requests for another session, or arriving outside a turn, are answered
+with `cancelled` without being recorded. Structured input uses the delegate's default decline behavior.
 
 The event format is version 1:
 
@@ -169,7 +181,10 @@ The event format is version 1:
   do not match the typed schema are forwarded as opaque updates and still recorded; envelope failures
   that prevent identifying the session are logged without the payload. The strict wire models remain unchanged.
 - `session.event`: a Codable `SessionEvent` containing initial/normalized config options, user prompt
-  and turn UUID, stop intent, turn completion/error, or a permission decision. When an adapter normalizes
+  and turn UUID, stop intent, turn completion/error, or a permission request and its resolution. A request
+  stores a local UUID, the tool call update and the offered options; a resolution stores the UUID and the
+  returned outcome, and the last resolution wins. The earlier single decision event (tool call update and
+  outcome, without options) is still read and shown with the option identifier only. When an adapter normalizes
   an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
   after the raw notification. Replay therefore reproduces live state without discarding original data.
 

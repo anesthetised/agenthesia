@@ -53,7 +53,7 @@ import Testing
         owner.environment = { (ProcessInfo.processInfo.environment, nil) }
         await owner.start(directory: directory, agent: try mock())
         let controller = try #require(owner.controller)
-        let path = directory.appending(path: "unwritten.txt").path
+        let path = directory.appending(path: "written.txt").path
         let turn = Task { await owner.send("write \(path) text") }
         while controller.pendingPermissions.isEmpty { await Task.yield() }
         let request = controller.pendingPermissions[0]
@@ -62,15 +62,19 @@ import Testing
         await turn.value
         #expect(controller.status == .idle)
         #expect(controller.transcript.lastStopReason == .endTurn)
-        // The agent received the answer: without an fs capability its write then fails visibly.
-        #expect(controller.transcript.items.compactMap(\.toolCall).first?.status == .failed)
-        #expect(!FileManager.default.fileExists(atPath: path))
+        #expect(controller.transcript.items.compactMap(\.toolCall).first?.status == .completed)
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == "text")
+        await owner.send("read \(path)")
+        let read = controller.transcript.items.compactMap(\.toolCall).last
+        #expect(read?.status == .completed)
+        #expect(read?.content == [.content(.init(content: .init(text: "text")))])
         await owner.send("hello")
         #expect(controller.transcript.items.last?.message?.text == "Echo: hello")
         let pendingTurn = Task { await owner.send("write \(path) again") }
         while controller.pendingPermissions.isEmpty { await Task.yield() }
         await owner.close()
         await pendingTurn.value
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == "text")
         let rows = controller.transcript.items.compactMap(\.permission)
         #expect(rows.map(\.outcome) == [.selected("allow"), .cancelled])
         #expect(rows.first?.selectedOption?.kind == .allowOnce)

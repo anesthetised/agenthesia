@@ -23,6 +23,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case missingRawNotification
         case startupBufferFull
         case sessionNotFound
+        case unsupportedAdditionalDirectories
     }
 
     public private(set) var status: Status = .ready
@@ -33,6 +34,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public private(set) var session: SessionRecord
     public private(set) var profile: ACP.AgentProfile?
     public private(set) var pendingPermissions: [PendingPermission] = []
+    /// Explicit roots for this launch; read-only history never re-enables filesystem access.
+    public let additionalDirectories: [String]
+    @ObservationIgnored var fileSystem: SessionFileSystem?
 
     private var failure: (any Error)?
     @ObservationIgnored private let store: PersistenceStore
@@ -52,9 +56,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
 
     /// The project and agent install must already exist. The draft session is inserted after session/new succeeds.
-    public init(session: SessionRecord, store: PersistenceStore) {
+    public init(session: SessionRecord, store: PersistenceStore, additionalDirectories: [String] = []) {
         self.session = session
         self.store = store
+        self.additionalDirectories = additionalDirectories
         createSession = { try await store.createSession($0) }
         appendEvents = { try await store.append($0, to: $1) }
     }
@@ -67,9 +72,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             let profile = try await connection.initialize(client: client)
             guard status == .starting else { throw SessionError.invalidState }
             self.profile = profile
+            guard additionalDirectories.isEmpty || profile.acceptsAdditionalDirectories else {
+                throw SessionError.unsupportedAdditionalDirectories
+            }
             let remote = try await connection.newSession(
                 cwd: session.workingDirectory,
-                additionalDirectories: [],
+                additionalDirectories: additionalDirectories,
                 mcpServers: []
             )
             guard status == .starting else { throw SessionError.invalidState }
@@ -222,10 +230,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     public func close() async {
-        guard status != .closed else { return }
+        guard status != .closed else { await fileSystem?.close(); return }
         status = .closed
+        fileSystem?.stopAccepting()
         cancelPermissions()
         await connection?.close()
+        await fileSystem?.close()
         _ = try? await turnTask?.value
         _ = try? await tail?.value
         connection = nil
@@ -404,11 +414,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let cause = failure ?? error
         failure = cause
         status = .failed
+        fileSystem?.stopAccepting()
         cancelPermissions()
         startupUpdates.removeAll()
         startupBytes = 0
         publishTranscript()
         await connection?.close()
+        await fileSystem?.close()
         connection = nil
         return cause
     }

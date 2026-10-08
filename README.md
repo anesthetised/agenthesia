@@ -44,12 +44,18 @@ close ACP, finish pending event writes, and terminate the agent process group.
 Sessions are stored in `~/Library/Application Support/Agenthesia/history.sqlite`. The sidebar opens
 saved transcripts read-only after a restart. A permission request appears as a card with the agent's
 options; choose one with the mouse or ⌥⌘1…⌥⌘9. Nothing is allowed implicitly, and stopping or closing
-answers pending requests with `cancelled`. Agent reconnection, client filesystem/terminal tools, and
-attachments are not yet connected; only implemented client capabilities are advertised.
+answers pending requests with `cancelled`. ACP filesystem reads and writes are served inside the
+session's working directory, with a path policy that refuses access outside its allowed roots.
+Writes in Git sessions affect the isolated worktree. Closing the session waits for accepted file
+operations to finish. Agent reconnection, client terminal tools, and attachments are not yet connected;
+only implemented client capabilities are advertised.
 Worktree review, merge, and discard controls remain separate work.
 
 For a local smoke test, build with `just test`, then point the app at the package's built `MockAgent`
 executable (the build directory depends on the Swift toolchain). Try `hello`, `slow`, `think`, or `fail`.
+Use `write <absolute-path> <text>` to exercise permission approval and file creation, then
+`read <absolute-path>` to see the content in a tool card. Use a path inside the session directory
+(shown in the app), not the original checkout; an outside path must fail even after approving the tool.
 The ACP command-line client remains available via `just cli` and `just mock-chat`.
 
 ## Requirements

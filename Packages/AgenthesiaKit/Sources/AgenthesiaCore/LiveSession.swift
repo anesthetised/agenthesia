@@ -42,6 +42,13 @@ public final class LiveSession {
         do {
             let store = try await library.store()
             guard !isClosed else { return }
+            // Resolve and check the command first, so a mistyped executable does not leave a worktree behind.
+            let resolution = await environment()
+            diagnostic = resolution.diagnostic
+            guard !isClosed else { return }
+            guard Self.isExecutable(agent.executable, path: resolution.values["PATH"]) else {
+                throw LaunchError(message: "Cannot find an executable named “\(agent.executable)”.")
+            }
             let id = UUID()
             let workspace: SessionWorkspace
             if let worktreesRoot {
@@ -57,8 +64,6 @@ public final class LiveSession {
             guard !isClosed else { return }
             let project = try await library.project(directory: workspace.projectDirectory)
             let install = try await library.install(agent)
-            let resolution = await environment()
-            diagnostic = resolution.diagnostic
             guard !isClosed else { return }
             let controller = SessionController(
                 session: SessionRecord(
@@ -141,6 +146,19 @@ public final class LiveSession {
         }
         closing = task
         await task.value
+    }
+
+    struct LaunchError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Mirrors `AgentProcess`: a path is used as is, a bare name is looked up in the agent's `PATH`.
+    static func isExecutable(_ executable: String, path: String?) -> Bool {
+        if executable.contains("/") { return FileManager.default.isExecutableFile(atPath: executable) }
+        return (path ?? "").split(separator: ":").contains {
+            FileManager.default.isExecutableFile(atPath: URL(filePath: String($0)).appending(path: executable).path)
+        }
     }
 
     private func cleanup() async {

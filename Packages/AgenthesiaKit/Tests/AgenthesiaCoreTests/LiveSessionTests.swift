@@ -62,6 +62,42 @@ import Testing
         #expect(try await library.history().isEmpty)
     }
 
+    @Test func missingExecutableFailsBeforeCreatingAWorktree() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = directory.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        let git = Process()
+        git.executableURL = URL(filePath: "/bin/sh")
+        git.arguments = [
+            "-c",
+            "git init -q && git -c user.name=T -c user.email=t@example.com -c commit.gpgsign=false "
+                + "commit -q --allow-empty -m Initial",
+        ]
+        git.currentDirectoryURL = repo
+        try git.run()
+        git.waitUntilExit()
+        #expect(git.terminationStatus == 0)
+        let trees = directory.appending(path: "trees")
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(
+            directory: repo,
+            agent: AgentInstallRecord(name: "Missing", executable: "agenthesia-missing-agent"),
+            worktreesRoot: trees
+        )
+        #expect(owner.errorMessage?.contains("agenthesia-missing-agent") == true)
+        #expect(!FileManager.default.fileExists(atPath: trees.path))
+        await owner.close()
+    }
+
+    @Test func executablesResolveLikeTheRuntime() {
+        #expect(LiveSession.isExecutable("/bin/sh", path: nil))
+        #expect(LiveSession.isExecutable("sh", path: "/does-not-exist:/bin"))
+        #expect(!LiveSession.isExecutable("sh", path: nil))
+        #expect(!LiveSession.isExecutable("/does-not-exist", path: "/bin"))
+    }
+
     @Test func closeDuringEnvironmentResolutionNeverLaunches() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

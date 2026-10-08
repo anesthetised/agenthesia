@@ -34,7 +34,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
-| `AgenthesiaUI` | SwiftUI and AppKit views. | `AgenthesiaCore`, `Rendering` |
+| `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
@@ -46,12 +46,14 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 The main window uses a window-bound `LiveSession` in Core to own the agent process and
 `SessionController` ([ADR-0014](adr/0014-window-bound-live-sessions.md)). `SessionLibrary.shared` opens
 one app database away from the main actor and provides project, install, and saved-session discovery.
-The owner resolves the login-shell environment, prepares the workspace, creates metadata, and starts
+The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
+leaves no worktree behind), prepares the workspace, creates metadata, and starts
 the ACP v1 adapter with filesystem, terminal, terminal-auth, and elicitation capabilities disabled.
 Agents must already be authenticated; authentication failures are displayed.
 
-`Workspace.SessionWorkspace` invokes the Git CLI off the main actor. Git checkouts get a new branch and
-worktree from HEAD under `~/.agenthesia/worktrees/<repo>/<uuid>`. Dirty and untracked files are not copied.
+`Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
+reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
+`~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree. Dirty and untracked files are not copied.
 Non-Git directories are used directly; bare, broken, or unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
 part of the worktree milestone.

@@ -23,7 +23,9 @@ import Testing
         await model.showHistory(record)
         #expect(model.displayed?.status == .readOnly)
         #expect(!model.isLoadingHistory)
+        model.errorMessage = "Stale"
         model.showLive()
+        #expect(model.errorMessage == nil)
         #expect(model.displayed == nil)
         #expect(model.canStart)
         await model.close()

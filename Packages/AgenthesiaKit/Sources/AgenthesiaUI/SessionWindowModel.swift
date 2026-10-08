@@ -50,6 +50,7 @@ import SwiftUI
         let token = UUID()
         selection = token
         isLoadingHistory = true
+        errorMessage = nil
         defer { if selection == token { isLoadingHistory = false } }
         do {
             let controller = try await SessionController.restore(id: record.id, store: library.store())
@@ -57,7 +58,7 @@ import SwiftUI
             restored = controller
         } catch { if selection == token { errorMessage = error.localizedDescription } }
     }
-    func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil }
+    func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil }
     func close() async { closed = true; selection = UUID(); await owner?.close() }
 }
 

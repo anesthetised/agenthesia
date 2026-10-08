@@ -96,7 +96,7 @@ public struct RootView: View {
                     }.frame(height: 150)
                 }
             }
-            .navigationTitle(model.displayed?.transcript.title ?? model.displayed?.session.title ?? "New Session")
+            .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
             .toolbar {
                 if let owner = model.owner {
                     Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
@@ -135,9 +135,11 @@ public struct RootView: View {
                 Button("Start Session") {
                     showingSetup = false
                     let command = executable.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let args = arguments.split(separator: "\n").map(String.init)
+                    let args = arguments.split(separator: "\n")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
                     Task {
-                        await model.start(directory: URL(filePath: directory), executable: command, arguments: args)
+                        await model.start(directory: URL(filePath: path), executable: command, arguments: args)
                     }
                 }.buttonStyle(.borderedProminent)
                     .disabled(directory.isEmpty || executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

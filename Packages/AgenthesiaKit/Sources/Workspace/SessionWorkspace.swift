@@ -73,6 +73,15 @@ public struct SessionWorkspace: Sendable {
         var errorDescription: String? { message }
     }
 
+    /// Async callers (including tests) must not block a cooperative thread: a cold `/usr/bin/git` shim can take seconds.
+    @discardableResult static func git(_ arguments: [String], in directory: URL) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try git(arguments, in: directory) as String })
+            }
+        }
+    }
+
     /// Blocks the calling thread. stderr goes to a file so a full pipe cannot deadlock and output stays clean.
     @discardableResult static func git(_ arguments: [String], in directory: URL) throws -> String {
         let process = Process()

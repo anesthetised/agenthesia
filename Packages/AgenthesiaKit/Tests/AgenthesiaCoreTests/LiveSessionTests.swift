@@ -75,9 +75,12 @@ import Testing
                 + "commit -q --allow-empty -m Initial",
         ]
         git.currentDirectoryURL = repo
-        try git.run()
-        git.waitUntilExit()
-        #expect(git.terminationStatus == 0)
+        // Waiting synchronously would block the main actor shared by the other suites.
+        let status = try await withCheckedThrowingContinuation { continuation in
+            git.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+            do { try git.run() } catch { continuation.resume(throwing: error) }
+        }
+        #expect(status == 0)
         let trees = directory.appending(path: "trees")
         let owner = LiveSession(library: library)
         owner.environment = { (ProcessInfo.processInfo.environment, nil) }

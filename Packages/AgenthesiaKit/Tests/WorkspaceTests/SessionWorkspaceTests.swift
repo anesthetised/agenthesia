@@ -10,10 +10,10 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let repo = directory.appending(path: "repo with spaces")
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-        try SessionWorkspace.git(["init", "-q"], in: repo)
+        try await SessionWorkspace.git(["init", "-q"], in: repo)
         try "committed".write(to: repo.appending(path: "file"), atomically: true, encoding: .utf8)
-        try SessionWorkspace.git(["add", "file"], in: repo)
-        try SessionWorkspace.git(
+        try await SessionWorkspace.git(["add", "file"], in: repo)
+        try await SessionWorkspace.git(
             [
                 "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit",
                 "-qm", "Initial",
@@ -38,7 +38,8 @@ import Testing
         #expect(try String(contentsOf: result.workingDirectory.appending(path: "file"), encoding: .utf8) == "committed")
         #expect(try String(contentsOf: repo.appending(path: "file"), encoding: .utf8) == "dirty")
         #expect(
-            try SessionWorkspace.git(["branch", "--show-current"], in: result.workingDirectory).hasPrefix("agenthesia/")
+            try await SessionWorkspace.git(["branch", "--show-current"], in: result.workingDirectory)
+                .hasPrefix("agenthesia/")
         )
     }
 
@@ -48,7 +49,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let result = try await SessionWorkspace.prepare(directory: directory, id: UUID())
         #expect(result.workingDirectory == directory.resolvingSymlinksInPath())
-        try SessionWorkspace.git(["init", "-q"], in: directory)
+        try await SessionWorkspace.git(["init", "-q"], in: directory)
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(
                 directory: directory,
@@ -66,10 +67,10 @@ import Testing
         let untracked = repo.appending(path: "untracked")
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: untracked, withIntermediateDirectories: true)
-        try SessionWorkspace.git(["init", "-q"], in: repo)
+        try await SessionWorkspace.git(["init", "-q"], in: repo)
         try "committed".write(to: package.appending(path: "file"), atomically: true, encoding: .utf8)
-        try SessionWorkspace.git(["add", "."], in: repo)
-        try SessionWorkspace.git(
+        try await SessionWorkspace.git(["add", "."], in: repo)
+        try await SessionWorkspace.git(
             [
                 "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit",
                 "-qm", "Initial",
@@ -88,12 +89,14 @@ import Testing
         }
     }
 
-    @Test func gitErrorsComeFromStandardError() throws {
+    @Test func gitErrorsComeFromStandardError() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        #expect(throws: (any Error).self) { try SessionWorkspace.git(["rev-parse", "--show-toplevel"], in: directory) }
-        do { try SessionWorkspace.git(["rev-parse", "--show-toplevel"], in: directory) } catch {
+        do {
+            try await SessionWorkspace.git(["rev-parse", "--show-toplevel"], in: directory)
+            Issue.record("Expected Git to fail outside a repository")
+        } catch {
             #expect(error.localizedDescription.contains("not a git repository"))
         }
     }

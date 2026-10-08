@@ -2,7 +2,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 package := "Packages/AgenthesiaKit"
 derived_data := ".build/xcode"
-coverage_thresholds := "JSONRPC=90 ACP=90 AgentRuntime=80 Workspace=90 Rendering=90 acp-cli=80"
+coverage_thresholds := "JSONRPC=90 ACP=90 AgentRuntime=80 Workspace=90 Persistence=90 Rendering=90 acp-cli=80"
 sources := package + "/Package.swift " + package + "/Sources " + package + "/Tests App"
 
 # List available recipes
@@ -52,6 +52,15 @@ bench *args:
 # Build the microbenchmarks without running them
 bench-build:
     swift build -c release --package-path {{package}} --product rendering-bench
+
+# Measure append throughput and latency in fresh processes; agree on resource use before running
+[positional-arguments]
+bench-persistence *args:
+    python3 scripts/bench.py persistence "$@"
+
+# Build the persistence benchmark without running it
+bench-persistence-build:
+    swift build -c release --package-path {{package}} --product persistence-bench
 
 # Locate the Release executable for the benchmark runner
 bench-path:

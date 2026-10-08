@@ -78,6 +78,25 @@ class BenchmarkRunnerTests(unittest.TestCase):
             self.assertEqual([row["repetition"] for row in report["results"]], [1, 1, 2, 2])
             self.assertEqual(len({row["log"] for row in report["results"]}), 4)
 
+    def test_persistence_matrix_uses_release_binary_and_separate_processes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "results"
+            args = argparse.Namespace(mode="persistence", runs=3, timeout=10, output=output, scenarios=None)
+            def capture(*command):
+                return "1024" if "hw.memsize" in command else "/tmp/bin"
+            with patch.object(bench, "capture", side_effect=capture), \
+                 patch.object(bench.subprocess, "run") as build, \
+                 patch.object(bench, "run_once", return_value=[{"scenario": "test"}]) as run:
+                bench.run(args)
+            self.assertEqual(build.call_args.args[0], ["just", "bench-persistence-build"])
+            expected = [["/tmp/bin/persistence-bench", str(batch), str(rate)]
+                        for batch in [1, 16, 64] for rate in [100, 1000, 0]] * 3
+            self.assertEqual([call.args[0] for call in run.call_args_list], expected)
+            self.assertTrue(all("AGENTHESIA_LAB_RUNS" not in call.args[1] for call in run.call_args_list))
+            report = json.loads((output / "report.json").read_text())
+            self.assertEqual(report["build"], "Release")
+            self.assertEqual(len(report["results"]), 27)
+
     def test_failed_measurement_retains_error_and_successful_results(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "results"

@@ -68,14 +68,18 @@ public struct Router: MessageHandler {
         return try await handler(params)
     }
 
-    /// Registers a lossless handler alongside the usual typed notification handler.
+    /// Registers a raw handler without requiring the typed params to decode first.
+    /// The handler validates its envelope; failures are logged without including the payload.
     public mutating func onRawNotification<N: RPCNotification>(
         _ notification: N.Type,
-        _ handler: @escaping @Sendable (N.Params, Data) async -> Void
+        _ handler: @escaping @Sendable (Data) async throws -> Void
     ) {
-        rawNotifications[N.method] = { params, rawMessage in
-            guard let decoded: N.Params = try? Self.decodeParams(params) else { return }
-            await handler(decoded, rawMessage)
+        rawNotifications[N.method] = { _, rawMessage in
+            do {
+                try await handler(rawMessage)
+            } catch {
+                Log.connection.error("Dropping \(N.method, privacy: .public): invalid params")
+            }
         }
     }
 

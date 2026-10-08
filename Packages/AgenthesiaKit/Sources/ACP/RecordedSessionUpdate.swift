@@ -1,4 +1,5 @@
 public import Foundation
+import JSONRPC
 
 extension ACP {
     /// Decodes an original session/update notification without a lossy typed re-encoding.
@@ -6,12 +7,31 @@ extension ACP {
     public struct RecordedSessionUpdate: Sendable {
         public let sessionId: SessionID
         public let update: SessionUpdate
+        public let meta: Meta?
 
         public init(rawNotification: Data) throws {
             struct Envelope: Decodable {
                 struct Params: Decodable {
                     var sessionId: SessionID
                     var update: SessionUpdate
+                    var meta: Meta?
+
+                    private enum CodingKeys: String, CodingKey {
+                        case sessionId, update
+                        case meta = "_meta"
+                    }
+
+                    init(from decoder: any Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        sessionId = try container.decode(SessionID.self, forKey: .sessionId)
+                        do {
+                            update = try container.decode(SessionUpdate.self, forKey: .update)
+                        } catch {
+                            // Recording must survive schema mismatches. The strict wire model is unchanged.
+                            update = .unknown(try container.decodeIfPresent(JSONValue.self, forKey: .update) ?? .null)
+                        }
+                        meta = try? container.decodeIfPresent(Meta.self, forKey: .meta)
+                    }
                 }
                 var jsonrpc: String
                 var method: String
@@ -23,6 +43,7 @@ extension ACP {
             }
             sessionId = envelope.params.sessionId
             update = envelope.params.update
+            meta = envelope.params.meta
         }
     }
 }

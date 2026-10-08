@@ -20,3 +20,13 @@ The median measured duration decreases by 21.3%, and snapshot assignments decrea
 asserts the same final sequence and text length. This supports coalescing publications; it is not an
 FPS claim or an absolute performance threshold. The live view uses its display link rather than a
 fixed chunk count. Raw samples are in [results.json](results.json).
+
+## After recording fixes
+
+The same approved workload was repeated after making recording tolerate undecodable update bodies
+and preserve notification metadata. Medians were 92.58 ms per-chunk and 72.55 ms coalesced (three runs,
+[raw samples](review-results.json)), versus 88.22 ms and 69.43 ms above. The coalesced median is 4.5%
+higher in this run; these are separate, unpaired measurements, not evidence of a statistically
+significant regression or improvement. Publication counts and final output are unchanged. The
+benchmark does exercise the revised recording decoder, but does not measure the live router,
+permission handling, transaction latency, or the config-only equality check.

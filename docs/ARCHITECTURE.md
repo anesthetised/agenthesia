@@ -115,21 +115,26 @@ cancelling a task waiting on `send` does not cancel that owned turn. `stop` reco
 `session/cancel`, retaining updates until the prompt response. A new prompt is not allowed until a pending cancel has been sent.
 A stop while the initial prompt write
 is pending prevents sending that prompt. Busy sends are rejected until #65 supplies queue/steering.
-Turn errors are recorded and close the session. A storage failure closes the connection and reports an
+Turn errors are recorded and close the session; deliberate close records cancellation instead.
+The first failure is retained so a subsequent connection-closed error cannot hide its cause.
+A storage failure closes the connection and reports an
 observable error without showing uncommitted text. The caller owns `AgentProcess` and must terminate it
 when the session fails or closes; closing ACP alone is not process containment.
 
 All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
 across an async SQLite write. Incoming notification handlers await their commit and reduction before
 JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.
-Until #21 provides approval UI, permission requests are recorded with a cancelled outcome and never
-granted. Structured input uses the delegate's default decline behavior.
+Until #21 provides approval UI, permission requests select and record `reject_once` when available;
+otherwise they return `cancelled`. Requests during cancellation also return `cancelled`. A stop racing
+with the decision write records a superseding cancellation before responding. Permissions are never granted. Structured input uses the delegate's default decline behavior.
 
 The event format is version 1:
 
 - `acp.session/update`: the **entire original JSON-RPC notification**, without its line terminator.
   JSONRPC → ACP → controller forwards these bytes alongside the typed update; the traffic logger is
-  not used as a second event channel. Whitespace, unknown fields and numeric lexemes survive unchanged.
+  not used as a second event channel. Whitespace, unknown fields and numeric lexemes survive unchanged. Valid envelopes with updates that
+  do not match the typed schema are forwarded as opaque updates and still recorded; envelope failures
+  that prevent identifying the session are logged without the payload. The strict wire models remain unchanged.
 - `session.event`: a Codable `SessionEvent` containing initial/normalized config options, user prompt
   and turn UUID, stop intent, turn completion/error, or a permission decision. When an adapter normalizes
   an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
@@ -138,9 +143,9 @@ The event format is version 1:
 `TranscriptState.apply` is the pure reduction of those stored events. Rows use their first contributing
 sequence as a stable identity. It combines contiguous content chunks, respects explicit message IDs,
 preserves non-text content, patches tool calls (absent fields stay unchanged), and tracks plans,
-commands, settings, title, usage, stop reason and unfinished turns. Unknown kinds/versions remain stored
-and advance the cursor with an unsupported-event count; malformed known payloads or sequence gaps fail
-replay explicitly.
+commands, settings, title, usage, stop reason and unfinished turns. Unknown kinds/versions and undecodable ACP update bodies remain stored
+and advance the cursor with an unsupported-event count. Malformed local event payloads, invalid ACP
+envelopes or sequence gaps fail replay explicitly.
 
 The reduced state is private and unobserved. `publishTranscript()` assigns one snapshot only when the
 sequence changes. `AgenthesiaUI.SessionFrameDriver` calls it from the view's display link, so streaming

@@ -21,10 +21,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public private(set) var status: Status = .ready
     public private(set) var transcript = TranscriptState()
-    public private(set) var errorMessage: String?
+    public var errorMessage: String? { failure.map { String(describing: $0) } }
     public private(set) var session: SessionRecord
     public private(set) var profile: ACP.AgentProfile?
 
+    private var failure: (any Error)?
     @ObservationIgnored private let store: PersistenceStore
     @ObservationIgnored private var connection: (any ACP.AgentConnection)?
     @ObservationIgnored private var reduced = TranscriptState()
@@ -85,8 +86,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             status = .idle
             publishTranscript()
         } catch {
-            await fail(error)
-            throw error
+            throw await fail(error)
         }
     }
 
@@ -169,11 +169,15 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             if status == .running || status == .stopping { status = .idle }
         } catch {
             promptStarted = false
+            if status == .closed, failure == nil {
+                // Deliberate close is a cancellation, not an agent failure.
+                try await record([try SessionEvent.finished(id: id, reason: .cancelled).storedEvent()])
+                throw CancellationError()
+            }
             if status != .failed {
                 try? await record([try SessionEvent.failed(id: id, message: String(describing: error)).storedEvent()])
             }
-            await fail(error)
-            throw error
+            throw await fail(error)
         }
     }
 
@@ -188,8 +192,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 try await committed.value
                 if turnID == id, status == .stopping, promptStarted { try await connection.cancel(agentID) }
             } catch {
-                await fail(error)
-                throw error
+                throw await fail(error)
             }
         }
         stopTask = task
@@ -247,11 +250,25 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         guard recording, sessionId == session.agentSessionID, status == .running || status == .stopping else {
             return .cancelled
         }
+        let outcome: ACP.PermissionOutcome =
+            status == .running && !Task.isCancelled
+            ? options.first(where: { $0.kind == .rejectOnce }).map { .selected($0.optionId) } ?? .cancelled
+            : .cancelled
         do {
-            try await record([try SessionEvent.permission(toolCall: toolCall, outcome: .cancelled).storedEvent()])
-        } catch { await fail(error) }
+            try await record([try SessionEvent.permission(toolCall: toolCall, outcome: outcome).storedEvent()])
+        } catch {
+            await fail(error)
+            return .cancelled
+        }
         publishTranscript()
-        return .cancelled
+        // Stop may arrive while the decision is being committed. Record the actual response too.
+        if outcome != .cancelled, status != .running || Task.isCancelled {
+            if status != .failed, failure == nil {
+                try? await record([try SessionEvent.permission(toolCall: toolCall, outcome: .cancelled).storedEvent()])
+            }
+            return .cancelled
+        }
+        return outcome
     }
 
     private func updateEvents(_ update: ACP.SessionUpdate, raw: Data) throws -> [NewEvent] {
@@ -259,7 +276,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         guard original.sessionId == session.agentSessionID else { throw SessionError.invalidState }
         var events = [NewEvent(kind: SessionEvent.updateKind, payload: raw)]
         // Keep the wire payload intact and record adapter normalization explicitly for deterministic replay.
-        if update != original.update, case .configOptions(let options) = update {
+        if case .configOptions(let options) = update, update != original.update {
             events.append(try SessionEvent.configOptions(options.configOptions).storedEvent())
         }
         return events
@@ -273,7 +290,14 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let task = Task {
             try await previous?.value
             guard self.status != .failed else { throw SessionError.invalidState }
-            let stored = try await append(events, id)
+            let stored: [StoredEvent]
+            do {
+                stored = try await append(events, id)
+            } catch {
+                // A disk error racing with deliberate close must still reach the caller as a disk error.
+                if self.failure == nil { self.failure = error }
+                throw error
+            }
             for event in stored { try self.reduced.apply(event) }
             if self.status == .failed || self.status == .closed { self.publishTranscript() }
         }
@@ -284,19 +308,21 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     private func record(_ events: [NewEvent]) async throws {
         let task = enqueue(events)
         do { try await task.value } catch {
-            await fail(error)
-            throw error
+            throw await fail(error)
         }
     }
 
-    private func fail(_ error: any Error) async {
-        guard status != .failed, status != .closed else { return }
-        errorMessage = String(describing: error)
+    /// Keep the first cause when closing the connection produces follow-up errors.
+    @discardableResult private func fail(_ error: any Error) async -> any Error {
+        guard status != .failed, status != .closed else { return failure ?? error }
+        let cause = failure ?? error
+        failure = cause
         status = .failed
         startupUpdates.removeAll()
         startupBytes = 0
         publishTranscript()
         await connection?.close()
         connection = nil
+        return cause
     }
 }

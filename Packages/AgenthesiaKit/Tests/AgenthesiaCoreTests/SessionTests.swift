@@ -319,8 +319,9 @@ extension SessionControllerTests {
         let fixture = try Fixture()
         let controller = try await fixture.live()
         try await controller.send([.init(text: "write /tmp/unwritten.txt content")])
-        #expect(controller.transcript.items.contains { $0.permission == .cancelled })
-        #expect(controller.transcript.lastStopReason == .cancelled)
+        #expect(controller.transcript.items.contains { $0.permission == .selected("reject") })
+        #expect(controller.transcript.lastStopReason == .endTurn)
+        #expect(controller.status == .idle)
         let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
         #expect(replay.transcript == controller.transcript)
         await controller.close()
@@ -474,5 +475,212 @@ extension SessionControllerTests {
         let replay = try await SessionController.restore(id: controller.session.id, store: store)
         #expect(replay.transcript == controller.transcript)
         #expect(replay.transcript.activeTurn == nil)
+    }
+}
+
+extension SessionControllerTests {
+    @Test func undecodableUpdateIsPersistedAndReplayContinues() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let raw = Data(
+            """
+            { "jsonrpc":"2.0", "method":"session/update", "params":{"sessionId":"s", "update":{
+            "sessionUpdate":"agent_message_chunk", "content":{"type":"text","text":123},
+            "future":9007199254740993.123456789}} }
+            """.utf8
+        )
+        var router = Router()
+        router.on(ACP.V1.Method.Initialize.self) { _ in .init(protocolVersion: 1) }
+        router.on(ACP.V1.Method.NewSession.self) { _ in .init(sessionId: "s") }
+        router.on(ACP.V1.Method.Prompt.self) { _ in
+            try await server.send(raw)
+            try await server.send(rawUpdate(.agentMessageChunk(.init(content: .init(text: "Still here")))))
+            return .init(stopReason: .endTurn)
+        }
+        let peer = Connection(transport: server)
+        await peer.start(handler: router)
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        try await controller.send([.init(text: "go")])
+        #expect(controller.status == .idle)
+        #expect(controller.transcript.unsupportedEvents == 1)
+        #expect(controller.transcript.items.last?.message?.text == "Still here")
+        let events = try await fixture.store.events(in: controller.session.id)
+        #expect(events[2].event.payload == raw)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test func closingARunningTurnRecordsCancellation() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let (updates, received) = AsyncStream<Void>.makeStream()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            let stored = try await store.append(events, to: id)
+            if events.contains(where: { $0.kind == SessionEvent.updateKind }) { received.yield(()) }
+            return stored
+        }
+        let turn = Task { try await controller.send([.init(text: "slow")]) }
+        var iterator = updates.makeAsyncIterator()
+        _ = await iterator.next()
+        await controller.close()
+        await #expect(throws: CancellationError.self) { try await turn.value }
+        let replay = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(replay.transcript.lastStopReason == .cancelled)
+        #expect(replay.transcript.activeTurn == nil)
+        #expect(!replay.transcript.items.contains { $0.notice != nil })
+        #expect(controller.errorMessage == nil)
+    }
+
+    @Test func startupRethrowsTheFirstFailure() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let entered = Gate()
+        var router = Router()
+        router.on(ACP.V1.Method.Initialize.self) { _ in
+            await entered.suspend()
+            return .init(protocolVersion: 1)
+        }
+        let peer = Connection(transport: server)
+        await peer.start(handler: router)
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let start = Task {
+            try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        await entered.waitUntilEntered()
+        await controller.sessionUpdate(.agentMessageChunk(.init(content: .init(text: "missing raw"))), in: "s")
+        await entered.open()
+        await #expect(throws: SessionController.SessionError.missingRawNotification) { try await start.value }
+        #expect(controller.status == .failed)
+        await controller.close()
+    }
+
+    @Test func streamWriteRethrowsDiskErrorRatherThanConnectionClosed() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            if events.contains(where: { $0.kind == SessionEvent.updateKind }) { throw CocoaError(.fileWriteOutOfSpace) }
+            return try await store.append(events, to: id)
+        }
+        do {
+            try await controller.send([.init(text: "hello")])
+            Issue.record("Expected a disk error")
+        } catch {
+            #expect((error as? CocoaError)?.code == .fileWriteOutOfSpace)
+        }
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func permissionCancellationAndMissingRejectOption(stopping: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            if events.contains(where: {
+                guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
+                if case .prompt = event { return true }; return false
+            }) {
+                await gate.suspend()
+            }
+            return try await store.append(events, to: id)
+        }
+        let turn = Task { try await controller.send([.init(text: "hello")]) }
+        await gate.waitUntilEntered()
+        let stop = stopping ? Task { try await controller.stop() } : nil
+        if stopping { while controller.status != .stopping { await Task.yield() } }
+        let permission = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t"),
+                options: stopping ? [.init(optionId: "reject", name: "Reject", kind: .rejectOnce)] : [],
+                in: try #require(controller.session.agentSessionID)
+            )
+        }
+        await gate.open()
+        #expect(try await permission.value == .cancelled)
+        try await stop?.value
+        try await turn.value
+        await controller.close()
+    }
+}
+
+extension SessionControllerTests {
+    @Test func stopDuringPermissionWriteReturnsAndRecordsCancellation() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let (updates, received) = AsyncStream<Void>.makeStream()
+        let gate = Gate()
+        let gated = Mutex(false)
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            let isPermission = events.contains {
+                guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
+                if case .permission = event { return true }; return false
+            }
+            if isPermission,
+                gated.withLock({ value in
+                    if value { return false }; value = true; return true
+                })
+            {
+                await gate.suspend()
+            }
+            let stored = try await store.append(events, to: id)
+            if events.contains(where: { $0.kind == SessionEvent.updateKind }) { received.yield(()) }
+            return stored
+        }
+        let turn = Task { try await controller.send([.init(text: "slow")]) }
+        var iterator = updates.makeAsyncIterator()
+        _ = await iterator.next()
+        let permission = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "blocked"),
+                options: [.init(optionId: "reject", name: "Reject", kind: .rejectOnce)],
+                in: try #require(controller.session.agentSessionID)
+            )
+        }
+        await gate.waitUntilEntered()
+        let stop = Task { try await controller.stop() }
+        while controller.status != .stopping { await Task.yield() }
+        await gate.open()
+        #expect(try await permission.value == .cancelled)
+        try await stop.value
+        try await turn.value
+        let replay = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(replay.transcript.items.first { $0.toolCall?.toolCallId == "blocked" }?.permission == .cancelled)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true])
+    func diskFailureRacingWithCloseIsNotReportedAsCancellation(failOnFinish: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            let local = try JSONDecoder().decode(SessionEvent.self, from: events[0].payload)
+            if case .prompt = local { await gate.suspend() }
+            if !failOnFinish { throw CocoaError(.fileWriteOutOfSpace) }
+            if case .finished = local { throw CocoaError(.fileWriteOutOfSpace) }
+            return try await store.append(events, to: id)
+        }
+        let turn = Task { try await controller.send([.init(text: "hello")]) }
+        await gate.waitUntilEntered()
+        let closing = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        await gate.open()
+        await closing.value
+        do {
+            try await turn.value
+            Issue.record("Expected disk error")
+        } catch {
+            #expect((error as? CocoaError)?.code == .fileWriteOutOfSpace)
+        }
+        #expect(controller.errorMessage != nil)
     }
 }

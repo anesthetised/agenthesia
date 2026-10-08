@@ -43,6 +43,8 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
             )
         }
         router.on(ACP.V1.Method.Prompt.self) { _ in
+            // No session id: log the invalid envelope, then continue processing the stream.
+            try await server.send(Data(#"{"jsonrpc":"2.0","method":"session/update","params":{"update":{}}}"#.utf8))
             try await server.send(raw)
             return .init(stopReason: .endTurn)
         }
@@ -74,6 +76,24 @@ private final class RawDelegate: ACP.AgentConnectionDelegate {
                     #"{"jsonrpc":"1.0","method":"other","params":{"sessionId":"s","update":{"sessionUpdate":"future"}}}"#
                         .utf8
                 )
+            )
+        }
+    }
+}
+
+extension RawSessionUpdateTests {
+    @Test func recordingToleratesBadTypedPayloadButWireModelRemainsStrict() throws {
+        let raw = Data(
+            #"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"usage_update","used":"future","size":10},"_meta":{"vendor":true}}}"#
+                .utf8
+        )
+        let recorded = try ACP.RecordedSessionUpdate(rawNotification: raw)
+        guard case .unknown = recorded.update else { Issue.record("Expected opaque update"); return }
+        #expect(recorded.meta?["vendor"] == .bool(true))
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(
+                ACP.SessionUpdate.self,
+                from: Data(#"{"sessionUpdate":"usage_update","used":"future","size":10}"#.utf8)
             )
         }
     }

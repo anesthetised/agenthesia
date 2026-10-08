@@ -87,6 +87,29 @@ It cannot establish end-to-end durable streaming throughput; that remains #97. L
 it requires prior workload/resource approval. `App` also supports the lab's selection, scroll, and
 appearance scenarios; these are separate workloads and were not part of this change's approved run.
 
+### Tool card updates
+
+`just lab-run S7:App --runs 3` streams the S1 answer below five tool cards rendered as the live transcript
+renders them (native header, collapsed Markdown body; the first card starts beyond its collapsed bound).
+Every 100 ms one card changes status and gains an output line, 124 updates per run. Cards scroll out of
+view as the answer grows, as they do in a session; off-screen cards are only re-rendered when shown.
+`toolUpdates` in the measurements counts applied changes. S7 exists only for `App`.
+
+Results for #19 on an M1 Pro (MacBookPro18,2, 120 Hz display), macOS 27.0.1, optimized Debug lab, fresh
+process per run, 1-minute load 2.6–4.9 and 80–81% free memory throughout. Hitches are callbacks over one
+frame interval:
+
+| Run | Commit | Hitches per run | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms |
+|---|---|---|---|---|---|
+| S1:App, before (`main`) | `6a1a29c` | 0, 0, 0, 0, 1, 7 | 8.3 / 8.3 | 8.3–47.7 | 9.2–10.7 |
+| S1:App, after | `08d1a88` | 0, 0, 94, 1, 12, 1 | 8.3 / 8.3 (one run 16.7 / 16.7) | 8.6–38.8 | 9.2–11.5 |
+| S7:App, after | `08d1a88` | 20, 36, 26 | 8.3 / 16.7–17.2 | 16.7–45.2 | 10.3–13.3 |
+
+The shared streaming path shows no consistent change: apart from one run with 94 single-frame misses,
+both commits stay within the same noise. Tool updates cost about one missed 120 Hz frame per five
+updates, because a changed header rebuilds the row and the card's Markdown is rendered again; p95 stays
+at one frame. Agents update tool calls far less often than ten times per second.
+
 ## Rendering workloads
 
 The microbenchmarks measure first use of each grammar, warm whole-file highlighting, Markdown rendering,

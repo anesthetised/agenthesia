@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261008T110738.454366Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "9ebdd9325f1f647e4ccffe0a0dd71ae1bfd94fcf",
+  "workingTree": "?? Packages/AgenthesiaKit/Sources/AgenthesiaCore/LiveSession.swift\n?? Packages/AgenthesiaKit/Sources/AgenthesiaCore/SessionLibrary.swift\n?? Packages/AgenthesiaKit/Sources/Workspace/SessionWorkspace.swift\n?? Packages/AgenthesiaKit/Tests/WorkspaceTests/SessionWorkspaceTests.swift",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S1:A2"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S1:A2",
+      "log": "run-1-1.log",
+      "wallSeconds": 14.492071915999986,
+      "samples": [
+        {
+          "report": {
+            "frames": 1482,
+            "p50": 8.333333331393078,
+            "estimatedMissed": 7,
+            "hitches": 2,
+            "excessMilliseconds": 60.0852528878022,
+            "memory": 70.57915496826172,
+            "freeMemory": 75,
+            "max": 49.45408334606327,
+            "p99": 8.333333360496908,
+            "load": 9.984375,
+            "p95": 8.333333360496908
+          },
+          "scenario": "S1 Stream, A\u2032: NSTableView + TextKit 2, warm",
+          "id": "5D02991D-7286-4AF9-8041-D33DFF638F76",
+          "measurements": {
+            "applyLatencyMaxMS": 33.1385,
+            "chunkIntervalMS": 10,
+            "chunks": 1244,
+            "backingScale": 2,
+            "peakBacklogChunks": 4,
+            "applyLatencyP95MS": 8.536625000001408,
+            "viewportHeight": 340,
+            "characters": 16249,
+            "viewportWidth": 868,
+            "screenMaximumFPS": 120,
+            "elapsedMS": 12445.741708
+          }
+        }
+      ]
+    }
+  ]
+}

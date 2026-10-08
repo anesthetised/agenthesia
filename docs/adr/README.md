@@ -18,5 +18,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0011](0011-cross-agent-memory.md) | Cross-agent memory | Superseded by [0012](0012-defer-cross-agent-memory.md) |
 | [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted |
 | [0013](0013-source-highlight-attributes.md) | Apply SourceView highlighting as attribute edits | Accepted |
+| [0014](0014-window-bound-live-sessions.md) | Window-bound live sessions | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

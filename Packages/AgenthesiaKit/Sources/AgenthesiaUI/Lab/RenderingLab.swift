@@ -102,6 +102,7 @@
         case tableTextKit = "A2"
         case document = "B"
         case swiftUI = "C"
+        case app = "App"
 
         var title: String {
             switch self {
@@ -109,6 +110,7 @@
             case .tableTextKit: "A′: NSTableView + TextKit 2"
             case .document: "B: TextKit 2"
             case .swiftUI: "C: SwiftUI"
+            case .app: "App: production transcript"
             }
         }
 
@@ -118,6 +120,7 @@
             case .tableTextKit: TableTranscript(textKit: true)
             case .document: DocumentTranscript()
             case .swiftUI: SwiftUITranscript()
+            case .app: AppTranscriptPrototype()
             }
         }
     }
@@ -196,7 +199,11 @@
                 guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
                 let batch = schedule.due(at: milliseconds(since: start) / 1000)
                 guard !batch.isEmpty else { return true }
-                view.didStream(transcript.stream(chunks[batch].joined()))
+                if let app = view as? AppTranscriptPrototype {
+                    app.append(chunks[batch].joined())
+                } else {
+                    view.didStream(transcript.stream(chunks[batch].joined()))
+                }
                 schedule.recordApplied(batch, at: milliseconds(since: start) / 1000)
                 return true
             }

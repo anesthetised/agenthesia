@@ -14,6 +14,7 @@ class BenchmarkRunnerTests(unittest.TestCase):
     def test_validates_scenarios_instead_of_silently_running_source_view(self):
         self.assertEqual(bench.scenarios("S1:A2,S6:B,S4:cold+lines+colors"),
                          ["S1:A2", "S6:B", "S4:cold+lines+colors"])
+        self.assertEqual(bench.scenarios("S1:App"), ["S1:App"])
         self.assertEqual(bench.scenarios("S4:"), ["S4:"])
         self.assertEqual(bench.scenarios("S4:appkit,S4:appkit+lines+colors"),
                          ["S4:appkit", "S4:appkit+lines+colors"])

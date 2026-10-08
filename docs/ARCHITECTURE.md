@@ -41,17 +41,39 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
 
-## Current interface preview
+## Live app integration
 
-`AgenthesiaUI` contains a temporary demo session model and a native session screen. The screen uses
-an `NSTableView` transcript with a TextKit 2 streaming row, following ADR-0007, and the existing
-`Rendering` module. The debug Rendering Lab remains independent so its recorded workloads are not
-changed by the interface preview.
+The main window uses a window-bound `LiveSession` in Core to own the agent process and
+`SessionController` ([ADR-0014](adr/0014-window-bound-live-sessions.md)). `SessionLibrary.shared` opens
+one app database away from the main actor and provides project, install, and saved-session discovery.
+The owner resolves the login-shell environment, prepares the workspace, creates metadata, and starts
+the ACP v1 adapter with filesystem, terminal, terminal-auth, and elicitation capabilities disabled.
+Agents must already be authenticated; authentication failures are displayed.
 
-The demo does not launch agents, modify a workspace, or persist sessions. It disables sending while
-streaming; it does not implement or supersede ADR-0010's production queue and steering behavior.
-`AgenthesiaCore` now supplies the live session controller and transcript reducer described below.
-The app still opens the independent demo; wiring a production session screen is a separate integration step.
+`Workspace.SessionWorkspace` invokes the Git CLI off the main actor. Git checkouts get a new branch and
+worktree from HEAD under `~/.agenthesia/worktrees/<repo>/<uuid>`. Dirty and untracked files are not copied.
+Non-Git directories are used directly; bare, broken, or unborn repositories fail explicitly. Worktrees
+are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
+part of the worktree milestone.
+
+`AgenthesiaUI` owns presentation and window integration. Its shared `TranscriptTableController` uses
+`NSTableView`, with TextKit 2 for streaming messages. `LiveTranscriptSource` lazily renders requested
+rows, caches attributed text, and handles updates to earlier rows as well as appended messages.
+`SessionFrameDriver` publishes committed transcript snapshots from the display link. Saved transcripts
+use the same table in read-only mode. The demo remains available as a test fixture; the original
+Rendering Lab prototypes retain their implementations, with an additional production-table variant.
+
+The composer accepts text prompts while idle and keeps drafts editable during a turn. Queueing and
+steering remain #65. Tool rows show a title and status pending #19; permission requests are rejected
+pending #21. Non-text content is identified with attachment placeholders rather than silently dropped.
+The session's bounded stderr log and environment diagnostics are visible in the window.
+
+A window-close notification starts asynchronous owner shutdown. An AppKit application delegate retains
+a registry solely for pending window cleanup and uses `terminateLater` to await shutdown on app quit.
+The owner closes ACP and drains controller writes, terminates the process group, and waits for startup
+if it was in flight. Unexpected process exit and observable controller failure also trigger cleanup.
+Closing a transcript view only detaches its display driver; selecting history does not terminate the
+window's live session. Starting another session requires ending the current one (or a startup failure).
 
 ## Persistence implementation
 
@@ -98,7 +120,7 @@ SQLite triggers reject event updates, deletes and replacement inserts. Every sto
 recursive triggers so an `INSERT OR REPLACE` collision on the hidden rowid also fires the delete guard.
 Log compaction or history deletion will require an explicit migration and policy. Migrations never
 erase data on schema changes; opening a database with unknown migration identifiers fails rather than
-writing through a newer schema. The demo and CLI are not yet connected to this store.
+writing through a newer schema. The app uses this store; the CLI remains independent.
 
 ## Session domain implementation
 
@@ -186,8 +208,7 @@ Process exit and stderr completion are separate events. Waiting for stderr first
 then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
 CLI initialization errors display at most the last ten retained lines.
 
-The session log view remains part of
-[#15](https://github.com/anesthetised/agenthesia/issues/15); the demo does not launch a process.
+The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 Registry installation and the managed Node runtime are also still planned. The shell-only
 `posix_spawn` adoption addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`

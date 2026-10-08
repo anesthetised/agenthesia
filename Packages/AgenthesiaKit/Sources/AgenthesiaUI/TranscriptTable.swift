@@ -5,7 +5,7 @@ import SwiftUI
 struct DemoTranscript: NSViewRepresentable {
     let session: DemoSession
 
-    func makeCoordinator() -> DemoTranscriptController { DemoTranscriptController() }
+    func makeCoordinator() -> TranscriptTableController { TranscriptTableController() }
 
     func makeNSView(context: Context) -> NSScrollView {
         context.coordinator.update(session)
@@ -17,14 +17,13 @@ struct DemoTranscript: NSViewRepresentable {
     }
 }
 
-/// Demo-only A′ table. The Rendering Lab keeps its measurement implementation unchanged.
-final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-    let table = DemoTableView()
-    let scroll = DemoScrollView()
-    private var session: DemoSession?
+/// Shared native A′ table. The Rendering Lab keeps its measurement implementation unchanged.
+final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    let table = TranscriptTableView()
+    let scroll = TranscriptScrollView()
+    private weak var session: (any TranscriptSource)?
     private var revision = -1
     private var count = 0
-    private var wasStreaming = false
     private var followingBottom = true
     private var adjustingScroll = false
     private var followScheduled = false
@@ -43,7 +42,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         table.dataSource = self
         table.delegate = self
         table.copyMessages = { [weak self] in self?.selectedMarkdown ?? "" }
-        table.setAccessibilityLabel("Demo conversation")
+        table.setAccessibilityLabel("Conversation")
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
@@ -69,7 +68,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
     var selectedMarkdown: String {
         guard let session else { return "" }
         return table.selectedRowIndexes.compactMap { row in
-            session.messages.indices.contains(row) ? session.messages[row].markdown : nil
+            (0..<session.messageCount).contains(row) ? session.message(at: row).markdown : nil
         }.joined(separator: "\n\n")
     }
 
@@ -77,38 +76,59 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         documentHeight - visibleRect.maxY <= 24
     }
 
-    func update(_ session: DemoSession) {
-        guard revision != session.revision else { return }
-        let initial = self.session == nil
+    func update(_ session: any TranscriptSource) {
+        guard revision != session.revision || self.session !== session else { return }
+        let initial = self.session !== session
         let origin = scroll.contentView.bounds.origin
         self.session = session
         if initial {
+            count = 0
+            followingBottom = true
             table.reloadData()
-        } else if count < session.messages.count {
-            table.insertRows(at: IndexSet(integersIn: count..<session.messages.count))
-        } else if count > 0 {
-            let row = count - 1
-            let visibleRow = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? DemoMessageRow
-            let keepsSelection = visibleRow?.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if wasStreaming != session.isStreaming, !keepsSelection {
-                visibleRow?.showFinished(session.messages[row], width: table.tableColumns[0].width - 48)
-            } else if let rowView = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? DemoMessageRow,
-                let cell = rowView.streamingCell
-            {
-                rowView.markdown = session.messages[row].markdown
-                if revision + 1 == session.revision, let update = session.lastUpdate {
+        } else if count < session.messageCount {
+            table.insertRows(at: IndexSet(integersIn: count..<session.messageCount))
+        }
+        // ACP can revise an earlier message or tool row, including in the same frame as an append.
+        // Refresh only materialized rows; history is rendered lazily when scrolled into view.
+        var changed = IndexSet()
+        var available = IndexSet()
+        table.enumerateAvailableRowViews { _, row in available.insert(row) }
+        for row in available where row < min(count, session.messageCount) {
+            guard let visible = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptMessageRow
+            else {
+                continue
+            }
+            let message = session.message(at: row)
+            let finished = !session.isStreaming(at: row)
+            let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
+            if visible.markdown == message.markdown, !(finished && visible.streamingCell != nil && !keepsSelection) {
+                continue
+            }
+            if finished, !keepsSelection {
+                visible.showFinished(message, width: table.tableColumns[0].width - 48)
+            } else if let cell = visible.streamingCell {
+                if let update = message.update, visible.markdown == message.previousMarkdown {
                     cell.textView.apply(update)
                 } else {
                     let selection = cell.textView.selectedRange()
-                    cell.textView.textStorage?.setAttributedString(session.messages[row].text)
-                    cell.textView.setSelectedRange(selection)
+                    cell.textView.textStorage?.setAttributedString(message.text)
+                    let length = message.text.length
+                    cell.textView.setSelectedRange(
+                        NSRange(
+                            location: min(selection.location, length),
+                            length: min(selection.length, max(0, length - selection.location))
+                        )
+                    )
                     cell.textView.invalidateIntrinsicContentSize()
                 }
+            } else {
+                table.reloadData(forRowIndexes: [row], columnIndexes: [0])
             }
-            table.noteHeightOfRows(withIndexesChanged: [row])
+            visible.markdown = message.markdown
+            changed.insert(row)
         }
-        count = session.messages.count
-        wasStreaming = session.isStreaming
+        if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }
+        count = session.messageCount
         revision = session.revision
         table.layoutSubtreeIfNeeded()
         if followingBottom {
@@ -148,13 +168,13 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         adjustingScroll = false
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { session?.messages.count ?? 0 }
+    func numberOfRows(in tableView: NSTableView) -> Int { session?.messageCount ?? 0 }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let session else { return nil }
-        let message = session.messages[row]
+        let message = session.message(at: row)
         let content: NSView
-        if session.isStreaming, row == session.messages.count - 1 {
+        if session.isStreaming(at: row) {
             let cell = TextKitCell()
             cell.textView.textStorage?.setAttributedString(message.text)
             cell.textView.invalidateIntrinsicContentSize()
@@ -177,13 +197,13 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
-        let rowView = DemoMessageRow(markdown: message.markdown)
+        let rowView = TranscriptMessageRow(markdown: message.markdown)
         rowView.streamingCell = content as? TextKitCell
         rowView.stack = stack
         let contentWidth = content.widthAnchor.constraint(equalTo: stack.widthAnchor)
         rowView.contentWidth = contentWidth
         copy.target = rowView
-        copy.action = #selector(DemoMessageRow.copyMessage(_:))
+        copy.action = #selector(TranscriptMessageRow.copyMessage(_:))
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowView.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -198,7 +218,7 @@ final class DemoTranscriptController: NSObject, NSTableViewDataSource, NSTableVi
     }
 }
 
-final class DemoTableView: NSTableView {
+final class TranscriptTableView: NSTableView {
     var copyMessages: (() -> String)?
     var didLayout: (() -> Void)?
     var willNavigate: (() -> Void)?
@@ -228,7 +248,7 @@ final class DemoTableView: NSTableView {
     }
 }
 
-final class DemoScrollView: NSScrollView {
+final class TranscriptScrollView: NSScrollView {
     var willNavigate: (() -> Void)?
     var didNavigate: (() -> Void)?
 
@@ -239,7 +259,7 @@ final class DemoScrollView: NSScrollView {
     }
 }
 
-private final class DemoMessageRow: NSTableCellView {
+private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
     var streamingCell: TextKitCell?
@@ -254,13 +274,15 @@ private final class DemoMessageRow: NSTableCellView {
 
     func showFinished(_ message: DemoSession.Message, width: CGFloat) {
         markdown = message.markdown
-        guard let old = streamingCell, let stack else { return }
+        guard let stack else { return }
         let cell = TextCell()
         cell.field.preferredMaxLayoutWidth = max(1, width)
         cell.field.attributedStringValue = message.text
         contentWidth?.isActive = false
-        stack.removeArrangedSubview(old)
-        old.removeFromSuperview()
+        if let old = stack.arrangedSubviews.last {
+            stack.removeArrangedSubview(old)
+            old.removeFromSuperview()
+        }
         stack.addArrangedSubview(cell)
         contentWidth = cell.widthAnchor.constraint(equalTo: stack.widthAnchor)
         contentWidth?.isActive = true

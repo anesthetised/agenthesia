@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261008T112724.472357Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "40e606501c888f74ca8b2e502acfdadcccab8086",
+  "workingTree": "M App/AgenthesiaApp.swift\n M Packages/AgenthesiaKit/Sources/AgenthesiaUI/DemoSession.swift\n D Packages/AgenthesiaKit/Sources/AgenthesiaUI/DemoTranscript.swift\n M Packages/AgenthesiaKit/Sources/AgenthesiaUI/Lab/RenderingLab.swift\n M Packages/AgenthesiaKit/Sources/AgenthesiaUI/RootView.swift\n M Packages/AgenthesiaKit/Tests/AgenthesiaUITests/DemoSessionTests.swift\n M README.md\n M docs/ARCHITECTURE.md\n M docs/BENCHMARKS.md\n M docs/adr/README.md\n M scripts/bench.py\n M scripts/test_bench.py\n?? Packages/AgenthesiaKit/Sources/AgenthesiaUI/Lab/AppTranscriptPrototype.swift\n?? Packages/AgenthesiaKit/Sources/AgenthesiaUI/LiveTranscript.swift\n?? Packages/AgenthesiaKit/Sources/AgenthesiaUI/SessionWindowModel.swift\n?? Packages/AgenthesiaKit/Sources/AgenthesiaUI/TranscriptTable.swift\n?? Packages/AgenthesiaKit/Tests/AgenthesiaUITests/LiveTranscriptTests.swift\n?? Packages/AgenthesiaKit/Tests/AgenthesiaUITests/SessionWindowModelTests.swift\n?? docs/adr/0014-window-bound-live-sessions.md",
+  "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S1:A2",
+    "S1:App"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S1:A2",
+      "log": "run-1-1.log",
+      "wallSeconds": 14.451285165996524,
+      "samples": [
+        {
+          "report": {
+            "frames": 1490,
+            "p95": 8.333333360496908,
+            "max": 24.784124980214983,
+            "memory": 66.45410919189453,
+            "freeMemory": 77,
+            "load": 7.7431640625,
+            "estimatedMissed": 2,
+            "hitches": 1,
+            "p50": 8.333333331393078,
+            "excessMilliseconds": 16.66666954406537,
+            "p99": 8.333333360496908
+          },
+          "measurements": {
+            "elapsedMS": 12443.497458,
+            "backingScale": 2,
+            "characters": 16249,
+            "screenMaximumFPS": 120,
+            "chunkIntervalMS": 10,
+            "viewportHeight": 340,
+            "applyLatencyP95MS": 9.48649999999951,
+            "viewportWidth": 868,
+            "peakBacklogChunks": 2,
+            "chunks": 1244,
+            "applyLatencyMaxMS": 15.546416999999996
+          },
+          "scenario": "S1 Stream, A\u2032: NSTableView + TextKit 2, warm",
+          "id": "02AF8782-9352-4142-9246-29057FC683C9"
+        }
+      ]
+    },
+    {
+      "repetition": 1,
+      "scenario": "S1:App",
+      "log": "run-1-2.log",
+      "wallSeconds": 14.270537083008094,
+      "samples": [
+        {
+          "scenario": "S1 Stream, App: production transcript, warm",
+          "measurements": {
+            "chunkIntervalMS": 10,
+            "screenMaximumFPS": 120,
+            "viewportWidth": 868,
+            "applyLatencyMaxMS": 32.282458,
+            "characters": 16249,
+            "elapsedMS": 12439.680208,
+            "viewportHeight": 340,
+            "chunks": 1244,
+            "backingScale": 2,
+            "peakBacklogChunks": 4,
+            "applyLatencyP95MS": 10.185832999999533
+          },
+          "report": {
+            "hitches": 0,
+            "estimatedMissed": 0,
+            "excessMilliseconds": 2.3180028656497598,
+            "p50": 8.333333331393078,
+            "p99": 8.333333360496908,
+            "p95": 8.333333360496908,
+            "memory": 69.87602996826172,
+            "max": 10.651333315763623,
+            "freeMemory": 77,
+            "load": 7.00732421875,
+            "frames": 1489
+          },
+          "id": "ED7E6287-D2B4-4BEB-BE1F-29C15D29C4BB"
+        }
+      ]
+    }
+  ]
+}

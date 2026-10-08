@@ -64,7 +64,7 @@ struct DemoSessionTests {
 
     @Test func tableCopiesSelectedMessagesInTranscriptOrder() {
         let session = DemoSession()
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         controller.update(session)
         controller.table.selectRowIndexes([0, 1], byExtendingSelection: false)
         #expect(controller.selectedMarkdown == session.messages.map(\.markdown).joined(separator: "\n\n"))
@@ -76,7 +76,7 @@ struct DemoSessionTests {
         let session = DemoSession()
         let token = try #require(session.begin("Hello"))
         session.receive("First paragraph.", for: token)
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(session)
@@ -102,7 +102,7 @@ struct DemoSessionTests {
         let session = DemoSession()
         let token = try #require(session.begin("Hello"))
         session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(session)
@@ -129,7 +129,7 @@ struct DemoSessionTests {
 
     @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() async throws {
         let session = DemoSession()
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.scroll.frame.size.height = 700
@@ -182,7 +182,7 @@ struct DemoSessionTests {
         let token = try #require(session.begin("Hello"))
         session.receive(DemoSession.responseChunks.joined(), for: token)
         session.finish(token)
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.scroll.frame.size.width = 400
@@ -219,7 +219,7 @@ struct DemoSessionTests {
         let session = DemoSession()
         let token = try #require(session.begin("Hello"))
         session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(session)
@@ -241,7 +241,7 @@ struct DemoSessionTests {
         let token = try #require(session.begin("Hello"))
         for chunk in DemoSession.responseChunks { session.receive(chunk, for: token) }
         if completed { session.finish(token) }
-        let controller = DemoTranscriptController()
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(session)
@@ -324,8 +324,8 @@ struct DemoSessionTests {
         }
     }
 
-    private func demoTable(in view: NSView) -> DemoTableView? {
-        if let table = view as? DemoTableView { return table }
+    private func demoTable(in view: NSView) -> TranscriptTableView? {
+        if let table = view as? TranscriptTableView { return table }
         return view.subviews.lazy.compactMap { demoTable(in: $0) }.first
     }
 
@@ -335,7 +335,7 @@ struct DemoSessionTests {
         }
     }
 
-    private func host(_ controller: DemoTranscriptController) -> NSWindow {
+    private func host(_ controller: TranscriptTableController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
             styleMask: [.titled],
@@ -357,19 +357,19 @@ struct DemoSessionTests {
 
     @Test func onlyReadersNearTheBottomFollowStreaming() {
         #expect(
-            DemoTranscriptController.followsBottom(
+            TranscriptTableController.followsBottom(
                 documentHeight: 1000,
                 visibleRect: NSRect(x: 0, y: 600, width: 500, height: 400)
             )
         )
         #expect(
-            DemoTranscriptController.followsBottom(
+            TranscriptTableController.followsBottom(
                 documentHeight: 1000,
                 visibleRect: NSRect(x: 0, y: 577, width: 500, height: 400)
             )
         )
         #expect(
-            !DemoTranscriptController.followsBottom(
+            !TranscriptTableController.followsBottom(
                 documentHeight: 1000,
                 visibleRect: NSRect(x: 0, y: 100, width: 500, height: 400)
             )

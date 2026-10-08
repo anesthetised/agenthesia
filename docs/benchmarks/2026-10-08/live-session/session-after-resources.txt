@@ -1,0 +1,4 @@
+kern.memorystatus_level: 76
+vm.loadavg: { 27.94 25.44 16.66 }
+kern.memorystatus_level: 78
+vm.loadavg: { 17.62 23.18 16.19 }

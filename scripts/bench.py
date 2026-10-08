@@ -24,7 +24,7 @@ def capture(*command):
 def scenarios(value):
     parts = value.split(",")
     for part in parts:
-        if re.fullmatch(r"S[1256]:(A|A2|B|C)", part):
+        if re.fullmatch(r"S[1256]:(A|A2|B|C|App)", part):
             continue
         if part.startswith("S4:"):
             flags = part[3:].split("+") if part[3:] else []

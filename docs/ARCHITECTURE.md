@@ -29,11 +29,11 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
-| `Workspace` | Git (CLI wrapper), worktrees, PTYs, `TerminalHost` (ACP `terminal/*`, including long-lived background processes), file index for Quick Open, FSEvents watcher. | — |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for agent terminals ([ADR-0015](adr/0015-agent-terminals.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
+| `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
-| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
+| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, ACP terminals (`SessionTerminals`), session manager, worktree lifecycle. | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |

@@ -291,6 +291,12 @@ terminal when the session leader exits; the wait is still bounded at 500 ms. Gro
 same `ProcessGroupTermination` that `AgentProcess` uses, started on natural exit or explicit
 termination.
 
+`TerminalText` derives the text an agent reads from a terminal's raw bytes: escape sequences (CSI, OSC,
+DCS and other string or short sequences) and control characters other than tab are removed, CRLF
+becomes LF, and a carriage return inside a line keeps only the text after it. The result is cut from
+the start at a character boundary to the byte limit. An incomplete trailing escape sequence or
+character of a running command is withheld. Cursor movement is not interpreted.
+
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 Registry installation and the managed Node runtime are also still planned. The shell-only
 `posix_spawn` adoption addresses a terminal interaction found while reviewing

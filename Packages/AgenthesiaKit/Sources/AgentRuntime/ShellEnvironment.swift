@@ -213,44 +213,14 @@ private enum ShellOutputCollector {
             posix_spawn_file_actions_addclose(&actions, stderr[1]) == 0
         else { return .launchFailed }
 
-        var attributes: posix_spawnattr_t?
-        guard posix_spawnattr_init(&attributes) == 0 else { return .launchFailed }
-        defer { posix_spawnattr_destroy(&attributes) }
-        var emptyMask = sigset_t()
-        var defaultSignals = sigset_t()
-        sigemptyset(&emptyMask)
-        sigemptyset(&defaultSignals)
-        for signal in [SIGTERM, SIGPIPE, SIGINT, SIGTTIN, SIGTTOU, SIGHUP, SIGQUIT, SIGCHLD] {
-            sigaddset(&defaultSignals, signal)
-        }
-        let flags = Int16(
-            POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF
-        )
-        guard posix_spawnattr_setflags(&attributes, flags) == 0,
-            posix_spawnattr_setsigmask(&attributes, &emptyMask) == 0,
-            posix_spawnattr_setsigdefault(&attributes, &defaultSignals) == 0
+        guard
+            let pid = try? spawnInNewSession(
+                path: shell,
+                arguments: [shell, "-l", "-i", "-c", script],
+                environment: environment,
+                actions: &actions
+            )
         else { return .launchFailed }
-
-        let arguments = [shell, "-l", "-i", "-c", script]
-        let variables = environment.map { "\($0.key)=\($0.value)" }
-        var argv = arguments.map { strdup($0) }
-        var envp = variables.map { strdup($0) }
-        defer {
-            for pointer in argv { free(pointer) }
-            for pointer in envp { free(pointer) }
-        }
-        guard argv.allSatisfy({ $0 != nil }), envp.allSatisfy({ $0 != nil }) else { return .launchFailed }
-        argv.append(nil)
-        envp.append(nil)
-        var pid: pid_t = 0
-        let spawnStatus = argv.withUnsafeMutableBufferPointer { args in
-            envp.withUnsafeMutableBufferPointer { vars in
-                shell.withCString { path in
-                    posix_spawn(&pid, path, &actions, &attributes, args.baseAddress, vars.baseAddress)
-                }
-            }
-        }
-        guard spawnStatus == 0 else { return .launchFailed }
         Darwin.close(stdout[1])
         Darwin.close(stderr[1])
         stdout[1] = -1

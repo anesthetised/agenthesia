@@ -278,6 +278,19 @@ Process exit and stderr completion are separate events. Waiting for stderr first
 then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
 CLI initialization errors display at most the last ten retained lines.
 
+`TerminalProcess` runs an agent terminal's command ([ADR-0015](adr/0015-agent-terminals.md)). It is
+spawned with `posix_spawn` as the leader of a new session; the pseudo-terminal's slave side is opened
+in the child after the session is created, so it becomes the controlling terminal, with an 80×24 window.
+A bare command is resolved through the command environment's `PATH` and a relative one against its
+working directory; a missing executable fails creation with `ENOENT`. Nothing is written to the
+terminal. The master side is read continuously, because a terminal's last close waits for its output
+to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
+batches so that noisy commands append in amortized constant time. A process source reaps the
+command. Exit waits for the end of output, which arrives promptly because the kernel revokes the
+terminal when the session leader exits; the wait is still bounded at 500 ms. Group cleanup is the
+same `ProcessGroupTermination` that `AgentProcess` uses, started on natural exit or explicit
+termination.
+
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 Registry installation and the managed Node runtime are also still planned. The shell-only
 `posix_spawn` adoption addresses a terminal interaction found while reviewing

@@ -29,8 +29,8 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
-| `Workspace` | Git (CLI wrapper), worktrees, PTYs, `TerminalHost` (ACP `terminal/*`, including long-lived background processes), file index for Quick Open, FSEvents watcher. | — |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands ([ADR-0015](adr/0015-agent-terminals.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
+| `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
@@ -277,6 +277,26 @@ have bounded storage; truncation of retained output is marked.
 Process exit and stderr completion are separate events. Waiting for stderr first awaits leader exit,
 then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
 CLI initialization errors display at most the last ten retained lines.
+
+`TerminalProcess` runs an agent terminal's command ([ADR-0015](adr/0015-agent-terminals.md)). It is
+spawned with `posix_spawn` as the leader of a new session; the pseudo-terminal's slave side is opened
+in the child after the session is created, so it becomes the controlling terminal, with an 80×24 window.
+A bare command is resolved through the command environment's `PATH` and a relative one against its
+working directory; a missing executable fails creation with `ENOENT`. Nothing is written to the
+terminal. The master side is read continuously, because a terminal's last close waits for its output
+to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
+batches so that noisy commands append in amortized constant time. A process source reaps the
+command. Both sources run on a private serial queue, which gets a thread even when the shared pools are
+busy: the kernel discards output still unread about 0.6 s after the command exits. Exit waits for the end of output, which arrives promptly because the kernel revokes the
+terminal when the session leader exits; the wait is still bounded at 500 ms. Group cleanup is the
+same `ProcessGroupTermination` that `AgentProcess` uses, started on natural exit or explicit
+termination.
+
+`TerminalText` derives the text an agent reads from a terminal's raw bytes: escape sequences (CSI, OSC,
+DCS and other string or short sequences) and control characters other than tab are removed, CRLF
+becomes LF, and a carriage return inside a line keeps only the text after it. The result is cut from
+the start at a character boundary to the byte limit. An incomplete trailing escape sequence or
+character of a running command is withheld. Cursor movement is not interpreted.
 
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 Registry installation and the managed Node runtime are also still planned. The shell-only

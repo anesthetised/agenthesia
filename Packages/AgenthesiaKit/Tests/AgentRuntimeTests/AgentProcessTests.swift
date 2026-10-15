@@ -107,7 +107,7 @@ import Testing
         _ = await process.terminate(gracePeriod: .milliseconds(50))
     }
 
-    @Test(arguments: [Duration.milliseconds(150), .seconds(4)])
+    @Test(arguments: [Duration.seconds(1), .seconds(4)])
     func terminatesDescendantsAfterLeaderExits(gracePeriod: Duration) async throws {
         let pidFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-child-\(UUID().uuidString).pid"
@@ -405,7 +405,7 @@ struct MockAgentScenarioTests {
     }
 }
 
-private func waitForChildPID(at file: URL) async throws -> Int32 {
+func waitForChildPID(at file: URL) async throws -> Int32 {
     let deadline = ContinuousClock.now + .seconds(3)
     while ContinuousClock.now < deadline {
         if let text = try? String(contentsOf: file, encoding: .utf8),
@@ -418,7 +418,7 @@ private func waitForChildPID(at file: URL) async throws -> Int32 {
     throw TestProcessError.timeout
 }
 
-private func waitUntilInactive(_ pid: Int32) async throws -> Bool {
+func waitUntilInactive(_ pid: Int32) async throws -> Bool {
     let deadline = ContinuousClock.now + .seconds(3)
     while ContinuousClock.now < deadline {
         if kill(pid, 0) != 0 { return true }

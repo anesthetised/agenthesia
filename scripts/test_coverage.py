@@ -33,10 +33,11 @@ class CoverageReportTests(unittest.TestCase):
             binary.touch()
             badge = root / "coverage.svg"
             stdout, stderr = io.StringIO(), io.StringIO()
+            run = patch.object(coverage.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0, stdout=exported))
             with patch.object(coverage, "codecov_dir", return_value=directory), \
                  patch.object(coverage, "swift", return_value=directory), \
-                 patch.object(coverage.subprocess, "run",
-                              return_value=subprocess.CompletedProcess([], 0, stdout=exported)), \
+                 run as self.run_mock, \
                  contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 status = coverage.report("unused", [threshold, "--badge", str(badge)])
             return status, stdout.getvalue(), stderr.getvalue(), badge.read_text()
@@ -50,6 +51,12 @@ class CoverageReportTests(unittest.TestCase):
         self.assertRegex(output, r"MockAgent\s+0/100\s+0\.0%")
         self.assertRegex(output, r"Product total\s+18/20\s+90\.0%")
         self.assertIn("coverage: 90.0%", badge)
+
+    def test_merge_skips_corrupt_profiles_unless_all_are(self):
+        self.report("Rendering=90")
+        merge = self.run_mock.call_args_list[0].args[0]
+        self.assertEqual(merge[:3], ["xcrun", "llvm-profdata", "merge"])
+        self.assertIn("--failure-mode=all", merge)
 
     def test_ui_threshold_is_still_enforced(self):
         status, output, errors, _ = self.report("AgenthesiaUI=85")

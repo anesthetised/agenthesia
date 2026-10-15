@@ -92,7 +92,10 @@ def report(package: str, args: list[str]) -> int:
         print("No coverage data; run the tests with --enable-code-coverage first.", file=sys.stderr)
         return 1
     merged = os.path.join(directory, "merged.profdata")
-    subprocess.run(["xcrun", "llvm-profdata", "merge", "-sparse", *raw, "-o", merged], check=True)
+    # A child process killed while writing its profile leaves a corrupt one; skip it with a warning. The
+    # thresholds still catch a lost profile of the test runner itself.
+    merge = ["xcrun", "llvm-profdata", "merge", "-sparse", "--failure-mode=all", *raw, "-o", merged]
+    subprocess.run(merge, check=True)
 
     bin_dir = swift(package, "build", "--show-bin-path")
     binaries = [

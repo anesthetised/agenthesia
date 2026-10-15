@@ -67,13 +67,38 @@ use the same table in read-only mode. The demo remains available as a test fixtu
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
-lines; Return sends while idle, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
+lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
 turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
 `resource_link` blocks built by `ResourceLink.file` in Core. For a session in a linked worktree,
 `SessionWorkspace.linkedCheckout` supplies the main checkout, and links to checkout paths that exist in
 the worktree point there. A draft that is a bare `/word` lists the matching commands from
 `available_commands_update`; choosing one inserts `/name ` as text. The transcript names link
-attachments. Queueing and steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
+attachments. `SessionController.submit(_:intent:)` owns the per-session prompt queue
+([ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)).
+Return sends only when idle with an empty, unpaused queue; otherwise it queues the draft. A completed
+turn drains the queue as one prompt. Queue snapshots record text, attachments, editing, removal and
+order in the existing event log. Dequeue and one `promptMessage` event per message commit atomically;
+the messages retain their UUIDs, share a turn ID and display “sent together”, with a unique event
+sequence per transcript row. Up in an empty composer recalls the last entry for text editing without
+rebuilding its attachments. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
+Saved entries remain paused after Continue. A failed live session also offers Continue, which creates
+a new connection; failed connections stay closed. A dispatch stopped before invoking the wire prompt returns its composed
+messages to the queue by UUID and marks the original transcript rows “not sent”. Queue snapshots are
+built only after preceding lifecycle writes settle, so this compensation cannot overwrite later edits.
+
+⌘Return sends the draft now and leaves the queue in place. ⇧⌘Return sends the queue with the nonempty
+draft last. Steering uses `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel
+tasks to settle, and then starts the next turn; injection-capable connections implement
+`AgentConnection.inject(_:in:)` without ending the active turn. The default injection implementation
+fails explicitly and no current v1 adapter advertises it. Injection first records complete composed
+content as pending queue entries; only successful wire acknowledgement atomically dequeues it and
+adds transcript rows. A Stop during preparation retains those entries. If the original wire turn
+ends during preparation, the controller sends a new turn instead. A crash or failure between wire
+insertion and acknowledgement conservatively retains the content for explicit recovery; ACP offers
+no exactly-once guarantee. Manual Stop supersedes a pending interrupt
+and never causes an automatic drain. Composer drafts clear only after durable acceptance.
+
+Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
 Markdown body with the title, reported locations and text content, so selection and copying work as
 for messages. Missing fields are shown as not reported; unsupported content appears
 as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;
@@ -217,7 +242,10 @@ The controller owns one prompt task. `send` records the prompt before sending it
 cancelling a task waiting on `send` does not cancel that owned turn. `stop` records the intent and sends
 `session/cancel`, retaining updates until the prompt response. A new prompt is not allowed until a pending cancel has been sent.
 A stop while the initial prompt write
-is pending prevents sending that prompt. Busy sends are rejected until #65 supplies queue/steering.
+is pending prevents sending that prompt. Low-level `send` rejects busy calls; the app uses `submit`
+to queue or steer them. The queue coordinator settles lifecycle writes before building snapshots and
+checks the Stop generation captured at public operation entry, so an earlier send-now or resume
+waiting behind an edit cannot supersede a later Stop.
 Turn errors are recorded and close the session; deliberate close records cancellation instead.
 Closing during startup also throws `CancellationError`; an earlier failure or a failed persistence write takes precedence.
 The first failure is retained so a subsequent connection-closed error cannot hide its cause.

@@ -164,7 +164,7 @@ final class LiveTranscriptSource: TranscriptSource {
         if let message = item.message {
             let role: String =
                 switch message.role {
-                case .user: "You";
+                case .user: message.notSent ? "You · not sent" : message.sentTogether ? "You · sent together" : "You";
                 case .assistant: "Agent";
                 case .thought: "Thinking"
                 }

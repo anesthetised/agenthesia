@@ -23,7 +23,11 @@ import SwiftUI
     var canStart: Bool {
         !closed && !starting && (owner == nil || owner?.isClosed == true || owner?.errorMessage != nil)
     }
-    var canContinue: Bool { restored?.status == .readOnly && !restoredIsLive && canStart }
+    var canContinue: Bool {
+        canStart
+            && ((restored?.status == .readOnly && !restoredIsLive)
+                || (restored == nil && owner?.controller?.status == .failed))
+    }
 
     func refresh() async {
         do {
@@ -45,7 +49,7 @@ import SwiftUI
     }
     /// Continues the selected saved session as this window's live session (ADR-0017).
     func continueRestored() async {
-        guard canContinue, let session = restored?.session else { return }
+        guard canContinue, let session = (restored ?? owner?.controller)?.session else { return }
         await replaceOwner { await $0.resume(session) }
     }
     private func replaceOwner(_ launch: (LiveSession) async -> Void) async {

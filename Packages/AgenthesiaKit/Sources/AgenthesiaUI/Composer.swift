@@ -1,4 +1,5 @@
 import ACP
+import AgenthesiaCore
 import AppKit
 import SwiftUI
 
@@ -8,7 +9,10 @@ struct ComposerInput: View {
     @Binding var attachments: [URL]
     let commands: [ACP.AvailableCommand]
     let isEnabled: Bool
-    let onSubmit: () -> Void
+    let onSubmit: (SessionController.SubmissionIntent) -> Void
+    var attachmentsEditable = true
+    var onRecall: () -> Void = {}
+    var onStop: () -> Void = {}
     @State private var selection = 0
     /// Escape hides the commands until the draft leaves command mode.
     @State private var dismissed = false
@@ -16,13 +20,14 @@ struct ComposerInput: View {
     var body: some View {
         let matches = dismissed ? [] : Self.commandMatches(text, in: commands)
         VStack(alignment: .leading, spacing: 8) {
-            if !matches.isEmpty { commandList(matches) }
-            if !attachments.isEmpty { chips }
+            if !matches.isEmpty { commandList(matches).disabled(!isEnabled) }
+            if !attachments.isEmpty { chips.disabled(!attachmentsEditable || !isEnabled) }
             ComposerTextView(
                 text: $text,
                 isEditable: isEnabled,
                 onCommand: { handle($0, matches: matches) },
-                onFiles: { if isEnabled { Self.add($0, to: &attachments) } }
+                onFiles: { if isEnabled && attachmentsEditable { Self.add($0, to: &attachments) } },
+                onShortcut: { handleShortcut($0, matches: matches) }
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -87,23 +92,67 @@ struct ComposerInput: View {
         .scrollIndicators(.never)
     }
 
-    private func handle(_ selector: Selector, matches: [ACP.AvailableCommand]) -> Bool {
-        let lineBreak = NSApp.currentEvent?.modifierFlags.intersection([.shift, .option]).isEmpty == false
-        guard let action = Self.keyAction(selector, matches: matches.count, selection: selection, lineBreak: lineBreak)
+    private func handleShortcut(_ event: NSEvent, matches: [ACP.AvailableCommand]) -> Bool {
+        guard isEnabled, event.modifierFlags.contains(.command) else { return false }
+        // Return and keypad Enter must reach the composer while NSTextView is first responder.
+        if event.keyCode == 36 || event.keyCode == 76 {
+            return handle(#selector(NSResponder.insertNewline(_:)), matches: matches, modifiers: event.modifierFlags)
+        }
+        if event.charactersIgnoringModifiers == "." {
+            return handle(#selector(NSResponder.cancelOperation(_:)), matches: matches, modifiers: event.modifierFlags)
+        }
+        return false
+    }
+
+    private func handle(
+        _ selector: Selector,
+        matches: [ACP.AvailableCommand],
+        modifiers: NSEvent.ModifierFlags? = nil
+    ) -> Bool {
+        let modifiers = modifiers ?? NSApp.currentEvent?.modifierFlags ?? []
+        let lineBreak = !modifiers.intersection([.shift, .option]).isEmpty
+        guard
+            let action = Self.keyAction(
+                selector,
+                matches: matches.count,
+                selection: selection,
+                lineBreak: lineBreak,
+                command: modifiers.contains(.command),
+                shift: modifiers.contains(.shift),
+                empty: text.isEmpty && attachments.isEmpty
+            )
         else { return false }
         switch action {
         case .select(let index): selection = index
         case .complete(let index): complete(matches[index])
         case .dismiss: dismissed = dismissed || !matches.isEmpty
-        case .submit: onSubmit()
+        case .submit: onSubmit(.whenReady)
+        case .sendNow: onSubmit(.now)
+        case .sendAllNow: onSubmit(.allNow)
+        case .recall: onRecall()
+        case .stop: onStop()
         }
         return true
     }
 
-    enum KeyAction: Equatable { case select(Int), complete(Int), dismiss, submit }
+    enum KeyAction: Equatable { case select(Int), complete(Int), dismiss, submit, sendNow, sendAllNow, recall, stop }
 
     /// What a key command does with `matches` commands listed; nil leaves it to the text view.
-    static func keyAction(_ selector: Selector, matches: Int, selection: Int, lineBreak: Bool) -> KeyAction? {
+    static func keyAction(
+        _ selector: Selector,
+        matches: Int,
+        selection: Int,
+        lineBreak: Bool,
+        command: Bool = false,
+        shift: Bool = false,
+        empty: Bool = false
+    ) -> KeyAction? {
+        if command {
+            if selector == #selector(NSResponder.insertNewline(_:)) { return shift ? .sendAllNow : .sendNow }
+            if selector == #selector(NSResponder.cancelOperation(_:)) { return .stop }
+        }
+        if selector == #selector(NSResponder.insertNewline(_:)), lineBreak { return nil }
+        if empty, selector == #selector(NSResponder.moveUp(_:)) { return .recall }
         if matches > 0 {
             switch selector {
             case #selector(NSResponder.moveUp(_:)): return .select(max(selection - 1, 0))
@@ -145,6 +194,7 @@ struct ComposerTextView: NSViewRepresentable {
     /// Return true to consume a key command such as `insertNewline:`.
     var onCommand: (Selector) -> Bool
     var onFiles: ([URL]) -> Void
+    var onShortcut: (NSEvent) -> Bool = { _ in false }
 
     static let font = NSFont.preferredFont(forTextStyle: .body)
     private static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
@@ -187,6 +237,7 @@ struct ComposerTextView: NSViewRepresentable {
     private func update(_ textView: FileTextView, coordinator: Coordinator) {
         coordinator.parent = self
         textView.onFiles = onFiles
+        textView.onShortcut = onShortcut
         textView.isEditable = isEditable
         if textView.string != text {
             textView.string = text
@@ -231,6 +282,11 @@ struct ComposerTextView: NSViewRepresentable {
 /// Turns pasted and dropped files into attachments instead of inserting their paths.
 final class FileTextView: NSTextView {
     var onFiles: ([URL]) -> Void = { _ in }
+    var onShortcut: (NSEvent) -> Bool = { _ in false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        onShortcut(event) || super.performKeyEquivalent(with: event)
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()

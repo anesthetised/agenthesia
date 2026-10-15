@@ -30,7 +30,7 @@ struct ComposerTests {
         #expect(ComposerInput.keyAction(down, matches: 3, selection: 2, lineBreak: false) == .select(2))
         #expect(ComposerInput.keyAction(up, matches: 3, selection: 0, lineBreak: false) == .select(0))
         #expect(ComposerInput.keyAction(tab, matches: 3, selection: 1, lineBreak: false) == .complete(1))
-        #expect(ComposerInput.keyAction(enter, matches: 2, selection: 5, lineBreak: true) == .complete(1))
+        #expect(ComposerInput.keyAction(enter, matches: 2, selection: 5, lineBreak: true) == nil)
         #expect(ComposerInput.keyAction(escape, matches: 3, selection: 0, lineBreak: false) == .dismiss)
         // Without listed commands, arrows and Tab edit text and Return sends unless it is a line break.
         #expect(ComposerInput.keyAction(up, matches: 0, selection: 0, lineBreak: false) == nil)
@@ -38,6 +38,20 @@ struct ComposerTests {
         #expect(ComposerInput.keyAction(enter, matches: 0, selection: 0, lineBreak: false) == .submit)
         #expect(ComposerInput.keyAction(enter, matches: 0, selection: 0, lineBreak: true) == nil)
         #expect(ComposerInput.keyAction(escape, matches: 0, selection: 0, lineBreak: false) == .dismiss)
+    }
+
+    @Test func queueShortcutsTakePrecedenceOverCommandCompletion() {
+        let enter = #selector(NSResponder.insertNewline(_:))
+        let escape = #selector(NSResponder.cancelOperation(_:))
+        let up = #selector(NSResponder.moveUp(_:))
+        #expect(ComposerInput.keyAction(enter, matches: 2, selection: 0, lineBreak: false, command: true) == .sendNow)
+        #expect(
+            ComposerInput.keyAction(enter, matches: 2, selection: 0, lineBreak: true, command: true, shift: true)
+                == .sendAllNow
+        )
+        #expect(ComposerInput.keyAction(escape, matches: 0, selection: 0, lineBreak: false, command: true) == .stop)
+        #expect(ComposerInput.keyAction(up, matches: 0, selection: 0, lineBreak: false, empty: true) == .recall)
+        #expect(ComposerInput.keyAction(up, matches: 0, selection: 0, lineBreak: false, empty: false) == nil)
     }
 
     @Test func attachmentsAreFileURLsWithoutDuplicates() {

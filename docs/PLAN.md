@@ -13,48 +13,36 @@ before implementation.
 - Live sessions run end-to-end in one window ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
   ([ADR-0016](adr/0016-agent-reported-command-output.md)).
-- Saved history opens read-only; it does not reconnect to the agent.
+- Saved history opens read-only; Continue reattaches it to its agent
+  ([ADR-0017](adr/0017-continue-saved-sessions.md)).
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
 
 ## Next steps
 
 | # | Issue | Depends on | Model and effort |
 |---|-------|------------|------------------|
-| 1 | #25 Session resume and load | — | Opus, high |
-| 2 | #20 DiffView | — | Opus, medium |
-| 3 | #18 Composer with attachments and slash commands | — | Opus, high |
-| 4 | #23 Config options picker | #18 | Opus, medium |
-| 5 | #65 Prompt queue and steering | #18 | Opus, high |
-| 6 | #24 Native elicitation forms | — | Opus, medium |
+| 1 | #20 DiffView | — | Opus, medium |
+| 2 | #18 Composer with attachments and slash commands | — | Opus, high |
+| 3 | #23 Config options picker | #18 | Opus, medium |
+| 4 | #65 Prompt queue and steering | #18 | Opus, high |
+| 5 | #24 Native elicitation forms | — | Opus, medium |
 
 Then M4 (Files), M7 (Parallel sessions), M8 (Worktrees). Small independent chores such as #73 (CI with
 Xcode 27) fit Sonnet at medium effort.
 
-### 1. Session resume and load (#25)
-
-- The protocol side exists: `AgentConnection.reopenSession` tries `session/resume`, then `session/load`
-  with replayed updates suppressed in the v1 adapter, and returns `.unavailable` otherwise.
-- Missing: Core and UI. `SessionController.restore` only reduces the log and sets `.readOnly`;
-  `LiveSession.launch` always creates a new workspace and calls `newSession`.
-- Decisions are in [ADR-0017](adr/0017-continue-saved-sessions.md): an explicit Continue action, one live
-  owner per session in `SessionLibrary`, closing turns and permission requests left open by a crash, a
-  `reopened` marker event, and read-only history with an explanation on any failure.
-- Additional directories are not stored in the session record, so a continued session runs without them.
-- Update ARCHITECTURE.md (session filesystem roots, `restore`) with the implementation.
-
-### 2. DiffView (#20)
+### 1. DiffView (#20)
 
 - Tool call cards show a placeholder for diff content (`LiveTranscript.swift`, `case .diff`).
 - Prefer the standard library (`CollectionDifference`) over a dependency. Word-level highlights on large
   files are performance-sensitive: add a case to `rendering-bench` and agree on the run with the owner.
 
-### 3–5. Composer, config options, prompt queue (#18, #23, #65)
+### 2–4. Composer, config options, prompt queue (#18, #23, #65)
 
 - #18 is the base for #23 and #65. The behavior of #65 is fixed by
   [ADR-0010](adr/0010-prompt-queue-and-steering.md); queue entries are persisted in the event log.
 - `AgentProfile.steering` already reports whether the agent supports injection.
 
-### 6. Elicitation forms (#24)
+### 5. Elicitation forms (#24)
 
 - The adapter is created with `elicitation: false` in `LiveSession`; the delegate's default declines.
   See [ADR-0009](adr/0009-tools-and-mcp.md).

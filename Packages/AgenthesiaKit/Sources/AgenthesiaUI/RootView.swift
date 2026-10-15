@@ -162,7 +162,13 @@ public struct RootView: View {
                 Text(Self.statusText(session))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                if session.status == .running || session.status == .stopping {
+                if session.status == .readOnly {
+                    Button("Continue", systemImage: "play.fill") { Task { await model.continueRestored() } }
+                        .disabled(!model.canContinue)
+                        .help(
+                            model.restoredIsLive ? "This session is open in another window." : "Reconnect to the agent."
+                        )
+                } else if session.status == .running || session.status == .stopping {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
                         .keyboardShortcut(".", modifiers: .command).disabled(session.status == .stopping)
                 } else {

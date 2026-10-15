@@ -1095,3 +1095,155 @@ extension SessionControllerTests {
         await controller.close()
     }
 }
+
+@MainActor private func reopen(_ id: UUID, store: PersistenceStore, agent: EchoAgent) async throws -> SessionController
+{
+    let controller = try await SessionController.history(id: id, store: store)
+    let (server, client) = InMemoryTransport.pair()
+    Task { await agent.serve(server) }
+    let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+    try await controller.reopen(connection: connection, client: .init(name: "test", version: "1"))
+    return controller
+}
+
+private func reopenMethods(_ events: [StoredEvent]) -> [SessionEvent.ReopenMethod] {
+    events.compactMap {
+        guard let local = try? JSONDecoder().decode(SessionEvent.self, from: $0.event.payload),
+            case .reopened(_, let method) = local
+        else { return nil }
+        return method
+    }
+}
+
+extension SessionControllerTests {
+    @Test(arguments: [SessionEvent.ReopenMethod.resume, .load])
+    func reopenContinuesAfterTheSavedHistory(method: SessionEvent.ReopenMethod) async throws {
+        let fixture = try Fixture()
+        var options = EchoAgent.Options()
+        options.resumeSession = method == .resume
+        // The same agent keeps the session, so loading replays it; the replay must not be recorded again.
+        let agent = EchoAgent(options: options)
+        let first = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        Task { await agent.serve(server) }
+        try await first.start(
+            connection: await ACP.V1.AgentConnectionAdapter(transport: client, delegate: first),
+            client: .init(name: "test", version: "1")
+        )
+        try await first.send([.init(text: "hello")])
+        await first.close()
+
+        let controller = try await reopen(first.session.id, store: fixture.store, agent: agent)
+        #expect(controller.status == .idle)
+        #expect(controller.transcript.items.prefix(first.transcript.items.count).elementsEqual(first.transcript.items))
+        #expect(controller.transcript.items.last?.reopenedAt != nil)
+        #expect(controller.transcript.configOptions.isEmpty == false)
+        try await controller.send([.init(text: "again")])
+        #expect(
+            controller.transcript.items.compactMap { $0.message?.text } == [
+                "hello", "Echo: hello", "again", "Echo: again",
+            ]
+        )
+        await controller.close()
+        let events = try await fixture.store.events(in: first.session.id)
+        #expect(reopenMethods(events) == [method])
+        let replay = try await SessionController.restore(id: first.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+    }
+
+    @Test func reopenClosesWhatACrashLeftOpen() async throws {
+        let fixture = try Fixture()
+        let seeded = try await fixture.seed()
+        let session = SessionRecord(
+            id: seeded.id,
+            projectID: seeded.projectID,
+            agentInstallID: seeded.agentInstallID,
+            agentSessionID: "saved",
+            workingDirectory: seeded.workingDirectory
+        )
+        try await fixture.store.createSession(session)
+        let turn = UUID()
+        let request = UUID()
+        _ = try await fixture.store.append(
+            [
+                try SessionEvent.started(configOptions: []).storedEvent(),
+                try SessionEvent.prompt(id: turn, content: [.init(text: "write")]).storedEvent(),
+                try SessionEvent.permissionRequested(id: request, toolCall: .init(toolCallId: "w"), options: choices)
+                    .storedEvent(),
+            ],
+            to: session.id
+        )
+        let saved = try await SessionController.restore(id: session.id, store: fixture.store)
+        #expect(saved.transcript.activeTurn == turn)
+        #expect(saved.transcript.unansweredPermissions == [request])
+
+        var options = EchoAgent.Options()
+        options.reopensUnknownSessions = true
+        let controller = try await reopen(session.id, store: fixture.store, agent: EchoAgent(options: options))
+        let transcript = controller.transcript
+        #expect(transcript.activeTurn == nil)
+        #expect(transcript.unansweredPermissions.isEmpty)
+        #expect(transcript.items.compactMap(\.permission).map(\.outcome) == [.cancelled])
+        #expect(transcript.items.contains { $0.notice?.hasPrefix("Interrupted") == true })
+        #expect(transcript.items.last?.reopenedAt != nil)
+        try await controller.send([.init(text: "hello")])
+        #expect(controller.transcript.items.last?.message?.text == "Echo: hello")
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func failedReopenWritesNothing(knownSession: Bool) async throws {
+        let fixture = try Fixture()
+        let first = try await fixture.live()
+        try await first.send([.init(text: "hello")])
+        await first.close()
+        let before = try await fixture.store.events(in: first.session.id)
+        var options = EchoAgent.Options()
+        if knownSession {
+            // The agent cannot continue sessions at all.
+            options.resumeSession = false
+            options.loadSession = false
+        }  // Otherwise a fresh agent does not know the session.
+        let controller = try await SessionController.history(id: first.session.id, store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        Task { await EchoAgent(options: options).serve(server) }
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        if knownSession {
+            await #expect(throws: SessionController.SessionError.cannotReopen) {
+                try await controller.reopen(connection: connection, client: .init(name: "test", version: "1"))
+            }
+        } else {
+            await #expect(throws: (any Error).self) {
+                try await controller.reopen(connection: connection, client: .init(name: "test", version: "1"))
+            }
+        }
+        #expect(controller.status == .failed)
+        #expect(try await fixture.store.events(in: first.session.id) == before)
+        await controller.close()
+    }
+
+    @Test func onlyAReadySavedSessionCanBeReopened() async throws {
+        let fixture = try Fixture()
+        let live = try await fixture.live()
+        let (_, client) = InMemoryTransport.pair()
+        let connection = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: live)
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await live.reopen(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        let readOnly = try await SessionController.restore(id: live.session.id, store: fixture.store)
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await readOnly.reopen(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        await live.close()
+        let draft = SessionController(
+            session: SessionRecord(
+                projectID: live.session.projectID,
+                agentInstallID: live.session.agentInstallID,
+                workingDirectory: live.session.workingDirectory
+            ),
+            store: fixture.store
+        )
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await draft.reopen(connection: connection, client: .init(name: "test", version: "1"))
+        }
+    }
+}

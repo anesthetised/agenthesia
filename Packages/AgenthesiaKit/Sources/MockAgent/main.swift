@@ -7,6 +7,9 @@ import JSONRPC
 //     MockAgent                      reactive echo agent (see EchoAgent)
 //     MockAgent --scenario <file>    plays a JSON scenario and exits non-zero on deviation
 //     MockAgent --auth               echo agent that requires authentication
+//     MockAgent --reopen             echo agent that resumes or loads sessions of earlier processes
+//     MockAgent --no-resume          echo agent without session/resume
+//     MockAgent --no-load            echo agent without session/load
 
 let transport = FileHandleTransport(reading: .standardInput, writing: .standardOutput)
 let arguments = CommandLine.arguments.dropFirst()
@@ -22,5 +25,8 @@ if let index = arguments.firstIndex(of: "--scenario"), arguments.indices.contain
     var options = EchoAgent.Options()
     options.chunkDelay = .milliseconds(30)
     options.requiresAuthentication = arguments.contains("--auth")
+    options.reopensUnknownSessions = arguments.contains("--reopen")
+    options.resumeSession = !arguments.contains("--no-resume")
+    options.loadSession = !arguments.contains("--no-load")
     await EchoAgent(options: options).serve(transport)
 }

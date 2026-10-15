@@ -36,7 +36,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
-| `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
+| `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
@@ -85,6 +85,18 @@ decline. Requests without a recorded response after a restart show that none was
 controls. Non-text content is identified with attachment placeholders rather than silently dropped.
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
+Saved history opens read-only. Its Continue action replaces the window's live session with one that
+reattaches the saved session ([ADR-0017](adr/0017-continue-saved-sessions.md)): `LiveSession.resume`
+looks up the session's agent install, checks the executable and the working directory, and launches
+the agent there without creating a workspace. `SessionLibrary` records which sessions have a live owner;
+Continue is disabled for a session that was live in another window when it was selected, and a second
+claim fails with an explanation. The claim is released when the owner cleans up.
+`SessionController.history(id:store:)` replays the log into a controller that `reopen` attaches through
+`AgentConnection.reopenSession`. Only when the agent accepts does the controller append `failed` for a
+turn without an outcome, `permissionResolved(.cancelled)` for requests without a response, and
+`reopened` with the session's settings and the method used; the transcript shows the last as a
+“Continued” divider. Any failure leaves the log unchanged and the history readable.
+
 A window-close notification starts asynchronous owner shutdown. An AppKit application delegate retains
 a registry solely for pending window cleanup and uses `terminateLater` to await shutdown on app quit.
 The owner closes ACP and drains controller writes, terminates the process group, and waits for startup
@@ -115,8 +127,8 @@ Roots are the actual session working directory (the worktree directory for Git p
 `additionalDirectories`. The launch API accepts additional directories and passes the same list to
 `session/new`; an agent that does not advertise support fails startup rather than silently receiving
 different roots. The current launch form supplies only the working directory. Additional roots are
-launch parameters, not restored permissions; reopening history enables no provider, and reconnection
-must supply its intended root set when implemented in #25.
+launch parameters, not restored permissions; reopening history enables no provider. A continued session
+does not store or restore additional roots, so its only root is its working directory.
 
 `ScopedFileAccess` canonicalizes roots and requested paths, including macOS aliases such as `/var`,
 then enforces directory-component boundaries. Internal symlinks may resolve inside any allowed root;
@@ -250,8 +262,8 @@ permission response, failure and close. The view owns and stops the driver; it f
 and uses a weak session reference. No display timer or rendering dependency is added to Core.
 
 `restore(id:store:)` replays bounded pages into a read-only controller without contacting an agent.
-An unfinished turn remains visible as unfinished; it is not automatically resubmitted. Reattach/resume
-is #25. The controller must be explicitly closed by its owner; that releases the connection/delegate
+An unfinished turn remains visible as unfinished; it is not automatically resubmitted. Continuing a
+saved session closes it as interrupted (see above). The controller must be explicitly closed by its owner; that releases the connection/delegate
 cycle and waits for the active turn and pending writes.
 
 ## Runtime implementation

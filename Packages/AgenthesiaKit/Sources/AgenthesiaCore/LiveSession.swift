@@ -21,6 +21,8 @@ public final class LiveSession {
     @ObservationIgnored private var closing: Task<Void, Never>?
     @ObservationIgnored private var exitTask: Task<Void, Never>?
     @ObservationIgnored private var logTask: Task<Void, Never>?
+    /// The session this owner holds in the library, released on cleanup.
+    @ObservationIgnored private var claimed: UUID?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment: @Sendable () async -> (values: [String: String], diagnostic: String?) = {
         let resolution = await ShellEnvironment.shared.resolve()
@@ -35,30 +37,50 @@ public final class LiveSession {
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = []
     ) async {
-        guard startup == nil, controller == nil, !isClosed else { return }
-        isStarting = true
-        let task = Task {
-            await launch(
+        await run(
+            .new(
                 directory: directory,
                 agent: agent,
                 worktreesRoot: worktreesRoot,
                 additionalDirectories: additionalDirectories
             )
-        }
+        )
+    }
+
+    /// Continues a saved session in its working directory with its agent (ADR-0017).
+    public func resume(_ session: SessionRecord) async {
+        await run(.saved(session))
+    }
+
+    private enum Launch {
+        case new(directory: URL, agent: AgentInstallRecord, worktreesRoot: URL?, additionalDirectories: [URL])
+        case saved(SessionRecord)
+    }
+
+    private func run(_ launch: Launch) async {
+        guard startup == nil, controller == nil, !isClosed else { return }
+        isStarting = true
+        let task = Task { await self.launch(launch) }
         startup = task
         await task.value
     }
 
-    private func launch(
-        directory: URL,
-        agent: AgentInstallRecord,
-        worktreesRoot: URL?,
-        additionalDirectories: [URL]
-    ) async {
+    private func launch(_ launch: Launch) async {
         defer { isStarting = false }
+        var agentName = "The agent"
         do {
             let store = try await library.store()
             guard !isClosed else { return }
+            let agent: AgentInstallRecord
+            switch launch {
+            case .new(_, let new, _, _): agent = new
+            case .saved(let session):
+                guard let install = try await library.install(id: session.agentInstallID) else {
+                    throw LaunchError(message: "The agent of this session is no longer configured.")
+                }
+                agent = install
+            }
+            agentName = agent.name
             // Resolve and check the command first, so a mistyped executable does not leave a worktree behind.
             let resolution = await environment()
             diagnostic = resolution.diagnostic
@@ -66,41 +88,39 @@ public final class LiveSession {
             guard Self.isExecutable(agent.executable, path: resolution.values["PATH"]) else {
                 throw LaunchError(message: "Cannot find an executable named “\(agent.executable)”.")
             }
-            let id = UUID()
-            let workspace: SessionWorkspace
-            if let worktreesRoot {
-                workspace = try await SessionWorkspace.prepare(
+            let controller: SessionController
+            switch launch {
+            case .new(let directory, _, let worktreesRoot, let additionalDirectories):
+                controller = try await create(
                     directory: directory,
-                    id: id,
-                    worktreesRoot: worktreesRoot
+                    agent: agent,
+                    worktreesRoot: worktreesRoot,
+                    additionalDirectories: additionalDirectories,
+                    store: store
                 )
-            } else {
-                workspace = try await SessionWorkspace.prepare(directory: directory, id: id)
+            case .saved(let session):
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: session.workingDirectory, isDirectory: &isDirectory),
+                    isDirectory.boolValue
+                else {
+                    throw LaunchError(message: "The working directory “\(session.workingDirectory)” no longer exists.")
+                }
+                guard await library.claim(session.id) else {
+                    throw LaunchError(message: "This session is already open in another window.")
+                }
+                claimed = session.id
+                workingDirectory = URL(filePath: session.workingDirectory)
+                controller = try await SessionController.history(id: session.id, store: store)
             }
-            workingDirectory = workspace.workingDirectory
             guard !isClosed else { return }
-            let project = try await library.project(directory: workspace.projectDirectory)
-            let install = try await library.install(agent)
-            guard !isClosed else { return }
-            let controller = SessionController(
-                session: SessionRecord(
-                    id: id,
-                    projectID: project.id,
-                    agentInstallID: install.id,
-                    title: "\(install.name) · \(project.name)",
-                    workingDirectory: workspace.workingDirectory.path
-                ),
-                store: store,
-                additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }
-            )
             self.controller = controller
             controller.fileSystem = try await SessionFileSystem(controller: controller)
             guard !isClosed else { await controller.close(); return }
             let command = AgentCommand(
-                executable: install.executable,
-                arguments: install.arguments,
+                executable: agent.executable,
+                arguments: agent.arguments,
                 environment: resolution.values,
-                currentDirectory: workspace.workingDirectory
+                currentDirectory: URL(filePath: controller.session.workingDirectory)
             )
             let process = try await Task.detached { try AgentProcess(launching: command) }.value
             self.process = process
@@ -118,7 +138,12 @@ public final class LiveSession {
                 options: .init(elicitation: false)
             )
             guard !isClosed else { await connection.close(); await cleanup(); return }
-            try await controller.start(connection: connection, client: .init(name: "Agenthesia", version: "0.1"))
+            let client = ACP.Implementation(name: "Agenthesia", version: "0.1")
+            if case .saved = launch {
+                try await controller.reopen(connection: connection, client: client)
+            } else {
+                try await controller.start(connection: connection, client: client)
+            }
             guard !isClosed else { await cleanup(); return }
             observeFailure()
             exitTask = Task { [weak self] in
@@ -132,10 +157,49 @@ public final class LiveSession {
                 await self.cleanup()
             }
         } catch {
-            if !isClosed { errorMessage = controller?.errorMessage ?? error.localizedDescription }
+            if !isClosed {
+                errorMessage =
+                    error as? SessionController.SessionError == .cannotReopen
+                    ? "\(agentName) cannot continue saved sessions."
+                    : controller?.errorMessage ?? error.localizedDescription
+            }
             await controller?.close()
             await cleanup()
         }
+    }
+
+    private func create(
+        directory: URL,
+        agent: AgentInstallRecord,
+        worktreesRoot: URL?,
+        additionalDirectories: [URL],
+        store: PersistenceStore
+    ) async throws -> SessionController {
+        let id = UUID()
+        _ = await library.claim(id)
+        claimed = id
+        let workspace: SessionWorkspace
+        if let worktreesRoot {
+            workspace = try await SessionWorkspace.prepare(directory: directory, id: id, worktreesRoot: worktreesRoot)
+        } else {
+            workspace = try await SessionWorkspace.prepare(directory: directory, id: id)
+        }
+        workingDirectory = workspace.workingDirectory
+        guard !isClosed else { throw CancellationError() }
+        let project = try await library.project(directory: workspace.projectDirectory)
+        let install = try await library.install(agent)
+        guard !isClosed else { throw CancellationError() }
+        return SessionController(
+            session: SessionRecord(
+                id: id,
+                projectID: project.id,
+                agentInstallID: install.id,
+                title: "\(install.name) · \(project.name)",
+                workingDirectory: workspace.workingDirectory.path
+            ),
+            store: store,
+            additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }
+        )
     }
 
     public func send(_ text: String) async {
@@ -183,6 +247,10 @@ public final class LiveSession {
     }
 
     private func cleanup() async {
+        if let claimed {
+            self.claimed = nil
+            await library.release(claimed)
+        }
         guard let process else { return }
         _ = await process.terminate()
         await process.waitForStderr()

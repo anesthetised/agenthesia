@@ -27,9 +27,9 @@ who may write to a session's log, and what happens when the session's environmen
 - **One owner per session.** `SessionLibrary` tracks the sessions that have a live owner in this app.
   Continue is unavailable for a session that is live in another window. Two app instances are not
   guarded against.
-- **Close what a crash left open.** Before reattaching, the controller appends `failed` for a turn
-  without an outcome and `permissionResolved(.cancelled)` for requests without a response. Read-only
-  viewing writes nothing.
+- **Close what a crash left open.** Once the agent accepts the reattach, the controller appends
+  `failed` for a turn without an outcome and `permissionResolved(.cancelled)` for requests without a
+  response, before any new event. Read-only viewing and failed attempts write nothing.
 - **Marker event.** A successful reattach appends `SessionEvent.reopened` with the session's config
   options and whether it was resumed or loaded. It serves as the new baseline, like `started`, and the
   transcript shows it as a divider.

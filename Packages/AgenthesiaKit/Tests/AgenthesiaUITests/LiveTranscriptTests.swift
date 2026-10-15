@@ -40,6 +40,7 @@ import Testing
         let tool = TranscriptState.Item(id: 2, toolCall: .init(toolCallId: "t", title: "Read file", status: .completed))
         #expect(LiveTranscriptSource.content(tool) == ("Tool", "**Read file**"))
         #expect(LiveTranscriptSource.content(.init(id: 3, notice: "Interrupted")).1 == "Interrupted")
+        #expect(LiveTranscriptSource.content(.init(id: 4, reopenedAt: .now)).1.hasPrefix("Continued · "))
     }
 
     @Test func toolCardShowsOnlyWhatTheAgentReported() {

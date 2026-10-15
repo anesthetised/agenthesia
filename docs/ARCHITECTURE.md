@@ -358,8 +358,10 @@ working directory; a missing executable fails creation with `ENOENT`. Nothing is
 terminal. The master side is read continuously, because a terminal's last close waits for its output
 to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
 batches so that noisy commands append in amortized constant time. A process source reaps the
-command. Both sources run on a private serial queue, which gets a thread even when the shared pools are
-busy: the kernel discards output still unread about 0.6 s after the command exits. Exit waits for the end of output, which arrives promptly because the kernel revokes the
+command. Both sources run on a private serial queue. The initial sizing slave remains open until the
+read source is registered and has drained a bounded snapshot of buffered bytes, preventing a quick
+command's output from being discarded while the reader queue starts. Later output must still be read
+promptly because the kernel can discard unread bytes on terminal close or revocation. Exit waits for the end of output, which arrives promptly because the kernel revokes the
 terminal when the session leader exits; the wait is still bounded at 500 ms. Group cleanup is the
 same `ProcessGroupTermination` that `AgentProcess` uses, started on natural exit or explicit
 termination.

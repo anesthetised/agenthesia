@@ -1,6 +1,7 @@
-import AgentRuntime
 import Foundation
 import Testing
+
+@testable import AgentRuntime
 
 @Suite(.timeLimit(.minutes(1))) struct TerminalProcessTests {
     @Test func runsAsSessionLeaderWithThePseudoTerminalAsControllingTerminal() async throws {
@@ -53,6 +54,7 @@ import Testing
         )
         #expect(await terminal.waitForExit() == .exited(0))
         let output = text(terminal.output).trimmingCharacters(in: .newlines)
+        try #require(!output.isEmpty, "Terminal exited without capturing its working directory.")
         let resolved = URL(filePath: output, directoryHint: .isDirectory).resolvingSymlinksInPath()
         #expect(resolved.path() == directory.resolvingSymlinksInPath().path())
     }
@@ -79,6 +81,30 @@ import Testing
         )
         #expect(await terminal.waitForExit() == .exited(0))
         #expect(terminal.output == TerminalOutput(bytes: Data("\u{1B}[31mred\u{1B}[0m\r\nend".utf8)))
+    }
+
+    @Test func retainsQuickOutputWhenReaderRegistrationIsDelayed() async throws {
+        let queue = DispatchQueue(label: "Agenthesia.TerminalProcessTests.delayed-reader")
+        queue.suspend()
+        let terminal: TerminalProcess
+        do {
+            terminal = try TerminalProcess(
+                launching: AgentCommand(executable: "/usr/bin/printf", arguments: ["captured-output\\n"]),
+                readerQueue: queue,
+                afterSpawn: { pid in
+                    let exited = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global())
+                    exited.setEventHandler {
+                        exited.cancel(); queue.resume()
+                    }
+                    exited.resume()
+                }
+            )
+        } catch {
+            queue.resume()
+            throw error
+        }
+        #expect(await terminal.waitForExit() == .exited(0))
+        #expect(terminal.output == TerminalOutput(bytes: Data("captured-output\r\n".utf8)))
     }
 
     @Test func retainsOnlyTheNewestBytesWithinTheLimit() async throws {

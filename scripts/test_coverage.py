@@ -1,13 +1,57 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import coverage
+
+
+class CoverageTestProcessTests(unittest.TestCase):
+    def test_samples_only_test_runners_descended_from_this_invocation(self):
+        processes = "\n".join([
+            "10 1 /usr/bin/swift-test",
+            "20 10 /usr/bin/wrapper",
+            "30 20 /tmp/Tests.xctest/Contents/MacOS/Tests",
+            "40 10 /usr/bin/swiftpm-testing",
+            "50 1 /tmp/Other.xctest/Contents/MacOS/Other",
+            "60 20 /tmp/MockAgent",
+            "70 10 /usr/bin/swiftpm-testing-helper",
+        ])
+        with patch.object(coverage.subprocess, "check_output", return_value=processes), \
+             patch.object(coverage.subprocess, "run") as sample, \
+             contextlib.redirect_stdout(io.StringIO()):
+            coverage.sample_test_processes(10)
+        self.assertEqual([call.args[0][1] for call in sample.call_args_list], ["30", "40", "70"])
+
+    def test_preserves_test_success_and_failure(self):
+        for status in (0, 17):
+            with self.subTest(status=status):
+                actual = coverage.run_test_process(
+                    [sys.executable, "-c", f"raise SystemExit({status})"], dict(os.environ), timeout=5
+                )
+                self.assertEqual(actual, status)
+
+    def test_timeout_reports_failure_and_reaps_the_test_process_even_if_sampling_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "pid"
+            command = [sys.executable, "-c",
+                       "import os, pathlib, signal, time; "
+                       "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                       f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid())); time.sleep(60)"]
+            with patch.object(coverage, "sample_test_processes", side_effect=OSError("sample unavailable")), \
+                 contextlib.redirect_stderr(io.StringIO()) as errors:
+                status = coverage.run_test_process(command, dict(os.environ), timeout=1)
+            self.assertEqual(status, 124)
+            self.assertIn("exceeded", errors.getvalue())
+            self.assertIn("sample unavailable", errors.getvalue())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(pid_file.read_text()), 0)
 
 
 class CoverageReportTests(unittest.TestCase):

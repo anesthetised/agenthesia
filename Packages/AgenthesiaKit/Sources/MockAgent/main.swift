@@ -24,6 +24,7 @@ if let index = arguments.firstIndex(of: "--scenario"), arguments.indices.contain
 } else {
     var options = EchoAgent.Options()
     options.chunkDelay = .milliseconds(30)
+    options.announcesCommands = true
     options.requiresAuthentication = arguments.contains("--auth")
     options.reopensUnknownSessions = arguments.contains("--reopen")
     options.resumeSession = !arguments.contains("--no-resume")

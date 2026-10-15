@@ -87,6 +87,13 @@ import Testing
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(directory: untracked, id: UUID(), worktreesRoot: trees)
         }
+        let linked = try #require(await SessionWorkspace.linkedCheckout(of: result.workingDirectory))
+        #expect(linked.checkout.path == repo.resolvingSymlinksInPath().path)
+        #expect(
+            linked.worktree.path == result.workingDirectory.deletingLastPathComponent().deletingLastPathComponent().path
+        )
+        #expect(await SessionWorkspace.linkedCheckout(of: package) == nil)
+        #expect(await SessionWorkspace.linkedCheckout(of: directory) == nil)
     }
 
     @Test(arguments: ["externalSymlink", "file", "internalSymlink"])

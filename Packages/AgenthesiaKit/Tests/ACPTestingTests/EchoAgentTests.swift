@@ -102,6 +102,20 @@ final class EchoClient: Sendable {
         #expect(client.agentText == "Echo: hello world")
     }
 
+    @Test func announcesCommandsThatPromptsMayPrefixWithASlash() async throws {
+        var options = EchoAgent.Options()
+        options.announcesCommands = true
+        let client = await EchoClient(options: options)
+        _ = try await client.initialize()
+        let session = try await client.newSession()
+        let announced = client.receivedUpdates.compactMap {
+            if case .availableCommands(let update) = $0 { update.availableCommands.map(\.name) } else { nil }
+        }
+        #expect(announced.first?.contains("plan") == true)
+        #expect(try await client.prompt("/plan", in: session.sessionId) == .endTurn)
+        #expect(client.receivedUpdates.contains { if case .plan = $0 { true } else { false } })
+    }
+
     @Test func readsAndWritesThroughTheClient() async throws {
         let client = await EchoClient()
         _ = try await client.initialize()

@@ -23,6 +23,8 @@ public final class LiveSession {
     @ObservationIgnored private var logTask: Task<Void, Never>?
     /// The session this owner holds in the library, released on cleanup.
     @ObservationIgnored private var claimed: UUID?
+    /// Where attached files from the user's checkout are found in the session worktree (ADR-0018).
+    @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment: @Sendable () async -> (values: [String: String], diagnostic: String?) = {
         let resolution = await ShellEnvironment.shared.resolve()
@@ -113,6 +115,8 @@ public final class LiveSession {
                 controller = try await SessionController.history(id: session.id, store: store)
             }
             guard !isClosed else { return }
+            checkout = await SessionWorkspace.linkedCheckout(of: URL(filePath: controller.session.workingDirectory))
+            guard !isClosed else { return }
             self.controller = controller
             controller.fileSystem = try await SessionFileSystem(controller: controller)
             guard !isClosed else { await controller.close(); return }
@@ -202,12 +206,24 @@ public final class LiveSession {
         )
     }
 
-    public func send(_ text: String) async {
+    /// Sends the text followed by a `resource_link` per attached file.
+    public func send(_ text: String, attachments: [URL] = []) async {
         guard let controller, !isClosed else { return }
-        do { try await controller.send([.init(text: text)]) } catch {
+        let content = Self.content(text, attachments: attachments, checkout: checkout)
+        do { try await controller.send(content) } catch {
             if !isClosed { errorMessage = controller.errorMessage ?? error.localizedDescription }
             if controller.status == .failed { await cleanup() }
         }
+    }
+
+    static func content(
+        _ text: String,
+        attachments: [URL],
+        checkout: (checkout: URL, worktree: URL)?
+    ) -> [ACP.ContentBlock] {
+        let links = attachments.map { ACP.ContentBlock.resourceLink(.file($0, checkout: checkout)) }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !links.isEmpty
+            ? links : [.init(text: text)] + links
     }
 
     public func stop() async {

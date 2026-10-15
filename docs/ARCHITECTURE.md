@@ -36,7 +36,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
-| `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
+| `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering, highlighting and diffs (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
@@ -66,8 +66,14 @@ rows, caches attributed text, and handles updates to earlier rows as well as app
 use the same table in read-only mode. The demo remains available as a test fixture; the original
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
 
-The composer accepts text prompts while idle and keeps drafts editable during a turn. Queueing and
-steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
+The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
+lines; Return sends while idle, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
+turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
+`resource_link` blocks built by `ResourceLink.file` in Core. For a session in a linked worktree,
+`SessionWorkspace.linkedCheckout` supplies the main checkout, and links to checkout paths that exist in
+the worktree point there. A draft that is a bare `/word` lists the matching commands from
+`available_commands_update`; choosing one inserts `/name ` as text. The transcript names link
+attachments. Queueing and steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
 Markdown body with the title, reported locations and text content, so selection and copying work as
 for messages. Missing fields are shown as not reported; unsupported content appears
 as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;

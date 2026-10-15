@@ -22,5 +22,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0015](0015-agent-terminals.md) | Agent terminals | Accepted; ACP semantics, lifecycle and history superseded by [0016](0016-agent-reported-command-output.md) |
 | [0016](0016-agent-reported-command-output.md) | Agent-reported command output | Accepted |
 | [0017](0017-continue-saved-sessions.md) | Continue saved sessions | Accepted |
+| [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

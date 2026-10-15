@@ -18,7 +18,8 @@ Consult the user before implementing architectural decisions. Present alternativ
 recommend an approach, and challenge proposals when there are concrete reasons to disagree.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
 Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
-avoiding unnecessary complexity.
+avoiding unnecessary complexity. When writing or changing SwiftUI or AppKit views, also run `swiftui-pro`
+over them before committing.
 
 ## Language
 

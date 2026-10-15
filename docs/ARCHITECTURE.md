@@ -436,3 +436,15 @@ Dependencies are added when the milestone that needs them starts, not up front.
   refer to both URLs. The package depends on the old URL and `.swiftpm/configuration/mirrors.json` (with a
   copy for Xcode in the workspace's `xcshareddata/swiftpm/configuration/`) maps the new one to it, so
   SwiftPM sees one package.
+
+### Native elicitation forms
+
+Live sessions advertise form elicitation and render matching session-scoped requests as native
+transcript cards. Requests and final responses are committed before display and delivery; drafts
+remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
+Saved forms have no active controls; Continue records cancellation of interrupted requests.
+
+Request-scoped elicitation is explicitly declined, including requests made before a durable session
+exists. Supporting those requests needs a separate startup interaction and persistence design
+([#111](https://github.com/anesthetised/agenthesia/issues/111)). URL
+elicitation remains unadvertised.

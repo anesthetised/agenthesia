@@ -1487,3 +1487,262 @@ extension SessionControllerTests {
         await controller.close()
     }
 }
+
+@Suite(.timeLimit(.minutes(1))) @MainActor struct InputLifecycleTests {
+    private func form(_ controller: SessionController) -> ACP.ElicitationRequest {
+        .init(
+            message: "Your name",
+            mode: .form(.init(properties: ["name": .string(.init(minLength: 2))], required: ["name"])),
+            scope: .session(controller.session.agentSessionID!, toolCallId: nil)
+        )
+    }
+    private func pending(_ controller: SessionController, count: Int = 1) async -> [SessionController.PendingInput] {
+        while controller.pendingInputs.count < count { await Task.yield() }
+        return controller.pendingInputs
+    }
+    @Test func concurrentRequestsValidateResolveOnceAndReplay() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = form(controller)
+        let first = Task { await controller.requestInput(request) }
+        let second = Task { await controller.requestInput(request) }
+        let requests = await pending(controller, count: 2)
+        #expect(!controller.answerInput(requests[0].id, with: .init(action: .accept([:]))))
+        #expect(controller.answerInput(requests[0].id, with: .init(action: .accept(["name": "Ada"]))))
+        #expect(!controller.answerInput(requests[0].id, with: .init(action: .decline)))
+        #expect(controller.answerInput(requests[1].id, with: .init(action: .decline)))
+        let responses = [await first.value, await second.value]
+        #expect(responses.contains(.init(action: .accept(["name": "Ada"]))))
+        #expect(responses.contains(.init(action: .decline)))
+        let restored = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(restored.pendingInputs.isEmpty)
+        #expect(restored.transcript.items.compactMap(\.input).count == 2)
+        #expect(restored.transcript.unansweredInputs.isEmpty)
+        await controller.close()
+    }
+    @Test(arguments: [false, true]) func withdrawalAndCloseCancelCommittedAnswers(close: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputResolved(_, let response) = try JSONDecoder().decode(
+                    SessionEvent.self,
+                    from: event.payload
+                ), case .accept = response.action {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        #expect(controller.answerInput(id, with: .init(action: .accept(["name": "Ada"]))))
+        await gate.waitUntilEntered()
+        var closing: Task<Void, Never>?
+        if close {
+            closing = Task { await controller.close() }
+            while controller.status != .closed { await Task.yield() }
+        } else {
+            task.cancel()
+        }
+        await gate.open()
+        #expect(await task.value.action == .cancel)
+        await closing?.value
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).first?.response?.action == .cancel)
+        await controller.close()
+    }
+    @Test func declinesRequestScopeAndRejectsOtherSessionsAndURL() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        var request = form(controller)
+        request.scope = .request(.int(1))
+        #expect(await controller.requestInput(request).action == .decline)
+        request.scope = .session("other", toolCallId: nil)
+        #expect(await controller.requestInput(request).action == .cancel)
+        request = form(controller)
+        request.mode = .url(elicitationId: "url", url: "https://example.com")
+        #expect(await controller.requestInput(request).action == .cancel)
+        #expect(controller.transcript.items.compactMap(\.input).isEmpty)
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func requestIsDurableBeforeDisplayAndWithdrawnRequestSettles() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        #expect(controller.pendingInputs.isEmpty)
+        #expect(controller.transcript.items.compactMap(\.input).isEmpty)
+        task.cancel()
+        await gate.open()
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).first?.response?.action == .cancel)
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func storageFailureSettlesCaller(failResponse: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                let local = try JSONDecoder().decode(SessionEvent.self, from: event.payload)
+                if case .inputRequested = local, !failResponse { throw CocoaError(.fileWriteUnknown) }
+                if case .inputResolved = local, failResponse { throw CocoaError(.fileWriteUnknown) }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        if failResponse {
+            let id = await pending(controller)[0].id
+            #expect(controller.answerInput(id, with: .init(action: .decline)))
+        }
+        #expect(await task.value.action == .cancel)
+        #expect(controller.status == .failed)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+
+    @Test func stopSettlesPendingForms() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        try await controller.stop()
+        #expect(await task.value.action == .cancel)
+        #expect(!controller.answerInput(id, with: .init(action: .decline)))
+        _ = try? await turn.value
+        await controller.close()
+    }
+
+    @Test func restoreIsReadOnlyAndContinueClosesInterruptedForms() async throws {
+        let fixture = try Fixture()
+        let first = try await fixture.live()
+        let request = form(first)
+        await first.close()
+        let id = UUID()
+        _ = try await fixture.store.append(
+            [try SessionEvent.inputRequested(id: id, request: request).storedEvent()],
+            to: first.session.id
+        )
+        let before = try await fixture.store.events(in: first.session.id)
+        let saved = try await SessionController.restore(id: first.session.id, store: fixture.store)
+        #expect(saved.pendingInputs.isEmpty)
+        #expect(saved.transcript.unansweredInputs == [id])
+        #expect(try await fixture.store.events(in: first.session.id) == before)
+        var options = EchoAgent.Options()
+        options.reopensUnknownSessions = true
+        let continued = try await reopen(first.session.id, store: fixture.store, agent: EchoAgent(options: options))
+        #expect(continued.transcript.unansweredInputs.isEmpty)
+        #expect(continued.transcript.items.compactMap(\.input).last?.response?.action == .cancel)
+        #expect(continued.pendingInputs.isEmpty)
+        await continued.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func turnCompletionCancelsUnansweredForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        _ = await pending(controller)
+        try await controller.send([.init(text: "hello")])
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func closeDrainsRequestWhoseInitialCommitIsSuspended() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        let closing = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        let repeated = Task { await controller.close() }
+        await gate.open()
+        await closing.value
+        await repeated.value
+        #expect(controller.pendingInputs.isEmpty)
+        let eventsAtClose = try await store.events(in: controller.session.id)
+        #expect(await task.value.action == .cancel)
+        #expect(try await store.events(in: controller.session.id) == eventsAtClose)
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).last?.response?.action == .cancel)
+        #expect(restored.transcript.unansweredInputs.isEmpty)
+    }
+
+    @Test func idleStopCancelsPendingForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        try await controller.stop()
+        #expect(await task.value.action == .cancel)
+        #expect(!controller.answerInput(id, with: .init(action: .decline)))
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func idleStopDuringInitialCommitNeverPublishesStaleForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        try await controller.stop()
+        await gate.open()
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+}

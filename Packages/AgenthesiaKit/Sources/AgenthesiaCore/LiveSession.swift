@@ -139,7 +139,7 @@ public final class LiveSession {
                 transport: process.transport,
                 delegate: controller,
                 fileSystem: controller.fileSystem,
-                options: .init(elicitation: false)
+                options: .init(elicitation: true)
             )
             guard !isClosed else { await connection.close(); await cleanup(); return }
             let client = ACP.Implementation(name: "Agenthesia", version: "0.1")

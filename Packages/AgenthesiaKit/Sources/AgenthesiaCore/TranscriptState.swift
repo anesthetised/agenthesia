@@ -53,6 +53,12 @@ public struct TranscriptState: Equatable, Sendable {
         }
     }
 
+    public struct Input: Equatable, Sendable {
+        public let requestID: UUID
+        public let request: ACP.ElicitationRequest
+        public var response: ACP.ElicitationResponse?
+    }
+
     /// Command output an agent reports in a tool call's `_meta` (ADR-0016): `terminal_output_delta` and
     /// `terminal_output` carry `data` to append, `terminal_exit` the end of the command.
     public struct CommandOutput: Equatable, Sendable {
@@ -101,6 +107,7 @@ public struct TranscriptState: Equatable, Sendable {
         /// When a saved session was continued; shown as a divider.
         public var reopenedAt: Date?
         public var permission: Permission?
+        public var input: Input?
         /// Output of the row's tool call, kept out of the call's `meta`.
         public var commandOutput: CommandOutput?
     }
@@ -120,6 +127,7 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var usage: ACP.UsageUpdate?
     public private(set) var unsupportedEvents = 0
     private var toolIndices: [ACP.ToolCallID: Int] = [:]
+    private var inputIndices: [UUID: Int] = [:]
     private var permissionIndices: [UUID: Int] = [:]
 
     public init() {}
@@ -128,6 +136,12 @@ public struct TranscriptState: Equatable, Sendable {
     public var unansweredPermissions: [UUID] {
         permissionIndices.sorted { $0.value < $1.value }.compactMap {
             items[$0.value].permission?.outcome == nil ? $0.key : nil
+        }
+    }
+
+    public var unansweredInputs: [UUID] {
+        inputIndices.sorted { $0.value < $1.value }.compactMap {
+            items[$0.value].input?.response == nil ? $0.key : nil
         }
     }
 
@@ -218,6 +232,11 @@ public struct TranscriptState: Equatable, Sendable {
             activeTurn = nil
             stopRequested = false
             items.append(Item(id: sequence, notice: message))
+        case .inputRequested(let id, let request):
+            inputIndices[id] = items.count
+            items.append(Item(id: sequence, input: .init(requestID: id, request: request)))
+        case .inputResolved(let id, let response):
+            if let index = inputIndices[id] { items[index].input?.response = response }
         case .permission(let tool, let outcome):
             appendPermission(nil, tool: tool, options: [], outcome: outcome, sequence: sequence)
         case .permissionRequested(let id, let tool, let options):

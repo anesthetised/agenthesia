@@ -33,6 +33,9 @@ public enum SessionEvent: Codable, Equatable, Sendable {
     /// The response returned to the agent. A later resolution of the same request supersedes an earlier one.
     case permissionResolved(id: UUID, outcome: ACP.PermissionOutcome)
 
+    case inputRequested(id: UUID, request: ACP.ElicitationRequest)
+    case inputResolved(id: UUID, response: ACP.ElicitationResponse)
+
     static let kind = "session.event"
     static let updateKind = "acp.session/update"
 

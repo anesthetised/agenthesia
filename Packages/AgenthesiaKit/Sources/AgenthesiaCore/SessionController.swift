@@ -17,6 +17,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         public let options: [ACP.PermissionOption]
     }
 
+    /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
+    public struct PendingInput: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public let request: ACP.ElicitationRequest
+    }
+
     public enum SessionError: Error, Equatable {
         case invalidState
         case emptyPrompt
@@ -40,6 +46,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public var errorMessage: String? { failure.map { String(describing: $0) } }
     public private(set) var session: SessionRecord
     public private(set) var profile: ACP.AgentProfile?
+    public private(set) var pendingInputs: [PendingInput] = []
     public private(set) var pendingPermissions: [PendingPermission] = []
     /// Explicit roots for this launch; read-only history never re-enables filesystem access.
     public let additionalDirectories: [String]
@@ -62,6 +69,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored private var recording = false
     @ObservationIgnored private var startupUpdates: [(ACP.SessionID, ACP.SessionUpdate, Data)] = []
     @ObservationIgnored private var startupBytes = 0
+    @ObservationIgnored private var inputCloseWaiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var inputGeneration: UInt64 = 0
+    @ObservationIgnored private var inputs: [UUID: Input] = [:]
     @ObservationIgnored private var permissions: [UUID: Permission] = [:]
     // Internal seam for deterministic disk-failure and suspended-write tests; production uses the store.
     @ObservationIgnored var createSession: @Sendable (SessionRecord) async throws -> Void
@@ -155,6 +165,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
             }
             events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
+            for id in reduced.unansweredInputs {
+                events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
+            }
             events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
             try await begin(events)
         } catch {
@@ -472,6 +485,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             promptStarted = false
             // The agent ended the turn without waiting for an answer.
             cancelPermissions()
+            cancelInputs()
             publishTranscript()
             if status == .idle, !queuePaused, !steering {
                 Task { try? await self.coordinateQueue { try await self.drainQueue() } }
@@ -528,6 +542,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     /// Requests cancellation, but keeps recording updates until the prompt response arrives.
     public func stop() async throws {
+        cancelInputs()
         guard [.idle, .running, .stopping].contains(status) else { return }
         stopGeneration += 1
         queuePaused = true
@@ -539,6 +554,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     private func requestStop(interrupted: Bool) async throws {
+        cancelInputs()
         guard status == .running, let id = turnID, let connection, let agentID = session.agentSessionID else { return }
         var events = [try SessionEvent.stopRequested(id: id).storedEvent()]
         if interrupted { events.append(try SessionEvent.interrupted(id: id).storedEvent()) }
@@ -560,13 +576,19 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public func close() async {
         guard status != .closed else {
-            await fileSystem?.close()
+            await waitForInputs()
             _ = try? await configTask?.value
+            _ = try? await turnTask?.value
+            _ = try? await injectionTask?.value
+            _ = try? await queueTask?.value
+            _ = try? await tail?.value
+            await fileSystem?.close()
             return
         }
         status = .closed
         fileSystem?.stopAccepting()
         cancelPermissions()
+        cancelInputs()
         await connection?.close()
         await fileSystem?.close()
         _ = try? await configTask?.value
@@ -574,6 +596,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         _ = try? await injectionTask?.value
         _ = try? await queueTask?.value
         _ = try? await tail?.value
+        await waitForInputs()
         connection = nil
         publishTranscript()
     }
@@ -703,6 +726,99 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         var committed: Task<Void, any Error>?
     }
 
+    /// Handles forms belonging to this established session; request-scoped startup input is declined (#111).
+    @MainActor public func requestInput(_ request: ACP.ElicitationRequest) async -> ACP.ElicitationResponse {
+        guard case .session(let sessionID, _) = request.scope else { return .init(action: .decline) }
+        guard recording,
+            sessionID == session.agentSessionID, case .form = request.mode,
+            status == .running || status == .idle
+        else { return .init(action: .cancel) }
+        let id = UUID()
+        let generation = inputGeneration
+        // Register before yielding to persistence so close can cancel and drain this admitted caller.
+        inputs[id] = Input(request: request)
+        defer {
+            inputs.removeValue(forKey: id)
+            if inputs.isEmpty {
+                for waiter in inputCloseWaiters { waiter.resume() }
+                inputCloseWaiters.removeAll()
+            }
+        }
+        do { try await record([try SessionEvent.inputRequested(id: id, request: request).storedEvent()]) } catch {
+            return .init(action: .cancel)
+        }
+        if generation == inputGeneration, (status == .running || status == .idle), !Task.isCancelled {
+            pendingInputs.append(PendingInput(id: id, request: request))
+            publishTranscript()
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    if inputs[id]?.response == nil { inputs[id]?.waiter = continuation } else { continuation.resume() }
+                }
+            } onCancel: {
+                Task { @MainActor in self.cancelInput(id) }
+            }
+        } else {
+            cancelInput(id)
+        }
+        while let committed = inputs[id]?.committed {
+            do { try await committed.value } catch { await fail(error); break }
+            guard inputs[id]?.committed == committed else { continue }
+            if Task.isCancelled, inputs[id]?.response?.action != .cancel { cancelInput(id); continue }
+            break
+        }
+        let response = inputs[id]?.response
+        publishTranscript()
+        guard status != .failed else { return .init(action: .cancel) }
+        return response ?? .init(action: .cancel)
+    }
+
+    /// Validates and commits the response before delivery. Stale or repeated answers return `false`.
+    @discardableResult public func answerInput(_ id: UUID, with response: ACP.ElicitationResponse) -> Bool {
+        guard status == .running || status == .idle, let input = inputs[id], input.response == nil,
+            case .form(let schema) = input.request.mode
+        else { return false }
+        switch response.action {
+        case .accept(let values):
+            guard InputValidation.errors(in: values ?? [:], schema: schema).isEmpty else { return false }
+        case .decline, .cancel: break
+        case .unknown: return false
+        }
+        resolveInput(id, response)
+        return true
+    }
+
+    private func cancelInput(_ id: UUID) {
+        guard let input = inputs[id], input.response?.action != .cancel else { return }
+        resolveInput(id, .init(action: .cancel))
+    }
+
+    private func waitForInputs() async {
+        guard !inputs.isEmpty else { return }
+        await withCheckedContinuation { inputCloseWaiters.append($0) }
+    }
+
+    private func cancelInputs() {
+        inputGeneration &+= 1
+        for id in inputs.keys { cancelInput(id) }
+    }
+
+    private func resolveInput(_ id: UUID, _ response: ACP.ElicitationResponse) {
+        inputs[id]?.response = response
+        if status != .failed, let event = try? SessionEvent.inputResolved(id: id, response: response).storedEvent() {
+            inputs[id]?.committed = enqueue([event])
+        }
+        inputs[id]?.waiter?.resume()
+        inputs[id]?.waiter = nil
+        pendingInputs.removeAll { $0.id == id }
+    }
+
+    private struct Input {
+        let request: ACP.ElicitationRequest
+        var response: ACP.ElicitationResponse?
+        var waiter: CheckedContinuation<Void, Never>?
+        var committed: Task<Void, any Error>?
+    }
+
     private func updateEvents(_ update: ACP.SessionUpdate, raw: Data) throws -> [NewEvent] {
         let original = try ACP.RecordedSessionUpdate(rawNotification: raw)
         guard original.sessionId == session.agentSessionID else { throw SessionError.invalidState }
@@ -753,6 +869,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         status = .failed
         fileSystem?.stopAccepting()
         cancelPermissions()
+        cancelInputs()
         startupUpdates.removeAll()
         startupBytes = 0
         publishTranscript()

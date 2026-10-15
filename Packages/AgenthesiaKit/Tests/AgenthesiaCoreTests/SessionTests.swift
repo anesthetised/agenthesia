@@ -1489,11 +1489,12 @@ extension SessionControllerTests {
 }
 
 @Suite(.timeLimit(.minutes(1))) @MainActor struct InputLifecycleTests {
-    private func form(_ controller: SessionController) -> ACP.ElicitationRequest {
-        .init(
+    private func form(_ controller: SessionController) throws -> ACP.ElicitationRequest {
+        let sessionID = try #require(controller.session.agentSessionID)
+        return .init(
             message: "Your name",
             mode: .form(.init(properties: ["name": .string(.init(minLength: 2))], required: ["name"])),
-            scope: .session(controller.session.agentSessionID!, toolCallId: nil)
+            scope: .session(sessionID, toolCallId: nil)
         )
     }
     private func pending(_ controller: SessionController, count: Int = 1) async -> [SessionController.PendingInput] {
@@ -1503,7 +1504,7 @@ extension SessionControllerTests {
     @Test func concurrentRequestsValidateResolveOnceAndReplay() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
-        let request = form(controller)
+        let request = try form(controller)
         let first = Task { await controller.requestInput(request) }
         let second = Task { await controller.requestInput(request) }
         let requests = await pending(controller, count: 2)
@@ -1536,7 +1537,7 @@ extension SessionControllerTests {
             }
             return try await store.append(events, to: id)
         }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         let id = await pending(controller)[0].id
         #expect(controller.answerInput(id, with: .init(action: .accept(["name": "Ada"]))))
@@ -1558,12 +1559,12 @@ extension SessionControllerTests {
     @Test func declinesRequestScopeAndRejectsOtherSessionsAndURL() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
-        var request = form(controller)
+        var request = try form(controller)
         request.scope = .request(.int(1))
         #expect(await controller.requestInput(request).action == .decline)
         request.scope = .session("other", toolCallId: nil)
         #expect(await controller.requestInput(request).action == .cancel)
-        request = form(controller)
+        request = try form(controller)
         request.mode = .url(elicitationId: "url", url: "https://example.com")
         #expect(await controller.requestInput(request).action == .cancel)
         #expect(controller.transcript.items.compactMap(\.input).isEmpty)
@@ -1585,7 +1586,7 @@ extension InputLifecycleTests {
             }
             return try await store.append(events, to: id)
         }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         await gate.waitUntilEntered()
         #expect(controller.pendingInputs.isEmpty)
@@ -1611,7 +1612,7 @@ extension InputLifecycleTests {
             }
             return try await store.append(events, to: id)
         }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         if failResponse {
             let id = await pending(controller)[0].id
@@ -1628,7 +1629,7 @@ extension InputLifecycleTests {
         let controller = try await fixture.live()
         let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
         while controller.pendingPermissions.isEmpty { await Task.yield() }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         let id = await pending(controller)[0].id
         try await controller.stop()
@@ -1641,7 +1642,7 @@ extension InputLifecycleTests {
     @Test func restoreIsReadOnlyAndContinueClosesInterruptedForms() async throws {
         let fixture = try Fixture()
         let first = try await fixture.live()
-        let request = form(first)
+        let request = try form(first)
         await first.close()
         let id = UUID()
         _ = try await fixture.store.append(
@@ -1667,7 +1668,7 @@ extension InputLifecycleTests {
     @Test func turnCompletionCancelsUnansweredForm() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         _ = await pending(controller)
         try await controller.send([.init(text: "hello")])
@@ -1691,7 +1692,7 @@ extension InputLifecycleTests {
             }
             return try await store.append(events, to: id)
         }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         await gate.waitUntilEntered()
         let closing = Task { await controller.close() }
@@ -1712,7 +1713,7 @@ extension InputLifecycleTests {
     @Test func idleStopCancelsPendingForm() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         let id = await pending(controller)[0].id
         try await controller.stop()
@@ -1736,7 +1737,7 @@ extension InputLifecycleTests {
             }
             return try await store.append(events, to: id)
         }
-        let request = form(controller)
+        let request = try form(controller)
         let task = Task { await controller.requestInput(request) }
         await gate.waitUntilEntered()
         let stopping = Task { try await controller.stop() }

@@ -256,8 +256,9 @@ observable error without showing uncommitted text. The caller owns `AgentProcess
 when the session fails or closes; closing ACP alone is not process containment.
 
 Session settings use `setConfigOption(_:to:)` only while idle ([ADR-0019](adr/0019-session-config-controls.md)).
-The controller owns the config task and exposes `isChangingConfig`; another config change or prompt
-submission is rejected until the returned options have been committed and published. The agent's full
+The controller owns the config task and exposes `isChangingConfig`; another config change or immediate
+turn dispatch is rejected until the returned options have been committed and published. Queue draining
+waits for that confirmation before dispatching. The agent's full
 response is authoritative. Request errors preserve confirmed settings and leave the session usable;
 storage errors fail the session. Close waits for accepted config work, and responses arriving after
 close are discarded. Native composer menus preserve choice groups; checkboxes show boolean settings.

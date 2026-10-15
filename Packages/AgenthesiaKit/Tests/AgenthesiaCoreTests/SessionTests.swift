@@ -1739,8 +1739,10 @@ extension InputLifecycleTests {
         let request = form(controller)
         let task = Task { await controller.requestInput(request) }
         await gate.waitUntilEntered()
-        try await controller.stop()
+        let stopping = Task { try await controller.stop() }
+        while !controller.queuePaused { await Task.yield() }
         await gate.open()
+        try await stopping.value
         #expect(await task.value.action == .cancel)
         #expect(controller.pendingInputs.isEmpty)
         await controller.close()

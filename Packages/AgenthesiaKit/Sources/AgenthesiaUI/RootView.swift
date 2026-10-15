@@ -198,7 +198,7 @@ public struct RootView: View {
                             model.restored != nil && model.restoredIsLive
                                 ? "This session is open in another window." : "Reconnect to the agent."
                         )
-                } else if session.status == .running || session.status == .stopping {
+                } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
                         .keyboardShortcut(".", modifiers: .command)
                         .disabled(session.status == .stopping && session.queuePaused)
@@ -219,7 +219,8 @@ public struct RootView: View {
                         Button("Send Whole Queue Now") { submit(.allNow) }
                             .keyboardShortcut(.return, modifiers: [.command, .shift])
                             .disabled(
-                                (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil || session.isChangingConfig
+                                (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                                    || session.isChangingConfig
                             )
                     }.labelStyle(.iconOnly)
                 }
@@ -261,12 +262,13 @@ public struct RootView: View {
         if session.status == .readOnly { return "Saved history · read-only" }
         if session.status == .failed { return "Connection failed · Continue to reconnect" }
         if session.status == .closed { return "Session ended" }
-        if session.queuePaused { return "Queue paused · ⇧⌘R resumes" }
         if let request = session.pendingPermissions.first {
             let count = min(request.options.count, 9)
             let keys = count > 1 ? "⌥⌘1–⌥⌘\(count)" : count == 1 ? "⌥⌘1" : "no options offered"
             return "Waiting for permission · \(keys)"
         }
+        if !session.pendingInputs.isEmpty { return "Waiting for input" }
+        if session.queuePaused { return "Queue paused · ⇧⌘R resumes" }
         return String(describing: session.status).capitalized
     }
 
@@ -275,7 +277,8 @@ public struct RootView: View {
     private func submit(_ intent: SessionController.SubmissionIntent) {
         guard editingQueueID == nil || intent == .whenReady else { return }
         guard model.restored == nil, !submitting, let owner = model.owner,
-            let session = owner.controller, !session.isChangingConfig, [.idle, .running, .stopping].contains(session.status),
+            let session = owner.controller, !session.isChangingConfig,
+            [.idle, .running, .stopping].contains(session.status),
             hasDraft || (intent == .allNow && !session.queuedPrompts.isEmpty)
         else { return }
         let text = prompt, files = attachments, editingID = editingQueueID

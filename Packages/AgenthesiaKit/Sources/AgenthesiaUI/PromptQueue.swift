@@ -31,7 +31,9 @@ struct PromptQueue: View {
                                 Text(prompt.text.isEmpty ? "Attachments" : prompt.text).lineLimit(2)
                                 ForEach(Array(prompt.content.enumerated()), id: \.offset) { _, block in
                                     if case .resourceLink(let link) = block {
-                                        Label(link.name, systemImage: "paperclip").font(.caption).foregroundStyle(
+                                        Label(link.name, systemImage: "paperclip").labelStyle(.titleAndIcon).font(
+                                            .caption
+                                        ).foregroundStyle(
                                             .secondary
                                         )
                                     }

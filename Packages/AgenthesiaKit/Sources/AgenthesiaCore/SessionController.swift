@@ -416,6 +416,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     private func drainQueue() async throws {
+        // A config change can enter while idle before a scheduled drain acquires the queue coordinator.
+        // Wait for its confirmation rather than rejecting the drain and stranding an unpaused queue.
+        _ = await configTask?.result
         guard status == .idle, !queuePaused, !steering, !reduced.queuedPrompts.isEmpty else { return }
         try await dispatch(reduced.queuedPrompts, removingQueued: true)
     }

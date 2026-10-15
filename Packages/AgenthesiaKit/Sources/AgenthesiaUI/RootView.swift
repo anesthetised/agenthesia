@@ -33,7 +33,7 @@ public struct RootView: View {
                     }
                 }
                 Section("Saved sessions") {
-                    ForEach(model.history.filter { $0.id != model.owner?.controller?.session.id }) { record in
+                    ForEach(model.savedSessions) { record in
                         Button {
                             showingSetup = false
                             prompt = ""
@@ -191,11 +191,12 @@ public struct RootView: View {
                 Text(Self.statusText(session))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                if session.status == .readOnly || session.status == .failed {
+                if [.readOnly, .failed, .closed].contains(session.status) {
                     Button("Continue", systemImage: "play.fill") { Task { await model.continueRestored() } }
                         .disabled(!model.canContinue)
                         .help(
-                            model.restoredIsLive ? "This session is open in another window." : "Reconnect to the agent."
+                            model.restored != nil && model.restoredIsLive
+                                ? "This session is open in another window." : "Reconnect to the agent."
                         )
                 } else if session.status == .running || session.status == .stopping {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
@@ -259,6 +260,7 @@ public struct RootView: View {
     static func statusText(_ session: SessionController) -> String {
         if session.status == .readOnly { return "Saved history · read-only" }
         if session.status == .failed { return "Connection failed · Continue to reconnect" }
+        if session.status == .closed { return "Session ended" }
         if session.queuePaused { return "Queue paused · ⇧⌘R resumes" }
         if let request = session.pendingPermissions.first {
             let count = min(request.options.count, 9)

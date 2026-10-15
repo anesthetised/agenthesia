@@ -156,7 +156,7 @@ public final class LiveSession {
                 guard let self, !self.isClosed else { return }
                 self.stderrLog = await process.stderrLog
                 self.errorMessage =
-                    self.controller?.errorMessage ?? "The agent \(status). Start a new session to continue."
+                    self.controller?.errorMessage ?? "The agent \(status). Continue to reconnect."
                 await self.controller?.close()
                 await self.cleanup()
             }

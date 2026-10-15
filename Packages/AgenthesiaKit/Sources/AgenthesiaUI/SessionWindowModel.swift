@@ -24,9 +24,13 @@ import SwiftUI
         !closed && !starting && (owner == nil || owner?.isClosed == true || owner?.errorMessage != nil)
     }
     var canContinue: Bool {
-        canStart
-            && ((restored?.status == .readOnly && !restoredIsLive)
-                || (restored == nil && owner?.controller?.status == .failed))
+        guard canStart, let displayed, displayed.session.agentSessionID != nil else { return false }
+        if let restored { return restored.status == .readOnly && !restoredIsLive }
+        return [.failed, .closed].contains(displayed.status) && history.contains { $0.id == displayed.session.id }
+    }
+    var savedSessions: [SessionRecord] {
+        guard let current = owner?.controller, ![.failed, .closed].contains(current.status) else { return history }
+        return history.filter { $0.id != current.session.id }
     }
 
     func refresh() async {

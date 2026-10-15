@@ -81,8 +81,10 @@ order in the existing event log. Dequeue and one `promptMessage` event per messa
 the messages retain their UUIDs, share a turn ID and display “sent together”, with a unique event
 sequence per transcript row. Up in an empty composer recalls the last entry for text editing without
 rebuilding its attachments. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
-Saved entries remain paused after Continue. A failed live session also offers Continue, which creates
-a new connection; failed connections stay closed. A dispatch stopped before invoking the wire prompt returns its composed
+Saved entries remain paused after Continue. An ended or failed established session also offers Continue,
+which creates a new connection; failed connections stay closed. Continue requires a persisted session
+with an agent session ID. Startup failures cannot continue, and ended sessions remain selectable in
+saved history. A dispatch stopped before invoking the wire prompt returns its composed
 messages to the queue by UUID and marks the original transcript rows “not sent”. Queue snapshots are
 built only after preceding lifecycle writes settle, so this compensation cannot overwrite later edits.
 

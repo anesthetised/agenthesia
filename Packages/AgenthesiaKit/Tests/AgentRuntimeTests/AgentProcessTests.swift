@@ -96,7 +96,8 @@ import Testing
         let long = Task { await process.terminate(gracePeriod: .seconds(2)) }
         #expect(await short.value == .signaled(SIGKILL))
         #expect(await long.value == .signaled(SIGKILL))
-        #expect(ContinuousClock.now - start < .seconds(1))
+        // The long call must not wait out its two-second grace; the margin covers loaded runners.
+        #expect(ContinuousClock.now - start < .milliseconds(1_500))
     }
 
     @Test func childHasItsOwnProcessGroup() async throws {

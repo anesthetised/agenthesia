@@ -11,6 +11,8 @@ Agenthesia is a native, opinionated macOS client for coding agents built on the 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules, data flow, concurrency.
 - [docs/adr/](docs/adr/) — accepted decisions. Do not contradict an ADR silently: propose a new one
   that supersedes it.
+- [docs/PLAN.md](docs/PLAN.md) — the order of upcoming work and known pitfalls; update it when a step
+  lands.
 
 Consult the user before implementing architectural decisions. Present alternatives and their trade-offs,
 recommend an approach, and challenge proposals when there are concrete reasons to disagree.

@@ -55,6 +55,9 @@ Xcode 27) fit Sonnet at medium effort.
   See [ADR-0009](adr/0009-tools-and-mcp.md).
 - [ADR-0020](adr/0020-native-elicitation-forms.md): native transcript forms, durable requests and final
   answers, temporary drafts, cancellation on lifecycle termination. URL elicitation is separate work.
+- [ADR-0022](adr/0022-session-scoped-elicitation.md): #24 supports established session scopes only;
+  request-scoped forms are explicitly declined. Pre-session presentation, persistence and request
+  lifetimes are deferred to [#111](https://github.com/anesthetised/agenthesia/issues/111).
 
 ## Implementation handoff and parallel work
 

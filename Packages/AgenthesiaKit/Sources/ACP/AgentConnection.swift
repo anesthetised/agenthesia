@@ -112,6 +112,8 @@ extension ACP {
         func deleteSession(_ sessionId: SessionID) async throws
         /// Runs a prompt turn and returns why it ended.
         func prompt(_ content: [ContentBlock], in sessionId: SessionID) async throws -> StopReason
+        /// Inserts content without ending the active turn. Advertise `.inject` only when implemented.
+        func inject(_ content: [ContentBlock], in sessionId: SessionID) async throws
         func cancel(_ sessionId: SessionID) async throws
         /// Changes a setting and returns all settings of the session.
         func setConfigOption(
@@ -170,4 +172,14 @@ extension ACP.AgentConnectionDelegate {
     }
 
     public func inputCompleted(_ elicitationId: ACP.ElicitationID) async {}
+}
+
+extension ACP {
+    public enum SteeringError: Error, Equatable { case injectionUnsupported }
+}
+
+extension ACP.AgentConnection {
+    public func inject(_ content: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws {
+        throw ACP.SteeringError.injectionUnsupported
+    }
 }

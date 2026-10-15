@@ -46,6 +46,23 @@ import Testing
         #expect(restored.status == .readOnly)
     }
 
+    @Test func submissionReportsDurableAcceptanceAndClearsRecoverableErrors() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: try mock())
+        let controller = try #require(owner.controller)
+        #expect(await owner.submit(" ") == false)
+        #expect(owner.errorMessage != nil)
+        #expect(await owner.submit("hello"))
+        #expect(owner.errorMessage == nil)
+        while controller.status != .idle { await Task.yield() }
+        #expect(controller.transcript.items.last?.message?.text == "Echo: hello")
+        await owner.close()
+        #expect(await owner.submit("closed") == false)
+    }
+
     @Test func mockAgentPermissionAnswerContinuesTheTurnAndReplays() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -13,6 +13,15 @@ public enum SessionEvent: Codable, Equatable, Sendable {
     /// A saved session was reattached; the new baseline, like `started`.
     case reopened(configOptions: [ACP.ConfigOption], method: ReopenMethod)
     case prompt(id: UUID, content: [ACP.ContentBlock])
+    case queueChanged([QueuedPrompt])
+    case queuePaused(Bool)
+    /// Durable injection intent; new composed messages remain recoverable in the queue until acknowledged.
+    case injectionPrepared([QueuedPrompt])
+    /// The turn was stopped before invoking the wire prompt; keep the composed messages for retry.
+    case promptsNotSent(turnID: UUID, prompts: [QueuedPrompt])
+    /// Each member has its own event sequence (transcript row identity); the whole batch is atomic.
+    case promptMessage(prompt: QueuedPrompt, turnID: UUID, startsTurn: Bool, sentTogether: Bool)
+    case interrupted(id: UUID)
     case stopRequested(id: UUID)
     case finished(id: UUID, reason: ACP.StopReason)
     case failed(id: UUID, message: String)

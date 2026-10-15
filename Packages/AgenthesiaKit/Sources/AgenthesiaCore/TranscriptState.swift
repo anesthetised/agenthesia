@@ -13,6 +13,9 @@ public struct TranscriptState: Equatable, Sendable {
         public let agentMessageID: ACP.MessageID?
         public var content: [ACP.ContentBlock]
         public var isLocalPrompt = false
+        public var localPromptID: UUID?
+        public var sentTogether = false
+        public var notSent = false
 
         public var text: String {
             content.compactMap { if case .text(let block) = $0 { block.text } else { nil } }.joined()
@@ -104,6 +107,8 @@ public struct TranscriptState: Equatable, Sendable {
 
     public private(set) var items: [Item] = []
     public private(set) var sequence: Int64 = 0
+    public private(set) var queuedPrompts: [QueuedPrompt] = []
+    public private(set) var queuePaused = false
     public private(set) var activeTurn: UUID?
     public private(set) var stopRequested = false
     public private(set) var lastStopReason: ACP.StopReason?
@@ -166,6 +171,41 @@ public struct TranscriptState: Equatable, Sendable {
                     message: .init(role: .user, turnID: id, agentMessageID: nil, content: content, isLocalPrompt: true)
                 )
             )
+        case .queueChanged(let prompts): queuedPrompts = prompts
+        case .queuePaused(let paused): queuePaused = paused
+        case .injectionPrepared(let prompts):
+            let existing = Set(queuedPrompts.map(\.id))
+            queuedPrompts += prompts.filter { !existing.contains($0.id) }
+        case .promptsNotSent(let turnID, let prompts):
+            let ids = Set(prompts.map(\.id))
+            queuedPrompts = prompts + queuedPrompts.filter { !ids.contains($0.id) }
+            for index in items.indices where items[index].message?.turnID == turnID {
+                if let id = items[index].message?.localPromptID, ids.contains(id) {
+                    items[index].message?.notSent = true
+                }
+            }
+        case .promptMessage(let prompt, let turnID, let startsTurn, let sentTogether):
+            if startsTurn {
+                activeTurn = turnID
+                stopRequested = false
+                lastStopReason = nil
+            }
+            items.append(
+                Item(
+                    id: sequence,
+                    message: .init(
+                        role: .user,
+                        turnID: turnID,
+                        agentMessageID: nil,
+                        content: prompt.content,
+                        isLocalPrompt: true,
+                        localPromptID: prompt.id,
+                        sentTogether: sentTogether
+                    )
+                )
+            )
+        case .interrupted:
+            items.append(Item(id: sequence, notice: "Interrupted"))
         case .stopRequested(let id):
             if id == activeTurn { stopRequested = true }
         case .finished(let id, let reason):

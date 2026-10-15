@@ -216,6 +216,25 @@ public final class LiveSession {
         }
     }
 
+    /// Accepts a draft into the durable queue or starts a turn, reporting whether it was accepted.
+    @discardableResult public func submit(
+        _ text: String,
+        attachments: [URL] = [],
+        intent: SessionController.SubmissionIntent = .whenReady
+    ) async -> Bool {
+        guard let controller, !isClosed else { return false }
+        let content = Self.content(text, attachments: attachments, checkout: checkout)
+        do {
+            try await controller.submit(content, intent: intent)
+            errorMessage = nil
+            return true
+        } catch {
+            if !isClosed { errorMessage = controller.errorMessage ?? error.localizedDescription }
+            if controller.status == .failed { await cleanup() }
+            return false
+        }
+    }
+
     static func content(
         _ text: String,
         attachments: [URL],

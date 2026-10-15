@@ -76,14 +76,21 @@ struct InputField: View {
             case .unknown:
                 Text("\(title): unsupported field").foregroundStyle(.secondary)
             default:
-                TextField(
-                    title,
-                    text: Binding(
-                        get: { draft.text[key] ?? "" },
-                        set: { draft.edit(key, text: $0, field: field) }
+                HStack {
+                    TextField(
+                        title,
+                        text: Binding(
+                            get: { draft.text[key] ?? "" },
+                            set: { draft.edit(key, text: $0, field: field) }
+                        )
                     )
-                )
-                .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.roundedBorder)
+                    if case .string = field, schema.required?.contains(key) != true, draft.values[key] != nil {
+                        Button("Omit \(metadata.title ?? key)", systemImage: "xmark.circle.fill") { draft.omit(key) }
+                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                            .help("Leave this optional field out of the response.")
+                    }
+                }
             }
             if let description = metadata.description { Text(description).font(.caption).foregroundStyle(.secondary) }
             if let error {

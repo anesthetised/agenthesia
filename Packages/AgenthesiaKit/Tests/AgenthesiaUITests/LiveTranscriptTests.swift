@@ -635,6 +635,25 @@ extension LiveTranscriptTests {
 }
 
 extension LiveTranscriptTests {
+    @Test func optionalTextCanBeOmittedAfterEditingWithoutLosingOtherAnswers() {
+        let email = ACP.PropertySchema.string(.init(format: .email, default: "ada@example.com"))
+        let schema = ACP.ElicitationSchema(
+            properties: ["name": .string(.init(default: "Ada")), "email": email],
+            required: ["name"]
+        )
+        let draft = InputDraft(schema: schema)
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+        draft.edit("email", text: "", field: email)
+        #expect(InputValidation.errors(in: draft.values, schema: schema)["email"] != nil)
+        draft.omit("email")
+        #expect(draft.text["email"] == nil && draft.values["email"] == nil)
+        #expect(draft.values["name"] == "Ada")
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+        draft.edit("email", text: "new@example.com", field: email)
+        #expect(draft.values["email"] == "new@example.com")
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+    }
+
     @Test func explicitEmptyStringsRemainPresentWhileUntouchedFieldsAreAbsent() {
         let schema = ACP.ElicitationSchema(
             properties: ["required": .string(.init(default: "Name")), "optional": .string(.init())],
@@ -668,6 +687,7 @@ extension LiveTranscriptTests {
         let schema = ACP.ElicitationSchema(
             properties: [
                 "name": .string(.init(title: "Name", minLength: 2)), "enabled": .boolean(.init(title: "Enabled")),
+                "email": .string(.init(title: "Email", format: .email, default: "ada@example.com")),
             ],
             required: ["name"]
         )

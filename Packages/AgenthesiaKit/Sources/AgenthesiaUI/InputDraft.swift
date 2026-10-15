@@ -37,4 +37,9 @@ import Observation
         default: values[key] = .string(text)
         }
     }
+
+    func omit(_ key: String) {
+        text.removeValue(forKey: key)
+        values.removeValue(forKey: key)
+    }
 }

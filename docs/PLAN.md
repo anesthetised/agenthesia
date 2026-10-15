@@ -88,7 +88,7 @@ in the order above.
 |---|---|
 | #23 | Select/grouped/boolean controls and legacy modes; confirmed settings replay correctly; rejected changes retain confirmed values; prompt submission cannot overtake a config change. |
 | #65 | Queue editing/reordering/deletion preserve attachments across replay; combined sends retain message identity; shortcuts, pause/resume and steering obey ADR-0010/0021 under turn-end/cancellation races. |
-| #24 | Supported fields validate required values and constraints; concurrent requests resolve once; stop/close/cancellation and recovery leave no pending callers or active historical forms; responses persist before delivery. |
+| #24 | Supported fields validate required values and constraints; optional text can be omitted after editing; concurrent requests resolve once; stop/close/cancellation and recovery leave no pending callers or active historical forms; responses persist before delivery. |
 
 The integration regressions cover config change → send → enqueue → form request → steering/Stop →
 close → restore/Continue, checking ordered events, retained attachments and explicit queue resume.

@@ -50,6 +50,47 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
 }
 
 @Suite(.timeLimit(.minutes(1))) struct TranscriptTests {
+    @Test func accumulatesCommandOutputOutsideMeta() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        func chunk(_ key: String, _ data: String) -> ACP.Meta {
+            [key: ["terminal_id": "x", "data": .string(data)]]
+        }
+        let updates: [ACP.SessionUpdate] = [
+            // An update may precede its call; the call's own meta must survive output-only updates.
+            .toolCallUpdate(.init(toolCallId: "t", meta: chunk("terminal_output_delta", "a\n"))),
+            .toolCall(.init(toolCallId: "t", title: "Run", kind: .execute, meta: ["claudeCode": ["toolName": "Bash"]])),
+            .toolCallUpdate(.init(toolCallId: "t", meta: chunk("terminal_output_delta", "b\n"))),
+            .toolCallUpdate(.init(toolCallId: "t", meta: chunk("terminal_output", "c\n"))),
+            .toolCallUpdate(.init(toolCallId: "t", meta: ["terminal_exit": ["exit_code": 2, "signal": .null]])),
+            .toolCallUpdate(.init(toolCallId: "u", meta: ["terminal_exit": ["signal": "SIGTERM"]])),
+            .toolCall(.init(toolCallId: "v", title: "Read", kind: .read, meta: ["terminal_output_delta": "bad"])),
+        ]
+        let events = try updates.map { NewEvent(kind: SessionEvent.updateKind, payload: try rawUpdate($0)) }
+        var state = TranscriptState()
+        for event in try await fixture.store.append(events, to: session.id) { try state.apply(event) }
+        let run = try #require(state.items.first { $0.toolCall?.toolCallId == "t" })
+        #expect(String(decoding: try #require(run.commandOutput).output.bytes, as: UTF8.self) == "a\nb\nc\n")
+        #expect(run.commandOutput?.exit == .init(exitCode: 2, signal: nil))
+        #expect(run.toolCall?.meta == ["claudeCode": ["toolName": "Bash"]])
+        let killed = try #require(state.items.first { $0.toolCall?.toolCallId == "u" })
+        #expect(killed.commandOutput?.exit == .init(exitCode: nil, signal: "SIGTERM"))
+        // A malformed chunk adds nothing.
+        #expect(state.items.first { $0.toolCall?.toolCallId == "v" }?.commandOutput?.output.bytes.isEmpty == true)
+    }
+
+    @Test func boundsCommandOutputToTheNewestBytes() {
+        var output = TranscriptState.CommandOutput()
+        let limit = TranscriptState.CommandOutput.byteLimit
+        output.apply(["terminal_output_delta": ["data": .string(String(repeating: "a", count: limit))]])
+        #expect(!output.output.truncated)
+        output.apply(["terminal_output_delta": ["data": "bc"]])
+        #expect(output.output.truncated && output.output.bytes.count == limit)
+        #expect(output.output.bytes.suffix(3) == Data("abc".utf8).suffix(3))
+        #expect(output.output.bytes.prefix(1) == Data("a".utf8))
+    }
+
     @Test func replayMessagesToolsAndMetadata() async throws {
         let fixture = try Fixture()
         let session = try await fixture.seed()

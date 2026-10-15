@@ -87,7 +87,7 @@ let package = Package(
         ),
         .target(
             name: "AgenthesiaUI",
-            dependencies: ["ACP", "Persistence", "AgenthesiaCore", "Rendering"],
+            dependencies: ["ACP", "AgentRuntime", "Persistence", "AgenthesiaCore", "Rendering"],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .executableTarget(

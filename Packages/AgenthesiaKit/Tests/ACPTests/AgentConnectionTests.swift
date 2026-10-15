@@ -158,6 +158,7 @@ private let initialized: Scenario.Step = .expectRequest(
                         "clientCapabilities": [
                             "terminal": false, "auth": ["terminal": false], "elicitation": ["form": [:]],
                             "session": ["configOptions": ["boolean": [:]]],
+                            "_meta": ["terminal_output_delta": true],
                         ],
                     ],
                     response: .result(["protocolVersion": 1])

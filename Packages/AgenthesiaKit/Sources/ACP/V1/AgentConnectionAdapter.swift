@@ -84,7 +84,9 @@ extension ACP.V1 {
                 terminal: terminals != nil,
                 session: .init(configOptions: .init(boolean: .init())),
                 auth: .init(terminal: options.terminalAuth),
-                elicitation: options.elicitation ? .init(form: .init()) : nil
+                elicitation: options.elicitation ? .init(form: .init()) : nil,
+                // Claude and Codex agree on this key only: every chunk is appended (ADR-0016).
+                meta: ["terminal_output_delta": .bool(true)]
             )
         }
 

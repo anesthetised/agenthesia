@@ -257,6 +257,54 @@ import Testing
         }
     }
 
+    @Test func commandOutputShowsItsLastLinesAndExitStatus() throws {
+        func output(_ text: String, exit: TranscriptState.CommandOutput.Exit? = nil) -> TranscriptState.CommandOutput {
+            .init(output: .init(bytes: Data(text.utf8)), exit: exit)
+        }
+        let call = ACP.ToolCall(
+            toolCallId: "t",
+            title: "Run",
+            kind: .execute,
+            content: [.terminal(.init(terminalId: "term"))]
+        )
+        let short = output("\u{1B}[31mred\u{1B}[0m\nok\n", exit: .init(exitCode: 1))
+        let (shortHeader, shortCard) = LiveTranscriptSource.toolCard(call, output: short, expanded: false)
+        #expect(shortCard.hasSuffix("```\nred\nok\n```\n\nExit code 1"))
+        #expect(!shortCard.contains("Terminal:") && !shortHeader.expandable)
+
+        let long = output((1...40).map { "line \($0)" }.joined(separator: "\n"))
+        let (header, collapsed) = LiveTranscriptSource.toolCard(call, output: long, expanded: false)
+        #expect(header.expandable && !header.expanded)
+        #expect(collapsed.contains("_… 28 earlier lines_\n\n```\nline 29\n"))
+        #expect(collapsed.hasSuffix("line 40\n```") && !collapsed.contains("line 28"))
+        let (expandedHeader, expanded) = LiveTranscriptSource.toolCard(call, output: long, expanded: true)
+        #expect(expandedHeader.expanded && expanded.contains("```\nline 1\n") && expanded.hasSuffix("line 40\n```"))
+
+        let killed = output("x", exit: .init(exitCode: nil, signal: "SIGTERM"))
+        #expect(
+            LiveTranscriptSource.toolCard(call, output: killed, expanded: false).markdown.hasSuffix(
+                "Terminated by signal SIGTERM"
+            )
+        )
+        let fenced = output("a\n````\nb")
+        #expect(
+            LiveTranscriptSource.toolCard(call, output: fenced, expanded: false).markdown.contains(
+                "`````\na\n````\nb\n`````"
+            )
+        )
+        var dropped = output("tail")
+        dropped.output.truncated = true
+        #expect(
+            LiveTranscriptSource.toolCard(call, output: dropped, expanded: true).markdown.contains(
+                "_… earlier output dropped_"
+            )
+        )
+        // A terminal reference without output keeps its placeholder.
+        #expect(LiveTranscriptSource.toolCard(call, expanded: false).markdown.contains("[Terminal: `term`]"))
+        // A command that reported nothing yet shows no empty block.
+        #expect(LiveTranscriptSource.toolCard(call, output: output(""), expanded: false).markdown == "**Run**")
+    }
+
     @Test func largeToolContentIsBoundedUntilExpanded() throws {
         let output = (1...40).map { "line \($0)" }.joined(separator: "\n")
         let call = ACP.ToolCall(

@@ -23,5 +23,8 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0016](0016-agent-reported-command-output.md) | Agent-reported command output | Accepted |
 | [0017](0017-continue-saved-sessions.md) | Continue saved sessions | Accepted |
 | [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted |
+| [0019](0019-session-config-controls.md) | Session config controls | Accepted |
+| [0020](0020-native-elicitation-forms.md) | Native elicitation forms | Accepted |
+| [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

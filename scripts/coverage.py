@@ -13,6 +13,7 @@ import glob
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from collections import defaultdict
@@ -74,9 +75,62 @@ def test(package: str) -> int:
     directory = codecov_dir(package)
     os.makedirs(directory, exist_ok=True)
     env = dict(os.environ, LLVM_PROFILE_FILE=os.path.join(directory, "%p.profraw"))
-    command = ["swift", "test", "--package-path", package]
-    command += ["-Xswiftc", "-profile-generate", "-Xswiftc", "-profile-coverage-mapping"]
-    return subprocess.run(command, env=env).returncode
+    flags = ["-Xswiftc", "-profile-generate", "-Xswiftc", "-profile-coverage-mapping"]
+    print("Building instrumented tests...", flush=True)
+    build = subprocess.run(["swift", "build", "--build-tests", "--package-path", package, *flags], env=env)
+    if build.returncode:
+        return build.returncode
+    print("Running tests (120-second process timeout)...", flush=True)
+    return run_test_process(["swift", "test", "--skip-build", "--package-path", package, *flags], env)
+
+
+def sample_test_processes(parent: int) -> None:
+    """Capture the blocked test runner, including when its main actor cannot process test time limits."""
+    output = subprocess.check_output(["ps", "-axo", "pid=,ppid=,comm="], text=True, timeout=5)
+    processes = [line.strip().split(None, 2) for line in output.splitlines()]
+    descendants = {parent}
+    while True:
+        children = {int(pid) for pid, ppid, _ in processes if int(ppid) in descendants}
+        if children <= descendants:
+            break
+        descendants |= children
+    for pid, _, command in processes:
+        if int(pid) in descendants and (
+            ".xctest/" in command or os.path.basename(command) in {"swiftpm-testing", "swiftpm-testing-helper"}
+        ):
+            print(f"Sampling stalled test process {pid}: {command}", flush=True)
+            subprocess.run(["sample", pid, "2", "-file", "/dev/stdout"], check=True, timeout=10)
+
+
+def run_test_process(command: list[str], env: dict[str, str], timeout: float = 120) -> int:
+    """Keep a test deadlock from consuming the entire CI job; preserve a stack before terminating it."""
+    with subprocess.Popen(command, env=env, start_new_session=True) as process:
+        try:
+            return process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            print(f"Test process exceeded {timeout:g} seconds; collecting stacks before termination.", file=sys.stderr)
+            try:
+                sample_test_processes(process.pid)
+            except (OSError, subprocess.SubprocessError) as error:
+                print(f"Could not sample test processes: {error}", file=sys.stderr)
+            finally:
+                # The driver and test runners share this fresh process group. GitHub's runner also cleans
+                # up test-launched agents that deliberately create their own sessions.
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+                # The driver may exit before a stuck child does.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+            return 124
 
 
 def report(package: str, args: list[str]) -> int:

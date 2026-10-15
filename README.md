@@ -88,7 +88,9 @@ descendants that outlive the agent.
 Coverage measures Swift sources in the package, including product UI. The badge and product total
 exclude test support (`ACPTesting`, `MockAgent`) and the debug-only `AgenthesiaUI/Lab/` directory;
 these are still reported separately, with the latter labeled `RenderingLab`. Per-module thresholds
-remain enforced by `just coverage`.
+remain enforced by `just coverage`. The instrumented build runs first; test execution then has a
+two-minute process timeout. On timeout, macOS `sample` writes test-runner stacks to the log before
+the test process group is terminated and the command fails.
 
 ## License
 

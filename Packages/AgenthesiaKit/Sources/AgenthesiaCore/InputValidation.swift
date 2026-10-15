@@ -1,18 +1,19 @@
 public import ACP
+import Darwin
 import Foundation
 public import JSONRPC
 
 /// Validates the modeled ACP form schema at both the UI and response boundary.
 public enum InputValidation {
     public static func errors(in values: [String: JSONValue], schema: ACP.ElicitationSchema) -> [String: String] {
-        let deadline = ContinuousClock.now.advanced(by: .milliseconds(20))
+        var patternBudget: UInt64 = 20_000_000
         var errors: [String: String] = [:]
         for key in schema.required ?? [] where values[key] == nil {
             errors[key] = "Required field."
         }
         for (key, value) in values {
             guard let field = schema.properties[key] else { errors[key] = "Unknown field."; continue }
-            if !valid(value, for: field, deadline: deadline) {
+            if !valid(value, for: field, patternBudget: &patternBudget) {
                 errors[key] = "Enter a valid value within the field's constraints."
             }
         }
@@ -25,31 +26,42 @@ public enum InputValidation {
     }
 
     /// Agent-provided expressions must not monopolize the main thread while a user types.
-    private static func matches(_ pattern: String, text: String, deadline: ContinuousClock.Instant) -> Bool {
+    private static func matches(_ pattern: String, text: String, budget: inout UInt64) -> Bool {
+        guard budget > 0 else { return false }
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
-        guard ContinuousClock.now < deadline else { return false }
+        // Count matching CPU time only: cold formatters and scheduling delays must not invalidate answers.
+        let started = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+        guard started > 0 else { budget = 0; return false }
+        let allowance = budget
         var matched = false
         regex.enumerateMatches(in: text, options: .reportProgress, range: NSRange(text.startIndex..., in: text)) {
             result,
             _,
             stop in
-            if ContinuousClock.now >= deadline { stop.pointee = true; return }
+            let now = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+            if now < started || now - started >= allowance {
+                stop.pointee = true; return
+            }
             if result != nil { matched = true; stop.pointee = true }
         }
+        let finished = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+        guard finished >= started else { budget = 0; return false }
+        let spent = finished - started
+        budget = spent >= allowance ? 0 : allowance - spent
         return matched
     }
 
     private static func valid(
         _ value: JSONValue,
         for field: ACP.PropertySchema,
-        deadline: ContinuousClock.Instant
+        patternBudget: inout UInt64
     ) -> Bool {
         switch (field, value) {
         case (.string(let schema), .string(let text)):
             if let min = schema.minLength, text.unicodeScalars.count < min { return false }
             if let max = schema.maxLength, text.unicodeScalars.count > max { return false }
             if let pattern = schema.pattern {
-                guard matches(pattern, text: text, deadline: deadline) else { return false }
+                guard matches(pattern, text: text, budget: &patternBudget) else { return false }
             }
             if let choices = schema.enum, !choices.contains(text) { return false }
             if let choices = schema.oneOf, !choices.contains(where: { $0.const == text }) { return false }

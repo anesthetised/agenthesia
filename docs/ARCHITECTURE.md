@@ -48,7 +48,8 @@ The main window uses a window-bound `LiveSession` in Core to own the agent proce
 one app database away from the main actor and provides project, install, and saved-session discovery.
 The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
 leaves no worktree behind), prepares the workspace, creates metadata, and starts
-the ACP v1 adapter with filesystem access enabled; terminal, terminal-auth, and elicitation capabilities remain disabled.
+the ACP v1 adapter with filesystem access and form elicitation enabled; terminal and terminal-auth
+capabilities remain disabled.
 Agents must already be authenticated; authentication failures are displayed.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
@@ -457,6 +458,8 @@ Live sessions advertise form elicitation and render matching session-scoped requ
 transcript cards. Requests and final responses are committed before display and delivery; drafts
 remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
 Saved forms have no active controls; Continue records cancellation of interrupted requests.
+Agent-provided regular expressions share a 20 ms budget of thread CPU time spent matching. Other
+field validation and time spent descheduled do not consume it; regex compilation is outside this budget.
 
 Request-scoped elicitation is explicitly declined, including requests made before a durable session
 exists. Supporting those requests needs a separate startup interaction and persistence design

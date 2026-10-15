@@ -47,6 +47,26 @@ import Testing
         )
     }
 
+    @Test func showsLargeRewritesAsAWholeReplacement() {
+        let count = UnifiedDiff.editLimit / 2 + 1
+        let old = (0..<count).map { "old \($0)" }
+        let new = (0..<count).map { "new \($0)" }
+        let diff = UnifiedDiff.make(
+            old: (["kept"] + old).joined(separator: "\n"),
+            new: (["kept"] + new).joined(separator: "\n")
+        )
+        let lines = diff.components(separatedBy: "\n")
+        #expect(lines.first == "@@ -1,\(count + 1) +1,\(count + 1) @@")
+        let removed: [String] = old.map { "-" + $0 }
+        let added: [String] = new.map { "+" + $0 }
+        #expect(Array(lines.dropFirst(2)) == removed + added)
+    }
+
+    @Test func boundsEditsByUnmatchedLines() {
+        #expect(UnifiedDiff.minimumEdits(from: ["a", "b", "a"], to: ["a", "c", "b"]) == 2)
+        #expect(UnifiedDiff.minimumEdits(from: ["a", "b"], to: ["b", "a"]) == 0)
+    }
+
     @Test func handlesInsertionsAndCRLF() {
         #expect(UnifiedDiff.make(old: "a\r\nc\r\n", new: "a\r\nb\r\nc\r\n") == "@@ -1,2 +1,3 @@\n a\n+b\n c")
     }

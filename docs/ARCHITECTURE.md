@@ -72,7 +72,8 @@ Markdown body with the title, reported locations and text content, so selection 
 for messages. Missing fields are shown as not reported; unsupported content appears
 as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;
 `MarkdownRenderer` tints added and removed lines and the words that changed between adjacent runs (runs over
-200 lines skip word comparison). Side-by-side diffs remain open. A command's output replaces the terminal placeholder: `TerminalText` derives
+200 lines skip word comparison). Edits with over 1,000 unmatched lines show as a whole replacement, and a
+diff is computed once per edit, not on every row update. Side-by-side diffs remain open. A command's output replaces the terminal placeholder: `TerminalText` derives
 escape-free text at render time, shown in a code block with the exit status; collapsed, it keeps the last lines. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.

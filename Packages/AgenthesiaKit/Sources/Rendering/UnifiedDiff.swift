@@ -7,17 +7,30 @@ public enum UnifiedDiff {
     /// Changed runs with more lines than this are not compared word by word.
     // ponytail: a fixed cap keeps huge rewrites cheap; tune with `just bench` if real edits hit it.
     static let wordDiffLineLimit = 200
+    /// Edits whose changed lines surely exceed this are shown as a whole replacement: `difference(from:)`
+    /// grows with the square of the edit count, about 18 ms at 1,000 lines.
+    // ponytail: the bound misses reordered lines; compute off the main thread if such edits stall the transcript.
+    static let editLimit = 1_000
 
     /// The hunks that turn `old` into `new`, without file headers; `nil` is a new file. Empty when nothing changed.
     public static func make(old: String?, new: String) -> String {
         let oldLines = lines(of: old ?? "")
         let newLines = lines(of: new)
+        let prefix = zip(oldLines, newLines).prefix { $0 == $1 }.count
+        let suffix = zip(oldLines[prefix...].reversed(), newLines[prefix...].reversed()).prefix { $0 == $1 }.count
+        let oldChanged = oldLines[prefix..<oldLines.count - suffix]
+        let newChanged = newLines[prefix..<newLines.count - suffix]
         var removed = Set<Int>()
         var inserted = Set<Int>()
-        for change in newLines.difference(from: oldLines) {
-            switch change {
-            case .remove(let offset, _, _): removed.insert(offset)
-            case .insert(let offset, _, _): inserted.insert(offset)
+        if minimumEdits(from: oldChanged, to: newChanged) > editLimit {
+            removed = Set(oldChanged.indices)
+            inserted = Set(newChanged.indices)
+        } else {
+            for change in Array(newChanged).difference(from: Array(oldChanged)) {
+                switch change {
+                case .remove(let offset, _, _): removed.insert(prefix + offset)
+                case .insert(let offset, _, _): inserted.insert(prefix + offset)
+                }
             }
         }
         // The edit script, with the line before which each entry stands in both files.
@@ -58,6 +71,18 @@ public enum UnifiedDiff {
             index = hunk.endIndex
         }
         return output.joined(separator: "\n")
+    }
+
+    /// A lower bound of the removed and inserted lines: those without a counterpart in the other side.
+    static func minimumEdits(from old: ArraySlice<Substring>, to new: ArraySlice<Substring>) -> Int {
+        var unmatched: [Substring: Int] = [:]
+        for line in old { unmatched[line, default: 0] += 1 }
+        var shared = 0
+        for line in new where unmatched[line, default: 0] > 0 {
+            unmatched[line, default: 0] -= 1
+            shared += 1
+        }
+        return old.count + new.count - 2 * shared
     }
 
     /// The lines of `text`; a final newline does not start another line.

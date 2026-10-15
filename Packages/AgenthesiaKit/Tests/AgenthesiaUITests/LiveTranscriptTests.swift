@@ -419,6 +419,18 @@ import Testing
         }
     }
 
+    @Test func liveRowsShowDiffs() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "edit")]).storedEvent())
+        let edit = ACP.Diff(path: "a.txt", oldText: "a\n", newText: "b\n")
+        try await recorded.apply(.toolCall(.init(toolCallId: "t", title: "Edit", kind: .edit, content: [.diff(edit)])))
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        let markdown = source.message(at: 1).markdown
+        #expect(markdown.contains(LiveTranscriptSource.diff(edit)))
+        #expect(source.message(at: 1).markdown == markdown)
+    }
+
     @Test func toolCardChangesInPlaceAndKeepsExpansionAndSelection() async throws {
         let recorded = try await RecordedTranscript()
         let turn = UUID()

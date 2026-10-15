@@ -11,6 +11,8 @@ public import JSONRPC
 ///   its output in `_meta` chunks (`terminal_output_delta`) and an exit status, as Codex does.
 /// - `slow` streams slowly, so the turn can be cancelled.
 /// - `fail` fails the turn with an internal error.
+///
+/// With `announcesCommands`, these verbs are offered as slash commands; `/plan` works like `plan`.
 public final class EchoAgent: Sendable {
     public struct Options: Sendable {
         public var loadSession = true
@@ -26,6 +28,8 @@ public final class EchoAgent: Sendable {
         public var modes = true
         /// Whether sessions expose a model config option.
         public var configOptions = true
+        /// Whether `session/new` is followed by an `available_commands_update` listing the prompt verbs.
+        public var announcesCommands = false
         /// Delay between streamed chunks.
         public var chunkDelay: Duration = .zero
 
@@ -100,6 +104,12 @@ public final class EchoAgent: Sendable {
                 throw RPCError(code: RPCError.authRequiredCode, message: "Authentication required")
             }
             let id = await state.createSession(cwd: request.cwd)
+            if options.announcesCommands {
+                try? await connection.notify(
+                    ACP.V1.Method.SessionUpdate.self,
+                    .init(sessionId: id, update: .availableCommands(.init(availableCommands: Self.commands)))
+                )
+            }
             return .init(
                 sessionId: id,
                 modes: options.modes ? Self.modes(current: "ask") : nil,
@@ -177,6 +187,17 @@ public final class EchoAgent: Sendable {
 
         return router
     }
+
+    /// The prompt verbs, announced after `session/new`; a leading slash is optional in prompts.
+    static let commands: [ACP.AvailableCommand] = [
+        .init(name: "read", description: "Read a file through the client", input: .init(hint: "path")),
+        .init(name: "write", description: "Write a file after asking for permission", input: .init(hint: "path text")),
+        .init(name: "tools", description: "Report tool calls"),
+        .init(name: "plan", description: "Report a plan"),
+        .init(name: "think", description: "Report a thought"),
+        .init(name: "slow", description: "Stream slowly until cancelled"),
+        .init(name: "fail", description: "Fail the turn"),
+    ]
 
     static func modes(current: String) -> ACP.V1.SessionModeState {
         .init(
@@ -286,7 +307,8 @@ extension EchoAgent {
             }.joined(separator: " ")
             await state.record(.userMessageChunk(.init(content: .init(text: text))), in: sessionID)
 
-            let words = text.split(separator: " ", maxSplits: 2).map(String.init)
+            var words = text.split(separator: " ", maxSplits: 2).map(String.init)
+            if let first = words.first, first.hasPrefix("/") { words[0].removeFirst() }
             switch words.first {
             case "read" where words.count >= 2:
                 try await read(path: words[1])

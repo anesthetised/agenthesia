@@ -73,6 +73,24 @@ public struct SessionWorkspace: Sendable {
         return SessionWorkspace(projectDirectory: root, workingDirectory: working)
     }
 
+    /// The main checkout and root of a linked worktree containing `directory`, or nil outside one.
+    public static func linkedCheckout(of directory: URL) async -> (checkout: URL, worktree: URL)? {
+        guard
+            let output = try? await git(
+                ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"],
+                in: directory
+            )
+        else { return nil }
+        let lines = output.split(separator: "\n").map(String.init)
+        guard lines.count == 2 else { return nil }
+        let common = URL(filePath: lines[1], directoryHint: .isDirectory).resolvingSymlinksInPath()
+        guard common.lastPathComponent == ".git" else { return nil }
+        let checkout = common.deletingLastPathComponent().standardizedFileURL
+        let worktree = URL(filePath: lines[0], directoryHint: .isDirectory).resolvingSymlinksInPath()
+            .standardizedFileURL
+        return checkout.path == worktree.path ? nil : (checkout, worktree)
+    }
+
     struct WorkspaceError: LocalizedError {
         let message: String
         var errorDescription: String? { message }

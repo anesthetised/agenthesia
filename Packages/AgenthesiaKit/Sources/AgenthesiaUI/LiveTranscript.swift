@@ -191,7 +191,8 @@ final class LiveTranscriptSource: TranscriptSource {
         case .text(let text): text.text
         case .image: "[Image attachment]"
         case .audio: "[Audio attachment]"
-        case .resourceLink, .resource: "[Resource attachment]"
+        case .resourceLink(let link): "[Attachment: `\(link.title ?? link.name)`]"
+        case .resource: "[Resource attachment]"
         case .unknown: "[Unsupported content]"
         }
     }

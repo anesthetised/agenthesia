@@ -7,23 +7,6 @@ import Testing
 
 @Suite @MainActor
 struct DemoSessionTests {
-    @Test func shiftReturnInsertsAtTheNativeSelection() {
-        let editor = NSTextView()
-        editor.isFieldEditor = true
-        editor.string = "Hello 🌍 world"
-        editor.setSelectedRange(NSRange(location: 6, length: 2))
-        #expect(RootView.handleComposerReturn(modifiers: .shift, responder: editor) == .handled)
-        #expect(editor.string == "Hello \n world")
-        #expect(editor.selectedRange() == NSRange(location: 7, length: 0))
-        #expect(RootView.handleComposerReturn(modifiers: .shift, responder: editor) == .handled)
-        #expect(editor.string == "Hello \n\n world")
-        #expect(RootView.handleComposerReturn(modifiers: [], responder: editor) == .ignored)
-        #expect(RootView.handleComposerReturn(modifiers: .command, responder: editor) == .ignored)
-        #expect(RootView.handleComposerReturn(modifiers: [.command, .shift], responder: editor) == .ignored)
-        #expect(RootView.handleComposerReturn(modifiers: .shift, responder: NSResponder()) == .ignored)
-        #expect(editor.string == "Hello \n\n world")
-    }
-
     @Test func blankAndBusyPromptsAreRejected() throws {
         let session = DemoSession()
         #expect(session.begin(" \n ") == nil)

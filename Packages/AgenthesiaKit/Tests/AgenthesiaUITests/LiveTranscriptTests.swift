@@ -37,6 +37,10 @@ import Testing
         )
         #expect(LiveTranscriptSource.content(message).0 == "Thinking")
         #expect(LiveTranscriptSource.content(message).1.contains("Image attachment"))
+        #expect(
+            LiveTranscriptSource.placeholder(.resourceLink(.init(uri: "file:///a/b.swift", name: "b.swift")))
+                == "[Attachment: `b.swift`]"
+        )
         let tool = TranscriptState.Item(id: 2, toolCall: .init(toolCallId: "t", title: "Read file", status: .completed))
         #expect(LiveTranscriptSource.content(tool) == ("Tool", "**Read file**"))
         #expect(LiveTranscriptSource.content(.init(id: 3, notice: "Interrupted")).1 == "Interrupted")

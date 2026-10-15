@@ -5,12 +5,12 @@ public import SwiftUI
 public struct RootView: View {
     @State private var model = SessionWindowModel()
     @State private var prompt = ""
+    @State private var attachments: [URL] = []
     @State private var directory = ""
     @State private var executable = ""
     @State private var arguments = ""
     @State private var showingSetup = true
     @State private var showingLog = false
-    @FocusState private var composerFocused: Bool
 
     public init() {}
 
@@ -34,6 +34,7 @@ public struct RootView: View {
                         Button {
                             showingSetup = false
                             prompt = ""
+                            attachments = []
                             Task { await model.showHistory(record) }
                         } label: {
                             VStack(alignment: .leading) {
@@ -150,15 +151,20 @@ public struct RootView: View {
     }
 
     private func composer(_ session: SessionController) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("Message the agent…", text: $prompt, axis: .vertical)
-                .lineLimit(2...6).textFieldStyle(.plain).focused($composerFocused)
-                .disabled(![.idle, .running, .stopping].contains(session.status))
-                .onKeyPress(keys: [.return], phases: .down) { press in
-                    Self.handleComposerReturn(modifiers: press.modifiers, responder: NSApp.keyWindow?.firstResponder)
-                }.onSubmit(send)
-                .accessibilityLabel("Message")
+        let editable = [.idle, .running, .stopping].contains(session.status)
+        return VStack(alignment: .leading, spacing: 8) {
+            ComposerInput(
+                text: $prompt,
+                attachments: $attachments,
+                commands: session.transcript.commands,
+                isEnabled: editable,
+                onSubmit: send
+            )
             HStack {
+                Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
+                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+                    .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!editable)
+                    .help("Attach files or folders (⇧⌘A)")
                 Text(Self.statusText(session))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
@@ -174,12 +180,28 @@ public struct RootView: View {
                 } else {
                     Button("Send", systemImage: "arrow.up", action: send)
                         .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(
-                            session.status != .idle || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
+                        .disabled(session.status != .idle || !hasDraft)
                 }
             }
-        }.padding(16).background(.bar).background { permissionShortcuts(session) }
+        }
+        .padding(16).background(.bar).background { permissionShortcuts(session) }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard editable else { return false }
+            ComposerInput.add(urls, to: &attachments)
+            return true
+        }
+    }
+
+    private var hasDraft: Bool {
+        !attachments.isEmpty || !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func chooseAttachments() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.directoryURL = model.owner?.workingDirectory
+        if panel.runModal() == .OK { ComposerInput.add(panel.urls, to: &attachments) }
     }
 
     /// ⌥⌘1… answer the oldest pending request with the option its card lists at that position.
@@ -205,23 +227,16 @@ public struct RootView: View {
     }
 
     private func send() {
-        guard model.restored == nil, model.owner?.controller?.status == .idle,
-            !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return }
-        let text = prompt
+        guard model.restored == nil, model.owner?.controller?.status == .idle, hasDraft else { return }
+        let text = prompt, files = attachments
         prompt = ""
-        Task { await model.owner?.send(text) }
+        attachments = []
+        Task { await model.owner?.send(text, attachments: files) }
     }
 
     static func launchCommand(executable: String, arguments: String) -> (executable: String, arguments: [String]) {
         let path = (executable.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
         return (path, arguments.split(separator: "\n").map(String.init))
-    }
-
-    static func handleComposerReturn(modifiers: EventModifiers, responder: NSResponder?) -> KeyPress.Result {
-        guard modifiers == .shift, let editor = responder as? NSTextView else { return .ignored }
-        editor.insertNewlineIgnoringFieldEditor(nil)
-        return .handled
     }
 }
 

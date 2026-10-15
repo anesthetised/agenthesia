@@ -100,6 +100,10 @@ accessibility labels were inspected; a spoken VoiceOver pass remains manual. Con
 and model selection are covered by protocol tests; native popup selection was not completed by UI
 automation.
 
+CI pins Xcode 26.6 and runs package coverage and the app build in parallel with separate incremental
+build caches. The aggregate `Lint, test, build` status requires both jobs to pass; cache hits still run
+all checks. Badge publication runs only after both succeed on main.
+
 ## Next steps
 
 Review and land the current batch, then M4 (Files), M7 (Parallel sessions), M8 (Worktrees).

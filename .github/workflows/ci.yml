@@ -6,16 +6,18 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Lint, test, build
-    # Default Xcode on macos-26 is 26.6; switch to Xcode 27 once it leaves preview on hosted runners.
+  package:
+    name: Lint and test with coverage
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -25,21 +27,117 @@ jobs:
         run: brew install just
 
       - name: Toolchain
+        id: toolchain
         run: |
           xcodebuild -version
           swift --version
+          echo "cache=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       - name: Lint
         run: just lint
 
-      - name: Test with coverage
-        run: just coverage --badge .build/badges/coverage.svg
-
       - name: Test benchmark and coverage tooling
         run: just test-scripts
 
-      - name: Publish coverage badge
+      - name: Restore package build cache
+        id: package-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: Packages/AgenthesiaKit/.build
+          key: ${{ runner.os }}-${{ runner.arch }}-package-v1-${{ steps.toolchain.outputs.cache }}-${{ hashFiles('Packages/AgenthesiaKit/Package.*', 'Packages/AgenthesiaKit/.swiftpm/configuration/mirrors.json', 'Agenthesia.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/configuration/mirrors.json', 'justfile', 'scripts/coverage.py', '.github/workflows/ci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-package-v1-${{ steps.toolchain.outputs.cache }}-${{ hashFiles('Packages/AgenthesiaKit/Package.*', 'Packages/AgenthesiaKit/.swiftpm/configuration/mirrors.json', 'Agenthesia.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/configuration/mirrors.json', 'justfile', 'scripts/coverage.py', '.github/workflows/ci.yml') }}-
+
+      - name: Test with coverage
+        id: coverage
+        run: just coverage --badge .build/badges/coverage.svg
+
+      # Retain incremental compiler work after a test failure, without changing the failed result.
+      - name: Save package build cache
+        if: ${{ !cancelled() && steps.coverage.outcome != 'skipped' && steps.package-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: Packages/AgenthesiaKit/.build
+          key: ${{ steps.package-cache.outputs.cache-primary-key }}
+
+      - name: Upload coverage badge
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-badge
+          path: .build/badges/coverage.svg
+          if-no-files-found: error
+          retention-days: 1
+
+  app:
+    name: Build app
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install just
+        run: brew install just
+
+      - name: Toolchain
+        id: toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "cache=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore app build cache
+        id: app-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .build/xcode
+          key: ${{ runner.os }}-${{ runner.arch }}-app-v1-${{ steps.toolchain.outputs.cache }}-${{ hashFiles('Packages/AgenthesiaKit/Package.*', 'Agenthesia.xcodeproj/**', 'Packages/AgenthesiaKit/.swiftpm/configuration/mirrors.json', 'Agenthesia.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/configuration/mirrors.json', 'justfile', '.github/workflows/ci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-app-v1-${{ steps.toolchain.outputs.cache }}-${{ hashFiles('Packages/AgenthesiaKit/Package.*', 'Agenthesia.xcodeproj/**', 'Packages/AgenthesiaKit/.swiftpm/configuration/mirrors.json', 'Agenthesia.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/configuration/mirrors.json', 'justfile', '.github/workflows/ci.yml') }}-
+
+      - name: Build app
+        id: app-build
+        run: just app
+
+      - name: Save app build cache
+        if: ${{ !cancelled() && steps.app-build.outcome != 'skipped' && steps.app-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build/xcode
+          key: ${{ steps.app-cache.outputs.cache-primary-key }}
+
+  build:
+    name: Lint, test, build
+    if: ${{ always() }}
+    needs: [package, app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both checks to pass
+        env:
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          APP_RESULT: ${{ needs.app.result }}
+        run: |
+          test "$PACKAGE_RESULT" = success
+          test "$APP_RESULT" = success
+
+  badge:
+    name: Publish coverage badge
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: coverage-badge
+          path: .build/badges
+
+      - name: Publish coverage badge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -53,6 +151,3 @@ jobs:
           git add coverage.svg
           git diff --cached --quiet || git commit -m "chore: update coverage badge"
           git push origin badges
-
-      - name: Build app
-        run: just app

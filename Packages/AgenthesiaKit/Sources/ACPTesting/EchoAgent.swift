@@ -7,7 +7,8 @@ public import JSONRPC
 /// - `write <path> <text>` asks for permission, then writes through `fs/write_text_file`.
 /// - `plan` reports a plan, `think` reports a thought.
 /// - `tools` streams a long answer while earlier tool calls change: an update before its call,
-///   several calls, a failure, long output, and diff, terminal and unknown content.
+///   several calls, a failure, long output, and diff, terminal and unknown content. The test run reports
+///   its output in `_meta` chunks (`terminal_output_delta`) and an exit status, as Codex does.
 /// - `slow` streams slowly, so the turn can be cancelled.
 /// - `fail` fails the turn with an internal error.
 public final class EchoAgent: Sendable {
@@ -316,6 +317,10 @@ extension EchoAgent {
             try? await connection.notify(ACP.V1.Method.SessionUpdate.self, .init(sessionId: sessionID, update: update))
         }
 
+        private static func outputChunk(_ data: String) -> ACP.Meta {
+            ["terminal_output_delta": ["terminal_id": "term-1", "data": .string(data)]]
+        }
+
         private func tools() async -> ACP.StopReason {
             let output = (1...40).map { "Sources/File\($0).swift:\($0): // TODO" }.joined(separator: "\n")
             let changes: [(Int, ACP.SessionUpdate)] = [
@@ -355,6 +360,12 @@ extension EchoAgent {
                     )
                 ),
                 (
+                    5,
+                    .toolCallUpdate(
+                        .init(toolCallId: "test", meta: Self.outputChunk("\u{1B}[32mRunning\u{1B}[0m tests\n"))
+                    )
+                ),
+                (
                     10,
                     .toolCallUpdate(
                         .init(
@@ -364,13 +375,15 @@ extension EchoAgent {
                         )
                     )
                 ),
+                (15, .toolCallUpdate(.init(toolCallId: "test", meta: Self.outputChunk("FAILED testParse\n")))),
                 (
                     20,
                     .toolCallUpdate(
                         .init(
                             toolCallId: "test",
                             status: .failed,
-                            content: [.content(.init(content: .init(text: "1 test failed")))]
+                            content: [.content(.init(content: .init(text: "1 test failed")))],
+                            meta: ["terminal_exit": ["terminal_id": "term-1", "exit_code": 1, "signal": .null]]
                         )
                     )
                 ),

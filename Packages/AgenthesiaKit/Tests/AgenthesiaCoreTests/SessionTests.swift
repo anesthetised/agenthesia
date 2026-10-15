@@ -393,6 +393,13 @@ extension SessionControllerTests {
         #expect(tools.map(\.toolCallId) == ["search", "test", "edit"])
         #expect(tools.map(\.status) == [.completed, .failed, .completed])
         #expect(tools[0].title == "Search for TODO")
+        let test = try #require(items.first { $0.toolCall?.toolCallId == "test" })
+        #expect(
+            String(decoding: try #require(test.commandOutput).output.bytes, as: UTF8.self).hasSuffix(
+                "FAILED testParse\n"
+            )
+        )
+        #expect(test.commandOutput?.exit == .init(exitCode: 1, signal: nil))
         #expect(tools[0].locations == [.init(path: "Sources")])
         #expect(tools[2].content?.contains(.unknown(["type": "future", "value": 1])) == true)
         // Cards keep their position while the answer streams after them.

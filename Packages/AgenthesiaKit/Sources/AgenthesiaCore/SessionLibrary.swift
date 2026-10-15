@@ -9,6 +9,8 @@ public actor SessionLibrary {
     )
     private let databaseURL: URL
     private var opening: Task<PersistenceStore, any Error>?
+    /// Sessions with a live owner in this app; one owner writes to a session's log (ADR-0017).
+    private var live: Set<UUID> = []
 
     public init(databaseURL: URL) { self.databaseURL = databaseURL }
 
@@ -33,6 +35,18 @@ public actor SessionLibrary {
             result += try await store.sessions(in: project.id)
         }
         return result.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Whether a window owns the session live, so it cannot be continued elsewhere.
+    public func isLive(_ id: UUID) -> Bool { live.contains(id) }
+
+    /// Returns `false` if another owner already holds the session.
+    func claim(_ id: UUID) -> Bool { live.insert(id).inserted }
+
+    func release(_ id: UUID) { live.remove(id) }
+
+    func install(id: UUID) async throws -> AgentInstallRecord? {
+        try await store().agentInstalls().first { $0.id == id }
     }
 
     func project(directory: URL) async throws -> ProjectRecord {

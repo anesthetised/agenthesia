@@ -239,3 +239,75 @@ extension LiveSessionTests {
         #expect(try await library.store().projects().count == 1)
     }
 }
+
+extension LiveSessionTests {
+    private func savedSession(
+        in directory: URL,
+        library: SessionLibrary,
+        agent: AgentInstallRecord
+    ) async throws -> SessionRecord {
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: agent)
+        await owner.send("hello")
+        let session = try #require(owner.controller?.session)
+        await owner.close()
+        return session
+    }
+
+    @Test func continuesASavedSessionInOneWindowAtATime() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let session = try await savedSession(in: directory, library: library, agent: try mock(arguments: ["--reopen"]))
+        #expect(await !library.isLive(session.id))
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.resume(session)
+        let controller = try #require(owner.controller)
+        #expect(owner.errorMessage == nil)
+        #expect(controller.status == .idle)
+        #expect(owner.workingDirectory?.path == session.workingDirectory)
+        #expect(await library.isLive(session.id))
+        let other = LiveSession(library: library)
+        other.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await other.resume(session)
+        #expect(other.errorMessage?.contains("another window") == true)
+        await other.close()
+        #expect(await library.isLive(session.id))
+        await owner.send("again")
+        #expect(
+            controller.transcript.items.compactMap { $0.message?.text } == [
+                "hello", "Echo: hello", "again", "Echo: again",
+            ]
+        )
+        await owner.close()
+        #expect(await !library.isLive(session.id))
+        #expect(try await library.history().map(\.id) == [session.id])
+    }
+
+    @Test func continueFailuresKeepTheHistory() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await library.store()
+        let cases: [(agent: [String], removeDirectory: Bool, message: String)] = [
+            (["--no-resume", "--no-load"], false, "cannot continue saved sessions"),
+            ([], false, "Unknown session"),
+            (["--reopen"], true, "no longer exists"),
+        ]
+        for (arguments, removeDirectory, message) in cases {
+            let project = directory.appending(path: UUID().uuidString)
+            try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+            let session = try await savedSession(in: project, library: library, agent: try mock(arguments: arguments))
+            if removeDirectory { try FileManager.default.removeItem(at: project) }
+            let before = try await store.events(in: session.id)
+            let owner = LiveSession(library: library)
+            owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+            await owner.resume(session)
+            #expect(owner.errorMessage?.contains(message) == true, "\(arguments)")
+            #expect(!owner.isStarting)
+            await owner.close()
+            #expect(await !library.isLive(session.id))
+            #expect(try await store.events(in: session.id) == before)
+        }
+    }
+}

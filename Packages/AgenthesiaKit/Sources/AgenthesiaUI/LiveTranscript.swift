@@ -162,6 +162,9 @@ final class LiveTranscriptSource: TranscriptSource {
         if let permission = item.permission {
             return ("Permission", permissionCard(permission, phase: .ended, expanded: false).markdown)
         }
+        if let date = item.reopenedAt {
+            return ("Session", "Continued · \(date.formatted(date: .abbreviated, time: .shortened))")
+        }
         return ("Session", item.notice ?? "")
     }
 

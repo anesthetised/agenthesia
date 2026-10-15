@@ -9,6 +9,8 @@ import SwiftUI
     var owner: LiveSession?
     var history: [SessionRecord] = []
     var restored: SessionController?
+    /// Whether the selected saved session is live in another window when it was selected.
+    var restoredIsLive = false
     var errorMessage: String?
     var isLoadingHistory = false
     var closed = false
@@ -21,6 +23,7 @@ import SwiftUI
     var canStart: Bool {
         !closed && !starting && (owner == nil || owner?.isClosed == true || owner?.errorMessage != nil)
     }
+    var canContinue: Bool { restored?.status == .readOnly && !restoredIsLive && canStart }
 
     func refresh() async {
         do {
@@ -29,6 +32,23 @@ import SwiftUI
         } catch { errorMessage = error.localizedDescription }
     }
     func start(directory: URL, executable: String, arguments: [String]) async {
+        await replaceOwner {
+            await $0.start(
+                directory: directory,
+                agent: AgentInstallRecord(
+                    name: URL(filePath: executable).lastPathComponent,
+                    executable: executable,
+                    arguments: arguments
+                )
+            )
+        }
+    }
+    /// Continues the selected saved session as this window's live session (ADR-0017).
+    func continueRestored() async {
+        guard canContinue, let session = restored?.session else { return }
+        await replaceOwner { await $0.resume(session) }
+    }
+    private func replaceOwner(_ launch: (LiveSession) async -> Void) async {
         guard canStart else { return }
         starting = true
         defer { starting = false }
@@ -39,14 +59,7 @@ import SwiftUI
         errorMessage = nil
         let owner = LiveSession(library: library)
         self.owner = owner
-        await owner.start(
-            directory: directory,
-            agent: AgentInstallRecord(
-                name: URL(filePath: executable).lastPathComponent,
-                executable: executable,
-                arguments: arguments
-            )
-        )
+        await launch(owner)
         await refresh()
     }
     func showHistory(_ record: SessionRecord) async {
@@ -57,8 +70,10 @@ import SwiftUI
         defer { if selection == token { isLoadingHistory = false } }
         do {
             let controller = try await SessionController.restore(id: record.id, store: library.store())
+            let live = await library.isLive(record.id)
             guard selection == token, !closed else { return }
             restored = controller
+            restoredIsLive = live
         } catch { if selection == token { errorMessage = error.localizedDescription } }
     }
     func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil }

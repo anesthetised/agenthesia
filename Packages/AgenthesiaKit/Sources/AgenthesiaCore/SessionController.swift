@@ -24,6 +24,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case startupBufferFull
         case sessionNotFound
         case unsupportedAdditionalDirectories
+        /// The agent can neither resume nor load sessions.
+        case cannotReopen
     }
 
     public private(set) var status: Status = .ready
@@ -98,34 +100,94 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 throw error
             }
             guard status == .starting else { throw SessionError.invalidState }
-            // Enqueue the baseline and all early updates without yielding, before accepting live writes.
-            var events = [try SessionEvent.started(configOptions: remote.configOptions).storedEvent()]
-            for (id, update, raw) in startupUpdates where id == remote.sessionId {
-                events += try updateEvents(update, raw: raw)
-            }
-            startupUpdates.removeAll()
-            startupBytes = 0
-            recording = true
-            try await record(events)
-            guard status == .starting else { throw SessionError.invalidState }
-            status = .idle
-            publishTranscript()
+            try await begin([try SessionEvent.started(configOptions: remote.configOptions).storedEvent()])
         } catch {
             if status == .closed, failure == nil { throw CancellationError() }
             throw await fail(error)
         }
     }
 
-    /// Reads history in bounded pages. Does not contact or resume the agent (#25).
+    /// Reattaches a saved session from `history(id:store:)` (ADR-0017). Writes nothing unless the agent accepts.
+    public func reopen(connection: any ACP.AgentConnection, client: ACP.Implementation) async throws {
+        guard status == .ready, let agentID = session.agentSessionID else { throw SessionError.invalidState }
+        status = .starting
+        self.connection = connection
+        do {
+            let profile = try await connection.initialize(client: client)
+            guard status == .starting else { throw SessionError.invalidState }
+            self.profile = profile
+            guard additionalDirectories.isEmpty || profile.acceptsAdditionalDirectories else {
+                throw SessionError.unsupportedAdditionalDirectories
+            }
+            let reopened = try await connection.reopenSession(
+                agentID,
+                cwd: session.workingDirectory,
+                additionalDirectories: additionalDirectories,
+                mcpServers: []
+            )
+            guard status == .starting else { throw SessionError.invalidState }
+            let state: ACP.SessionState
+            let method: SessionEvent.ReopenMethod
+            switch reopened {
+            case .resumed(let resumed): (state, method) = (resumed, .resume)
+            case .loaded(let loaded): (state, method) = (loaded, .load)
+            case .unavailable: throw SessionError.cannotReopen
+            }
+            // Close what an earlier run left open, so the new baseline starts with no turn or request pending.
+            var events: [NewEvent] = []
+            if let turn = reduced.activeTurn {
+                events.append(
+                    try SessionEvent.failed(id: turn, message: "Interrupted: Agenthesia stopped during this turn.")
+                        .storedEvent()
+                )
+            }
+            for id in reduced.unansweredPermissions {
+                events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
+            }
+            events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
+            try await begin(events)
+        } catch {
+            if status == .closed, failure == nil { throw CancellationError() }
+            throw await fail(error)
+        }
+    }
+
+    /// Enqueues the baseline and all early updates without yielding, before accepting live writes.
+    private func begin(_ baseline: [NewEvent]) async throws {
+        var events = baseline
+        for (id, update, raw) in startupUpdates where id == session.agentSessionID {
+            events += try updateEvents(update, raw: raw)
+        }
+        startupUpdates.removeAll()
+        startupBytes = 0
+        recording = true
+        try await record(events)
+        guard status == .starting else { throw SessionError.invalidState }
+        status = .idle
+        publishTranscript()
+    }
+
+    /// Reads history in bounded pages into a read-only controller. Does not contact the agent.
     public static func restore(id: UUID, store: PersistenceStore) async throws -> SessionController {
+        let controller = try await history(id: id, store: store)
+        controller.status = .readOnly
+        controller.publishTranscript()
+        return controller
+    }
+
+    /// Reads history in bounded pages into a controller that can `reopen` the session.
+    public static func history(
+        id: UUID,
+        store: PersistenceStore,
+        additionalDirectories: [String] = []
+    ) async throws -> SessionController {
         guard let session = try await store.session(id: id) else { throw SessionError.sessionNotFound }
-        let controller = SessionController(session: session, store: store)
+        let controller = SessionController(session: session, store: store, additionalDirectories: additionalDirectories)
         while true {
             let page = try await store.events(in: id, after: controller.reduced.sequence)
             guard !page.isEmpty else { break }
             for event in page { try controller.reduced.apply(event) }
         }
-        controller.status = .readOnly
         controller.publishTranscript()
         return controller
     }

@@ -95,6 +95,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var message: Message?
         public var toolCall: ACP.ToolCall?
         public var notice: String?
+        /// When a saved session was continued; shown as a divider.
+        public var reopenedAt: Date?
         public var permission: Permission?
         /// Output of the row's tool call, kept out of the call's `meta`.
         public var commandOutput: CommandOutput?
@@ -117,6 +119,13 @@ public struct TranscriptState: Equatable, Sendable {
 
     public init() {}
 
+    /// Requests without a recorded response, oldest first.
+    public var unansweredPermissions: [UUID] {
+        permissionIndices.sorted { $0.value < $1.value }.compactMap {
+            items[$0.value].permission?.outcome == nil ? $0.key : nil
+        }
+    }
+
     public enum ReplayError: Error, Equatable {
         case outOfOrder(expected: Int64, actual: Int64)
     }
@@ -130,7 +139,7 @@ public struct TranscriptState: Equatable, Sendable {
             unsupportedEvents += 1
         } else if event.event.kind == SessionEvent.kind {
             let local = try JSONDecoder().decode(SessionEvent.self, from: event.event.payload)
-            apply(local, sequence: event.sequence)
+            apply(local, sequence: event.sequence, timestamp: event.event.timestamp)
         } else if event.event.kind == SessionEvent.updateKind {
             let notification = try ACP.RecordedSessionUpdate(rawNotification: event.event.payload)
             apply(notification.update, sequence: event.sequence)
@@ -140,10 +149,13 @@ public struct TranscriptState: Equatable, Sendable {
         sequence = event.sequence
     }
 
-    private mutating func apply(_ event: SessionEvent, sequence: Int64) {
+    private mutating func apply(_ event: SessionEvent, sequence: Int64, timestamp: Date) {
         switch event {
         case .started(let options), .configOptions(let options):
             configOptions = options
+        case .reopened(let options, _):
+            configOptions = options
+            items.append(Item(id: sequence, reopenedAt: timestamp))
         case .prompt(let id, let content):
             activeTurn = id
             stopRequested = false

@@ -23,15 +23,31 @@ import Testing
         await model.showHistory(record)
         #expect(model.displayed?.status == .readOnly)
         #expect(!model.isLoadingHistory)
+        #expect(model.canContinue)
+        // Live in another window: Continue is unavailable until the selection is refreshed.
+        #expect(await library.claim(record.id))
+        await model.showHistory(record)
+        #expect(model.restoredIsLive && !model.canContinue)
+        await model.continueRestored()
+        #expect(model.owner == nil)
+        await library.release(record.id)
+        await model.showHistory(record)
+        // The configured agent does not exist; the failure is the owner's, history stays listed.
+        await model.continueRestored()
+        #expect(model.restored == nil)
+        #expect(model.owner?.errorMessage?.contains("unused") == true)
+        #expect(model.history == [record])
+        await model.showHistory(record)
         model.errorMessage = "Stale"
         model.showLive()
         #expect(model.errorMessage == nil)
         #expect(model.displayed == nil)
         #expect(model.canStart)
+        let failed = model.owner
         await model.close()
         #expect(!model.canStart)
         await model.start(directory: directory, executable: "/does-not-exist", arguments: [])
-        #expect(model.owner == nil)
+        #expect(model.owner === failed)
     }
 
     @Test func transcriptTableDoesNotRetainItsSource() {

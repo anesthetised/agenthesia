@@ -18,6 +18,8 @@ public final class EchoAgent: Sendable {
         public var listSessions = true
         public var closeSession = true
         public var deleteSession = true
+        /// Whether `session/resume` and `session/load` accept unknown ids, as if an earlier process saved them.
+        public var reopensUnknownSessions = false
         /// Whether `session/new` fails with `-32000` until `authenticate` succeeds.
         public var requiresAuthentication = false
         /// Whether sessions expose legacy session modes.
@@ -107,7 +109,13 @@ public final class EchoAgent: Sendable {
 
         router.on(M.LoadSession.self) { request in
             guard options.loadSession else { throw RPCError.methodNotFound(M.LoadSession.method) }
-            guard let history = await state.history(of: request.sessionId) else {
+            guard
+                let history = await state.reopen(
+                    request.sessionId,
+                    cwd: request.cwd,
+                    adopting: options.reopensUnknownSessions
+                )
+            else {
                 throw RPCError(code: RPCError.resourceNotFoundCode, message: "Unknown session")
             }
             for update in history {
@@ -121,7 +129,9 @@ public final class EchoAgent: Sendable {
 
         router.on(M.ResumeSession.self) { request in
             guard options.resumeSession else { throw RPCError.methodNotFound(M.ResumeSession.method) }
-            guard await state.history(of: request.sessionId) != nil else {
+            guard
+                await state.reopen(request.sessionId, cwd: request.cwd, adopting: options.reopensUnknownSessions) != nil
+            else {
                 throw RPCError(code: RPCError.resourceNotFoundCode, message: "Unknown session")
             }
             return .init(
@@ -223,6 +233,14 @@ extension EchoAgent {
 
         func history(of id: ACP.SessionID) -> [ACP.SessionUpdate]? {
             sessions.first { $0.id == id }?.history
+        }
+
+        /// The session's history; an unknown session is adopted with an empty one if `adopting`.
+        func reopen(_ id: ACP.SessionID, cwd: String, adopting: Bool) -> [ACP.SessionUpdate]? {
+            if let history = history(of: id) { return history }
+            guard adopting else { return nil }
+            sessions.append((id, cwd, []))
+            return []
         }
 
         func record(_ update: ACP.SessionUpdate, in id: ACP.SessionID) {

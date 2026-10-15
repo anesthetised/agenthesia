@@ -4,7 +4,14 @@ import Persistence
 
 /// Version 1 of the app-owned event payload. ACP notifications are stored separately, byte-for-byte.
 public enum SessionEvent: Codable, Equatable, Sendable {
+    /// How a saved session was reattached (ADR-0017).
+    public enum ReopenMethod: String, Codable, Sendable {
+        case resume, load
+    }
+
     case started(configOptions: [ACP.ConfigOption])
+    /// A saved session was reattached; the new baseline, like `started`.
+    case reopened(configOptions: [ACP.ConfigOption], method: ReopenMethod)
     case prompt(id: UUID, content: [ACP.ContentBlock])
     case stopRequested(id: UUID)
     case finished(id: UUID, reason: ACP.StopReason)

@@ -88,11 +88,14 @@ public actor TerminalProcess {
         }
 
         processIdentifier = pid
-        reader = TerminalReader(master: master, limit: max(1, outputLimit))
+        // A private queue gets a thread even when the shared pools are busy; output still unread shortly
+        // after the command exits is discarded by the kernel.
+        let queue = DispatchQueue(label: "Agenthesia.TerminalProcess", qos: .userInitiated)
+        reader = TerminalReader(master: master, limit: max(1, outputLimit), queue: queue)
         // POSIX_SPAWN_SETSID makes the command the leader of its own process group.
         groupTermination = ProcessGroupTermination(group: pid, leader: pid) { false }
 
-        let exit = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .global(qos: .utility))
+        let exit = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
         exit.setEventHandler { [weak self] in
             var status: Int32 = 0
             var result: pid_t
@@ -171,9 +174,9 @@ private final class TerminalReader: Sendable {
     private let source: any DispatchSourceRead
     private let state = Mutex(State())
 
-    init(master: Int32, limit: Int) {
+    init(master: Int32, limit: Int, queue: DispatchQueue) {
         self.limit = limit
-        source = DispatchSource.makeReadSource(fileDescriptor: master, queue: .global(qos: .utility))
+        source = DispatchSource.makeReadSource(fileDescriptor: master, queue: queue)
         // The handlers keep the reader alive until the source is cancelled.
         source.setEventHandler { [self] in
             var chunk = [UInt8](repeating: 0, count: 16_384)

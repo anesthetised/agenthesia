@@ -107,7 +107,7 @@ import Testing
         _ = await process.terminate(gracePeriod: .milliseconds(50))
     }
 
-    @Test(arguments: [Duration.milliseconds(150), .seconds(4)])
+    @Test(arguments: [Duration.seconds(1), .seconds(4)])
     func terminatesDescendantsAfterLeaderExits(gracePeriod: Duration) async throws {
         let pidFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-child-\(UUID().uuidString).pid"

@@ -42,7 +42,7 @@ struct ComposerInput: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(matches.enumerated()), id: \.offset) { index, command in
+                    ForEach(matches.enumerated(), id: \.element.name) { index, command in
                         Button {
                             complete(command)
                         } label: {
@@ -56,18 +56,21 @@ struct ComposerInput: View {
                             }
                             .padding(.horizontal, 8).padding(.vertical, 4).contentShape(.rect)
                             .background(
-                                index == selection ? Color.accentColor.opacity(0.2) : .clear,
+                                index == selection ? AnyShapeStyle(.tint.quaternary) : AnyShapeStyle(.clear),
                                 in: .rect(cornerRadius: 6)
                             )
                         }
-                        .buttonStyle(.plain).id(index)
+                        .buttonStyle(.plain).id(command.name)
                         .accessibilityAddTraits(index == selection ? .isSelected : [])
                     }
                 }
             }
             .frame(maxHeight: 180).fixedSize(horizontal: false, vertical: true)
-            .onChange(of: selection) { proxy.scrollTo(selection) }
+            .onChange(of: selection) {
+                if matches.indices.contains(selection) { proxy.scrollTo(matches[selection].name) }
+            }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Commands")
     }
 
@@ -75,17 +78,9 @@ struct ComposerInput: View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
                 ForEach(attachments, id: \.self) { url in
-                    HStack(spacing: 4) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable()
-                            .frame(width: 16, height: 16).accessibilityHidden(true)
-                        Text(url.lastPathComponent).lineLimit(1)
-                        Button("Remove \(url.lastPathComponent)", systemImage: "xmark.circle.fill") {
-                            attachments.removeAll { $0 == url }
-                        }
-                        .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary)
+                    AttachmentChip(url: url) {
+                        attachments.removeAll { $0 == url }
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(.quaternary, in: .capsule).help(url.path)
                 }
             }
         }
@@ -152,6 +147,7 @@ struct ComposerTextView: NSViewRepresentable {
     var onFiles: ([URL]) -> Void
 
     static let font = NSFont.preferredFont(forTextStyle: .body)
+    private static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
     static let lines = 2...6
     static let padding: CGFloat = 5
 
@@ -205,7 +201,7 @@ struct ComposerTextView: NSViewRepresentable {
 
     /// The content height for the width, clamped to `lines`.
     static func height(of text: String, width: CGFloat) -> CGFloat {
-        let line = NSLayoutManager().defaultLineHeight(for: font)
+        let line = lineHeight
         var content = (text as NSString).boundingRect(
             with: CGSize(width: max(width - 2 * padding, 1), height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],

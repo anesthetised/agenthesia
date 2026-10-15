@@ -53,6 +53,11 @@ bench *args:
 bench-build:
     swift build -c release --package-path {{package}} --product rendering-bench
 
+# Time 500 hosted composer updates with three attachments; agree on resource use before running
+[positional-arguments]
+bench-composer *args: build
+    python3 scripts/bench_composer.py "$@"
+
 # Measure append throughput and latency in fresh processes; agree on resource use before running
 [positional-arguments]
 bench-persistence *args:

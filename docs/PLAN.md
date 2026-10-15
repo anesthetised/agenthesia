@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-15)
+## State (2026-10-16)
 
 - Live sessions run end-to-end in one window ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -18,6 +18,8 @@ before implementation.
 - Tool call diffs render as unified diffs with word-level highlights (#20); side-by-side is not scheduled.
 - The composer attaches files as `resource_link` and lists the agent's slash commands
   ([ADR-0018](adr/0018-composer-attachments.md), #18).
+  Command rows retain their names inside the Commands accessibility group and use command names for
+  identity and scrolling. Attachment chips retain their file icons across draft edits.
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
 
 ## Next steps

@@ -1,6 +1,6 @@
 # 0015. Agent terminals
 
-- Status: Accepted
+- Status: Accepted; ACP semantics, lifecycle and history superseded by [0016](0016-agent-reported-command-output.md)
 - Date: 2026-10-11
 - Decider: Project owner
 - Scope: ACP v1 `terminal/*` (#30) and terminal output in tool call cards (#31); complements

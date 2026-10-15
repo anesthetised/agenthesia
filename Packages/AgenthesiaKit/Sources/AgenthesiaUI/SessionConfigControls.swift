@@ -28,7 +28,7 @@ struct SessionConfigControls: View {
         }
     }
 
-    @ContentBuilder private func control(_ option: ACP.ConfigOption) -> some View {
+    @ViewBuilder private func control(_ option: ACP.ConfigOption) -> some View {
         switch option.value {
         case .select(let current, let choices):
             Menu {

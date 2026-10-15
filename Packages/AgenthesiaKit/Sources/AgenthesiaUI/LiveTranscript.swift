@@ -58,6 +58,14 @@ final class LiveTranscriptSource: TranscriptSource {
         var stream: StreamingMarkdown
     }
     private var cache: [Int64: Cached] = [:]
+    /// Rows are rebuilt on every update; a diff is computed once per edit.
+    private var diffs: [ACP.Diff: String] = [:]
+    private func cachedDiff(_ diff: ACP.Diff) -> String {
+        if let markdown = diffs[diff] { return markdown }
+        let markdown = Self.diff(diff)
+        diffs[diff] = markdown
+        return markdown
+    }
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
     private var expanded: Set<Int64> = []
     var messageCount: Int { state.items.count }
@@ -78,7 +86,12 @@ final class LiveTranscriptSource: TranscriptSource {
     func message(at row: Int) -> TranscriptMessage {
         let item = state.items[row]
         if let tool = item.toolCall {
-            let card = Self.toolCard(tool, output: item.commandOutput, expanded: expanded.contains(item.id))
+            let card = Self.toolCard(
+                tool,
+                output: item.commandOutput,
+                expanded: expanded.contains(item.id),
+                diff: cachedDiff
+            )
             var message = render(id: item.id, role: "Tool", markdown: card.markdown)
             message.tool = card.header
             return message
@@ -92,7 +105,12 @@ final class LiveTranscriptSource: TranscriptSource {
                 } else {
                     .ended
                 }
-            let card = Self.permissionCard(permission, phase: phase, expanded: expanded.contains(item.id))
+            let card = Self.permissionCard(
+                permission,
+                phase: phase,
+                expanded: expanded.contains(item.id),
+                diff: cachedDiff
+            )
             var message = render(id: item.id, role: "Permission", markdown: card.markdown)
             message.tool = card.header
             return message
@@ -181,17 +199,20 @@ final class LiveTranscriptSource: TranscriptSource {
     static let collapsedLines = 12
     static let collapsedCharacters = 2_000
 
-    /// Shows only what the agent reported. The specialized diff view is #20.
+    /// Shows only what the agent reported.
     static func toolCard(
         _ tool: ACP.ToolCall,
         output: TranscriptState.CommandOutput? = nil,
-        expanded: Bool
+        expanded: Bool,
+        diff: (ACP.Diff) -> String = diff
     ) -> (header: ToolCardHeader, markdown: String) {
         let (symbol, kind) = kind(tool.kind)
         let (status, tone) = status(tool.status)
         var header = ToolCardHeader(symbol: symbol, kind: kind, status: status, tone: tone)
         var sections = [title(tool)]
-        if let body = body(tool, output: output, header: &header, expanded: expanded) { sections.append(body) }
+        if let body = body(tool, output: output, header: &header, expanded: expanded, diff: diff) {
+            sections.append(body)
+        }
         return (header, sections.joined(separator: "\n\n"))
     }
 
@@ -208,12 +229,13 @@ final class LiveTranscriptSource: TranscriptSource {
     static func permissionCard(
         _ permission: TranscriptState.Permission,
         phase: PermissionPhase,
-        expanded: Bool
+        expanded: Bool,
+        diff: (ACP.Diff) -> String = diff
     ) -> (header: ToolCardHeader, markdown: String) {
         let tool = permission.toolCall
         var header = ToolCardHeader(symbol: "hand.raised", kind: "Permission", status: "", tone: .neutral)
         var sections = ["\(kind(tool.kind).label) · \(title(tool))"]
-        if let body = body(tool, header: &header, expanded: expanded) { sections.append(body) }
+        if let body = body(tool, header: &header, expanded: expanded, diff: diff) { sections.append(body) }
         let option = permission.selectedOption
         switch permission.outcome {
         case nil:
@@ -272,7 +294,8 @@ final class LiveTranscriptSource: TranscriptSource {
         _ tool: ACP.ToolCall,
         output: TranscriptState.CommandOutput? = nil,
         header: inout ToolCardHeader,
-        expanded: Bool
+        expanded: Bool,
+        diff: (ACP.Diff) -> String = diff
     ) -> String? {
         var details: [String] = []
         if let locations = tool.locations, !locations.isEmpty {
@@ -281,7 +304,7 @@ final class LiveTranscriptSource: TranscriptSource {
         for content in tool.content ?? [] {
             switch content {
             case .content(let block): details.append(placeholder(block.content))
-            case .diff(let diff): details.append("[Diff: `\(diff.path)`\(diff.oldText == nil ? ", new file" : "")]")
+            case .diff(let edit): details.append(diff(edit))
             case .terminal(let terminal):
                 if output == nil { details.append("[Terminal: `\(terminal.terminalId)`]") }
             case .unknown: details.append("[Unsupported content]")
@@ -319,17 +342,7 @@ final class LiveTranscriptSource: TranscriptSource {
         } else if text.truncated {
             sections.append("_… earlier output dropped_")
         }
-        if !shown.isEmpty {
-            // Longer than any backtick run in the output, so the output cannot close the fence.
-            var longest = 0
-            var run = 0
-            for character in shown {
-                run = character == "`" ? run + 1 : 0
-                longest = max(longest, run)
-            }
-            let fence = String(repeating: "`", count: max(3, longest + 1))
-            sections.append("\(fence)\n\(shown)\n\(fence)")
-        }
+        if !shown.isEmpty { sections.append(fenced(shown)) }
         if let exit = command.exit {
             let status: String =
                 switch (exit.exitCode, exit.signal) {
@@ -340,6 +353,25 @@ final class LiveTranscriptSource: TranscriptSource {
             sections.append(status)
         }
         return sections.isEmpty ? nil : (sections.joined(separator: "\n\n"), oversized)
+    }
+
+    /// `code` as a fenced block, the fence longer than any backtick run in `code` so it cannot close the fence.
+    nonisolated static func fenced(_ code: String, language: String = "") -> String {
+        var longest = 0
+        var run = 0
+        for character in code {
+            run = character == "`" ? run + 1 : 0
+            longest = max(longest, run)
+        }
+        let fence = String(repeating: "`", count: max(3, longest + 1))
+        return "\(fence)\(language)\n\(code)\n\(fence)"
+    }
+
+    /// The edited path and its unified diff.
+    nonisolated static func diff(_ diff: ACP.Diff) -> String {
+        let path = "`\(diff.path)`\(diff.oldText == nil ? " (new file)" : "")"
+        let hunks = UnifiedDiff.make(old: diff.oldText, new: diff.newText)
+        return hunks.isEmpty ? "\(path): no changes" : "\(path)\n\n\(fenced(hunks, language: "diff"))"
     }
 
     /// The body bounded to its collapsed size, or `nil` when it already fits.

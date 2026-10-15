@@ -113,7 +113,8 @@ at one frame. Agents update tool calls far less often than ten times per second.
 ## Rendering workloads
 
 The microbenchmarks measure first use of each grammar, warm whole-file highlighting, Markdown rendering,
-streaming with fixed 13-character chunks, and rendering 1,000 transcript items. Streaming covers both
+streaming with fixed 13-character chunks, rendering 1,000 transcript items, and building and highlighting
+unified diffs of a 2,000-line file with 100, 500 and 2,000 edited lines. Streaming covers both
 a mixed answer and one long unclosed Swift code block. They measure computation, not UI responsiveness.
 Per-operation medians use five highlighting iterations or twenty Markdown iterations; streaming reports
 percentiles across chunks. Fresh-process repetitions are separate observations, not pooled chunk samples.
@@ -138,6 +139,20 @@ chunks into one update. This tests the intended UI coalescing policy; it does no
 or persistence. Transcript scenarios prewarm grammars. S4 cold refers to process-local grammar state,
 not a cold OS filesystem cache or total app launch time. Use the runner for cold runs; a manual cold run
 after other work in the same lab process is not cold.
+
+### Tool call diffs (2026-10-15)
+
+Three Release runs on 10 cores, free RAM 73–75%, load average 5.7–10.5. Medians of five iterations, in ms:
+
+| Edited lines of 2,000 | Make, before bound | Make | Highlight |
+|---|--:|--:|--:|
+| 100 | 3.9–4.1 | 4.6 | 2.5–2.6 |
+| 500 | — | 22.5–23.1 | 10.8–11.3 |
+| 2,000 | 137–140 | 3.2–3.3 | 6.7–6.9 |
+
+`difference(from:)` grows with the square of the edit count, so `UnifiedDiff` trims the common prefix and
+suffix and shows an edit as a whole replacement when its unmatched lines exceed 1,000. Cards compute a diff
+once per edit; rows rebuilt on later updates reuse it.
 
 ## Interpreting metrics
 

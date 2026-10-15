@@ -39,6 +39,10 @@ public struct Theme: Sendable {
     public var linkColor: NSColor { .linkColor }
     public var codeBackgroundColor: NSColor { .quaternarySystemFill }
     public var quoteBarColor: NSColor { .tertiaryLabelColor }
+    public var diffAddedColor: NSColor { .systemGreen.withAlphaComponent(0.15) }
+    public var diffRemovedColor: NSColor { .systemRed.withAlphaComponent(0.15) }
+    public var diffAddedWordColor: NSColor { .systemGreen.withAlphaComponent(0.4) }
+    public var diffRemovedWordColor: NSColor { .systemRed.withAlphaComponent(0.4) }
 
     /// The color for a tree-sitter highlight capture such as `keyword.function` or `string.special`.
     ///

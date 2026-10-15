@@ -233,4 +233,17 @@ print("|---|--:|--:|--:|")
 print("| Typical answers, one thread | \(items.count) | \(format(itemsTime)) | \(format(itemsTime / 1_000)) |")
 try record("Transcript items", ["items": Double(items.count), "totalMS": itemsTime])
 
+print("\n| Diff | Lines | Changed | Make, ms | Highlight, ms |")
+print("|---|--:|--:|--:|--:|")
+for (name, lines, every) in [("Scattered edits", 2_000, 20), ("Heavy edits", 2_000, 4), ("Rewrite", 2_000, 1)] {
+    let old = sourceFile(.swift, lines: lines)
+    let new = old.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+        .map { $0.offset % every == 0 ? $0.element + " // edited" : $0.element }.joined(separator: "\n")
+    var diff = ""
+    let make = median(5) { diff = UnifiedDiff.make(old: old, new: new) }
+    let highlight = median(5) { _ = UnifiedDiff.highlight(diff, theme: .standard) }
+    print("| \(name) | \(lines) | \(lines / every) | \(format(make)) | \(format(highlight)) |")
+    try record("Diff: \(name)", ["makeMS": make, "highlightMS": highlight])
+}
+
 print("\nSystem at end: \(systemLoad())")

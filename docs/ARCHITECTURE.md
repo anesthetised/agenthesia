@@ -32,12 +32,12 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands ([ADR-0015](adr/0015-agent-terminals.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
-| `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
+| `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
-| `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
+| `rendering-bench` | Release-build timings of Markdown rendering, highlighting and diffs (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
 
@@ -69,8 +69,11 @@ Rendering Lab prototypes retain their implementations, with an additional produc
 The composer accepts text prompts while idle and keeps drafts editable during a turn. Queueing and
 steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
 Markdown body with the title, reported locations and text content, so selection and copying work as
-for messages. Missing fields are shown as not reported; diff and unsupported content appear
-as placeholders until #20. A command's output replaces the terminal placeholder: `TerminalText` derives
+for messages. Missing fields are shown as not reported; unsupported content appears
+as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;
+`MarkdownRenderer` tints added and removed lines and the words that changed between adjacent runs (runs over
+200 lines skip word comparison). Edits with over 1,000 unmatched lines show as a whole replacement, and a
+diff is computed once per edit, not on every row update. Side-by-side diffs remain open. A command's output replaces the terminal placeholder: `TerminalText` derives
 escape-free text at render time, shown in a code block with the exit status; collapsed, it keeps the last lines. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
@@ -145,8 +148,7 @@ resource limits remain follow-up work for large files.
 These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox:
 an agent's own tools remain outside this provider, reads can see existing hard-linked files, and an
 open directory descriptor keeps referring to that directory if another process renames it. File
-changes remain in the worktree; specialized diff rendering and changed-file observation remain #20
-and #28. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
+changes remain in the worktree; tool call diffs are rendered in cards, changed-file observation remains #28. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
 
 ## Persistence implementation
 

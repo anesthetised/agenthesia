@@ -160,6 +160,7 @@ public struct RootView: View {
                 isEnabled: editable,
                 onSubmit: send
             )
+            SessionConfigControls(session: session).id(session.session.id)
             HStack {
                 Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -180,7 +181,7 @@ public struct RootView: View {
                 } else {
                     Button("Send", systemImage: "arrow.up", action: send)
                         .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(session.status != .idle || !hasDraft)
+                        .disabled(session.status != .idle || session.isChangingConfig || !hasDraft)
                 }
             }
         }
@@ -227,7 +228,9 @@ public struct RootView: View {
     }
 
     private func send() {
-        guard model.restored == nil, model.owner?.controller?.status == .idle, hasDraft else { return }
+        guard model.restored == nil, model.owner?.controller?.status == .idle,
+            model.owner?.controller?.isChangingConfig == false, hasDraft
+        else { return }
         let text = prompt, files = attachments
         prompt = ""
         attachments = []

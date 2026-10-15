@@ -28,6 +28,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case cannotReopen
     }
 
+    public private(set) var isChangingConfig = false
     public private(set) var status: Status = .ready
     public private(set) var transcript = TranscriptState()
     /// Observed separately so window chrome does not re-render on every published transcript frame.
@@ -45,6 +46,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored private var connection: (any ACP.AgentConnection)?
     @ObservationIgnored private var reduced = TranscriptState()
     @ObservationIgnored private var tail: Task<Void, any Error>?
+    @ObservationIgnored private var configTask: Task<Void, any Error>?
     @ObservationIgnored private var turnTask: Task<Void, any Error>?
     @ObservationIgnored private var stopTask: Task<Void, any Error>?
     @ObservationIgnored private var turnID: UUID?
@@ -192,10 +194,33 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         return controller
     }
 
+    /// Changes settings only between turns. The agent's full response becomes visible after durable recording.
+    /// Like a turn, accepted config work belongs to the controller rather than the waiting UI task.
+    public func setConfigOption(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) async throws {
+        try Task.checkCancellation()
+        guard status == .idle, !isChangingConfig, let connection, let agentID = session.agentSessionID else {
+            throw SessionError.invalidState
+        }
+        isChangingConfig = true
+        let task = Task {
+            defer {
+                isChangingConfig = false
+                configTask = nil
+            }
+            let options = try await connection.setConfigOption(id, to: value, in: agentID)
+            // Closing may finish the wire request. Never record its response after admission has stopped.
+            guard status == .idle else { throw SessionError.invalidState }
+            try await record([try SessionEvent.configOptions(options).storedEvent()])
+            publishTranscript()
+        }
+        configTask = task
+        try await task.value
+    }
+
     /// Owns the turn task: cancelling a UI task waiting here cannot silently cancel the wire request.
     public func send(_ content: [ACP.ContentBlock]) async throws {
         try Task.checkCancellation()
-        guard status == .idle, let connection, let agentID = session.agentSessionID else {
+        guard status == .idle, !isChangingConfig, let connection, let agentID = session.agentSessionID else {
             throw SessionError.invalidState
         }
         guard !content.isEmpty,
@@ -292,12 +317,17 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     public func close() async {
-        guard status != .closed else { await fileSystem?.close(); return }
+        guard status != .closed else {
+            await fileSystem?.close()
+            _ = try? await configTask?.value
+            return
+        }
         status = .closed
         fileSystem?.stopAccepting()
         cancelPermissions()
         await connection?.close()
         await fileSystem?.close()
+        _ = try? await configTask?.value
         _ = try? await turnTask?.value
         _ = try? await tail?.value
         connection = nil

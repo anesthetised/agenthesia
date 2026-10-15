@@ -225,6 +225,15 @@ A storage failure closes the connection and reports an
 observable error without showing uncommitted text. The caller owns `AgentProcess` and must terminate it
 when the session fails or closes; closing ACP alone is not process containment.
 
+Session settings use `setConfigOption(_:to:)` only while idle ([ADR-0019](adr/0019-session-config-controls.md)).
+The controller owns the config task and exposes `isChangingConfig`; another config change or prompt
+submission is rejected until the returned options have been committed and published. The agent's full
+response is authoritative. Request errors preserve confirmed settings and leave the session usable;
+storage errors fail the session. Close waits for accepted config work, and responses arriving after
+close are discarded. Native composer menus preserve choice groups; checkboxes show boolean settings.
+Unknown option types are hidden, and saved settings remain visible read-only. Legacy modes enter the
+same controls through adapter normalization.
+
 All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
 across an async SQLite write. Incoming notification handlers await their commit and reduction before
 JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.

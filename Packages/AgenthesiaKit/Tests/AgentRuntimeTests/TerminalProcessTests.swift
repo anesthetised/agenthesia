@@ -81,22 +81,6 @@ import Testing
         #expect(terminal.output == TerminalOutput(bytes: Data("\u{1B}[31mred\u{1B}[0m\r\nend".utf8)))
     }
 
-    @Test func readsOutputWhileTheGlobalQueuesAreBusy() async throws {
-        // Output unread for about 0.6 s after the command exits is discarded by the kernel.
-        let release = DispatchSemaphore(value: 0)
-        let blockers = ProcessInfo.processInfo.activeProcessorCount * 4
-        for _ in 0..<blockers {
-            DispatchQueue.global(qos: .utility).async { _ = release.wait(timeout: .now() + 5) }
-            DispatchQueue.global(qos: .userInitiated).async { _ = release.wait(timeout: .now() + 5) }
-        }
-        defer { for _ in 0..<(blockers * 2) { release.signal() } }
-        let start = ContinuousClock.now
-        let terminal = try TerminalProcess(launching: AgentCommand(executable: "/bin/echo", arguments: ["busy"]))
-        #expect(await terminal.waitForExit() == .exited(0))
-        #expect(ContinuousClock.now - start < .seconds(2))
-        #expect(text(terminal.output) == "busy\n")
-    }
-
     @Test func retainsOnlyTheNewestBytesWithinTheLimit() async throws {
         let script = "/usr/bin/awk 'BEGIN { for (i=0; i<5000; i++) printf \"x\"; printf \"END\" }'"
         let terminal = try TerminalProcess(

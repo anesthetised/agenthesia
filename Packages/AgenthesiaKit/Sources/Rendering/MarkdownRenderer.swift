@@ -121,8 +121,10 @@ public struct MarkdownRenderer: Sendable {
     }
 
     private func codeBlock(_ block: CodeBlock, _ context: Context) -> NSMutableAttributedString {
+        let code = withoutTrailingNewline(block.code)
+        if block.language == "diff" { return paragraph(UnifiedDiff.highlight(code, theme: theme), context) }
         let language = block.language.flatMap { CodeLanguage(name: $0) }
-        let text = Highlighter(theme: theme).highlight(withoutTrailingNewline(block.code), language: language)
+        let text = Highlighter(theme: theme).highlight(code, language: language)
         text.addAttribute(.backgroundColor, value: theme.codeBackgroundColor, range: NSRange(0..<text.length))
         return paragraph(text, context)
     }

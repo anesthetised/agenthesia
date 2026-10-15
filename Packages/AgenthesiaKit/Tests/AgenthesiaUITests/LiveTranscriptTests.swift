@@ -70,8 +70,10 @@ import Testing
             ],
             locations: [.init(path: "/src/main.swift", line: 4), .init(path: "/src/other.swift")]
         )
-        let (header, markdown) = LiveTranscriptSource.toolCard(call, expanded: false)
-        #expect(header == ToolCardHeader(symbol: "pencil", kind: "Edit", status: "Failed", tone: .failure))
+        let (header, markdown) = LiveTranscriptSource.toolCard(call, expanded: true)
+        var expected = ToolCardHeader(symbol: "pencil", kind: "Edit", status: "Failed", tone: .failure)
+        (expected.expandable, expected.expanded) = (true, true)
+        #expect(header == expected)
         #expect(
             markdown == """
                 **Edit main.swift**
@@ -83,7 +85,12 @@ import Testing
 
                 [Image attachment]
 
-                [Diff: `main.swift`, new file]
+                `main.swift` (new file)
+
+                ```diff
+                @@ -0,0 +1,1 @@
+                +new
+                ```
 
                 [Terminal: `term`]
 
@@ -96,6 +103,21 @@ import Testing
         )
         #expect(ACP.ToolKind.knownCases.map { LiveTranscriptSource.kind($0).label }.count == 10)
         #expect(LiveTranscriptSource.kind(.unknown("deploy")).label == "deploy")
+    }
+
+    @Test func diffsShowHunksInAFenceTheyCannotClose() {
+        #expect(LiveTranscriptSource.diff(.init(path: "a.md", oldText: "x", newText: "x")) == "`a.md`: no changes")
+        #expect(
+            LiveTranscriptSource.diff(.init(path: "a.md", oldText: "x", newText: "```")) == """
+                `a.md`
+
+                ````diff
+                @@ -1,1 +1,1 @@
+                -x
+                +```
+                ````
+                """
+        )
     }
 
     @Test func permissionOutcomesClaimOnlyWhatWasRecorded() {

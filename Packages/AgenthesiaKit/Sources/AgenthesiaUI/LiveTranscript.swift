@@ -181,7 +181,7 @@ final class LiveTranscriptSource: TranscriptSource {
     static let collapsedLines = 12
     static let collapsedCharacters = 2_000
 
-    /// Shows only what the agent reported. The specialized diff view is #20.
+    /// Shows only what the agent reported.
     static func toolCard(
         _ tool: ACP.ToolCall,
         output: TranscriptState.CommandOutput? = nil,
@@ -281,7 +281,7 @@ final class LiveTranscriptSource: TranscriptSource {
         for content in tool.content ?? [] {
             switch content {
             case .content(let block): details.append(placeholder(block.content))
-            case .diff(let diff): details.append("[Diff: `\(diff.path)`\(diff.oldText == nil ? ", new file" : "")]")
+            case .diff(let diff): details.append(Self.diff(diff))
             case .terminal(let terminal):
                 if output == nil { details.append("[Terminal: `\(terminal.terminalId)`]") }
             case .unknown: details.append("[Unsupported content]")
@@ -319,17 +319,7 @@ final class LiveTranscriptSource: TranscriptSource {
         } else if text.truncated {
             sections.append("_… earlier output dropped_")
         }
-        if !shown.isEmpty {
-            // Longer than any backtick run in the output, so the output cannot close the fence.
-            var longest = 0
-            var run = 0
-            for character in shown {
-                run = character == "`" ? run + 1 : 0
-                longest = max(longest, run)
-            }
-            let fence = String(repeating: "`", count: max(3, longest + 1))
-            sections.append("\(fence)\n\(shown)\n\(fence)")
-        }
+        if !shown.isEmpty { sections.append(fenced(shown)) }
         if let exit = command.exit {
             let status: String =
                 switch (exit.exitCode, exit.signal) {
@@ -340,6 +330,25 @@ final class LiveTranscriptSource: TranscriptSource {
             sections.append(status)
         }
         return sections.isEmpty ? nil : (sections.joined(separator: "\n\n"), oversized)
+    }
+
+    /// `code` as a fenced block, the fence longer than any backtick run in `code` so it cannot close the fence.
+    static func fenced(_ code: String, language: String = "") -> String {
+        var longest = 0
+        var run = 0
+        for character in code {
+            run = character == "`" ? run + 1 : 0
+            longest = max(longest, run)
+        }
+        let fence = String(repeating: "`", count: max(3, longest + 1))
+        return "\(fence)\(language)\n\(code)\n\(fence)"
+    }
+
+    /// The edited path and its unified diff.
+    static func diff(_ diff: ACP.Diff) -> String {
+        let path = "`\(diff.path)`\(diff.oldText == nil ? " (new file)" : "")"
+        let hunks = UnifiedDiff.make(old: diff.oldText, new: diff.newText)
+        return hunks.isEmpty ? "\(path): no changes" : "\(path)\n\n\(fenced(hunks, language: "diff"))"
     }
 
     /// The body bounded to its collapsed size, or `nil` when it already fits.

@@ -1,4 +1,5 @@
 public import ACP
+public import AgentRuntime
 public import Foundation
 public import Persistence
 
@@ -49,6 +50,45 @@ public struct TranscriptState: Equatable, Sendable {
         }
     }
 
+    /// Command output an agent reports in a tool call's `_meta` (ADR-0016): `terminal_output_delta` and
+    /// `terminal_output` carry `data` to append, `terminal_exit` the end of the command.
+    public struct CommandOutput: Equatable, Sendable {
+        public struct Exit: Equatable, Sendable {
+            public var exitCode: Int?
+            public var signal: String?
+        }
+
+        /// The most recent bytes; older ones are dropped beyond this limit.
+        public static let byteLimit = 1 << 20
+        static let chunkKeys = ["terminal_output_delta", "terminal_output"]
+        /// Keys whose content lives here instead of in the tool call's `meta`.
+        static let keys = chunkKeys + ["terminal_exit"]
+
+        public var output = TerminalOutput()
+        public var exit: Exit?
+
+        static func carries(_ meta: ACP.Meta) -> Bool {
+            keys.contains { meta[$0] != nil }
+        }
+
+        mutating func apply(_ meta: ACP.Meta) {
+            for key in Self.chunkKeys {
+                guard case .object(let chunk)? = meta[key], case .string(let data)? = chunk["data"] else { continue }
+                output.bytes.append(Data(data.utf8))
+            }
+            if output.bytes.count > Self.byteLimit {
+                output.bytes.removeFirst(output.bytes.count - Self.byteLimit)
+                output.truncated = true
+            }
+            if case .object(let end)? = meta["terminal_exit"] {
+                var exit = Exit()
+                if case .int(let code)? = end["exit_code"] { exit.exitCode = Int(code) }
+                if case .string(let signal)? = end["signal"] { exit.signal = signal }
+                self.exit = exit
+            }
+        }
+    }
+
     public struct Item: Identifiable, Equatable, Sendable {
         /// Sequence of the first event contributing this row; stable across replay.
         public let id: Int64
@@ -56,6 +96,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var toolCall: ACP.ToolCall?
         public var notice: String?
         public var permission: Permission?
+        /// Output of the row's tool call, kept out of the call's `meta`.
+        public var commandOutput: CommandOutput?
     }
 
     public private(set) var items: [Item] = []
@@ -160,27 +202,22 @@ public struct TranscriptState: Equatable, Sendable {
         case .agentMessageChunk(let chunk): append(chunk, role: .assistant, sequence: sequence)
         case .agentThoughtChunk(let chunk): append(chunk, role: .thought, sequence: sequence)
         case .toolCall(let call):
-            if toolIndices[call.toolCallId] == nil {
-                toolIndices[call.toolCallId] = items.count
-                items.append(Item(id: sequence, toolCall: call))
-            } else {
-                // Updates may precede the call; fields it omits keep their reported values.
-                merge(
-                    .init(
-                        toolCallId: call.toolCallId,
-                        title: call.title,
-                        name: call.name,
-                        kind: call.kind,
-                        status: call.status,
-                        content: call.content,
-                        locations: call.locations,
-                        rawInput: call.rawInput,
-                        rawOutput: call.rawOutput,
-                        meta: call.meta
-                    ),
-                    sequence: sequence
-                )
-            }
+            // Updates may precede the call; fields it omits keep their reported values.
+            merge(
+                .init(
+                    toolCallId: call.toolCallId,
+                    title: call.title,
+                    name: call.name,
+                    kind: call.kind,
+                    status: call.status,
+                    content: call.content,
+                    locations: call.locations,
+                    rawInput: call.rawInput,
+                    rawOutput: call.rawOutput,
+                    meta: call.meta
+                ),
+                sequence: sequence
+            )
         case .toolCallUpdate(let update): merge(update, sequence: sequence)
         case .plan(let value): plan = value
         case .availableCommands(let value): commands = value.availableCommands
@@ -238,6 +275,10 @@ public struct TranscriptState: Equatable, Sendable {
         }
         guard let index = toolIndices[update.toolCallId] else { return }
         items[index].toolCall?.apply(update)
+        if let meta = update.meta, CommandOutput.carries(meta) {
+            if items[index].commandOutput == nil { items[index].commandOutput = .init() }
+            items[index].commandOutput?.apply(meta)
+        }
     }
 }
 
@@ -251,6 +292,10 @@ extension ACP.ToolCall {
         if let value = update.locations { locations = value }
         if let value = update.rawInput { rawInput = value }
         if let value = update.rawOutput { rawOutput = value }
-        if let value = update.meta { meta = value }
+        if let value = update.meta {
+            let kept = value.filter { !TranscriptState.CommandOutput.keys.contains($0.key) }
+            // An update that carried only output leaves the reported meta alone.
+            if !kept.isEmpty || value.isEmpty { meta = kept }
+        }
     }
 }

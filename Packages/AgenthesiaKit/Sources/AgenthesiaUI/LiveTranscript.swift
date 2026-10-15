@@ -1,4 +1,5 @@
 import ACP
+import AgentRuntime
 import AgenthesiaCore
 import AppKit
 import Rendering
@@ -77,7 +78,7 @@ final class LiveTranscriptSource: TranscriptSource {
     func message(at row: Int) -> TranscriptMessage {
         let item = state.items[row]
         if let tool = item.toolCall {
-            let card = Self.toolCard(tool, expanded: expanded.contains(item.id))
+            let card = Self.toolCard(tool, output: item.commandOutput, expanded: expanded.contains(item.id))
             var message = render(id: item.id, role: "Tool", markdown: card.markdown)
             message.tool = card.header
             return message
@@ -156,7 +157,7 @@ final class LiveTranscriptSource: TranscriptSource {
             return (role, text)
         }
         if let tool = item.toolCall {
-            return ("Tool", toolCard(tool, expanded: false).markdown)
+            return ("Tool", toolCard(tool, output: item.commandOutput, expanded: false).markdown)
         }
         if let permission = item.permission {
             return ("Permission", permissionCard(permission, phase: .ended, expanded: false).markdown)
@@ -177,13 +178,17 @@ final class LiveTranscriptSource: TranscriptSource {
     static let collapsedLines = 12
     static let collapsedCharacters = 2_000
 
-    /// Shows only what the agent reported. Specialized diff and terminal views are #20 and #31.
-    static func toolCard(_ tool: ACP.ToolCall, expanded: Bool) -> (header: ToolCardHeader, markdown: String) {
+    /// Shows only what the agent reported. The specialized diff view is #20.
+    static func toolCard(
+        _ tool: ACP.ToolCall,
+        output: TranscriptState.CommandOutput? = nil,
+        expanded: Bool
+    ) -> (header: ToolCardHeader, markdown: String) {
         let (symbol, kind) = kind(tool.kind)
         let (status, tone) = status(tool.status)
         var header = ToolCardHeader(symbol: symbol, kind: kind, status: status, tone: tone)
         var sections = [title(tool)]
-        if let body = body(tool, header: &header, expanded: expanded) { sections.append(body) }
+        if let body = body(tool, output: output, header: &header, expanded: expanded) { sections.append(body) }
         return (header, sections.joined(separator: "\n\n"))
     }
 
@@ -259,8 +264,13 @@ final class LiveTranscriptSource: TranscriptSource {
         tool.title.isEmpty ? "_Untitled tool call_" : "**\(tool.title)**"
     }
 
-    /// The reported locations and content, bounded unless expanded.
-    static func body(_ tool: ACP.ToolCall, header: inout ToolCardHeader, expanded: Bool) -> String? {
+    /// The reported locations, content and command output, bounded unless expanded.
+    static func body(
+        _ tool: ACP.ToolCall,
+        output: TranscriptState.CommandOutput? = nil,
+        header: inout ToolCardHeader,
+        expanded: Bool
+    ) -> String? {
         var details: [String] = []
         if let locations = tool.locations, !locations.isEmpty {
             details.append(locations.map { "- `\($0.path)\($0.line.map { ":\($0)" } ?? "")`" }.joined(separator: "\n"))
@@ -269,16 +279,64 @@ final class LiveTranscriptSource: TranscriptSource {
             switch content {
             case .content(let block): details.append(placeholder(block.content))
             case .diff(let diff): details.append("[Diff: `\(diff.path)`\(diff.oldText == nil ? ", new file" : "")]")
-            case .terminal(let terminal): details.append("[Terminal: `\(terminal.terminalId)`]")
+            case .terminal(let terminal):
+                if output == nil { details.append("[Terminal: `\(terminal.terminalId)`]") }
             case .unknown: details.append("[Unsupported content]")
             }
         }
-        guard !details.isEmpty else { return nil }
         let body = details.joined(separator: "\n\n")
-        let collapsed = collapse(body)
-        header.expandable = collapsed != nil
-        header.expanded = expanded && collapsed != nil
-        return header.expanded ? body : collapsed ?? body
+        let collapsed = details.isEmpty ? nil : collapse(body)
+        let command = output.flatMap { commandOutput($0, expanded: expanded) }
+        header.expandable = collapsed != nil || command?.oversized == true
+        header.expanded = expanded && header.expandable
+        let shown = details.isEmpty ? nil : header.expanded ? body : collapsed ?? body
+        let sections = [shown, command?.markdown].compactMap { $0 }
+        return sections.isEmpty ? nil : sections.joined(separator: "\n\n")
+    }
+
+    /// The output as a code block, showing only the last lines unless expanded, with the exit status.
+    /// `oversized` tells that the output exceeds the collapsed bound.
+    static func commandOutput(
+        _ command: TranscriptState.CommandOutput,
+        expanded: Bool
+    ) -> (markdown: String, oversized: Bool)? {
+        let text = TerminalText.make(from: command.output, byteLimit: TranscriptState.CommandOutput.byteLimit)
+        var lines = text.text.split(separator: "\n", omittingEmptySubsequences: false)
+        if lines.last == "" { lines.removeLast() }
+        var shown = lines.joined(separator: "\n")
+        let oversized = lines.count > collapsedLines || shown.count > collapsedCharacters
+        let cut = oversized && !expanded
+        if cut {
+            shown = String(lines.suffix(collapsedLines).joined(separator: "\n").suffix(collapsedCharacters))
+        }
+        var sections: [String] = []
+        let hidden = lines.count - shown.split(separator: "\n", omittingEmptySubsequences: false).count
+        if cut {
+            sections.append(hidden > 0 ? "_… \(hidden) earlier line\(hidden == 1 ? "" : "s")_" : "_… truncated_")
+        } else if text.truncated {
+            sections.append("_… earlier output dropped_")
+        }
+        if !shown.isEmpty {
+            // Longer than any backtick run in the output, so the output cannot close the fence.
+            var longest = 0
+            var run = 0
+            for character in shown {
+                run = character == "`" ? run + 1 : 0
+                longest = max(longest, run)
+            }
+            let fence = String(repeating: "`", count: max(3, longest + 1))
+            sections.append("\(fence)\n\(shown)\n\(fence)")
+        }
+        if let exit = command.exit {
+            let status: String =
+                switch (exit.exitCode, exit.signal) {
+                case (_, let signal?): "Terminated by signal \(signal)"
+                case (let code?, nil): "Exit code \(code)"
+                case (nil, nil): "Exited"
+                }
+            sections.append(status)
+        }
+        return sections.isEmpty ? nil : (sections.joined(separator: "\n\n"), oversized)
     }
 
     /// The body bounded to its collapsed size, or `nil` when it already fits.

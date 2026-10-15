@@ -34,7 +34,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `DiffView` ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
 | `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
-| `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `Persistence`, `AgenthesiaCore`, `Rendering` |
+| `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, or a JSON scenario with `--scenario`. | `ACPTesting` |
 | `rendering-bench` | Release-build timings of Markdown rendering and highlighting (`just bench`). | `Rendering` |
@@ -69,8 +69,9 @@ Rendering Lab prototypes retain their implementations, with an additional produc
 The composer accepts text prompts while idle and keeps drafts editable during a turn. Queueing and
 steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
 Markdown body with the title, reported locations and text content, so selection and copying work as
-for messages. Missing fields are shown as not reported; diff, terminal and unsupported content appear
-as placeholders until #20 and #31. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
+for messages. Missing fields are shown as not reported; diff and unsupported content appear
+as placeholders until #20. A command's output replaces the terminal placeholder: `TerminalText` derives
+escape-free text at render time, shown in a code block with the exit status; collapsed, it keeps the last lines. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
 Each permission request is its own card, even when several refer to one tool call. It shows the tool
@@ -235,7 +236,9 @@ The event format is version 1:
 `TranscriptState.apply` is the pure reduction of those stored events. Rows use their first contributing
 sequence as a stable identity. It combines contiguous content chunks, respects explicit message IDs,
 preserves non-text content, patches tool calls (absent fields stay unchanged, including when updates
-arrive before the full call, whose untitled placeholder has an empty title), and tracks plans,
+arrive before the full call, whose untitled placeholder has an empty title), accumulates the command output
+an agent reports in a tool call's `_meta` (`terminal_output_delta`, `terminal_output`, `terminal_exit`; the newest
+1 MiB, outside the call's `meta`; [ADR-0016](adr/0016-agent-reported-command-output.md)), and tracks plans,
 commands, settings, title, usage, stop reason and unfinished turns. Unknown kinds/versions and undecodable ACP update bodies remain stored
 and advance the cursor with an unsupported-event count. Malformed local event payloads, invalid ACP
 envelopes or sequence gaps fail replay explicitly.

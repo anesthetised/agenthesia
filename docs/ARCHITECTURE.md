@@ -262,6 +262,15 @@ close are discarded. Native composer menus preserve choice groups; checkboxes sh
 Unknown option types are hidden, and saved settings remain visible read-only. Legacy modes enter the
 same controls through adapter normalization.
 
+Config responses use a JSON-RPC ordered result consumer: decoding, adapter normalization and the Core
+commit finish before the reader dispatches the next incoming message. This preserves both orderings:
+a response supersedes earlier config notifications, and later notifications supersede that response.
+The original config API still returns the normalized snapshot for its response. Cancellation before
+response admission withdraws the request; once its consumer starts, it completes even if its waiter is
+cancelled or the connection closes. The pending continuation is removed before consumption, so a
+failed durable commit can close the connection without completing it twice. Consumers may close the
+connection but must not await another wire response on it.
+
 All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
 across an async SQLite write. Incoming notification handlers await their commit and reduction before
 JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.

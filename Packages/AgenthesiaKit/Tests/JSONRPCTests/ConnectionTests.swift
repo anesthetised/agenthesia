@@ -259,3 +259,99 @@ private func makeConnection(
         #expect(events.contains { $0.hasPrefix("incoming") && $0.contains(#""in""#) })
     }
 }
+
+private actor ResponseGate {
+    private var entered = false
+    private var entrants: [CheckedContinuation<Void, Never>] = []
+    private var release: CheckedContinuation<Void, Never>?
+
+    func suspend() async {
+        entered = true
+        for waiter in entrants { waiter.resume() }
+        entrants.removeAll()
+        await withCheckedContinuation { release = $0 }
+    }
+    func waitUntilEntered() async {
+        if entered { return }
+        await withCheckedContinuation { entrants.append($0) }
+    }
+    func open() { release?.resume(); release = nil }
+}
+
+extension ConnectionTests {
+    @Test func responseConsumerFinishesBeforeFollowingNotification() async throws {
+        let gate = ResponseGate()
+        let recorder = Recorder()
+        let (notifications, received) = AsyncStream<Void>.makeStream()
+        var router = Router()
+        router.on(Log.self) { _ in
+            recorder.record("notification"); received.yield(())
+        }
+        let (connection, peer) = await makeConnection(router: router)
+        let task = Task {
+            try await connection.request(Add.self, .init(a: 1, b: 2)) { result in
+                recorder.record("entered")
+                await gate.suspend()
+                recorder.record("consumed")
+                return result * 2
+            }
+        }
+        guard case .request(let id, _, _) = try await peer.next() else { return }
+        try await peer.send(.response(id: id, result: .success(3)))
+        try await peer.send(.notification(method: "log", params: ["text": "after"]))
+        await gate.waitUntilEntered()
+        #expect(recorder.all == ["entered"])
+        await gate.open()
+        #expect(try await task.value == 6)
+        var iterator = notifications.makeAsyncIterator()
+        _ = await iterator.next()
+        #expect(recorder.all == ["entered", "consumed", "notification"])
+        await connection.close()
+    }
+
+    @Test(arguments: ["cancel", "close", "consumerClose"])
+    func admittedResponseConsumerSettlesOnceDespiteCancellationOrClose(ending: String) async throws {
+        let gate = ResponseGate()
+        let recorder = Recorder()
+        let (connection, peer) = await makeConnection()
+        let task = Task {
+            try await connection.request(Add.self, .init(a: 1, b: 2)) { result in
+                recorder.record("entered")
+                if ending == "consumerClose" { await connection.close() }
+                await gate.suspend()
+                recorder.record("consumed")
+                return result
+            }
+        }
+        guard case .request(let id, _, _) = try await peer.next() else { return }
+        try await peer.send(.response(id: id, result: .success(3)))
+        await gate.waitUntilEntered()
+        if ending == "cancel" { task.cancel() } else { await connection.close() }
+        await gate.open()
+        #expect(try await task.value == 3)
+        #expect(recorder.all == ["entered", "consumed"])
+        await connection.close()
+    }
+
+    @Test(arguments: [false, true]) func responseConsumerAndDecodeErrorsReachCaller(invalidResult: Bool) async throws {
+        let (connection, peer) = await makeConnection()
+        let task = Task {
+            try await connection.request(Add.self, .init(a: 1, b: 2)) { _ -> Int in
+                throw RPCError.internalError("cannot commit")
+            }
+        }
+        guard case .request(let id, _, _) = try await peer.next() else { return }
+        try await peer.send(.response(id: id, result: .success(invalidResult ? .string("bad result") : .int(3))))
+        if invalidResult {
+            await #expect(throws: ConnectionError.self) { try await task.value }
+        } else {
+            await #expect(throws: RPCError.internalError("cannot commit")) { try await task.value }
+        }
+        // Consumer failures affect their request, not later traffic.
+        let next = Task { try await connection.request(method: "after", params: nil) }
+        guard case .request(let nextID, _, _) = try await peer.next() else { return }
+        try await peer.send(.response(id: nextID, result: .success("ok")))
+        #expect(try await next.value == "ok")
+        await connection.close()
+    }
+}

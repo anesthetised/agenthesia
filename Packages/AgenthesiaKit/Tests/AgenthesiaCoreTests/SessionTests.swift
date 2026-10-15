@@ -1746,3 +1746,184 @@ extension InputLifecycleTests {
         await controller.close()
     }
 }
+
+/// Widens the suspension between a wire response and its caller observing the decoded result.
+/// Notifications continue through the real adapter while the response continuation is suspended.
+private struct GatedConfigResponse: ACP.AgentConnection {
+    let base: any ACP.AgentConnection
+    let gate: Gate
+
+    func initialize(client: ACP.Implementation) async throws -> ACP.AgentProfile {
+        try await base.initialize(client: client)
+    }
+    func authenticate(methodId: ACP.AuthMethodID) async throws { try await base.authenticate(methodId: methodId) }
+    func logout() async throws { try await base.logout() }
+    func newSession(
+        cwd: String,
+        additionalDirectories: [String],
+        mcpServers: [ACP.MCPServer]
+    ) async throws
+        -> ACP.SessionState
+    {
+        try await base.newSession(cwd: cwd, additionalDirectories: additionalDirectories, mcpServers: mcpServers)
+    }
+    func reopenSession(
+        _ id: ACP.SessionID,
+        cwd: String,
+        additionalDirectories: [String],
+        mcpServers: [ACP.MCPServer]
+    )
+        async throws -> ACP.ReopenedSession
+    {
+        try await base.reopenSession(id, cwd: cwd, additionalDirectories: additionalDirectories, mcpServers: mcpServers)
+    }
+    func listSessions(cwd: String?) async throws -> [ACP.SessionInfo] { try await base.listSessions(cwd: cwd) }
+    func closeSession(_ id: ACP.SessionID) async throws { try await base.closeSession(id) }
+    func deleteSession(_ id: ACP.SessionID) async throws { try await base.deleteSession(id) }
+    func prompt(_ content: [ACP.ContentBlock], in id: ACP.SessionID) async throws -> ACP.StopReason {
+        try await base.prompt(content, in: id)
+    }
+    func cancel(_ id: ACP.SessionID) async throws { try await base.cancel(id) }
+    func setConfigOption(
+        _ id: ACP.ConfigOptionID,
+        to value: ACP.ConfigValue,
+        in session: ACP.SessionID
+    ) async throws
+        -> [ACP.ConfigOption]
+    {
+        let options = try await base.setConfigOption(id, to: value, in: session)
+        await gate.suspend()
+        return options
+    }
+    func setConfigOption(
+        _ id: ACP.ConfigOptionID,
+        to value: ACP.ConfigValue,
+        in session: ACP.SessionID,
+        applying: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Void
+    ) async throws {
+        try await base.setConfigOption(id, to: value, in: session, applying: applying)
+        await gate.suspend()
+    }
+    func close() async { await base.close() }
+}
+
+extension SessionControllerTests {
+    @Test func configNotificationFollowingResponseRemainsAuthoritative() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let earlier: [ACP.ConfigOption] = [
+            .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: false))
+        ]
+        let later: [ACP.ConfigOption] = [
+            .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: true))
+        ]
+        let agent = ScenarioAgent(
+            scenario: Scenario([
+                .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+                .expectRequest(method: "session/new", response: .result(["sessionId": "s"])),
+                .expectRequest(
+                    method: "session/set_config_option",
+                    response: .result(
+                        try JSONValue(encoding: ACP.V1.SetConfigOptionResponse(configOptions: earlier))
+                    )
+                ),
+                .sendNotification(
+                    method: "session/update",
+                    params: try JSONValue(
+                        encoding:
+                            ACP.V1.SessionNotification(
+                                sessionId: "s",
+                                update: .configOptions(.init(configOptions: later))
+                            )
+                    )
+                ),
+            ]),
+            transport: server
+        )
+        let run = Task { await agent.run() }
+        let gate = Gate()
+        let adapter = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let connection = GatedConfigResponse(base: adapter, gate: gate)
+        try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        let change = Task { try await controller.setConfigOption("thinking", to: .boolean(false)) }
+        await gate.waitUntilEntered()
+        #expect(await run.value == nil)
+        // Suspend method completion while the following notification commits. Response application must
+        // occur inside ordered dispatch, rather than after this caller resumes.
+        while controller.transcript.sequence < 3 {
+            controller.publishTranscript()
+            await Task.yield()
+        }
+        #expect(controller.transcript.configOptions == later)
+        await gate.open()
+        try await change.value
+        #expect(controller.transcript.configOptions == later)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript.configOptions == later)
+        await controller.close()
+    }
+}
+
+extension SessionControllerTests {
+    @Test func legacyModeNotificationFollowingResponseRemainsAuthoritative() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let modes = ACP.V1.SessionModeState(
+            currentModeId: "ask",
+            availableModes: [
+                .init(id: "ask", name: "Ask"), .init(id: "code", name: "Code"),
+            ]
+        )
+        let agent = ScenarioAgent(
+            scenario: Scenario([
+                .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+                .expectRequest(
+                    method: "session/new",
+                    response: .result(
+                        try JSONValue(
+                            encoding:
+                                ACP.V1.NewSessionResponse(sessionId: "s", modes: modes)
+                        )
+                    )
+                ),
+                .expectRequest(method: "session/set_mode", response: .result([:])),
+                .sendNotification(
+                    method: "session/update",
+                    params: try JSONValue(
+                        encoding:
+                            ACP.V1.SessionNotification(
+                                sessionId: "s",
+                                update: .currentMode(.init(currentModeId: "ask"))
+                            )
+                    )
+                ),
+            ]),
+            transport: server
+        )
+        let run = Task { await agent.run() }
+        let gate = Gate()
+        let adapter = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        try await controller.start(
+            connection: GatedConfigResponse(base: adapter, gate: gate),
+            client: .init(name: "test", version: "1")
+        )
+        let before = controller.transcript.configOptions
+        let change = Task {
+            try await controller.setConfigOption(ACP.V1.AgentConnectionAdapter.modeOptionID, to: .select("code"))
+        }
+        await gate.waitUntilEntered()
+        #expect(await run.value == nil)
+        while controller.transcript.sequence < 4 {
+            controller.publishTranscript()
+            await Task.yield()
+        }
+        await gate.open()
+        try await change.value
+        #expect(controller.transcript.configOptions == before)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript.configOptions == before)
+        await controller.close()
+    }
+}

@@ -121,6 +121,14 @@ extension ACP {
             to value: ConfigValue,
             in sessionId: SessionID
         ) async throws -> [ConfigOption]
+        /// Applies confirmed settings before later notifications are delivered when the adapter supports ordering.
+        /// The callback must not await another wire response on this connection.
+        func setConfigOption(
+            _ configId: ConfigOptionID,
+            to value: ConfigValue,
+            in sessionId: SessionID,
+            applying: @escaping @Sendable ([ConfigOption]) async throws -> Void
+        ) async throws
         func close() async
     }
 
@@ -181,5 +189,17 @@ extension ACP {
 extension ACP.AgentConnection {
     public func inject(_ content: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws {
         throw ACP.SteeringError.injectionUnsupported
+    }
+}
+
+extension ACP.AgentConnection {
+    public func setConfigOption(
+        _ configId: ACP.ConfigOptionID,
+        to value: ACP.ConfigValue,
+        in sessionId: ACP.SessionID,
+        applying: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Void
+    ) async throws {
+        let options = try await setConfigOption(configId, to: value, in: sessionId)
+        try await applying(options)
     }
 }

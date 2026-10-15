@@ -230,11 +230,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 isChangingConfig = false
                 configTask = nil
             }
-            let options = try await connection.setConfigOption(id, to: value, in: agentID)
-            // Closing may finish the wire request. Never record its response after admission has stopped.
-            guard status == .idle else { throw SessionError.invalidState }
-            try await record([try SessionEvent.configOptions(options).storedEvent()])
-            publishTranscript()
+            try await connection.setConfigOption(id, to: value, in: agentID) { @MainActor options in
+                // The adapter keeps this commit in wire order, ahead of later config notifications.
+                guard self.status == .idle else { throw SessionError.invalidState }
+                try await self.record([try SessionEvent.configOptions(options).storedEvent()])
+                self.publishTranscript()
+            }
         }
         configTask = task
         try await task.value

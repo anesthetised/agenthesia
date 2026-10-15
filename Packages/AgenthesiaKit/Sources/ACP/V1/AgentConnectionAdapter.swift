@@ -190,15 +190,39 @@ extension ACP.V1 {
             to value: ACP.ConfigValue,
             in sessionId: ACP.SessionID
         ) async throws -> [ACP.ConfigOption] {
+            try await changeConfigOption(configId, to: value, in: sessionId, applying: { _ in })
+        }
+
+        public func setConfigOption(
+            _ configId: ACP.ConfigOptionID,
+            to value: ACP.ConfigValue,
+            in sessionId: ACP.SessionID,
+            applying: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Void
+        ) async throws {
+            _ = try await changeConfigOption(configId, to: value, in: sessionId, applying: applying)
+        }
+
+        private func changeConfigOption(
+            _ configId: ACP.ConfigOptionID,
+            to value: ACP.ConfigValue,
+            in sessionId: ACP.SessionID,
+            applying: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Void
+        ) async throws -> [ACP.ConfigOption] {
             if configId == Self.modeOptionID {
                 guard case .select(let modeId) = value else {
                     throw RPCError.invalidParams("The session mode takes a select value")
                 }
-                try await client.setMode(modeId, in: sessionId)
-                return await state.setCurrentMode(modeId, in: sessionId)
+                return try await client.setMode(modeId, in: sessionId) { [state] in
+                    let options = await state.setCurrentMode(modeId, in: sessionId)
+                    try await applying(options)
+                    return options
+                }
             }
-            let options = try await client.setConfigOption(configId, to: value, in: sessionId)
-            return await state.setAgentOptions(options, in: sessionId)
+            return try await client.setConfigOption(configId, to: value, in: sessionId) { [state] options in
+                let normalized = await state.setAgentOptions(options, in: sessionId)
+                try await applying(normalized)
+                return normalized
+            }
         }
 
         public func close() async {

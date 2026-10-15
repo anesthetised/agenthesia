@@ -93,11 +93,11 @@ import Testing
         let start = ContinuousClock.now
         let short = Task { await process.terminate(gracePeriod: .milliseconds(200)) }
         try await Task.sleep(for: .milliseconds(20))
-        let long = Task { await process.terminate(gracePeriod: .seconds(2)) }
+        let long = Task { await process.terminate(gracePeriod: .seconds(30)) }
         #expect(await short.value == .signaled(SIGKILL))
         #expect(await long.value == .signaled(SIGKILL))
-        // The long call must not wait out its two-second grace; the margin covers loaded runners.
-        #expect(ContinuousClock.now - start < .milliseconds(1_500))
+        // The long call must not wait out its grace. The gap is orders of magnitude wider than scheduling noise.
+        #expect(ContinuousClock.now - start < .seconds(10))
     }
 
     @Test func childHasItsOwnProcessGroup() async throws {
@@ -185,10 +185,10 @@ import Testing
         var messages = process.transport.messages.makeAsyncIterator()
         #expect(try await messages.next() == Data("ready".utf8))
         #expect(await process.waitForExit() == .exited(0))
-        let long = Task { await process.terminate(gracePeriod: .seconds(3)) }
+        let long = Task { await process.terminate(gracePeriod: .seconds(30)) }
         let start = ContinuousClock.now
         #expect(await process.terminate(gracePeriod: .milliseconds(100)) == .exited(0))
-        #expect(ContinuousClock.now - start < .seconds(1))
+        #expect(ContinuousClock.now - start < .seconds(10))
         #expect(await long.value == .exited(0))
         #expect(try await waitUntilInactive(child))
     }
@@ -296,7 +296,7 @@ import Testing
         )
         defer { try? FileManager.default.removeItem(at: pidFile) }
         let script = """
-            /bin/sh -c 'trap "" TERM; echo $$ > "\(pidFile.path(percentEncoded: false))"; exec /bin/sleep 5' 1>&2 &
+            /bin/sh -c 'trap "" TERM; echo $$ > "\(pidFile.path(percentEncoded: false))"; exec /bin/sleep 30' 1>&2 &
             attempt=0
             while [ ! -s "\(pidFile.path(percentEncoded: false))" ] && [ "$attempt" -lt 100 ]; do
                 /bin/sleep 0.01
@@ -321,7 +321,8 @@ import Testing
         let start = ContinuousClock.now
         await process.waitForStderr()
         #expect(ContinuousClock.now - start >= .milliseconds(400))
-        #expect(ContinuousClock.now - start < .seconds(2))
+        // The descendant holds stderr open for 30 s.
+        #expect(ContinuousClock.now - start < .seconds(10))
         #expect((await process.stderrLog).contains("leader"))
         _ = await process.terminate(gracePeriod: .milliseconds(50))
     }

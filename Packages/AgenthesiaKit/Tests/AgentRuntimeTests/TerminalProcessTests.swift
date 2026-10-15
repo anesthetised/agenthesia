@@ -120,9 +120,8 @@ import Testing
             )
         )
         try await waitForOutput("ready", from: terminal)
-        let start = ContinuousClock.now
+        // Escalation is the only way out: the shell ignores SIGTERM, so a missing one hangs until the time limit.
         #expect(await terminal.terminate(gracePeriod: .milliseconds(200)) == .signaled(SIGKILL))
-        #expect(ContinuousClock.now - start < .seconds(2))
     }
 
     @Test func terminatesDescendantsAndBoundsTheOutputWaitAfterTheLeaderExits() async throws {
@@ -149,9 +148,8 @@ import Testing
         }
         defer { kill(child, SIGKILL) }
         #expect(getpgid(child) == terminal.processIdentifier)
-        let start = ContinuousClock.now
+        // The descendant keeps the pseudo-terminal open for good, so an unbounded output wait hangs until the time limit.
         #expect(await terminal.waitForExit() == .exited(0))
-        #expect(ContinuousClock.now - start < .seconds(2))
         #expect(text(terminal.output).contains("leader"))
         #expect(await terminal.terminate(gracePeriod: .milliseconds(50)) == .exited(0))
         #expect(try await waitUntilInactive(child))

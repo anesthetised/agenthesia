@@ -36,12 +36,11 @@ Xcode 27) fit Sonnet at medium effort.
   with replayed updates suppressed in the v1 adapter, and returns `.unavailable` otherwise.
 - Missing: Core and UI. `SessionController.restore` only reduces the log and sets `.readOnly`;
   `LiveSession.launch` always creates a new workspace and calls `newSession`.
-- Decide with the owner before coding: what triggers reconnecting, what happens to a turn or permission
-  request left unfinished by a crash, how to keep one live owner per saved session, and what to do when
-  the session's worktree is gone. ADR-0014 states that history does not reconnect, so the outcome needs a
-  new ADR.
-- The session record does not store additional directories; a reopened session gets none unless that
-  changes.
+- Decisions are in [ADR-0017](adr/0017-continue-saved-sessions.md): an explicit Continue action, one live
+  owner per session in `SessionLibrary`, closing turns and permission requests left open by a crash, a
+  `reopened` marker event, and read-only history with an explanation on any failure.
+- Additional directories are not stored in the session record, so a continued session runs without them.
+- Update ARCHITECTURE.md (session filesystem roots, `restore`) with the implementation.
 
 ### 2. DiffView (#20)
 

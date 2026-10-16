@@ -20,7 +20,12 @@ public actor Connection {
     private let outgoingMessages: AsyncStream<Data>
 
     private var nextID: Int64 = 1
-    private var pending: [RequestID: CheckedContinuation<JSONValue, any Error>] = [:]
+    private struct Pending {
+        let succeed: @Sendable (JSONValue) async -> Void
+        let fail: @Sendable (any Error) -> Void
+    }
+
+    private var pending: [RequestID: Pending] = [:]
     private var inFlight: [RequestID: Task<Void, Never>] = [:]
     private var tasks: [Task<Void, Never>] = []
     private var isClosed = false
@@ -67,18 +72,38 @@ public actor Connection {
 
     /// Sends a typed request and waits for its result.
     public func request<R: RPCRequest>(_ request: R.Type, _ params: R.Params) async throws -> R.Result {
-        let result = try await self.request(method: R.method, params: try JSONValue(encoding: params))
-        do {
-            return try result.decode(as: R.Result.self)
-        } catch {
-            throw ConnectionError.invalidResult(method: R.method, reason: String(describing: error))
+        try await self.request(request, params, consuming: { $0 })
+    }
+
+    /// Consumes a decoded response before dispatching the next incoming message.
+    /// Once admitted, consumption finishes even if the waiting task is cancelled or the connection closes.
+    /// The consumer may close this connection, but must not await another wire response from it.
+    public func request<R: RPCRequest, Value: Sendable>(
+        _ request: R.Type,
+        _ params: R.Params,
+        consuming: @escaping @Sendable (R.Result) async throws -> Value
+    ) async throws -> Value {
+        try await performRequest(method: R.method, params: try JSONValue(encoding: params)) { raw in
+            let result: R.Result
+            do { result = try raw.decode(as: R.Result.self) } catch {
+                throw ConnectionError.invalidResult(method: R.method, reason: String(describing: error))
+            }
+            return try await consuming(result)
         }
     }
 
     /// Sends a request and waits for its result.
     ///
-    /// Cancelling the calling task sends `$/cancel_request` to the peer and throws `CancellationError`.
+    /// Cancelling the calling task before response admission sends `$/cancel_request` and throws.
     public func request(method: String, params: JSONValue?) async throws -> JSONValue {
+        try await performRequest(method: method, params: params, consuming: { $0 })
+    }
+
+    private func performRequest<Value: Sendable>(
+        method: String,
+        params: JSONValue?,
+        consuming: @escaping @Sendable (JSONValue) async throws -> Value
+    ) async throws -> Value {
         try Task.checkCancellation()
         guard !isClosed else { throw ConnectionError.closed }
         let id = RequestID.int(nextID)
@@ -86,7 +111,14 @@ public actor Connection {
         let message = try JSONEncoder.rpc.encode(Message.request(id: id, method: method, params: params))
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                pending[id] = continuation
+                pending[id] = Pending(
+                    succeed: { raw in
+                        do { continuation.resume(returning: try await consuming(raw)) } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    },
+                    fail: { continuation.resume(throwing: $0) }
+                )
                 outgoing.yield(message)
             }
         } onCancel: {
@@ -134,11 +166,15 @@ public actor Connection {
 
         switch message {
         case .response(let id, let result):
-            guard let id, let continuation = pending.removeValue(forKey: id) else {
+            guard let id, let request = pending.removeValue(forKey: id) else {
                 Log.connection.error("Response to unknown request \(String(describing: id), privacy: .public)")
                 return
             }
-            continuation.resume(with: result.mapError { $0 as any Error })
+            // Remove before awaiting: a consumer may close the connection on a persistence failure.
+            switch result {
+            case .success(let value): await request.succeed(value)
+            case .failure(let error): request.fail(error)
+            }
 
         case .notification(Self.cancelRequestMethod, let params):
             if let id = params?["requestId"].flatMap({ try? $0.decode(as: RequestID.self) }) {
@@ -180,8 +216,8 @@ public actor Connection {
     // MARK: - Lifecycle
 
     private func cancelOutgoing(_ id: RequestID) {
-        guard let continuation = pending.removeValue(forKey: id) else { return }
-        continuation.resume(throwing: CancellationError())
+        guard let request = pending.removeValue(forKey: id) else { return }
+        request.fail(CancellationError())
         try? notify(method: Self.cancelRequestMethod, params: ["requestId": id.jsonValue])
     }
 
@@ -189,8 +225,8 @@ public actor Connection {
         guard !isClosed else { return }
         isClosed = true
         outgoing.finish()
-        for continuation in pending.values {
-            continuation.resume(throwing: ConnectionError.closed)
+        for request in pending.values {
+            request.fail(ConnectionError.closed)
         }
         pending.removeAll()
         for task in inFlight.values {

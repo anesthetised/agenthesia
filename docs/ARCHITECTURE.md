@@ -48,7 +48,8 @@ The main window uses a window-bound `LiveSession` in Core to own the agent proce
 one app database away from the main actor and provides project, install, and saved-session discovery.
 The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
 leaves no worktree behind), prepares the workspace, creates metadata, and starts
-the ACP v1 adapter with filesystem access enabled; terminal, terminal-auth, and elicitation capabilities remain disabled.
+the ACP v1 adapter with filesystem access and form elicitation enabled; terminal and terminal-auth
+capabilities remain disabled.
 Agents must already be authenticated; authentication failures are displayed.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
@@ -67,13 +68,40 @@ use the same table in read-only mode. The demo remains available as a test fixtu
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
-lines; Return sends while idle, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
+lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
 turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
 `resource_link` blocks built by `ResourceLink.file` in Core. For a session in a linked worktree,
 `SessionWorkspace.linkedCheckout` supplies the main checkout, and links to checkout paths that exist in
 the worktree point there. A draft that is a bare `/word` lists the matching commands from
 `available_commands_update`; choosing one inserts `/name ` as text. The transcript names link
-attachments. Queueing and steering remain #65. Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
+attachments. `SessionController.submit(_:intent:)` owns the per-session prompt queue
+([ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)).
+Return sends only when idle with an empty, unpaused queue; otherwise it queues the draft. A completed
+turn drains the queue as one prompt. Queue snapshots record text, attachments, editing, removal and
+order in the existing event log. Dequeue and one `promptMessage` event per message commit atomically;
+the messages retain their UUIDs, share a turn ID and display “sent together”, with a unique event
+sequence per transcript row. Up in an empty composer recalls the last entry for text editing without
+rebuilding its attachments. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
+Saved entries remain paused after Continue. An ended or failed established session also offers Continue,
+which creates a new connection; failed connections stay closed. Continue requires a persisted session
+with an agent session ID. Startup failures cannot continue, and ended sessions remain selectable in
+saved history. A dispatch stopped before invoking the wire prompt returns its composed
+messages to the queue by UUID and marks the original transcript rows “not sent”. Queue snapshots are
+built only after preceding lifecycle writes settle, so this compensation cannot overwrite later edits.
+
+⌘Return sends the draft now and leaves the queue in place. ⇧⌘Return sends the queue with the nonempty
+draft last. Steering uses `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel
+tasks to settle, and then starts the next turn; injection-capable connections implement
+`AgentConnection.inject(_:in:)` without ending the active turn. The default injection implementation
+fails explicitly and no current v1 adapter advertises it. Injection first records complete composed
+content as pending queue entries; only successful wire acknowledgement atomically dequeues it and
+adds transcript rows. A Stop during preparation retains those entries. If the original wire turn
+ends during preparation, the controller sends a new turn instead. A crash or failure between wire
+insertion and acknowledgement conservatively retains the content for explicit recovery; ACP offers
+no exactly-once guarantee. Manual Stop supersedes a pending interrupt
+and never causes an automatic drain. Composer drafts clear only after durable acceptance.
+
+Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
 Markdown body with the title, reported locations and text content, so selection and copying work as
 for messages. Missing fields are shown as not reported; unsupported content appears
 as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;
@@ -217,13 +245,35 @@ The controller owns one prompt task. `send` records the prompt before sending it
 cancelling a task waiting on `send` does not cancel that owned turn. `stop` records the intent and sends
 `session/cancel`, retaining updates until the prompt response. A new prompt is not allowed until a pending cancel has been sent.
 A stop while the initial prompt write
-is pending prevents sending that prompt. Busy sends are rejected until #65 supplies queue/steering.
+is pending prevents sending that prompt. Low-level `send` rejects busy calls; the app uses `submit`
+to queue or steer them. The queue coordinator settles lifecycle writes before building snapshots and
+checks the Stop generation captured at public operation entry, so an earlier send-now or resume
+waiting behind an edit cannot supersede a later Stop.
 Turn errors are recorded and close the session; deliberate close records cancellation instead.
 Closing during startup also throws `CancellationError`; an earlier failure or a failed persistence write takes precedence.
 The first failure is retained so a subsequent connection-closed error cannot hide its cause.
 A storage failure closes the connection and reports an
 observable error without showing uncommitted text. The caller owns `AgentProcess` and must terminate it
 when the session fails or closes; closing ACP alone is not process containment.
+
+Session settings use `setConfigOption(_:to:)` only while idle ([ADR-0019](adr/0019-session-config-controls.md)).
+The controller owns the config task and exposes `isChangingConfig`; another config change or immediate
+turn dispatch is rejected until the returned options have been committed and published. Queue draining
+waits for that confirmation before dispatching. The agent's full
+response is authoritative. Request errors preserve confirmed settings and leave the session usable;
+storage errors fail the session. Close waits for accepted config work, and responses arriving after
+close are discarded. Native composer menus preserve choice groups; checkboxes show boolean settings.
+Unknown option types are hidden, and saved settings remain visible read-only. Legacy modes enter the
+same controls through adapter normalization.
+
+Config responses use a JSON-RPC ordered result consumer: decoding, adapter normalization and the Core
+commit finish before the reader dispatches the next incoming message. This preserves both orderings:
+a response supersedes earlier config notifications, and later notifications supersede that response.
+The original config API still returns the normalized snapshot for its response. Cancellation before
+response admission withdraws the request; once its consumer starts, it completes even if its waiter is
+cancelled or the connection closes. The pending continuation is removed before consumption, so a
+failed durable commit can close the connection without completing it twice. Consumers may close the
+connection but must not await another wire response on it.
 
 All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
 across an async SQLite write. Incoming notification handlers await their commit and reduction before
@@ -309,8 +359,10 @@ working directory; a missing executable fails creation with `ENOENT`. Nothing is
 terminal. The master side is read continuously, because a terminal's last close waits for its output
 to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
 batches so that noisy commands append in amortized constant time. A process source reaps the
-command. Both sources run on a private serial queue, which gets a thread even when the shared pools are
-busy: the kernel discards output still unread about 0.6 s after the command exits. Exit waits for the end of output, which arrives promptly because the kernel revokes the
+command. Both sources run on a private serial queue. The initial sizing slave remains open until the
+read source is registered and has drained a bounded snapshot of buffered bytes, preventing a quick
+command's output from being discarded while the reader queue starts. Later output must still be read
+promptly because the kernel can discard unread bytes on terminal close or revocation. Exit waits for the end of output, which arrives promptly because the kernel revokes the
 terminal when the session leader exits; the wait is still bounded at 500 ms. Group cleanup is the
 same `ProcessGroupTermination` that `AgentProcess` uses, started on natural exit or explicit
 termination.
@@ -399,3 +451,17 @@ Dependencies are added when the milestone that needs them starts, not up front.
   refer to both URLs. The package depends on the old URL and `.swiftpm/configuration/mirrors.json` (with a
   copy for Xcode in the workspace's `xcshareddata/swiftpm/configuration/`) maps the new one to it, so
   SwiftPM sees one package.
+
+### Native elicitation forms
+
+Live sessions advertise form elicitation and render matching session-scoped requests as native
+transcript cards. Requests and final responses are committed before display and delivery; drafts
+remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
+Saved forms have no active controls; Continue records cancellation of interrupted requests.
+Agent-provided regular expressions share a 20 ms budget of thread CPU time spent matching. Other
+field validation and time spent descheduled do not consume it; regex compilation is outside this budget.
+
+Request-scoped elicitation is explicitly declined, including requests made before a durable session
+exists. Supporting those requests needs a separate startup interaction and persistence design
+([#111](https://github.com/anesthetised/agenthesia/issues/111)). URL
+elicitation remains unadvertised.

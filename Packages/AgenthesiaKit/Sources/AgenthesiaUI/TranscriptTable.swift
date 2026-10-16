@@ -101,12 +101,14 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let message = session.message(at: row)
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if visible.markdown == message.markdown, visible.tool == message.tool,
+            if visible.markdown == message.markdown, visible.tool == message.tool, visible.input == message.input,
                 !(finished && visible.streamingCell != nil && !keepsSelection)
             {
                 continue
             }
-            if visible.tool != message.tool, visible.markdown == message.markdown {
+            if visible.input != message.input {
+                visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
+            } else if visible.tool != message.tool, visible.markdown == message.markdown {
                 visible.showHeader(message, controller: self)
             } else if visible.tool != message.tool {
                 // The header and body changed; rebuild the row's content in place.
@@ -251,6 +253,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
     var tool: ToolCardHeader?
+    var input: InputCard?
     var streamingCell: TextKitCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
@@ -268,6 +271,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         actions = nil
         markdown = message.markdown
         tool = message.tool
+        input = message.input
         let content: NSView
         if streaming {
             let cell = TextKitCell()
@@ -300,6 +304,11 @@ private final class TranscriptMessageRow: NSTableCellView {
             contentWidth,
         ])
         showActions(message, controller: controller)
+        if let input = message.input {
+            let form = NSHostingView(rootView: InputForm(card: input))
+            stack.addArrangedSubview(form)
+            form.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
     }
 
     /// Keep the text field and its field editor attached when only native metadata changes.

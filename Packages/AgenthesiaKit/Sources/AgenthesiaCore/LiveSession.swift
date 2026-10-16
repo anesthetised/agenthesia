@@ -139,7 +139,7 @@ public final class LiveSession {
                 transport: process.transport,
                 delegate: controller,
                 fileSystem: controller.fileSystem,
-                options: .init(elicitation: false)
+                options: .init(elicitation: true)
             )
             guard !isClosed else { await connection.close(); await cleanup(); return }
             let client = ACP.Implementation(name: "Agenthesia", version: "0.1")
@@ -156,7 +156,7 @@ public final class LiveSession {
                 guard let self, !self.isClosed else { return }
                 self.stderrLog = await process.stderrLog
                 self.errorMessage =
-                    self.controller?.errorMessage ?? "The agent \(status). Start a new session to continue."
+                    self.controller?.errorMessage ?? "The agent \(status). Continue to reconnect."
                 await self.controller?.close()
                 await self.cleanup()
             }
@@ -213,6 +213,25 @@ public final class LiveSession {
         do { try await controller.send(content) } catch {
             if !isClosed { errorMessage = controller.errorMessage ?? error.localizedDescription }
             if controller.status == .failed { await cleanup() }
+        }
+    }
+
+    /// Accepts a draft into the durable queue or starts a turn, reporting whether it was accepted.
+    @discardableResult public func submit(
+        _ text: String,
+        attachments: [URL] = [],
+        intent: SessionController.SubmissionIntent = .whenReady
+    ) async -> Bool {
+        guard let controller, !isClosed else { return false }
+        let content = Self.content(text, attachments: attachments, checkout: checkout)
+        do {
+            try await controller.submit(content, intent: intent)
+            errorMessage = nil
+            return true
+        } catch {
+            if !isClosed { errorMessage = controller.errorMessage ?? error.localizedDescription }
+            if controller.status == .failed { await cleanup() }
+            return false
         }
     }
 

@@ -85,6 +85,32 @@ extension ACP.V1 {
             ).configOptions
         }
 
+        /// Processes a legacy mode response before the next agent message.
+        public func setMode<Value: Sendable>(
+            _ modeId: ACP.SessionModeID,
+            in sessionId: ACP.SessionID,
+            consuming: @escaping @Sendable () async throws -> Value
+        ) async throws -> Value {
+            try await connection.request(Method.SetMode.self, .init(sessionId: sessionId, modeId: modeId)) { _ in
+                try await consuming()
+            }
+        }
+
+        /// Processes the full config response before the next agent message.
+        public func setConfigOption<Value: Sendable>(
+            _ configId: ACP.ConfigOptionID,
+            to value: ACP.ConfigValue,
+            in sessionId: ACP.SessionID,
+            consuming: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Value
+        ) async throws -> Value {
+            try await connection.request(
+                Method.SetConfigOption.self,
+                .init(sessionId: sessionId, configId: configId, value: value)
+            ) { response in
+                try await consuming(response.configOptions)
+            }
+        }
+
         /// Runs a prompt turn and returns why it ended.
         public func prompt(_ prompt: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws -> PromptResponse {
             try await connection.request(Method.Prompt.self, .init(sessionId: sessionId, prompt: prompt))

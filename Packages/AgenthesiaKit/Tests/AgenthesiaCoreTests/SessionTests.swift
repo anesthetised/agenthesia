@@ -285,7 +285,8 @@ private actor Gate {
         #expect(controller.transcript.lastStopReason == .cancelled)
         #expect(controller.transcript.items.count == 1)
         let events = try await store.events(in: controller.session.id)
-        #expect(events.map(\.sequence) == [1, 2, 3, 4])
+        #expect(events.map(\.sequence) == [1, 2, 3, 4, 5])
+        #expect(controller.queuePaused && controller.transcript.queuePaused)
         let replay = try await SessionController.restore(id: controller.session.id, store: store)
         #expect(replay.transcript == controller.transcript)
         await controller.close()
@@ -1245,5 +1246,687 @@ extension SessionControllerTests {
         await #expect(throws: SessionController.SessionError.invalidState) {
             try await draft.reopen(connection: connection, client: .init(name: "test", version: "1"))
         }
+    }
+}
+
+extension SessionControllerTests {
+    @Test func configChangesWaitForDurableConfirmationAndReplay() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let before = controller.transcript.configOptions
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            await gate.suspend()
+            return try await store.append(events, to: id)
+        }
+        let change = Task { try await controller.setConfigOption("model", to: .select("large")) }
+        await gate.waitUntilEntered()
+        #expect(controller.isChangingConfig)
+        #expect(controller.transcript.configOptions == before)
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await controller.send([.init(text: "cannot overtake")])
+        }
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await controller.setConfigOption("model", to: .select("small"))
+        }
+        await gate.open()
+        try await change.value
+        #expect(!controller.isChangingConfig)
+        #expect(controller.status == .idle)
+        #expect(
+            controller.transcript.configOptions.first { $0.id == "model" }?.value
+                == .select(
+                    currentValue: "large",
+                    options: .flat([
+                        .init(value: "small", name: "Small"), .init(value: "large", name: "Large"),
+                    ])
+                )
+        )
+        let replay = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(replay.transcript == controller.transcript)
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await replay.setConfigOption("model", to: .select("small"))
+        }
+        await controller.close()
+    }
+
+    @Test func rejectedConfigKeepsConfirmedSettingsAndSessionUsable() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let before = controller.transcript
+        await #expect(throws: (any Error).self) {
+            try await controller.setConfigOption("missing", to: .boolean(true))
+        }
+        #expect(controller.transcript == before)
+        #expect(controller.status == .idle)
+        #expect(!controller.isChangingConfig)
+        try await controller.send([.init(text: "still usable")])
+        await controller.close()
+    }
+
+    @Test func configStorageFailureDoesNotPublishUncommittedSettings() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let before = controller.transcript
+        controller.appendEvents = { _, _ in throw CocoaError(.fileWriteOutOfSpace) }
+        await #expect(throws: CocoaError.self) {
+            try await controller.setConfigOption("model", to: .select("large"))
+        }
+        #expect(controller.transcript == before)
+        #expect(controller.status == .failed)
+        #expect(!controller.isChangingConfig)
+        await controller.close()
+    }
+
+    @Test func legacyModeChangesUseNormalizedConfig() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        try await controller.setConfigOption(ACP.V1.AgentConnectionAdapter.modeOptionID, to: .select("code"))
+        let mode = try #require(controller.transcript.configOptions.first { $0.category == .mode })
+        guard case .select(let current, _) = mode.value else { Issue.record("Missing mode choices"); return }
+        #expect(current == "code")
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+}
+
+extension SessionControllerTests {
+    @Test func configResponseOverridesEarlierNotificationsWithAgentReturnedOptions() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let confirmed: [ACP.ConfigOption] = [
+            .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: false)),
+            .init(
+                id: "effort",
+                name: "Effort",
+                category: .thoughtLevel,
+                value: .select(
+                    currentValue: "medium",
+                    options: .grouped([
+                        .init(group: "balanced", name: "Balanced", options: [.init(value: "medium", name: "Medium")])
+                    ])
+                )
+            ),
+        ]
+        let notification = ACP.SessionUpdate.configOptions(
+            .init(configOptions: [
+                .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: true))
+            ])
+        )
+        let agent = ScenarioAgent(
+            scenario: Scenario([
+                .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+                .expectRequest(method: "session/new", response: .result(["sessionId": "s"])),
+                .expectRequest(method: "session/set_config_option", response: nil, deferAs: "config"),
+                .sendNotification(
+                    method: "session/update",
+                    params: try JSONValue(
+                        encoding:
+                            ACP.V1.SessionNotification(sessionId: "s", update: notification)
+                    )
+                ),
+                .respond(
+                    to: "config",
+                    response: .result(
+                        try JSONValue(
+                            encoding:
+                                ACP.V1.SetConfigOptionResponse(configOptions: confirmed)
+                        )
+                    )
+                ),
+            ]),
+            transport: server
+        )
+        let run = Task { await agent.run() }
+        try await controller.start(
+            connection: await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller),
+            client: .init(name: "test", version: "1")
+        )
+        try await controller.setConfigOption("thinking", to: .boolean(true))
+        #expect(await run.value == nil)
+        #expect(controller.transcript.configOptions == confirmed)
+        let events = try await fixture.store.events(in: controller.session.id)
+        #expect(events.count == 3)
+        #expect(events[1].event.kind == SessionEvent.updateKind)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript == controller.transcript)
+        await controller.close()
+    }
+
+    @Test func closeWaitsForAcceptedConfigWriteAndPreventsFurtherChanges() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            await gate.suspend()
+            return try await store.append(events, to: id)
+        }
+        let change = Task { try await controller.setConfigOption("model", to: .select("large")) }
+        await gate.waitUntilEntered()
+        let close = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        var secondCloseFinished = false
+        let secondClose = Task {
+            await controller.close()
+            secondCloseFinished = true
+        }
+        await Task.yield()
+        #expect(!secondCloseFinished)
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await controller.setConfigOption("model", to: .select("small"))
+        }
+        await gate.open()
+        _ = try? await change.value
+        await close.value
+        await secondClose.value
+        #expect(secondCloseFinished)
+        #expect(!controller.isChangingConfig)
+        let final = controller.transcript
+        await Task.yield()
+        #expect(controller.transcript == final)
+        let replay = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(replay.transcript == final)
+    }
+}
+
+extension SessionControllerTests {
+    @Test func closeDuringConfigRequestDiscardsLateResponse() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let gate = Gate()
+        var router = Router()
+        router.on(ACP.V1.Method.Initialize.self) { _ in .init(protocolVersion: 1) }
+        router.on(ACP.V1.Method.NewSession.self) { _ in .init(sessionId: "s") }
+        router.on(ACP.V1.Method.SetConfigOption.self) { _ in
+            await gate.suspend()
+            return .init(configOptions: [.init(id: "flag", name: "Flag", value: .boolean(currentValue: true))])
+        }
+        let serverConnection = Connection(transport: server)
+        await serverConnection.start(handler: router)
+        try await controller.start(
+            connection: await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller),
+            client: .init(name: "test", version: "1")
+        )
+        let before = controller.transcript
+        let change = Task { try await controller.setConfigOption("flag", to: .boolean(true)) }
+        await gate.waitUntilEntered()
+        let close = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        await gate.open()
+        _ = try? await change.value
+        await close.value
+        #expect(controller.transcript == before)
+        #expect(!controller.isChangingConfig)
+        #expect(try await fixture.store.events(in: controller.session.id).count == 1)
+        await serverConnection.close()
+    }
+
+    @Test func runningTurnRejectsConfigChanges() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            await gate.suspend()
+            return try await store.append(events, to: id)
+        }
+        let turn = Task { try await controller.send([.init(text: "hello")]) }
+        await gate.waitUntilEntered()
+        await #expect(throws: SessionController.SessionError.invalidState) {
+            try await controller.setConfigOption("model", to: .select("large"))
+        }
+        // Only the prompt write is gated; allow the remaining turn writes normally.
+        controller.appendEvents = { try await store.append($0, to: $1) }
+        await gate.open()
+        try await turn.value
+        await controller.close()
+    }
+}
+
+@Suite(.timeLimit(.minutes(1))) @MainActor struct InputLifecycleTests {
+    private func form(_ controller: SessionController) throws -> ACP.ElicitationRequest {
+        let sessionID = try #require(controller.session.agentSessionID)
+        return .init(
+            message: "Your name",
+            mode: .form(.init(properties: ["name": .string(.init(minLength: 2))], required: ["name"])),
+            scope: .session(sessionID, toolCallId: nil)
+        )
+    }
+    private func pending(_ controller: SessionController, count: Int = 1) async -> [SessionController.PendingInput] {
+        while controller.pendingInputs.count < count { await Task.yield() }
+        return controller.pendingInputs
+    }
+    @Test func concurrentRequestsValidateResolveOnceAndReplay() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = try form(controller)
+        let first = Task { await controller.requestInput(request) }
+        let second = Task { await controller.requestInput(request) }
+        let requests = await pending(controller, count: 2)
+        #expect(!controller.answerInput(requests[0].id, with: .init(action: .accept([:]))))
+        #expect(controller.answerInput(requests[0].id, with: .init(action: .accept(["name": "Ada"]))))
+        #expect(!controller.answerInput(requests[0].id, with: .init(action: .decline)))
+        #expect(controller.answerInput(requests[1].id, with: .init(action: .decline)))
+        let responses = [await first.value, await second.value]
+        #expect(responses.contains(.init(action: .accept(["name": "Ada"]))))
+        #expect(responses.contains(.init(action: .decline)))
+        let restored = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(restored.pendingInputs.isEmpty)
+        #expect(restored.transcript.items.compactMap(\.input).count == 2)
+        #expect(restored.transcript.unansweredInputs.isEmpty)
+        await controller.close()
+    }
+    @Test(arguments: [false, true]) func withdrawalAndCloseCancelCommittedAnswers(close: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputResolved(_, let response) = try JSONDecoder().decode(
+                    SessionEvent.self,
+                    from: event.payload
+                ), case .accept = response.action {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        #expect(controller.answerInput(id, with: .init(action: .accept(["name": "Ada"]))))
+        await gate.waitUntilEntered()
+        var closing: Task<Void, Never>?
+        if close {
+            closing = Task { await controller.close() }
+            while controller.status != .closed { await Task.yield() }
+        } else {
+            task.cancel()
+        }
+        await gate.open()
+        #expect(await task.value.action == .cancel)
+        await closing?.value
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).first?.response?.action == .cancel)
+        await controller.close()
+    }
+    @Test func declinesRequestScopeAndRejectsOtherSessionsAndURL() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        var request = try form(controller)
+        request.scope = .request(.int(1))
+        #expect(await controller.requestInput(request).action == .decline)
+        request.scope = .session("other", toolCallId: nil)
+        #expect(await controller.requestInput(request).action == .cancel)
+        request = try form(controller)
+        request.mode = .url(elicitationId: "url", url: "https://example.com")
+        #expect(await controller.requestInput(request).action == .cancel)
+        #expect(controller.transcript.items.compactMap(\.input).isEmpty)
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func requestIsDurableBeforeDisplayAndWithdrawnRequestSettles() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        #expect(controller.pendingInputs.isEmpty)
+        #expect(controller.transcript.items.compactMap(\.input).isEmpty)
+        task.cancel()
+        await gate.open()
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).first?.response?.action == .cancel)
+        await controller.close()
+    }
+
+    @Test(arguments: [false, true]) func storageFailureSettlesCaller(failResponse: Bool) async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                let local = try JSONDecoder().decode(SessionEvent.self, from: event.payload)
+                if case .inputRequested = local, !failResponse { throw CocoaError(.fileWriteUnknown) }
+                if case .inputResolved = local, failResponse { throw CocoaError(.fileWriteUnknown) }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        if failResponse {
+            let id = await pending(controller)[0].id
+            #expect(controller.answerInput(id, with: .init(action: .decline)))
+        }
+        #expect(await task.value.action == .cancel)
+        #expect(controller.status == .failed)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+
+    @Test func stopSettlesPendingForms() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        try await controller.stop()
+        #expect(await task.value.action == .cancel)
+        #expect(!controller.answerInput(id, with: .init(action: .decline)))
+        _ = try? await turn.value
+        await controller.close()
+    }
+
+    @Test func restoreIsReadOnlyAndContinueClosesInterruptedForms() async throws {
+        let fixture = try Fixture()
+        let first = try await fixture.live()
+        let request = try form(first)
+        await first.close()
+        let id = UUID()
+        _ = try await fixture.store.append(
+            [try SessionEvent.inputRequested(id: id, request: request).storedEvent()],
+            to: first.session.id
+        )
+        let before = try await fixture.store.events(in: first.session.id)
+        let saved = try await SessionController.restore(id: first.session.id, store: fixture.store)
+        #expect(saved.pendingInputs.isEmpty)
+        #expect(saved.transcript.unansweredInputs == [id])
+        #expect(try await fixture.store.events(in: first.session.id) == before)
+        var options = EchoAgent.Options()
+        options.reopensUnknownSessions = true
+        let continued = try await reopen(first.session.id, store: fixture.store, agent: EchoAgent(options: options))
+        #expect(continued.transcript.unansweredInputs.isEmpty)
+        #expect(continued.transcript.items.compactMap(\.input).last?.response?.action == .cancel)
+        #expect(continued.pendingInputs.isEmpty)
+        await continued.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func turnCompletionCancelsUnansweredForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        _ = await pending(controller)
+        try await controller.send([.init(text: "hello")])
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func closeDrainsRequestWhoseInitialCommitIsSuspended() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        let closing = Task { await controller.close() }
+        while controller.status != .closed { await Task.yield() }
+        let repeated = Task { await controller.close() }
+        await gate.open()
+        await closing.value
+        await repeated.value
+        #expect(controller.pendingInputs.isEmpty)
+        let eventsAtClose = try await store.events(in: controller.session.id)
+        #expect(await task.value.action == .cancel)
+        #expect(try await store.events(in: controller.session.id) == eventsAtClose)
+        let restored = try await SessionController.restore(id: controller.session.id, store: store)
+        #expect(restored.transcript.items.compactMap(\.input).last?.response?.action == .cancel)
+        #expect(restored.transcript.unansweredInputs.isEmpty)
+    }
+
+    @Test func idleStopCancelsPendingForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        let id = await pending(controller)[0].id
+        try await controller.stop()
+        #expect(await task.value.action == .cancel)
+        #expect(!controller.answerInput(id, with: .init(action: .decline)))
+        await controller.close()
+    }
+}
+
+extension InputLifecycleTests {
+    @Test func idleStopDuringInitialCommitNeverPublishesStaleForm() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let gate = Gate()
+        let store = fixture.store
+        controller.appendEvents = { events, id in
+            for event in events {
+                if case .inputRequested = try JSONDecoder().decode(SessionEvent.self, from: event.payload) {
+                    await gate.suspend()
+                }
+            }
+            return try await store.append(events, to: id)
+        }
+        let request = try form(controller)
+        let task = Task { await controller.requestInput(request) }
+        await gate.waitUntilEntered()
+        let stopping = Task { try await controller.stop() }
+        while !controller.queuePaused { await Task.yield() }
+        await gate.open()
+        try await stopping.value
+        #expect(await task.value.action == .cancel)
+        #expect(controller.pendingInputs.isEmpty)
+        await controller.close()
+    }
+}
+
+/// Widens the suspension between a wire response and its caller observing the decoded result.
+/// Notifications continue through the real adapter while the response continuation is suspended.
+private struct GatedConfigResponse: ACP.AgentConnection {
+    let base: any ACP.AgentConnection
+    let gate: Gate
+
+    func initialize(client: ACP.Implementation) async throws -> ACP.AgentProfile {
+        try await base.initialize(client: client)
+    }
+    func authenticate(methodId: ACP.AuthMethodID) async throws { try await base.authenticate(methodId: methodId) }
+    func logout() async throws { try await base.logout() }
+    func newSession(
+        cwd: String,
+        additionalDirectories: [String],
+        mcpServers: [ACP.MCPServer]
+    ) async throws
+        -> ACP.SessionState
+    {
+        try await base.newSession(cwd: cwd, additionalDirectories: additionalDirectories, mcpServers: mcpServers)
+    }
+    func reopenSession(
+        _ id: ACP.SessionID,
+        cwd: String,
+        additionalDirectories: [String],
+        mcpServers: [ACP.MCPServer]
+    )
+        async throws -> ACP.ReopenedSession
+    {
+        try await base.reopenSession(id, cwd: cwd, additionalDirectories: additionalDirectories, mcpServers: mcpServers)
+    }
+    func listSessions(cwd: String?) async throws -> [ACP.SessionInfo] { try await base.listSessions(cwd: cwd) }
+    func closeSession(_ id: ACP.SessionID) async throws { try await base.closeSession(id) }
+    func deleteSession(_ id: ACP.SessionID) async throws { try await base.deleteSession(id) }
+    func prompt(_ content: [ACP.ContentBlock], in id: ACP.SessionID) async throws -> ACP.StopReason {
+        try await base.prompt(content, in: id)
+    }
+    func cancel(_ id: ACP.SessionID) async throws { try await base.cancel(id) }
+    func setConfigOption(
+        _ id: ACP.ConfigOptionID,
+        to value: ACP.ConfigValue,
+        in session: ACP.SessionID
+    ) async throws
+        -> [ACP.ConfigOption]
+    {
+        let options = try await base.setConfigOption(id, to: value, in: session)
+        await gate.suspend()
+        return options
+    }
+    func setConfigOption(
+        _ id: ACP.ConfigOptionID,
+        to value: ACP.ConfigValue,
+        in session: ACP.SessionID,
+        applying: @escaping @Sendable ([ACP.ConfigOption]) async throws -> Void
+    ) async throws {
+        try await base.setConfigOption(id, to: value, in: session, applying: applying)
+        await gate.suspend()
+    }
+    func close() async { await base.close() }
+}
+
+extension SessionControllerTests {
+    @Test func configNotificationFollowingResponseRemainsAuthoritative() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let earlier: [ACP.ConfigOption] = [
+            .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: false))
+        ]
+        let later: [ACP.ConfigOption] = [
+            .init(id: "thinking", name: "Thinking", value: .boolean(currentValue: true))
+        ]
+        let agent = ScenarioAgent(
+            scenario: Scenario([
+                .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+                .expectRequest(method: "session/new", response: .result(["sessionId": "s"])),
+                .expectRequest(
+                    method: "session/set_config_option",
+                    response: .result(
+                        try JSONValue(encoding: ACP.V1.SetConfigOptionResponse(configOptions: earlier))
+                    )
+                ),
+                .sendNotification(
+                    method: "session/update",
+                    params: try JSONValue(
+                        encoding:
+                            ACP.V1.SessionNotification(
+                                sessionId: "s",
+                                update: .configOptions(.init(configOptions: later))
+                            )
+                    )
+                ),
+            ]),
+            transport: server
+        )
+        let run = Task { await agent.run() }
+        let gate = Gate()
+        let adapter = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        let connection = GatedConfigResponse(base: adapter, gate: gate)
+        try await controller.start(connection: connection, client: .init(name: "test", version: "1"))
+        let change = Task { try await controller.setConfigOption("thinking", to: .boolean(false)) }
+        await gate.waitUntilEntered()
+        #expect(await run.value == nil)
+        // Suspend method completion while the following notification commits. Response application must
+        // occur inside ordered dispatch, rather than after this caller resumes.
+        while controller.transcript.sequence < 3 {
+            controller.publishTranscript()
+            await Task.yield()
+        }
+        #expect(controller.transcript.configOptions == later)
+        await gate.open()
+        try await change.value
+        #expect(controller.transcript.configOptions == later)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript.configOptions == later)
+        await controller.close()
+    }
+}
+
+extension SessionControllerTests {
+    @Test func legacyModeNotificationFollowingResponseRemainsAuthoritative() async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        let modes = ACP.V1.SessionModeState(
+            currentModeId: "ask",
+            availableModes: [
+                .init(id: "ask", name: "Ask"), .init(id: "code", name: "Code"),
+            ]
+        )
+        let agent = ScenarioAgent(
+            scenario: Scenario([
+                .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+                .expectRequest(
+                    method: "session/new",
+                    response: .result(
+                        try JSONValue(
+                            encoding:
+                                ACP.V1.NewSessionResponse(sessionId: "s", modes: modes)
+                        )
+                    )
+                ),
+                .expectRequest(method: "session/set_mode", response: .result([:])),
+                .sendNotification(
+                    method: "session/update",
+                    params: try JSONValue(
+                        encoding:
+                            ACP.V1.SessionNotification(
+                                sessionId: "s",
+                                update: .currentMode(.init(currentModeId: "ask"))
+                            )
+                    )
+                ),
+            ]),
+            transport: server
+        )
+        let run = Task { await agent.run() }
+        let gate = Gate()
+        let adapter = await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller)
+        try await controller.start(
+            connection: GatedConfigResponse(base: adapter, gate: gate),
+            client: .init(name: "test", version: "1")
+        )
+        let before = controller.transcript.configOptions
+        let change = Task {
+            try await controller.setConfigOption(ACP.V1.AgentConnectionAdapter.modeOptionID, to: .select("code"))
+        }
+        await gate.waitUntilEntered()
+        #expect(await run.value == nil)
+        while controller.transcript.sequence < 4 {
+            controller.publishTranscript()
+            await Task.yield()
+        }
+        await gate.open()
+        try await change.value
+        #expect(controller.transcript.configOptions == before)
+        let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(replay.transcript.configOptions == before)
+        await controller.close()
     }
 }

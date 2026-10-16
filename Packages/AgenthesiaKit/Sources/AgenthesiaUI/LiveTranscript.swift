@@ -12,6 +12,7 @@ struct TranscriptMessage {
     var previousMarkdown: String?
     var update: StreamingMarkdown.Update?
     var tool: ToolCardHeader?
+    var input: InputCard?
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
@@ -67,12 +68,14 @@ final class LiveTranscriptSource: TranscriptSource {
         return markdown
     }
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
+    private var inputDrafts: [UUID: InputDraft] = [:]
     private var expanded: Set<Int64> = []
     var messageCount: Int { state.items.count }
 
     func update(_ controller: SessionController) {
         self.controller = controller
         state = controller.transcript
+        inputDrafts = inputDrafts.filter { id, _ in controller.pendingInputs.contains { $0.id == id } }
         pending = controller.pendingPermissions.map(\.id)
         running = controller.status == .running || controller.status == .stopping
         revision += 1
@@ -85,6 +88,20 @@ final class LiveTranscriptSource: TranscriptSource {
 
     func message(at row: Int) -> TranscriptMessage {
         let item = state.items[row]
+        if let input = item.input, case .form(let schema) = input.request.mode {
+            let active = controller?.pendingInputs.contains { $0.id == input.requestID } == true
+            let draft = inputDrafts[input.requestID] ?? InputDraft(schema: schema)
+            if active { inputDrafts[input.requestID] = draft } else { inputDrafts.removeValue(forKey: input.requestID) }
+            var message = render(id: item.id, role: "Input", markdown: input.request.message)
+            let recording =
+                !active && input.response == nil
+                && (controller?.status == .running || controller?.status == .idle || controller?.status == .stopping)
+            message.input = InputCard(input: input, active: active, recording: recording, draft: draft) {
+                [weak controller] response in
+                controller?.answerInput(input.requestID, with: response)
+            }
+            return message
+        }
         if let tool = item.toolCall {
             let card = Self.toolCard(
                 tool,
@@ -164,7 +181,7 @@ final class LiveTranscriptSource: TranscriptSource {
         if let message = item.message {
             let role: String =
                 switch message.role {
-                case .user: "You";
+                case .user: message.notSent ? "You · not sent" : message.sentTogether ? "You · sent together" : "You";
                 case .assistant: "Agent";
                 case .thought: "Thinking"
                 }
@@ -179,6 +196,9 @@ final class LiveTranscriptSource: TranscriptSource {
         }
         if let permission = item.permission {
             return ("Permission", permissionCard(permission, phase: .ended, expanded: false).markdown)
+        }
+        if let input = item.input {
+            return ("Input", input.request.message + "\n\n" + InputForm.outcome(input.response))
         }
         if let date = item.reopenedAt {
             return ("Session", "Continued · \(date.formatted(date: .abbreviated, time: .shortened))")

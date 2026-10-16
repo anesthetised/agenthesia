@@ -62,7 +62,7 @@ The ACP command-line client remains available via `just cli` and `just mock-chat
 ## Requirements
 
 - macOS 26 or later, Apple silicon.
-- Building from source: Xcode 27 (Xcode 26.x works for now).
+- Building from source: Xcode 27, or Xcode 26.6 to match CI.
 
 ## Building
 
@@ -78,6 +78,20 @@ just run     # build and launch the app
 just cli chat -- <agent>  # talk to any ACP agent from the terminal
 just mock-chat            # try it with the bundled mock agent
 ```
+
+CI pins Xcode 26.6. To run the same checks locally when that Xcode is installed:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer just ci
+```
+
+Package tests with coverage and the app build run in parallel on separate macOS runners. Each restores
+its own incremental build cache, matched by OS, architecture, Xcode build and dependency/configuration
+hashes. A commit-specific snapshot can be reused by later commits with the same configuration. Builds
+and tests always run, including on exact cache hits; coverage profiles are cleared before each test run.
+Compiler work is cached even after a test failure, while the failed check remains failed. The combined
+`Lint, test, build` check requires both jobs to succeed. Only the main-branch badge publisher has write
+access to repository contents.
 
 The CLI resolves the login-shell environment once and passes it to the agent and terminal
 authentication. If resolution fails or times out, it warns and uses a fallback environment. Add

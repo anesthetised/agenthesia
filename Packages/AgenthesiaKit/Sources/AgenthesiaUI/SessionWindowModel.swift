@@ -23,7 +23,15 @@ import SwiftUI
     var canStart: Bool {
         !closed && !starting && (owner == nil || owner?.isClosed == true || owner?.errorMessage != nil)
     }
-    var canContinue: Bool { restored?.status == .readOnly && !restoredIsLive && canStart }
+    var canContinue: Bool {
+        guard canStart, let displayed, displayed.session.agentSessionID != nil else { return false }
+        if let restored { return restored.status == .readOnly && !restoredIsLive }
+        return [.failed, .closed].contains(displayed.status) && history.contains { $0.id == displayed.session.id }
+    }
+    var savedSessions: [SessionRecord] {
+        guard let current = owner?.controller, ![.failed, .closed].contains(current.status) else { return history }
+        return history.filter { $0.id != current.session.id }
+    }
 
     func refresh() async {
         do {
@@ -45,7 +53,7 @@ import SwiftUI
     }
     /// Continues the selected saved session as this window's live session (ADR-0017).
     func continueRestored() async {
-        guard canContinue, let session = restored?.session else { return }
+        guard canContinue, let session = (restored ?? owner?.controller)?.session else { return }
         await replaceOwner { await $0.resume(session) }
     }
     private func replaceOwner(_ launch: (LiveSession) async -> Void) async {

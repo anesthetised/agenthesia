@@ -36,6 +36,20 @@ public actor TerminalProcess {
     /// Resolves a bare `executable` through the command environment's `PATH`, and a relative one against
     /// its working directory. Throws `ENOENT` when no executable is found.
     public init(launching command: AgentCommand, outputLimit: Int = defaultOutputLimit) throws {
+        try self.init(
+            launching: command,
+            outputLimit: outputLimit,
+            readerQueue: DispatchQueue(label: "Agenthesia.TerminalProcess", qos: .userInitiated),
+            afterSpawn: { _ in }
+        )
+    }
+
+    init(
+        launching command: AgentCommand,
+        outputLimit: Int = defaultOutputLimit,
+        readerQueue: DispatchQueue,
+        afterSpawn: @Sendable (Int32) -> Void
+    ) throws {
         let directory =
             command.currentDirectory?.path(percentEncoded: false) ?? FileManager.default.currentDirectoryPath
         let environment = command.environment ?? ProcessInfo.processInfo.environment
@@ -56,8 +70,8 @@ public actor TerminalProcess {
             Darwin.close(master)
             throw POSIXError(code)
         }
-        // The window size can only be set through the terminal side; this descriptor is not the
-        // command's controlling terminal and is closed once the command has its own.
+        // Keep the sizing descriptor open until the reader has registered and drained initial output.
+        // Closing the last slave before that point can discard a quick command's output.
         let terminal = open(name, O_RDWR | O_NOCTTY | O_CLOEXEC)
         defer { if terminal >= 0 { Darwin.close(terminal) } }
 
@@ -88,9 +102,10 @@ public actor TerminalProcess {
         }
 
         processIdentifier = pid
+        afterSpawn(pid)
         // A private queue gets a thread even when the shared pools are busy; output still unread shortly
         // after the command exits is discarded by the kernel.
-        let queue = DispatchQueue(label: "Agenthesia.TerminalProcess", qos: .userInitiated)
+        let queue = readerQueue
         reader = TerminalReader(master: master, limit: max(1, outputLimit), queue: queue)
         // POSIX_SPAWN_SETSID makes the command the leader of its own process group.
         groupTermination = ProcessGroupTermination(group: pid, leader: pid) { false }
@@ -171,27 +186,55 @@ private final class TerminalReader: Sendable {
     }
 
     private let limit: Int
+    private let master: Int32
     private let source: any DispatchSourceRead
     private let state = Mutex(State())
 
     init(master: Int32, limit: Int, queue: DispatchQueue) {
+        self.master = master
         self.limit = limit
         source = DispatchSource.makeReadSource(fileDescriptor: master, queue: queue)
         // The handlers keep the reader alive until the source is cancelled.
         source.setEventHandler { [self] in
-            var chunk = [UInt8](repeating: 0, count: 16_384)
-            let count = Darwin.read(master, &chunk, chunk.count)
-            if count > 0 {
-                append(chunk[..<count])
-            } else if count == 0 || (errno != EAGAIN && errno != EINTR) {
-                source.cancel()
-            }
+            _ = read(upTo: 16_384)
         }
         source.setCancelHandler { [self] in
             Darwin.close(master)
             finish()
         }
+        let registered = DispatchSemaphore(value: 0)
+        source.setRegistrationHandler { [self] in
+            defer { registered.signal() }
+            // Darwin FIONREAD (_IOR('f', 127, int)) is not imported by Swift.
+            let bytesAvailableRequest: UInt = 0x4004_667F
+            var available: Int32 = 0
+            guard ioctl(master, bytesAvailableRequest, &available) == 0 else { return }
+            // Bound startup work even if a descendant continuously writes to the terminal.
+            var remaining = Int(available)
+            while remaining > 0 {
+                let count = read(upTo: remaining)
+                if count > 0 {
+                    remaining -= count
+                } else if count < 0, errno == EINTR {
+                    continue
+                } else {
+                    break
+                }
+            }
+        }
         source.resume()
+        registered.wait()
+    }
+
+    private func read(upTo maximum: Int) -> Int {
+        var chunk = [UInt8](repeating: 0, count: min(16_384, maximum))
+        let count = Darwin.read(master, &chunk, chunk.count)
+        if count > 0 {
+            append(chunk[..<count])
+        } else if count == 0 || (errno != EAGAIN && errno != EINTR) {
+            source.cancel()
+        }
+        return count
     }
 
     var output: TerminalOutput {

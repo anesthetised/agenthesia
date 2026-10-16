@@ -592,3 +592,137 @@ private final class RecordedTranscript {
         try await append(NewEvent(kind: SessionEvent.updateKind, payload: try JSONEncoder().encode(notification)))
     }
 }
+
+extension LiveTranscriptTests {
+    @Test func historicalFormsHaveNoActiveControlsAndShowCancelledOutcome() async throws {
+        let recorded = try await RecordedTranscript()
+        let request = ACP.ElicitationRequest(
+            message: "Name",
+            mode: .form(.init(properties: ["name": .string(.init())])),
+            scope: .session("s", toolCallId: nil)
+        )
+        try await recorded.append(SessionEvent.inputRequested(id: UUID(), request: request).storedEvent())
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        let message = source.message(at: 0)
+        let card = try #require(message.input)
+        #expect(!card.active && !card.recording)
+        #expect(InputForm.outcome(card.input.response) == "Cancelled")
+        #expect(LiveTranscriptSource.content(recorded.state.items[0]).1.contains("Cancelled"))
+    }
+    @Test func formDraftPreservesDefaultsAndInvalidNumericInputForValidation() {
+        let draft = InputDraft(
+            schema: .init(properties: [
+                "s": .string(.init(default: "Ada")), "n": .number(.init(default: 1.5)),
+                "i": .integer(.init(default: 2)), "b": .boolean(.init(default: true)),
+                "m": .multiSelect(.init(items: .strings(["a"]), default: ["a"])),
+                "optional": .multiSelect(.init(minItems: 1, items: .strings(["a"]))),
+            ])
+        )
+        #expect(draft.values["s"] == "Ada")
+        #expect(draft.values["n"] == .double(1.5))
+        #expect(draft.values["i"] == 2)
+        #expect(draft.values["b"] == true)
+        #expect(draft.values["m"] == ["a"])
+        #expect(draft.values["optional"] == nil)
+        draft.edit("n", text: "invalid", field: .number(.init()))
+        #expect(draft.values["n"] == "invalid")
+        draft.edit("n", text: "", field: .number(.init()))
+        #expect(draft.values["n"] == nil)
+        draft.edit("i", text: "3", field: .integer(.init()))
+        #expect(draft.values["i"] == 3)
+    }
+}
+
+extension LiveTranscriptTests {
+    @Test func optionalTextCanBeOmittedAfterEditingWithoutLosingOtherAnswers() {
+        let email = ACP.PropertySchema.string(.init(format: .email, default: "ada@example.com"))
+        let schema = ACP.ElicitationSchema(
+            properties: ["name": .string(.init(default: "Ada")), "email": email],
+            required: ["name"]
+        )
+        let draft = InputDraft(schema: schema)
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+        draft.edit("email", text: "", field: email)
+        #expect(InputValidation.errors(in: draft.values, schema: schema)["email"] != nil)
+        draft.omit("email")
+        #expect(draft.text["email"] == nil && draft.values["email"] == nil)
+        #expect(draft.values["name"] == "Ada")
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+        draft.edit("email", text: "new@example.com", field: email)
+        #expect(draft.values["email"] == "new@example.com")
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+    }
+
+    @Test func explicitEmptyStringsRemainPresentWhileUntouchedFieldsAreAbsent() {
+        let schema = ACP.ElicitationSchema(
+            properties: ["required": .string(.init(default: "Name")), "optional": .string(.init())],
+            required: ["required"]
+        )
+        let draft = InputDraft(schema: schema)
+        #expect(draft.values["optional"] == nil)
+        draft.edit("required", text: "", field: .string(.init()))
+        #expect(draft.values["required"] == "")
+        #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
+        draft.edit("optional", text: "", field: .string(.init()))
+        #expect(draft.values["optional"] == "")
+    }
+}
+
+private final class FormTranscriptSource: TranscriptSource {
+    var revision = 0
+    var messageCount: Int { 1 }
+    var card: InputCard
+    init(card: InputCard) { self.card = card }
+    func message(at row: Int) -> TranscriptMessage {
+        var message = TranscriptMessage(role: "Input", markdown: "Name", text: NSAttributedString(string: "Name"))
+        message.input = card
+        return message
+    }
+    func isStreaming(at row: Int) -> Bool { false }
+}
+
+extension LiveTranscriptTests {
+    @Test(arguments: [440.0, 600.0]) func nativeFormSizingAndDraftSurviveTranscriptRefresh(width: Double) throws {
+        let schema = ACP.ElicitationSchema(
+            properties: [
+                "name": .string(.init(title: "Name", minLength: 2)), "enabled": .boolean(.init(title: "Enabled")),
+                "email": .string(.init(title: "Email", format: .email, default: "ada@example.com")),
+            ],
+            required: ["name"]
+        )
+        let request = ACP.ElicitationRequest(
+            message: "Name",
+            mode: .form(schema),
+            scope: .session("s", toolCallId: nil)
+        )
+        let draft = InputDraft(schema: schema)
+        let card = InputCard(
+            input: .init(requestID: UUID(), request: request),
+            active: true,
+            recording: false,
+            draft: draft,
+            answer: { _ in }
+        )
+        let source = FormTranscriptSource(card: card)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        window.setContentSize(NSSize(width: width, height: 600))
+        controller.scroll.frame = window.contentLayoutRect
+        controller.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let original = try #require(row.subviews.first)
+        #expect(controller.table.rect(ofRow: 0).height > 80)
+        draft.edit("name", text: "Ada", field: .string(.init(minLength: 2)))
+        source.revision += 1
+        controller.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let refreshed = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        #expect(refreshed === row)
+        #expect(refreshed.subviews.first === original)
+        #expect(draft.values["name"] == "Ada")
+        #expect(controller.table.rect(ofRow: 0).width <= width)
+    }
+}

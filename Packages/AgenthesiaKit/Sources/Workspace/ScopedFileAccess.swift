@@ -24,6 +24,12 @@ public struct ScopedFileAccess: Sendable {
         self.roots = roots.map(Self.canonicalURL)
     }
 
+    /// Whether `root` still resolves to itself, i.e. was not replaced by a symlink since it was canonicalized.
+    public static func isCanonical(_ root: URL) -> Bool {
+        canonicalURL(root).path(percentEncoded: false).withoutTrailingSlash
+            == root.path(percentEncoded: false).withoutTrailingSlash
+    }
+
     /// The resolved URL for `path`, if it is absolute and inside one of the roots.
     public func resolve(_ path: String) throws(Failure) -> URL {
         guard !path.utf8.contains(0) else { throw .invalidPath(path) }

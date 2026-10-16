@@ -27,6 +27,10 @@ struct SessionChangedFiles: View {
                     Label(path, systemImage: "doc.text").lineLimit(1).truncationMode(.middle)
                 }.buttonStyle(.plain).help(path)
             }
+            if let error = files.watchError {
+                Text("Automatic refresh is unavailable: \(error)").font(.caption).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
             Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
         }
     }

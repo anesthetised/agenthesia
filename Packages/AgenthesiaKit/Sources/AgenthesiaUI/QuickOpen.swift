@@ -28,14 +28,15 @@ struct QuickOpen: View {
             if let error {
                 Text(error).foregroundStyle(.red).textSelection(.enabled)
             }
-            if isLoading {
-                ProgressView("Finding files…").controlSize(.small)
-            }
+            // Background refreshes keep the visible list, so loading is shown only without results.
             if paths.isEmpty {
-                ContentUnavailableView(
-                    isLoading ? "Indexing files…" : "No matching files",
-                    systemImage: "doc.text.magnifyingglass"
-                ).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Group {
+                    if isLoading {
+                        ProgressView("Finding files…")
+                    } else {
+                        ContentUnavailableView("No matching files", systemImage: "doc.text.magnifyingglass")
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
                     List(selection: $selectedPath) {
@@ -73,7 +74,9 @@ struct QuickOpen: View {
         .padding()
         .frame(idealWidth: 540, idealHeight: 420)
         .onAppear { searchFocused = true }
-        .onChange(of: paths, initial: true) { _, paths in selectedPath = paths.first }
+        .onChange(of: paths, initial: true) { _, paths in
+            selectedPath = Self.retainedSelection(selectedPath, in: paths)
+        }
         .onExitCommand(perform: onDismiss)
     }
 
@@ -83,6 +86,11 @@ struct QuickOpen: View {
 
     private func move(_ offset: Int) {
         selectedPath = Self.movedSelection(selectedPath, by: offset, in: paths)
+    }
+
+    /// A refresh keeps a still-listed selection; a new query clears the list first and selects its first match.
+    static func retainedSelection(_ selected: String?, in paths: [String]) -> String? {
+        if let selected, paths.contains(selected) { selected } else { paths.first }
     }
 
     static func movedSelection(_ selected: String?, by offset: Int, in paths: [String]) -> String? {

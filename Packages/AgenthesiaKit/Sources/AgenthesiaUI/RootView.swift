@@ -136,7 +136,7 @@ public struct RootView: View {
         .frame(minWidth: 740, minHeight: 500)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         .task { await model.refresh() }
-        .task(id: model.displayed?.session.id) { await model.files.attach(model.displayed?.session) }
+        .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
             finishEditing(); showingQuickOpen = false; fileQuery = ""

@@ -6,12 +6,17 @@ public import Foundation
     private var stream: FSEventStreamRef?
     private let callback: Callback
 
-    public init(directories: [URL], onChange: @escaping @MainActor @Sendable () -> Void) throws {
-        guard !directories.isEmpty,
-            directories.allSatisfy({
-                let path = $0.path(percentEncoded: false)
-                return $0.isFileURL && path.hasPrefix("/") && !path.utf8.contains(0)
-            })
+    /// `excluding` drops events below up to eight absolute directories, the FSEvents limit.
+    public init(
+        directories: [URL],
+        excluding: [URL] = [],
+        onChange: @escaping @MainActor @Sendable () -> Void
+    ) throws {
+        let isValid: (URL) -> Bool = {
+            let path = $0.path(percentEncoded: false)
+            return $0.isFileURL && path.hasPrefix("/") && !path.utf8.contains(0)
+        }
+        guard !directories.isEmpty, excluding.count <= 8, directories.allSatisfy(isValid), excluding.allSatisfy(isValid)
         else {
             throw SessionWorkspace.WorkspaceError(message: "File watching requires at least one absolute directory.")
         }
@@ -40,7 +45,11 @@ public import Foundation
             )
         else { throw SessionWorkspace.WorkspaceError(message: "Could not create file watching.") }
         FSEventStreamSetDispatchQueue(stream, .main)
-        guard FSEventStreamStart(stream) else {
+        guard
+            excluding.isEmpty
+                || FSEventStreamSetExclusionPaths(stream, excluding.map { $0.path(percentEncoded: false) } as CFArray),
+            FSEventStreamStart(stream)
+        else {
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
             throw SessionWorkspace.WorkspaceError(message: "Could not start file watching.")

@@ -27,19 +27,8 @@ public struct SessionWorkspace: Sendable {
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
             throw WorkspaceError(message: "Choose an existing directory.")
         }
-        // A .git entry is also present in linked worktrees and submodules. A broken repository
-        // must fail rather than silently fall back to running in the user's checkout.
-        var ancestor = directory
-        var repository = false
-        while true {
-            if FileManager.default.fileExists(atPath: ancestor.appending(path: ".git").path) {
-                repository = true
-                break
-            }
-            if ancestor.path == "/" { break }
-            ancestor.deleteLastPathComponent()
-        }
-        guard repository else {
+        // A broken repository must fail rather than silently fall back to running in the user's checkout.
+        guard hasGitEntry(atOrAbove: directory) else {
             // Bare repositories cannot supply a working directory.
             if (try? git(["rev-parse", "--is-bare-repository"], in: directory)) == "true" {
                 throw WorkspaceError(message: "Choose a working checkout, not a bare repository.")
@@ -95,6 +84,19 @@ public struct SessionWorkspace: Sendable {
         let worktree = URL(filePath: lines[0], directoryHint: .isDirectory).resolvingSymlinksInPath()
             .standardizedFileURL
         return checkout.path == worktree.path ? nil : (checkout, worktree)
+    }
+
+    /// Whether `directory` (resolved) or an ancestor has a `.git` entry, as in linked worktrees and submodules.
+    /// Dangling `.git` symlinks count: they are broken repositories, not plain folders.
+    static func hasGitEntry(atOrAbove directory: URL) -> Bool {
+        var ancestor = directory
+        while true {
+            if (try? FileManager.default.attributesOfItem(atPath: ancestor.appending(path: ".git").path)) != nil {
+                return true
+            }
+            if ancestor.path == "/" { return false }
+            ancestor.deleteLastPathComponent()
+        }
     }
 
     struct WorkspaceError: LocalizedError {

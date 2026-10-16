@@ -15,6 +15,8 @@ public final class SessionFiles {
     public private(set) var document: SessionFileDocument?
     public private(set) var indexError: String?
     public private(set) var changesError: String?
+    /// Automatic refresh is unavailable; manual and ACP-triggered refreshes still work.
+    public private(set) var watchError: String?
     public private(set) var documentError: String?
     public private(set) var isLoadingIndex = false
     public private(set) var isLoadingDocument = false
@@ -36,9 +38,14 @@ public final class SessionFiles {
         try await SessionFileDocument.load(root: $0, url: $1)
     }
     // Test seam for root replacement while an asynchronous scan is in flight.
-    @ObservationIgnored var indexLoader: @MainActor (URL) async throws -> FileIndex = {
-        try await FileIndex.load(in: $0)
+    @ObservationIgnored var indexLoader: @MainActor (URL, Bool) async throws -> FileIndex = {
+        try await FileIndex.load(in: $0, isGitRepository: $1)
     }
+    // Test seam for a watcher that cannot start.
+    @ObservationIgnored var watcherFactory:
+        @MainActor (URL, @escaping @MainActor @Sendable () -> Void) async throws -> SessionFileChanges = {
+            try await SessionFileChanges(directory: $0, onChange: $1)
+        }
 
     public init() {}
 
@@ -55,24 +62,12 @@ public final class SessionFiles {
                 continuation.resume(returning: ScopedFileAccess(roots: [directory]).roots[0])
             }
         }
-        guard generation == token, !Task.isCancelled else { return }
+        guard isCurrent(token) else { return }
         self.root = root
         baseRevision = session.baseRevision
-        isLoadingIndex = true
-        do {
-            let git = try await SessionFileChanges.isGitRepository(in: root)
-            guard generation == token, !Task.isCancelled else { return }
-            isGitRepository = git
-            let observer = try await SessionFileChanges(directory: root) { [weak self] in self?.invalidate() }
-            guard generation == token, !Task.isCancelled else { observer.close(); return }
-            watcher = observer
-        } catch {
-            guard generation == token, !Task.isCancelled else { return }
-            changesError = error.localizedDescription
-        }
-        guard generation == token, !Task.isCancelled else { return }
+        // The first scan also starts watching.
         await refresh()
-        if generation == token, !Task.isCancelled { attached = true }
+        if isCurrent(token) { attached = true }
     }
 
     /// Coalesces filesystem and ACP invalidations, including one retry for changes during a scan.
@@ -98,80 +93,96 @@ public final class SessionFiles {
             defer { if self.generation == token { self.scan = nil } }
             repeat {
                 self.needsRefresh = false
-                self.isLoadingIndex = true
-                do {
-                    let isOriginalRoot = await Self.rootIsUnchanged(root)
-                    guard self.generation == token, !Task.isCancelled else { return }
-                    guard isOriginalRoot else {
-                        self.indexError = SessionFileDocument.Failure.outsideScope.localizedDescription
-                        self.changesError = self.indexError
-                        self.search?.cancel(); self.search = nil
-                        self.isSearching = false
-                        self.index = nil; self.matches = []; self.changedPaths = []; self.isLoadingIndex = false
-                        return
-                    }
-                    let git = try await SessionFileChanges.isGitRepository(in: root)
-                    guard self.generation == token, !Task.isCancelled else { return }
-                    if git != self.isGitRepository || self.watcher == nil {
-                        let observer = try await SessionFileChanges(directory: root) { [weak self] in self?.invalidate()
-                        }
-                        guard self.generation == token, !Task.isCancelled else { observer.close(); return }
-                        self.watcher?.close()
-                        self.watcher = observer
-                        self.isGitRepository = git
-                        self.changedPaths = []
-                        self.changesError = nil
-                    }
-                    let updated = try await self.indexLoader(root)
-                    // A scan can suspend while the pathname is replaced; validate again before publishing.
-                    let stillOriginalRoot = await Self.rootIsUnchanged(root)
-                    guard self.generation == token, !Task.isCancelled else { return }
-                    guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
-                    self.index = updated
-                    self.indexError = nil
-                    self.setQuery(self.query)
-                } catch {
-                    guard self.generation == token, !Task.isCancelled else { return }
-                    self.indexError = error.localizedDescription
-                    self.search?.cancel(); self.search = nil
-                    self.isSearching = false
-                    self.index = nil
-                    self.matches = []
-                    if error as? SessionFileDocument.Failure == .outsideScope {
-                        self.changedPaths = []
-                        self.changesError = self.indexError
-                        self.isLoadingIndex = false
-                        return
-                    }
-                }
-                self.isLoadingIndex = false
-                if self.isGitRepository {
-                    do {
-                        let paths = try await SessionFileChanges.paths(in: root, baseRevision: self.baseRevision)
-                        let stillOriginalRoot = await Self.rootIsUnchanged(root)
-                        guard self.generation == token, !Task.isCancelled else { return }
-                        guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
-                        self.changedPaths = paths
-                        self.changesError = nil
-                    } catch {
-                        guard self.generation == token, !Task.isCancelled else { return }
-                        self.changedPaths = []
-                        self.changesError = error.localizedDescription
-                    }
-                }
-            } while self.needsRefresh && self.generation == token && !Task.isCancelled
+                await self.scanOnce(root, token: token)
+            } while self.needsRefresh && self.isCurrent(token)
         }
         scan = task
         await task.value
     }
 
-    public func setQuery(_ query: String) {
+    private func scanOnce(_ root: URL, token: UUID) async {
+        isLoadingIndex = true
+        let git: Bool
+        do {
+            guard await Self.rootIsUnchanged(root) else { throw SessionFileDocument.Failure.outsideScope }
+            git = try await SessionFileChanges.isGitRepository(in: root)
+        } catch {
+            if isCurrent(token) { fail(error, changes: true) }
+            return
+        }
+        guard isCurrent(token) else { return }
+        if git != isGitRepository {
+            isGitRepository = git
+            changedPaths = []
+            changesError = nil
+            watcher?.close(); watcher = nil
+        }
+        await watch(root, token: token)
+        guard isCurrent(token) else { return }
+        do {
+            let updated = try await indexLoader(root, git)
+            // A scan can suspend while the pathname is replaced; validate again before publishing.
+            let stillOriginalRoot = await Self.rootIsUnchanged(root)
+            guard isCurrent(token) else { return }
+            guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
+            index = updated
+            indexError = nil
+            // Keep the visible matches until the refreshed ones replace them.
+            search(query, clearing: false)
+        } catch {
+            guard isCurrent(token) else { return }
+            let outside = error as? SessionFileDocument.Failure == .outsideScope
+            fail(error, changes: outside)
+            if outside { return }
+        }
+        isLoadingIndex = false
+        guard git else { return }
+        do {
+            let paths = try await SessionFileChanges.paths(in: root, baseRevision: baseRevision)
+            let stillOriginalRoot = await Self.rootIsUnchanged(root)
+            guard isCurrent(token) else { return }
+            guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
+            changedPaths = paths
+            changesError = nil
+        } catch {
+            guard isCurrent(token) else { return }
+            changedPaths = []
+            changesError = error.localizedDescription
+        }
+    }
+
+    /// Watching is advisory: a failure leaves manual and ACP-triggered refreshes working, and is retried.
+    private func watch(_ root: URL, token: UUID) async {
+        guard watcher == nil else { return }
+        do {
+            let observer = try await watcherFactory(root) { [weak self] in self?.invalidate() }
+            guard isCurrent(token) else { observer.close(); return }
+            watcher = observer
+            watchError = nil
+        } catch {
+            if isCurrent(token) { watchError = error.localizedDescription }
+        }
+    }
+
+    private func fail(_ error: any Error, changes: Bool) {
+        indexError = error.localizedDescription
+        search?.cancel(); search = nil
+        isSearching = false
+        index = nil; matches = []; isLoadingIndex = false
+        if changes { changedPaths = []; changesError = indexError }
+    }
+
+    private func isCurrent(_ token: UUID) -> Bool { generation == token && !Task.isCancelled }
+
+    public func setQuery(_ query: String) { search(query, clearing: true) }
+
+    private func search(_ query: String, clearing: Bool) {
         self.query = query
         search?.cancel()
         isSearching = false
         guard let index else { matches = []; return }
         if query.isEmpty { matches = Array(index.paths.prefix(100)); return }
-        matches = []
+        if clearing { matches = [] }
         isSearching = true
         let token = generation
         let work = Task.detached { try index.matching(query) }
@@ -192,7 +203,7 @@ public final class SessionFiles {
     private static func rootIsUnchanged(_ root: URL) async -> Bool {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: ScopedFileAccess(roots: [root]).roots[0] == root)
+                continuation.resume(returning: ScopedFileAccess.isCanonical(root))
             }
         }
     }
@@ -241,6 +252,7 @@ public final class SessionFiles {
         closeDocument()
         root = nil; baseRevision = nil; isGitRepository = false
         matches = []; changedPaths = []; index = nil; query = ""
-        indexError = nil; changesError = nil; isLoadingIndex = false; isSearching = false; needsRefresh = false
+        indexError = nil; changesError = nil; watchError = nil; isLoadingIndex = false; isSearching = false;
+        needsRefresh = false
     }
 }

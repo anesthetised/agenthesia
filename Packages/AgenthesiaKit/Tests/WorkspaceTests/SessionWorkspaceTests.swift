@@ -63,6 +63,23 @@ import Testing
         }
     }
 
+    @Test func danglingGitLinkFailsInsteadOfUsingThePlainFolder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createSymbolicLink(
+            at: directory.appending(path: ".git"),
+            withDestinationURL: directory.appending(path: "missing")
+        )
+        await #expect(throws: (any Error).self) {
+            try await SessionWorkspace.prepare(
+                directory: directory,
+                id: UUID(),
+                worktreesRoot: directory.appending(path: "trees")
+            )
+        }
+    }
+
     @Test func keepsTheSelectedSubdirectory() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

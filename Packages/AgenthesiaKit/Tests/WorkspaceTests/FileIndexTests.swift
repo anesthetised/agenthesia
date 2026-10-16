@@ -39,6 +39,33 @@ import Testing
         #expect(index.paths == ["nested/.hidden"])
     }
 
+    @Test func gitSkipsNamesThatAreNotUTF8() async throws {
+        let root = try directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try await SessionWorkspace.git(["init", "-q"], in: root)
+        try "text".write(to: root.appending(path: "good.swift"), atomically: true, encoding: .utf8)
+        try await stageNonUTF8Path(in: root)
+        #expect(try await FileIndex.load(in: root).paths == ["good.swift"])
+        #expect(try await FileIndex.load(in: root, isGitRepository: true).paths == ["good.swift"])
+    }
+
+    @Test func directoryWalkSkipsUnreadableSubdirectoriesButNotAnUnreadableRoot() async throws {
+        let root = try directory()
+        let locked = root.appending(path: "locked")
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try "text".write(to: locked.appending(path: "hidden"), atomically: true, encoding: .utf8)
+        try "text".write(to: root.appending(path: "visible"), atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        #expect(try await FileIndex.load(in: root).paths == ["visible"])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: root.path)
+        await #expect(throws: (any Error).self) { try await FileIndex.load(in: root, isGitRepository: false) }
+    }
+
     @Test func fuzzyMatchingPrioritizesBasenamesAndIsBoundedAndDeterministic() throws {
         let index = FileIndex(paths: ["folder/RootView.swift", "rv", "rv-extra", "xrvx", "root/very/file", "Raven"])
         #expect(

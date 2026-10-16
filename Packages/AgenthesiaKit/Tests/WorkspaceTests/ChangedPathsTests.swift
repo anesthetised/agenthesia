@@ -74,6 +74,16 @@ import Testing
         #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: base) == ["new", "old"])
     }
 
+    @Test func skipsChangedNamesThatAreNotUTF8() async throws {
+        let fixture = try await ChangedPathsFixture()
+        defer { fixture.remove() }
+        try fixture.write("base", path: "file")
+        try await fixture.commit()
+        try fixture.write("changed", path: "file")
+        try await stageNonUTF8Path(in: fixture.directory)
+        #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: nil) == ["file"])
+    }
+
     @Test func distinguishesNonGitBrokenGitAndBareRepositories() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "changed-paths-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

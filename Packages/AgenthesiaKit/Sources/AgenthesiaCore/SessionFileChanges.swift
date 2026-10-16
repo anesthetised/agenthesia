@@ -8,7 +8,15 @@ import Workspace
     public init(directory: URL, onChange: @escaping @MainActor @Sendable () -> Void) async throws {
         let roots = try await SessionWorkspace.watchDirectories(in: directory)
         try Task.checkCancellation()
-        watcher = try DirectoryWatcher(directories: roots, onChange: onChange)
+        // Object and reflog writes (e.g. by another worktree) matter only together with a ref or index change.
+        let selected = directory.resolvingSymlinksInPath().standardizedFileURL
+        // FSEvents matches exclusions against physical paths (e.g. /private/var).
+        let metadata = ScopedFileAccess(roots: roots.filter { $0.standardizedFileURL != selected }).roots
+        watcher = try DirectoryWatcher(
+            directories: roots,
+            excluding: metadata.flatMap { [$0.appending(path: "objects"), $0.appending(path: "logs")] },
+            onChange: onChange
+        )
     }
 
     public static func paths(in directory: URL, baseRevision: String?) async throws -> [String] {

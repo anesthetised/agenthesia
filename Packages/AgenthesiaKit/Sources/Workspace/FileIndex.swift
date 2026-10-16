@@ -14,11 +14,19 @@ public struct FileIndex: Sendable {
     }
 
     /// Git contributes tracked and untracked nonignored files; ordinary directories are walked.
-    public static func load(in directory: URL) async throws -> FileIndex {
+    /// Callers that already know whether `directory` is in a repository pass it to skip that lookup.
+    /// Unreadable subdirectories and non-UTF-8 names are skipped; an unreadable root fails.
+    public static func load(in directory: URL, isGitRepository: Bool? = nil) async throws -> FileIndex {
         try Task.checkCancellation()
         let directory = directory.standardizedFileURL
         let data: Data?
-        if try await SessionWorkspace.repositoryRoot(in: directory) != nil {
+        let git: Bool
+        if let isGitRepository {
+            git = isGitRepository
+        } else {
+            git = try await SessionWorkspace.repositoryRoot(in: directory) != nil
+        }
+        if git {
             data = try await SessionWorkspace.gitOutput(
                 ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."],
                 in: directory
@@ -44,30 +52,25 @@ public struct FileIndex: Sendable {
                             }
                             var paths: [String] = []
                             if let data {
-                                guard let output = String(data: data, encoding: .utf8) else {
-                                    throw SessionWorkspace.WorkspaceError(
-                                        message: "Git returned a filename that is not UTF-8."
-                                    )
-                                }
-                                for path in output.split(separator: "\0") {
+                                for bytes in data.split(separator: 0) {
                                     try check()
+                                    guard let path = String(data: bytes, encoding: .utf8) else { continue }
                                     var isDirectory: ObjCBool = false
                                     if FileManager.default.fileExists(
-                                        atPath: directory.appending(path: String(path)).path,
+                                        atPath: directory.appending(path: path).path,
                                         isDirectory: &isDirectory
                                     ), !isDirectory.boolValue {
-                                        paths.append(String(path))
+                                        paths.append(path)
                                     }
                                 }
                             } else {
-                                var failure: (any Error)?
+                                // Fail for an unreadable root; the enumerator skips unreadable subtrees.
+                                _ = try FileManager.default.contentsOfDirectory(atPath: directory.path)
                                 guard
                                     let enumerator = FileManager.default.enumerator(
                                         at: directory,
                                         includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
-                                        errorHandler: { _, error in
-                                            failure = error; return false
-                                        }
+                                        errorHandler: { _, _ in true }
                                     )
                                 else {
                                     throw SessionWorkspace.WorkspaceError(
@@ -80,9 +83,12 @@ public struct FileIndex: Sendable {
                                         enumerator.skipDescendants()
                                         continue
                                     }
-                                    let values = try url.resourceValues(forKeys: [
-                                        .isRegularFileKey, .isSymbolicLinkKey,
-                                    ])
+                                    // An entry can disappear during the walk.
+                                    guard
+                                        let values = try? url.resourceValues(forKeys: [
+                                            .isRegularFileKey, .isSymbolicLinkKey,
+                                        ])
+                                    else { continue }
                                     if values.isSymbolicLink == true {
                                         enumerator.skipDescendants()
                                     } else if values.isRegularFile == true {
@@ -91,7 +97,6 @@ public struct FileIndex: Sendable {
                                         paths.append(String(url.path.dropFirst(prefix.count)))
                                     }
                                 }
-                                if let failure { throw failure }
                             }
                             try check()
                             return FileIndex(paths: paths)

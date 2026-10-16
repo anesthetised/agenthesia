@@ -21,7 +21,8 @@ extension SessionWorkspace {
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(
                     with: Result {
-                        guard try repositoryRootBlocking(in: directory) != nil else {
+                        // Git itself rejects a broken repository; skip a separate `rev-parse` per refresh.
+                        guard hasGitEntry(atOrAbove: directory.resolvingSymlinksInPath().standardizedFileURL) else {
                             throw WorkspaceError(message: "Change tracking requires a Git working checkout.")
                         }
                         let diff = [
@@ -42,8 +43,9 @@ extension SessionWorkspace {
                         for command in commands {
                             let output: Data = try gitOutput(command, in: directory)
                             for bytes in output.split(separator: 0) {
-                                guard let path = String(data: bytes, encoding: .utf8), !path.hasPrefix("/"),
-                                    !path.split(separator: "/").contains("..")
+                                // A non-UTF-8 name cannot be opened by relative path; skip it, not the whole list.
+                                guard let path = String(data: bytes, encoding: .utf8) else { continue }
+                                guard !path.hasPrefix("/"), !path.split(separator: "/").contains("..")
                                 else { throw WorkspaceError(message: "Git returned an unsupported file path.") }
                                 paths.insert(path)
                             }
@@ -89,17 +91,11 @@ extension SessionWorkspace {
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
             throw WorkspaceError(message: "The session working directory is unavailable.")
         }
-        var ancestor = directory
-        while true {
-            // attributesOfItem sees dangling .git symlinks too: they are broken repositories, not plain folders.
-            if (try? FileManager.default.attributesOfItem(atPath: ancestor.appending(path: ".git").path)) != nil {
-                return URL(
-                    filePath: try gitPath(["rev-parse", "--show-toplevel"], in: directory),
-                    directoryHint: .isDirectory
-                ).resolvingSymlinksInPath().standardizedFileURL
-            }
-            if ancestor.path == "/" { break }
-            ancestor.deleteLastPathComponent()
+        if hasGitEntry(atOrAbove: directory) {
+            return URL(
+                filePath: try gitPath(["rev-parse", "--show-toplevel"], in: directory),
+                directoryHint: .isDirectory
+            ).resolvingSymlinksInPath().standardizedFileURL
         }
         if (try? git(["rev-parse", "--is-bare-repository"], in: directory)) == "true" {
             throw WorkspaceError(message: "Change tracking requires a working checkout, not a bare repository.")

@@ -41,12 +41,9 @@ public struct SessionFileDocument: Sendable, Equatable {
                 continuation.resume(
                     with: Result {
                         do {
-                            let access = ScopedFileAccess(roots: [root])
                             // Do not broaden a captured root if it was later replaced with an outside symlink.
-                            guard access.roots[0].path(percentEncoded: false) == root.path(percentEncoded: false) else {
-                                throw Failure.outsideScope
-                            }
-                            let text = try access.readText(
+                            guard ScopedFileAccess.isCanonical(root) else { throw Failure.outsideScope }
+                            let text = try ScopedFileAccess(roots: [root]).readText(
                                 at: url.path(percentEncoded: false),
                                 maximumBytes: maximumBytes
                             )

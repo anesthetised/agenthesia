@@ -16,7 +16,7 @@ import Workspace
         try "outside".write(to: outside.appending(path: "outside.txt"), atomically: true, encoding: .utf8)
         let files = SessionFiles()
         defer { files.close() }
-        files.indexLoader = { captured in
+        files.indexLoader = { captured, _ in
             try FileManager.default.moveItem(at: captured, to: fixture.appending(path: "original"))
             try FileManager.default.createSymbolicLink(at: captured, withDestinationURL: outside)
             return try await FileIndex.load(in: captured)
@@ -145,6 +145,71 @@ import Workspace
                 )
             }
         }
+    }
+
+    @Test func backgroundRefreshKeepsVisibleMatchesUntilReplaced() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "hello".write(to: root.appending(path: "hello.txt"), atomically: true, encoding: .utf8)
+        let files = SessionFiles()
+        defer { files.close() }
+        await files.attach(record(root))
+        files.setQuery("hel")
+        while files.isSearching { await Task.yield() }
+        #expect(files.matches == ["hello.txt"])
+        var continuation: CheckedContinuation<Void, Never>?
+        var suspended = false
+        files.indexLoader = { root, git in
+            // Only the first scan waits; a filesystem event can request another.
+            if !suspended {
+                suspended = true
+                await withCheckedContinuation { continuation = $0 }
+            }
+            return try await FileIndex.load(in: root, isGitRepository: git)
+        }
+        try "help".write(to: root.appending(path: "help.txt"), atomically: true, encoding: .utf8)
+        let refreshing = Task { await files.refresh() }
+        while continuation == nil { await Task.yield() }
+        #expect(files.matches == ["hello.txt"])
+        continuation?.resume()
+        var emptied = false
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while files.matches != ["help.txt", "hello.txt"] && ContinuousClock.now < deadline {
+            if files.matches.isEmpty { emptied = true }
+            await Task.yield()
+        }
+        await refreshing.value
+        #expect(!emptied)
+        #expect(files.matches == ["help.txt", "hello.txt"])
+    }
+
+    @Test func watcherFailureKeepsIndexAndChangesAndIsRetried() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "hello".write(to: root.appending(path: "hello.txt"), atomically: true, encoding: .utf8)
+        try await git(["init", "-q"], in: root)
+        try await git(["add", "."], in: root)
+        try await git(["commit", "-qm", "Initial"], in: root)
+        try "edited".write(to: root.appending(path: "hello.txt"), atomically: true, encoding: .utf8)
+        let files = SessionFiles()
+        defer { files.close() }
+        var attempts = 0
+        files.watcherFactory = { _, _ in
+            attempts += 1
+            throw CocoaError(.fileReadUnknown)
+        }
+        await files.attach(record(root))
+        #expect(files.matches == ["hello.txt"])
+        #expect(files.indexError == nil)
+        #expect(files.changedPaths == ["hello.txt"])
+        #expect(files.changesError == nil)
+        #expect(files.watchError != nil)
+        files.watcherFactory = { try await SessionFileChanges(directory: $0, onChange: $1) }
+        await files.refresh()
+        #expect(attempts == 1)
+        #expect(files.watchError == nil)
     }
 
     @Test func cancelledAttachmentCanAttachTheSameSessionAgain() async throws {

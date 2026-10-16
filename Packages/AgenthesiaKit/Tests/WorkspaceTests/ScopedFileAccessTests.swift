@@ -87,6 +87,16 @@ import Testing
         }
     }
 
+    @Test func canonicalRootsDetectSubstitution() throws {
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let canonical = access.roots[0]
+        #expect(ScopedFileAccess.isCanonical(canonical))
+        #expect(ScopedFileAccess.isCanonical(canonical.appending(path: "/")))
+        try FileManager.default.moveItem(at: root, to: root.deletingLastPathComponent().appending(path: "moved"))
+        try FileManager.default.createSymbolicLink(at: root, withDestinationURL: outside)
+        #expect(!ScopedFileAccess.isCanonical(canonical))
+    }
+
     @Test func acceptsTheRootItselfAndMultipleRoots() throws {
         #expect(try access.resolve(root.path(percentEncoded: false)).resolvingSymlinksInPath().path == root.path)
         let both = ScopedFileAccess(roots: [root, outside])

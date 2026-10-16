@@ -197,17 +197,21 @@ renderer with Preview/Source selection; other text uses `SourceView`. `SessionFi
 regular UTF-8 files off the main actor, capped at 2 MiB, through `ScopedFileAccess`.
 
 Workspace's immutable `FileIndex` uses Git tracked/nonignored untracked paths, or a directory walk
-outside Git, and deterministic fuzzy matching limited to 100 results. `DirectoryWatcher` uses FSEvents
-only as an invalidation signal. `SessionFileChanges` bridges it to Core, watching the selected directory
-and external Git metadata. Successful ACP writes also invalidate through `SessionController.fileRevision`.
-The model coalesces scans, cancels obsolete searches/reads and rejects late results after selection or
-window replacement. Canonical roots are captured once and cannot broaden after symlink substitution.
+outside Git, and deterministic fuzzy matching limited to 100 results. Non-UTF-8 names and unreadable
+subdirectories are skipped rather than failing the index. `DirectoryWatcher` uses FSEvents only as an
+invalidation signal. `SessionFileChanges` bridges it to Core, watching the selected directory and
+external Git metadata, excluding object and reflog writes. A watcher that cannot start is reported and
+retried without affecting the index; manual and ACP-triggered refreshes still work. Successful ACP
+writes also invalidate through `SessionController.fileRevision`. The model coalesces scans, resolves the
+repository once per scan, keeps visible search results until refreshed ones replace them, cancels
+obsolete searches/reads and rejects late results after selection or window replacement. Canonical
+roots are captured once and cannot broaden after symlink substitution.
 
 Git changed paths combine `base...HEAD`, staged, unstaged and nonignored untracked changes. Legacy
 sessions without a base explicitly show working changes only; non-Git folders explain that change
 tracking requires Git. Renames include both paths. Full worktree review and editor handoff remain #42
 and #29 respectively. Browsing stops when the displayed session changes or its window closes, rather
-than when the agent process ends.
+than when the agent process ends; Continue keeps the same session's files across its startup.
 
 ## Persistence implementation
 

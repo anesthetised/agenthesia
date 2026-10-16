@@ -54,18 +54,31 @@ import Testing
     }
 
     private func descendants<V: NSView>(of type: V.Type, in root: NSView) -> [V] {
-        (root as? V).map { [$0] } ?? root.subviews.flatMap { descendants(of: type, in: $0) }
+        ((root as? V).map { [$0] } ?? []) + root.subviews.flatMap { descendants(of: type, in: $0) }
+    }
+
+    /// Window-coordinate spans of every split view's panes, e.g. to compare layouts across macOS versions.
+    private func layout(of host: NSView, window: NSWindow) -> String {
+        let span: (NSView) -> String = {
+            let frame = $0.convert($0.bounds, to: nil)
+            return "\(frame.minX)–\(frame.maxX)"
+        }
+        let splits = descendants(of: NSSplitView.self, in: host).map {
+            $0.arrangedSubviews.map(span).joined(separator: " | ")
+        }
+        return "window \(window.contentLayoutRect.width) pt; splits: \(splits.joined(separator: "; "))"
     }
 
     private func expectHorizontallyContained(_ view: NSView, in host: NSView, window: NSWindow) {
         // Nested native split dividers can round the trailing edge by one point.
         let tolerance: CGFloat = 1
+        let layout = "\(type(of: view)) in \(layout(of: host, window: window))"
         let inHost = host.convert(view.bounds, from: view)
-        #expect(inHost.minX >= host.bounds.minX - tolerance)
-        #expect(inHost.maxX <= host.bounds.maxX + tolerance)
+        #expect(inHost.minX >= host.bounds.minX - tolerance, "\(layout)")
+        #expect(inHost.maxX <= host.bounds.maxX + tolerance, "\(layout)")
         let inWindow = view.convert(view.bounds, to: nil)
-        #expect(inWindow.minX >= window.contentLayoutRect.minX - tolerance)
-        #expect(inWindow.maxX <= window.contentLayoutRect.maxX + tolerance)
+        #expect(inWindow.minX >= window.contentLayoutRect.minX - tolerance, "\(layout)")
+        #expect(inWindow.maxX <= window.contentLayoutRect.maxX + tolerance, "\(layout)")
     }
 
     @Test func switchesMarkdownPreviewAndSourceInSplitPane() async throws {
@@ -99,7 +112,7 @@ import Testing
                         }.padding(8)
                         Divider()
                         FileViewer(document: document)
-                    }.frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                    }.frame(minWidth: 240, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                 }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             }.frame(minWidth: 740, minHeight: 500)
         )
@@ -126,6 +139,10 @@ import Testing
                 try await Task.sleep(for: .milliseconds(10))
                 window.layoutIfNeeded()
                 host.layoutSubtreeIfNeeded()
+            }
+            // CI runs an older macOS than development machines; keep its layout in the log.
+            if ProcessInfo.processInfo.environment["CI"] != nil {
+                print("FileViewerTests layout: \(layout(of: host, window: window))")
             }
             if iteration.isMultiple(of: 2) {
                 let source = try #require(descendant(of: SourceView.self, in: host))

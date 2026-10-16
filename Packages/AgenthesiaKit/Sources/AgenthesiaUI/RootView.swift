@@ -74,8 +74,10 @@ public struct RootView: View {
                             composer(session)
                         }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                         if filesMatchSession, model.files.selectedPath != nil {
+                            // The transcript starts under the sidebar, so at the 740 pt window minimum it
+                            // takes the sidebar's width (240 pt, more on macOS 26) plus its own minimum.
                             SessionFilePane(files: model.files) { openFile($0, for: $1) }
-                                .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                                .frame(minWidth: 240, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                 } else {

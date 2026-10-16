@@ -27,5 +27,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0020](0020-native-elicitation-forms.md) | Native elicitation forms | Accepted |
 | [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted |
 | [0022](0022-session-scoped-elicitation.md) | Session-scoped elicitation first | Accepted |
+| [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

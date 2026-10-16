@@ -58,6 +58,9 @@ enum Schema {
                     """
             )
         }
+        migrator.registerMigration("v2-session-base-revision") { db in
+            try db.execute(sql: "ALTER TABLE session ADD COLUMN baseRevision TEXT")
+        }
         return migrator
     }
 }

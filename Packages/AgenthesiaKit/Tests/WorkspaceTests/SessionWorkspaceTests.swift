@@ -28,6 +28,9 @@ import Testing
         )
         #expect(result.projectDirectory == repo.resolvingSymlinksInPath())
         #expect(result.workingDirectory != result.projectDirectory)
+        #expect(
+            result.baseRevision == (try await SessionWorkspace.git(["rev-parse", "HEAD"], in: result.workingDirectory))
+        )
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(
                 directory: repo,
@@ -49,6 +52,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let result = try await SessionWorkspace.prepare(directory: directory, id: UUID())
         #expect(result.workingDirectory == directory.resolvingSymlinksInPath())
+        #expect(result.baseRevision == nil)
         try await SessionWorkspace.git(["init", "-q"], in: directory)
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(

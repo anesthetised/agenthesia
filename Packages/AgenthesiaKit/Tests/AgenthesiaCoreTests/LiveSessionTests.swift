@@ -21,6 +21,64 @@ import Testing
         return AgentInstallRecord(name: "Mock", executable: binary.path, arguments: arguments)
     }
 
+    @Test func initialGitRevisionSurvivesStartHistoryAndContinue() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = directory.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        try await git(["init", "-q"], in: repo)
+        try "initial".write(to: repo.appending(path: "file.txt"), atomically: true, encoding: .utf8)
+        try await git(["add", "."], in: repo)
+        try await git(["commit", "-qm", "Initial"], in: repo)
+        let initial = try await git(["rev-parse", "HEAD"], in: repo)
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(
+            directory: repo,
+            agent: try mock(arguments: ["--reopen"]),
+            worktreesRoot: directory.appending(path: "trees")
+        )
+        let launched = owner.controller?.session
+        await owner.close()
+        let session = try #require(launched)
+        #expect(session.baseRevision == initial)
+        #expect(try await library.history().first?.baseRevision == initial)
+        let resumed = LiveSession(library: library)
+        resumed.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await resumed.resume(session)
+        let continued = resumed.controller?.session
+        await resumed.close()
+        #expect(continued?.baseRevision == initial)
+    }
+
+    @discardableResult private func git(_ arguments: [String], in directory: URL) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(
+                    with: Result {
+                        let process = Process()
+                        process.executableURL = URL(filePath: "/usr/bin/git")
+                        process.currentDirectoryURL = directory
+                        process.arguments =
+                            [
+                                "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c",
+                                "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                            ] + arguments
+                        process.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("GIT_") }
+                        let output = Pipe()
+                        process.standardOutput = output
+                        process.standardError = output
+                        try process.run()
+                        let data = output.fileHandleForReading.readDataToEndOfFile()
+                        process.waitUntilExit()
+                        guard process.terminationStatus == 0 else { throw CocoaError(.fileReadUnknown) }
+                        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines)
+                    }
+                )
+            }
+        }
+    }
+
     @Test func echoStopCloseAndReplay() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

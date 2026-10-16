@@ -48,6 +48,8 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let protocolVersion: Int
     public let title: String?
     public let workingDirectory: String
+    /// Initial Git HEAD for new sessions. Legacy and non-Git sessions have no known base.
+    public let baseRevision: String?
     public let createdAt: Date
 
     public init(
@@ -58,6 +60,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         protocolVersion: Int = 1,
         title: String? = nil,
         workingDirectory: String,
+        baseRevision: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -67,6 +70,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         self.protocolVersion = protocolVersion
         self.title = title
         self.workingDirectory = workingDirectory
+        self.baseRevision = baseRevision
         self.createdAt = createdAt
     }
 }

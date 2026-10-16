@@ -14,6 +14,8 @@ public struct RootView: View {
     @State private var arguments = ""
     @State private var showingSetup = true
     @State private var showingLog = false
+    @State private var showingQuickOpen = false
+    @State private var fileQuery = ""
 
     public init() {}
 
@@ -47,6 +49,9 @@ public struct RootView: View {
                         }.buttonStyle(.plain)
                     }
                 }
+                if !showingSetup, filesMatchSession {
+                    SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
+                }
             }
             .navigationTitle("Agenthesia")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -62,9 +67,17 @@ public struct RootView: View {
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let session = model.displayed {
-                    LiveTranscript(session: session).id(session.session.id)
-                    Divider()
-                    composer(session)
+                    HSplitView {
+                        VStack(spacing: 0) {
+                            LiveTranscript(session: session).id(session.session.id)
+                            Divider()
+                            composer(session)
+                        }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+                        if filesMatchSession, model.files.selectedPath != nil {
+                            SessionFilePane(files: model.files) { openFile($0, for: $1) }
+                                .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
                 } else {
                     ContentUnavailableView(
                         model.owner?.isStarting == true ? "Starting session…" : "Start a session",
@@ -100,8 +113,16 @@ public struct RootView: View {
                     }.frame(height: 150)
                 }
             }
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
             .toolbar {
+                Button("Quick Open", systemImage: "doc.text.magnifyingglass") {
+                    fileQuery = ""
+                    model.files.setQuery("")
+                    showingQuickOpen = true
+                }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(showingSetup || !filesMatchSession)
                 if let owner = model.owner {
                     Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
@@ -115,7 +136,39 @@ public struct RootView: View {
         .frame(minWidth: 740, minHeight: 500)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         .task { await model.refresh() }
-        .onChange(of: model.displayed?.session.id) { finishEditing() }
+        .task(id: model.displayed?.session.id) { await model.files.attach(model.displayed?.session) }
+        .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
+        .onChange(of: model.displayed?.session.id) {
+            finishEditing(); showingQuickOpen = false; fileQuery = ""
+        }
+        .onChange(of: fileQuery) { model.files.setQuery(fileQuery) }
+        .sheet(isPresented: $showingQuickOpen) {
+            let id = model.files.sessionID
+            QuickOpen(
+                query: $fileQuery,
+                paths: model.files.matches,
+                isLoading: model.files.isLoadingIndex || model.files.isSearching,
+                error: model.files.indexError,
+                onSelect: { path in
+                    guard model.files.query == fileQuery, model.files.matches.contains(path) else { return }
+                    openFile(path, for: id)
+                },
+                onDismiss: { showingQuickOpen = false }
+            )
+        }
+    }
+
+    private var filesMatchSession: Bool {
+        model.files.root != nil && model.files.sessionID == model.displayed?.session.id
+    }
+
+    private func openFile(_ path: String, for id: UUID?) {
+        guard let id, model.displayed?.session.id == id, model.files.sessionID == id else { return }
+        showingQuickOpen = false
+        Task {
+            guard model.displayed?.session.id == id, !model.closed else { return }
+            await model.files.open(path: path, in: id)
+        }
     }
 
     private var setup: some View {

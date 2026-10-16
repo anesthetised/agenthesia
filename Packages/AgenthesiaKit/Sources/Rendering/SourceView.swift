@@ -185,4 +185,12 @@ public struct SourceViewRepresentable: NSViewRepresentable {
             view.setText(text, language: language)
         }
     }
+
+    public func sizeThatFits(_ proposal: ProposedViewSize, nsView: SourceView, context: Context) -> CGSize? {
+        guard let width = proposal.width, let height = proposal.height, width.isFinite, height.isFinite else {
+            return nil
+        }
+        // Source content scrolls inside the proposed viewport; its fitting size must not resize the split pane.
+        return CGSize(width: max(0, width), height: max(0, height))
+    }
 }

@@ -17,6 +17,7 @@ import SwiftUI
     private var starting = false
     private var selection = UUID()
     let library: SessionLibrary
+    let files = SessionFiles()
 
     init(library: SessionLibrary = .shared) { self.library = library }
     var displayed: SessionController? { restored ?? owner?.controller }
@@ -85,7 +86,7 @@ import SwiftUI
         } catch { if selection == token { errorMessage = error.localizedDescription } }
     }
     func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil }
-    func close() async { closed = true; selection = UUID(); await owner?.close() }
+    func close() async { closed = true; selection = UUID(); files.close(); await owner?.close() }
 }
 
 /// AppKit waits for asynchronous event writes and process-group cleanup before terminating.

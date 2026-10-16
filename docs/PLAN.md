@@ -30,7 +30,8 @@ before implementation.
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
 - Quick Open, the side file viewer and changed-file tracking (#26–#28) are implemented on `feat/files`
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
-  sessions show working changes only. #29 is the next file-navigation task.
+  sessions show working changes only. #114 (compare changed files with the session base rather than
+  the merge base) needs an ADR first; #29 is the next file-navigation task.
 
 ## Previous batch: session interactions (merged)
 
@@ -108,8 +109,11 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, is implemented on `feat/files`. Next is #29 (clickable
-transcript paths and editor handoff), then M7 (Parallel sessions), followed by M8 (Worktrees).
+The first M4 (Files) batch, #26–#28 below, is implemented on `feat/files`. Next is #114 (Changed Files
+compares with `merge-base(base, HEAD)`, so a reset past the base hides paths and an amended base adds
+untouched ones; an ADR superseding the `base...HEAD` points of ADR-0006/ADR-0023 comes first, Opus at
+high effort), then #29 (clickable transcript paths and editor handoff), then M7 (Parallel sessions),
+followed by M8 (Worktrees).
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
 ### M4 parallel batch (2026-10-16)
@@ -132,13 +136,15 @@ workload before implementation and execution. Push and PR creation retain their 
 
 ### File batch verification
 
-The integrated suite has 512 Swift tests and 15 script tests. Regressions cover initial-revision
+The integrated suite has 523 Swift tests and 15 script tests. Regressions cover initial-revision
 migration and start/replay/Continue preservation, committed and working paths, linked-worktree Git
 metadata, ACP/external write invalidation, stale searches/selections, cancelled attachment/read tasks,
 root symlink replacement during a scan, and watcher closure. The scan regression checks transient
 publication, rather than only the final list after an FSEvents retry.
-`just lint`, `just test`, `just coverage` and `just app` pass. Coverage remains above every module gate: Core
-97.9%, Workspace 96.9%, Persistence 100%, Rendering 97.5%, ACP 99.0%, JSONRPC 98.7%, AgentRuntime
+Review fixes keep search results and selection through background refreshes without progress flicker,
+limit sustained rescans to one per second, exclude Git object/reflog events, report watcher failures
+without clearing the index, skip non-UTF-8 names and unreadable subdirectories, and keep files across
+Continue. `just lint`, `just test`, `just coverage` and `just app` pass after the review fixes. Coverage remains above every module gate: Core 97.9%, Workspace 97.5%, Persistence 100%, Rendering 97.5%, ACP 99.0%, JSONRPC 98.7%, AgentRuntime
 92.6% and CLI 88.7%.
 
 Hosted native tests switch Markdown Preview/Source at 740, 900 and 1000 pt widths and bound a long

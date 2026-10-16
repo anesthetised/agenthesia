@@ -28,10 +28,11 @@ before implementation.
 - Native session-scoped elicitation forms appear in the transcript (#24,
   [ADR-0020](adr/0020-native-elicitation-forms.md), [ADR-0022](adr/0022-session-scoped-elicitation.md)).
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
-- Quick Open, the side file viewer and changed-file tracking (#26–#28) are implemented on `feat/files`
+- Quick Open, the side file viewer and changed-file tracking (#26–#28) are merged (#113)
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
   sessions show working changes only. #114 (compare changed files with the session base rather than
-  the merge base) needs an ADR first; #29 is the next file-navigation task.
+  the merge base) is implemented under [ADR-0024](adr/0024-changed-files-session-base.md) on
+  `feat/changed-files-base`; #29 is the next file-navigation task.
 
 ## Previous batch: session interactions (merged)
 
@@ -109,11 +110,11 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, is implemented on `feat/files`. Next is #114 (Changed Files
-compares with `merge-base(base, HEAD)`, so a reset past the base hides paths and an amended base adds
-untouched ones; an ADR superseding the `base...HEAD` points of ADR-0006/ADR-0023 comes first, Opus at
-high effort), then #29 (clickable transcript paths and editor handoff), then M7 (Parallel sessions),
-followed by M8 (Worktrees).
+The first M4 (Files) batch, #26–#28 below, is merged. Next is #114 ([ADR-0024](adr/0024-changed-files-session-base.md): Changed Files
+compares `git diff base HEAD` instead of `merge-base(base, HEAD)`; implemented on
+`feat/changed-files-base`, awaiting its pull request), then #29
+(clickable transcript paths and editor handoff), then M7 (Parallel sessions), followed by M8 (Worktrees),
+which also decides whether to pin the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
 ### M4 parallel batch (2026-10-16)

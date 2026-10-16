@@ -13,8 +13,8 @@ extension SessionWorkspace {
         return root
     }
 
-    /// Paths relative to the selected directory, including committed, staged, unstaged and untracked changes.
-    /// A nil base lists working changes only. Renames intentionally include both the old and new path.
+    /// Paths relative to the selected directory, including committed (base against HEAD), staged, unstaged and
+    /// untracked changes. A nil base lists working changes only. Renames include both the old and new path.
     public static func changedPaths(in directory: URL, baseRevision: String?) async throws -> [String] {
         try Task.checkCancellation()
         let paths: [String] = try await withCheckedThrowingContinuation { continuation in
@@ -37,7 +37,7 @@ extension SessionWorkspace {
                             guard [40, 64].contains(baseRevision.utf8.count),
                                 baseRevision.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
                             else { throw WorkspaceError(message: "The session's initial Git revision is invalid.") }
-                            commands.insert(diff + ["\(baseRevision)...HEAD", "--", "."], at: 0)
+                            commands.insert(diff + [baseRevision, "HEAD", "--", "."], at: 0)
                         }
                         var paths = Set<String>()
                         for command in commands {

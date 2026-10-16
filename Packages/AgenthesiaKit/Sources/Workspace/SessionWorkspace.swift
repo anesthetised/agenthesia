@@ -35,10 +35,13 @@ public struct SessionWorkspace: Sendable {
             }
             return SessionWorkspace(projectDirectory: directory, workingDirectory: directory, baseRevision: nil)
         }
-        let root = URL(
-            filePath: try git(["rev-parse", "--show-toplevel"], in: directory),
-            directoryHint: .isDirectory
-        ).resolvingSymlinksInPath()
+        let root: URL
+        do {
+            root = URL(
+                filePath: try git(["rev-parse", "--show-toplevel"], in: directory),
+                directoryHint: .isDirectory
+            ).resolvingSymlinksInPath()
+        } catch { throw brokenRepository(error) }
         let slug = id.uuidString.lowercased()
         let destination = worktreesRoot.appending(path: root.lastPathComponent).appending(path: slug)
             .resolvingSymlinksInPath().standardizedFileURL
@@ -97,6 +100,11 @@ public struct SessionWorkspace: Sendable {
             if ancestor.path == "/" { return false }
             ancestor.deleteLastPathComponent()
         }
+    }
+
+    /// Git reports a broken `.git` entry as "not a git repository"; name the actual problem.
+    static func brokenRepository(_ error: any Error) -> WorkspaceError {
+        WorkspaceError(message: "The .git entry here or in a parent folder is broken. \(error.localizedDescription)")
     }
 
     struct WorkspaceError: LocalizedError {

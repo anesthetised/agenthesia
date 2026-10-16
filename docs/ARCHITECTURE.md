@@ -58,7 +58,8 @@ reads its errors from stderr only. Git checkouts get a new branch and worktree f
 `~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.
 After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
 The new worktree's actual initial HEAD is retained as the session's `baseRevision` before launching
-the agent. Non-Git directories are used directly; bare, broken, or unborn repositories fail explicitly. Worktrees
+the agent. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
+unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
 part of the worktree milestone.
 
@@ -202,9 +203,11 @@ subdirectories are skipped rather than failing the index. `DirectoryWatcher` use
 invalidation signal. `SessionFileChanges` bridges it to Core, watching the selected directory and
 external Git metadata, excluding object and reflog writes. A watcher that cannot start is reported and
 retried without affecting the index; manual and ACP-triggered refreshes still work. Successful ACP
-writes also invalidate through `SessionController.fileRevision`. The model coalesces scans, resolves the
-repository once per scan, keeps visible search results until refreshed ones replace them, cancels
-obsolete searches/reads and rejects late results after selection or window replacement. Canonical
+writes also invalidate through `SessionController.fileRevision`. The model coalesces scans and, under
+sustained events such as a build writing ignored output, rescans at most once per second. It resolves
+the repository once per scan; background refreshes keep visible results and show no progress until
+refreshed ones replace them. It cancels obsolete searches/reads and rejects late results after
+selection or window replacement. Canonical
 roots are captured once and cannot broaden after symlink substitution.
 
 Git changed paths combine `base...HEAD`, staged, unstaged and nonignored untracked changes. Legacy

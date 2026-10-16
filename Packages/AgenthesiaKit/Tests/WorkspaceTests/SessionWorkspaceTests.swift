@@ -71,13 +71,15 @@ import Testing
             at: directory.appending(path: ".git"),
             withDestinationURL: directory.appending(path: "missing")
         )
-        await #expect(throws: (any Error).self) {
+        let error = await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(
                 directory: directory,
                 id: UUID(),
                 worktreesRoot: directory.appending(path: "trees")
             )
         }
+        #expect(error?.localizedDescription.contains(".git entry") == true)
+        await #expect(throws: (any Error).self) { try await SessionWorkspace.repositoryRoot(in: directory) }
     }
 
     @Test func keepsTheSelectedSubdirectory() async throws {

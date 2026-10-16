@@ -172,16 +172,47 @@ import Workspace
         let refreshing = Task { await files.refresh() }
         while continuation == nil { await Task.yield() }
         #expect(files.matches == ["hello.txt"])
+        #expect(!files.isLoadingIndex)
         continuation?.resume()
         var emptied = false
+        var showedProgress = false
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while files.matches != ["help.txt", "hello.txt"] && ContinuousClock.now < deadline {
             if files.matches.isEmpty { emptied = true }
+            if files.isLoadingIndex || files.isSearching { showedProgress = true }
             await Task.yield()
         }
         await refreshing.value
         #expect(!emptied)
+        #expect(!showedProgress)
         #expect(files.matches == ["help.txt", "hello.txt"])
+    }
+
+    @Test func sustainedInvalidationsRescanAtMostOncePerInterval() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let files = SessionFiles()
+        defer { files.close() }
+        await files.attach(record(root))
+        var scans = 0
+        files.indexLoader = { root, git in
+            scans += 1
+            return try await FileIndex.load(in: root, isGitRepository: git)
+        }
+        // Unthrottled, 150 ms coalescing alone would allow about nine scans in this window.
+        let end = ContinuousClock.now.advanced(by: .milliseconds(1500))
+        while ContinuousClock.now < end {
+            files.invalidate()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect((1...2).contains(scans))
+        // A new attachment and its explicit refresh are not delayed by the previous scans.
+        files.close()
+        await files.attach(record(root))
+        let started = ContinuousClock.now
+        await files.refresh()
+        #expect(ContinuousClock.now - started < .milliseconds(900))
     }
 
     @Test func watcherFailureKeepsIndexAndChangesAndIsRetried() async throws {

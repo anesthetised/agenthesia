@@ -92,10 +92,12 @@ extension SessionWorkspace {
             throw WorkspaceError(message: "The session working directory is unavailable.")
         }
         if hasGitEntry(atOrAbove: directory) {
-            return URL(
-                filePath: try gitPath(["rev-parse", "--show-toplevel"], in: directory),
-                directoryHint: .isDirectory
-            ).resolvingSymlinksInPath().standardizedFileURL
+            do {
+                return URL(
+                    filePath: try gitPath(["rev-parse", "--show-toplevel"], in: directory),
+                    directoryHint: .isDirectory
+                ).resolvingSymlinksInPath().standardizedFileURL
+            } catch { throw brokenRepository(error) }
         }
         if (try? git(["rev-parse", "--is-bare-repository"], in: directory)) == "true" {
             throw WorkspaceError(message: "Change tracking requires a working checkout, not a bare repository.")

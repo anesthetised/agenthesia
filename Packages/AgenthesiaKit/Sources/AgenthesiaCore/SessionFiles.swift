@@ -33,6 +33,9 @@ public final class SessionFiles {
     @ObservationIgnored private var search: Task<Void, Never>?
     @ObservationIgnored private var read: Task<SessionFileDocument, any Error>?
     @ObservationIgnored private var needsRefresh = false
+    @ObservationIgnored private var lastScan: ContinuousClock.Instant?
+    /// Sustained events, e.g. a build writing ignored output, rescan at most once per interval.
+    @ObservationIgnored var scanInterval: Duration = .seconds(1)
     // Test seam for a file read that finishes after selection replacement or window closure.
     @ObservationIgnored var documentLoader: @MainActor (URL, URL) async throws -> SessionFileDocument = {
         try await SessionFileDocument.load(root: $0, url: $1)
@@ -76,8 +79,9 @@ public final class SessionFiles {
         if scan != nil { needsRefresh = true; return }
         guard invalidation == nil else { return }
         let token = generation
+        let delay = delayBeforeNextScan(atLeast: .milliseconds(150))
         invalidation = Task { [weak self] in
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            do { try await Task.sleep(for: delay) } catch { return }
             guard let self, self.generation == token else { return }
             self.invalidation = nil
             await self.refresh()
@@ -93,15 +97,24 @@ public final class SessionFiles {
             defer { if self.generation == token { self.scan = nil } }
             repeat {
                 self.needsRefresh = false
+                self.lastScan = .now
                 await self.scanOnce(root, token: token)
+                guard self.needsRefresh, self.isCurrent(token) else { break }
+                do { try await Task.sleep(for: self.delayBeforeNextScan(atLeast: .zero)) } catch { break }
             } while self.needsRefresh && self.isCurrent(token)
         }
         scan = task
         await task.value
     }
 
+    private func delayBeforeNextScan(atLeast minimum: Duration) -> Duration {
+        guard let lastScan else { return minimum }
+        return max(minimum, lastScan + scanInterval - .now)
+    }
+
     private func scanOnce(_ root: URL, token: UUID) async {
-        isLoadingIndex = true
+        // Only a scan without published files is loading; background refreshes keep the current state visible.
+        isLoadingIndex = index == nil
         let git: Bool
         do {
             guard await Self.rootIsUnchanged(root) else { throw SessionFileDocument.Failure.outsideScope }
@@ -177,13 +190,15 @@ public final class SessionFiles {
     public func setQuery(_ query: String) { search(query, clearing: true) }
 
     private func search(_ query: String, clearing: Bool) {
+        // A background re-run shows progress only when it continues a visible search.
+        let showsProgress = clearing || isSearching
         self.query = query
         search?.cancel()
         isSearching = false
         guard let index else { matches = []; return }
         if query.isEmpty { matches = Array(index.paths.prefix(100)); return }
         if clearing { matches = [] }
-        isSearching = true
+        isSearching = showsProgress
         let token = generation
         let work = Task.detached { try index.matching(query) }
         search = Task { [weak self] in
@@ -252,7 +267,8 @@ public final class SessionFiles {
         closeDocument()
         root = nil; baseRevision = nil; isGitRepository = false
         matches = []; changedPaths = []; index = nil; query = ""
-        indexError = nil; changesError = nil; watchError = nil; isLoadingIndex = false; isSearching = false;
+        lastScan = nil; indexError = nil; changesError = nil; watchError = nil; isLoadingIndex = false;
+        isSearching = false;
         needsRefresh = false
     }
 }

@@ -15,6 +15,7 @@ just test                         # Includes metric, scheduling and runner tests
 # Run only after approval:
 just bench --runs 1
 just bench-persistence --runs 3
+just bench-files
 just lab-run S1:A2,S6:A2,S4:cold+lines+colors --runs 1
 ```
 
@@ -230,3 +231,22 @@ using 10,000 recorded text updates and three sequential Release runs. It measure
 reduction and snapshot copies; fixture/database setup, UI rendering and controller scheduling are
 outside the timed loop. Ask for workload/resource approval before running it, like the other benchmarks.
 See [the initial comparison](benchmarks/2026-10-08/session/README.md) for results and limitations.
+
+## Session files
+
+`just bench-files` measures the new Workspace paths in Release: indexing, 20 fuzzy queries, changed
+paths and one bounded 2 MiB read. The temporary Git fixture contains 10,000 short files and one large
+UTF-8 file; 50 committed and 50 unstaged changes must all appear. Every run validates exact counts and
+known query results. The owner approved this workload and three sequential runs on 2026-10-16.
+
+This executable emits JSON to stdout. Redirect it to a new results file and retain the Release build
+log separately. Unlike the rendering/persistence runner, all three measurements share one process and
+fixture, with setup excluded and no cache eviction; later runs may benefit from OS/Git caches. The
+temporary fixture is removed on normal success or failure. A forcibly killed process may leave a
+temporary `agenthesia-workspace-bench-*` folder. Do not run builds or tests during measurement.
+
+These are initial timings for new APIs, not a historical before/after comparison or an end-to-end UI
+latency measurement. They do not include FSEvents delivery, the refresh debounce, Markdown rendering
+or SwiftUI layout.
+
+Recorded validation: [2026-10-16 results and raw samples](benchmarks/2026-10-16/files/README.md).

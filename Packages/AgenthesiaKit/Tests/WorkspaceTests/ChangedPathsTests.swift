@@ -56,7 +56,7 @@ import Testing
         #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: nil) == ["file"])
     }
 
-    @Test func reportsBothSidesOfRenamesAndUsesTheMergeBaseAfterDivergence() async throws {
+    @Test func reportsBothSidesOfRenamesAndBaseOnlyPathsAfterDivergence() async throws {
         let fixture = try await ChangedPathsFixture()
         defer { fixture.remove() }
         try fixture.write("base", path: "old")
@@ -71,7 +71,43 @@ import Testing
             to: fixture.directory.appending(path: "new")
         )
         try await fixture.commit()
-        #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: base) == ["new", "old"])
+        #expect(
+            try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: base)
+                == ["new", "old", "source-only"]
+        )
+    }
+
+    @Test func listsPathsRevertedByResettingPastTheBase() async throws {
+        let fixture = try await ChangedPathsFixture()
+        defer { fixture.remove() }
+        try fixture.write("base", path: "kept")
+        try await fixture.commit()
+        let original = try await SessionWorkspace.git(["rev-parse", "HEAD"], in: fixture.directory)
+        try fixture.write("user commit", path: "user-file")
+        try await fixture.commit()
+        let base = try await SessionWorkspace.git(["rev-parse", "HEAD"], in: fixture.directory)
+        try await SessionWorkspace.git(["reset", "-q", "--hard", original], in: fixture.directory)
+        #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: base) == ["user-file"])
+    }
+
+    @Test func omitsFilesOfAnAmendedBaseTheAgentDidNotTouch() async throws {
+        let fixture = try await ChangedPathsFixture()
+        defer { fixture.remove() }
+        try fixture.write("base", path: "kept")
+        try await fixture.commit()
+        try fixture.write("user commit", path: "user-file")
+        try await fixture.commit()
+        let base = try await SessionWorkspace.git(["rev-parse", "HEAD"], in: fixture.directory)
+        try fixture.write("agent", path: "agent-file")
+        try await SessionWorkspace.git(["add", "."], in: fixture.directory)
+        try await SessionWorkspace.git(
+            [
+                "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false",
+                "commit", "-q", "--amend", "--no-edit",
+            ],
+            in: fixture.directory
+        )
+        #expect(try await SessionWorkspace.changedPaths(in: fixture.directory, baseRevision: base) == ["agent-file"])
     }
 
     @Test func skipsChangedNamesThatAreNotUTF8() async throws {

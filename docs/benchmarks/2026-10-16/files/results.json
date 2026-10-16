@@ -1,0 +1,48 @@
+{
+  "cachePolicy" : "One fixture reused; no cache eviction or warm-up. Later runs may use OS and Git caches.",
+  "committedChanges" : 50,
+  "fixtureCreationTimed" : false,
+  "largeFileBytes" : 2097152,
+  "runs" : [
+    {
+      "changedPaths" : 100,
+      "changesMilliseconds" : 80.185334,
+      "indexMilliseconds" : 101.552125,
+      "indexedFiles" : 10001,
+      "matchingPaths" : 20,
+      "queries" : 20,
+      "queryMilliseconds" : 207.69375,
+      "readBytes" : 2097152,
+      "readMilliseconds" : 1.142292,
+      "run" : 1
+    },
+    {
+      "changedPaths" : 100,
+      "changesMilliseconds" : 98.606083,
+      "indexMilliseconds" : 101.106083,
+      "indexedFiles" : 10001,
+      "matchingPaths" : 20,
+      "queries" : 20,
+      "queryMilliseconds" : 192.189709,
+      "readBytes" : 2097152,
+      "readMilliseconds" : 0.712458,
+      "run" : 2
+    },
+    {
+      "changedPaths" : 100,
+      "changesMilliseconds" : 87.377542,
+      "indexMilliseconds" : 101.86975,
+      "indexedFiles" : 10001,
+      "matchingPaths" : 20,
+      "queries" : 20,
+      "queryMilliseconds" : 192.102958,
+      "readBytes" : 2097152,
+      "readMilliseconds" : 0.703375,
+      "run" : 3
+    }
+  ],
+  "shortFiles" : 10000,
+  "unstagedChanges" : 50,
+  "validationPassed" : true,
+  "workload" : "10000 short files, one 2 MiB UTF-8 file, 100 changed paths, 20 fuzzy queries, 3 sequential runs"
+}

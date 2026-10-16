@@ -40,6 +40,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `rendering-bench` | Release-build timings of Markdown rendering, highlighting and diffs (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
+| `workspace-bench` | Release-build file indexing, fuzzy search, changed paths and bounded-read timings (`just bench-files`). | `Workspace` |
 
 ## Live app integration
 
@@ -56,7 +57,9 @@ Agents must already be authenticated; authentication failures are displayed.
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
 `~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.
 After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
-Non-Git directories are used directly; bare, broken, or unborn repositories fail explicitly. Worktrees
+The new worktree's actual initial HEAD is retained as the session's `baseRevision` before launching
+the agent. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
+unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
 part of the worktree milestone.
 
@@ -182,7 +185,36 @@ resource limits remain follow-up work for large files.
 These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox:
 an agent's own tools remain outside this provider, reads can see existing hard-linked files, and an
 open directory descriptor keeps referring to that directory if another process renames it. File
-changes remain in the worktree; tool call diffs are rendered in cards, changed-file observation remains #28. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
+changes remain in the worktree; tool call diffs are rendered in cards and the session file list observes
+current disk changes. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
+
+## Session file browsing
+
+The displayed session has a window-owned `SessionFiles` model, independent of ACP admission and event
+replay ([ADR-0023](adr/0023-session-files.md)). Quick Open and the changed-file list open one file in a
+resizable pane beside the transcript. These views read current disk contents, including for saved
+sessions, and are scoped to the selected session's working directory. Markdown uses the existing native
+renderer with Preview/Source selection; other text uses `SourceView`. `SessionFileDocument` reads
+regular UTF-8 files off the main actor, capped at 2 MiB, through `ScopedFileAccess`.
+
+Workspace's immutable `FileIndex` uses Git tracked/nonignored untracked paths, or a directory walk
+outside Git, and deterministic fuzzy matching limited to 100 results. Non-UTF-8 names and unreadable
+subdirectories are skipped rather than failing the index. `DirectoryWatcher` uses FSEvents only as an
+invalidation signal. `SessionFileChanges` bridges it to Core, watching the selected directory and
+external Git metadata, excluding object and reflog writes. A watcher that cannot start is reported and
+retried without affecting the index; manual and ACP-triggered refreshes still work. Successful ACP
+writes also invalidate through `SessionController.fileRevision`. The model coalesces scans and, under
+sustained events such as a build writing ignored output, rescans at most once per second. It resolves
+the repository once per scan; background refreshes keep visible results and show no progress until
+refreshed ones replace them. It cancels obsolete searches/reads and rejects late results after
+selection or window replacement. Canonical
+roots are captured once and cannot broaden after symlink substitution.
+
+Git changed paths combine `base...HEAD`, staged, unstaged and nonignored untracked changes. Legacy
+sessions without a base explicitly show working changes only; non-Git folders explain that change
+tracking requires Git. Renames include both paths. Full worktree review and editor handoff remain #42
+and #29 respectively. Browsing stops when the displayed session changes or its window closes, rather
+than when the agent process ends; Continue keeps the same session's files across its startup.
 
 ## Persistence implementation
 
@@ -198,7 +230,7 @@ The initial `v1` migration creates four tables:
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
 | `agent_install` | Local UUID, name, executable, argument array and creation time. Agents are configured manually; registry installation metadata belongs to the installer milestone. |
-| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. |
+| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
 The event log uses an ordinary rowid table with a unique composite primary-key index. This keeps

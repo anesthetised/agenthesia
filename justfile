@@ -14,8 +14,9 @@ build:
     swift build --package-path {{package}}
 
 # Run package tests
-test: test-scripts
-    swift test --package-path {{package}}
+[positional-arguments]
+test *args: test-scripts
+    swift test --package-path {{package}} "$@"
 
 # Test benchmark and coverage tooling without launching benchmarks
 test-scripts:
@@ -125,3 +126,7 @@ clean:
 # Compare transcript publication per chunk vs every 16 chunks: 10,000 events, three Release runs
 bench-session:
     swift run -c release --package-path {{package}} session-bench
+
+# Time indexing/search/changes/2 MiB reads in a 10,000-file Git fixture, 3 runs; agree on resource use first
+bench-files:
+    swift run --disable-automatic-resolution -c release --package-path {{package}} workspace-bench

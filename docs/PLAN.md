@@ -28,8 +28,12 @@ before implementation.
 - Native session-scoped elicitation forms appear in the transcript (#24,
   [ADR-0020](adr/0020-native-elicitation-forms.md), [ADR-0022](adr/0022-session-scoped-elicitation.md)).
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
+- Quick Open, the side file viewer and changed-file tracking (#26–#28) are implemented on `feat/files`
+  under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
+  sessions show working changes only. #114 (compare changed files with the session base rather than
+  the merge base) needs an ADR first; #29 is the next file-navigation task.
 
-## Current batch
+## Previous batch: session interactions (merged)
 
 | # | Issue | Depends on | Model and effort |
 |---|-------|------------|------------------|
@@ -37,9 +41,8 @@ before implementation.
 | 2 | #65 Prompt queue and steering | Approved ADR-0021 and ADR-0010 | Sol, high |
 | 3 | #24 Native elicitation forms | Approved ADR-0020 | Sol, medium |
 
-The owner approved these decisions on 2026-10-16. All three are implemented in this checkout; the
-issues remain open pending review and merge. They were developed in isolated worktrees and integrated
-in the order above.
+The owner approved these decisions on 2026-10-16. All three landed in main through #112 and their
+issues are closed. They were developed in isolated worktrees and integrated in the order above.
 
 ### 1–2. Config options, prompt queue (#23, #65)
 
@@ -65,7 +68,7 @@ in the order above.
   request-scoped forms are explicitly declined. Pre-session presentation, persistence and request
   lifetimes are deferred to [#111](https://github.com/anesthetised/agenthesia/issues/111).
 
-## Integration and verification
+### Integration and verification
 
 - The shared base is `fee57ab`, containing the composer and approved decisions. This batch retains
   the composer dependency if it has not landed on main.
@@ -82,7 +85,7 @@ in the order above.
   use `just lint`, `just test`, `just coverage` and `just app` for the integrated batch. Benchmarks,
   push and PR creation retain the approvals in `AGENTS.md`.
 
-### Acceptance and verification
+### Acceptance
 
 | Issue | Acceptance criteria and focused verification |
 |---|---|
@@ -106,8 +109,56 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-Review and land the current batch, then M4 (Files), M7 (Parallel sessions), M8 (Worktrees).
+The first M4 (Files) batch, #26–#28 below, is implemented on `feat/files`. Next is #114 (Changed Files
+compares with `merge-base(base, HEAD)`, so a reset past the base hides paths and an amended base adds
+untouched ones; an ADR superseding the `base...HEAD` points of ADR-0006/ADR-0023 comes first, Opus at
+high effort), then #29 (clickable transcript paths and editor handoff), then M7 (Parallel sessions),
+followed by M8 (Worktrees).
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+
+### M4 parallel batch (2026-10-16)
+
+The owner approved [ADR-0023](adr/0023-session-files.md): a side file pane and an initial Git revision
+saved for new sessions. Existing sessions explicitly show working changes only; non-Git folders
+support browsing and explain that change tracking requires Git.
+
+| Issue | Owner and files | Acceptance and verification | Model and effort |
+|---|---|---|---|
+| #26 Quick Open | Index/search and palette, isolated worktree | Tracked/untracked/ignored paths, non-Git traversal, unusual names, deterministic bounded search, keyboard/focus/accessibility tests | GPT-6.1-Sol, medium |
+| #27 File viewer | Bounded reads, Core document loader, source/Markdown views, isolated worktree | Scoped regular UTF-8 reads, 2 MiB boundary, binary/missing/errors, source/preview selection and hosted resizing tests | GPT-6.1-Sol, medium |
+| #28 Changed files | Git changed paths, FSEvents bridge and successful ACP write invalidation, isolated worktree | Committed plus working changes, metadata-only events, selected-folder scope, external edits, cancellation/lifetime tests | GPT-6.1-Sol, high |
+| Integration | Initial revision migration/capture, Core file state and RootView | Preserve base across start/replay/Continue; stale work cannot overwrite new selections; switching sessions and closing windows stop observation | GPT-6.1-Sol, high |
+
+All file navigation uses the displayed session's working directory. RootView and shared presentation
+state have one integration owner. The streams were integrated from separate worktrees, with Swift
+build/test commands serialized. The owner approved the initial-revision migration and benchmark
+workload before implementation and execution. Push and PR creation retain their separate approvals.
+
+### File batch verification
+
+The integrated suite has 523 Swift tests and 15 script tests. Regressions cover initial-revision
+migration and start/replay/Continue preservation, committed and working paths, linked-worktree Git
+metadata, ACP/external write invalidation, stale searches/selections, cancelled attachment/read tasks,
+root symlink replacement during a scan, and watcher closure. The scan regression checks transient
+publication, rather than only the final list after an FSEvents retry.
+Review fixes keep search results and selection through background refreshes without progress flicker,
+limit sustained rescans to one per second, exclude Git object/reflog events, report watcher failures
+without clearing the index, skip non-UTF-8 names and unreadable subdirectories, and keep files across
+Continue. `just lint`, `just test`, `just coverage` and `just app` pass after the review fixes. Coverage remains above every module gate: Core 97.9%, Workspace 97.5%, Persistence 100%, Rendering 97.5%, ACP 99.0%, JSONRPC 98.7%, AgentRuntime
+92.6% and CLI 88.7%.
+
+Hosted native tests switch Markdown Preview/Source at 740, 900 and 1000 pt widths and bound a long
+source line to its viewport. Native app checks cover Command-P, arrow/Return selection, changed-file
+navigation including committed paths, external updates and Reload, binary-file errors, Preview/Source,
+divider resizing and closing the pane. Source views accept the proposed viewport size to prevent
+native constraint-update recursion; the detail container accepts its available width to avoid clipping
+the whole split view. Keyboard access and accessibility labels were inspected; spoken VoiceOver
+verification remains manual.
+
+The approved three-run Release benchmark passed every count/content validation. Medians are 101.552 ms
+for indexing 10,001 files, 192.190 ms for all 20 fuzzy queries, 87.378 ms for 100 changed paths and
+0.712 ms for a bounded 2 MiB read. These are initial API timings, not an improvement or UI-latency claim;
+see [raw results and limitations](benchmarks/2026-10-16/files/README.md).
 
 ## Open research
 

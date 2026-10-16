@@ -40,6 +40,7 @@ import Testing
         // The configured agent does not exist; the failure is the owner's, history stays listed.
         await model.continueRestored()
         #expect(model.restored == nil)
+        #expect(model.filesSession == nil)
         #expect(model.owner?.errorMessage?.contains("unused") == true)
         #expect(model.history == [record])
         await model.showHistory(record)
@@ -94,7 +95,20 @@ import Testing
         #expect(controller.status == .closed)
         #expect(model.canContinue)
         #expect(model.savedSessions.contains { $0.id == record.id })
-        await model.continueRestored()
+        #expect(model.filesSession?.id == record.id)
+        // File browsing follows the session through the startup gap without a controller.
+        var finished = false
+        var lostFiles = false
+        let continuing = Task {
+            await model.continueRestored()
+            finished = true
+        }
+        while !finished {
+            if model.filesSession?.id != record.id { lostFiles = true }
+            await Task.yield()
+        }
+        await continuing.value
+        #expect(!lostFiles)
         let continued = try #require(model.owner?.controller)
         #expect(model.owner !== owner)
         #expect(continued.session.id == record.id)

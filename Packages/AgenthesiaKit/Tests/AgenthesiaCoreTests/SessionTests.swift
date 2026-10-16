@@ -27,7 +27,12 @@ private final class Fixture: Sendable {
     func seed() async throws -> SessionRecord {
         try await store.createProject(project)
         try await store.createAgentInstall(agent)
-        return SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: project.rootPath)
+        return SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            workingDirectory: project.rootPath,
+            baseRevision: String(repeating: "b", count: 40)
+        )
     }
 
     @MainActor func live() async throws -> SessionController {
@@ -205,6 +210,7 @@ private actor Gate {
         let fixture = try Fixture()
         let controller = try await fixture.live()
         #expect(controller.status == .idle)
+        #expect(controller.session.baseRevision == String(repeating: "b", count: 40))
         try await controller.send([.init(text: "hello")])
         #expect(controller.transcript.items.compactMap { $0.message?.text } == ["hello", "Echo: hello"])
         #expect(controller.transcript.lastStopReason == .endTurn)
@@ -213,6 +219,7 @@ private actor Gate {
         #expect(controller.transcript.items.last?.notice != nil)
         let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
         #expect(replay.status == .readOnly)
+        #expect(replay.session.baseRevision == controller.session.baseRevision)
         #expect(replay.transcript == controller.transcript)
         await #expect(throws: SessionController.SessionError.invalidState) {
             try await replay.send([.init(text: "no")])

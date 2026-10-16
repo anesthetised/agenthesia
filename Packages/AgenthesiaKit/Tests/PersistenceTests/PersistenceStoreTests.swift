@@ -39,6 +39,7 @@ final class PersistenceStoreTests: Sendable {
             agentSessionID: "remote-session",
             title: "Session ✓",
             workingDirectory: project.rootPath,
+            baseRevision: String(repeating: "a", count: 40),
             createdAt: date
         )
         try await store.createProject(project)
@@ -73,7 +74,40 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await reopened.sessions(in: project.id) == [session])
         #expect(try await reopened.events(in: session.id) == appended)
         #expect(try await reopened.events(in: session.id).first?.event.payload == payload)
-        #expect(try await database.read { try Schema.migrator.appliedMigrations($0) } == ["v1"])
+        #expect(
+            try await database.read { try Schema.migrator.appliedMigrations($0) } == ["v1", "v2-session-base-revision"]
+        )
+    }
+
+    @Test func upgradesLegacySessionsWithoutGuessingTheirBaseOrChangingEvents() async throws {
+        let legacy = try DatabaseQueue()
+        try Schema.migrator.migrate(legacy, upTo: "v1")
+        let project = UUID().uuidString
+        let agent = UUID().uuidString
+        let session = UUID()
+        try await legacy.write { db in
+            try db.execute(
+                sql: "INSERT INTO project VALUES (?, 'Legacy', '/tmp/legacy', 0)",
+                arguments: [project]
+            )
+            try db.execute(
+                sql: "INSERT INTO agent_install VALUES (?, 'Agent', 'agent', CAST('[]' AS BLOB), 0)",
+                arguments: [agent]
+            )
+            try db.execute(
+                sql: "INSERT INTO session VALUES (?, ?, ?, 'remote', 1, 'Old session', '/tmp/tree', 0)",
+                arguments: [session.uuidString, project, agent]
+            )
+            try db.execute(
+                sql: "INSERT INTO event VALUES (?, 1, 'future', 1, CAST('{\"keep\":true}' AS BLOB), 0)",
+                arguments: [session.uuidString]
+            )
+        }
+        let upgraded = try PersistenceStore(database: legacy)
+        let record = try #require(await upgraded.session(id: session))
+        #expect(record.baseRevision == nil)
+        #expect(record.title == "Old session")
+        #expect(try await upgraded.events(in: session).map(\.event.payload) == [Data("{\"keep\":true}".utf8)])
     }
 
     @Test(arguments: [Date(timeIntervalSinceReferenceDate: 800_000_000.0.nextUp), Date()])
@@ -244,7 +278,11 @@ final class PersistenceStoreTests: Sendable {
         try await database.write { try $0.execute(sql: "INSERT INTO grdb_migrations VALUES ('future-version')") }
         #expect(throws: PersistenceError.newerSchema) { try PersistenceStore(databaseURL: databaseURL) }
         #expect(try await store.events(in: session.id) == original)
-        #expect(try await database.read { try Schema.migrator.appliedIdentifiers($0) } == ["v1", "future-version"])
+        #expect(
+            try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
+                "v1", "v2-session-base-revision", "future-version",
+            ]
+        )
     }
 
     @Test func failedMigrationRollsBackWithoutErasingExistingData() throws {

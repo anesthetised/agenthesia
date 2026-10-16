@@ -35,6 +35,19 @@ import Testing
         #expect(try access.readText(at: path("lines.txt"), line: 0, limit: 0) == "")
     }
 
+    @Test func boundedReadsAcceptExactLimitAndRejectLargerFiles() throws {
+        #expect(try access.readText(at: path("lines.txt"), maximumBytes: 18) == "one\ntwo\nthree\nfour")
+        #expect(throws: ScopedFileAccess.Failure.io(path("lines.txt"), EFBIG)) {
+            try access.readText(at: path("lines.txt"), maximumBytes: 17)
+        }
+        try "".write(to: root.appending(path: "empty"), atomically: true, encoding: .utf8)
+        #expect(try access.readText(at: path("empty"), maximumBytes: 0) == "")
+        #expect(throws: ScopedFileAccess.Failure.io(path("empty"), EINVAL)) {
+            try access.readText(at: path("empty"), maximumBytes: -1)
+        }
+        #expect(try access.readText(at: path("lines.txt"), maximumBytes: Int.max) == "one\ntwo\nthree\nfour")
+    }
+
     @Test func writesFilesAndCreatesDirectories() throws {
         try access.writeText("new", to: path("nested/dir/file.txt"))
         #expect(try String(contentsOf: root.appending(path: "nested/dir/file.txt"), encoding: .utf8) == "new")
@@ -72,6 +85,16 @@ import Testing
         #expect(throws: ScopedFileAccess.Failure.notRegularFile(path("dir"))) {
             try access.writeText("x", to: path("dir"))
         }
+    }
+
+    @Test func canonicalRootsDetectSubstitution() throws {
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let canonical = access.roots[0]
+        #expect(ScopedFileAccess.isCanonical(canonical))
+        #expect(ScopedFileAccess.isCanonical(canonical.appending(path: "/")))
+        try FileManager.default.moveItem(at: root, to: root.deletingLastPathComponent().appending(path: "moved"))
+        try FileManager.default.createSymbolicLink(at: root, withDestinationURL: outside)
+        #expect(!ScopedFileAccess.isCanonical(canonical))
     }
 
     @Test func acceptsTheRootItselfAndMultipleRoots() throws {

@@ -28,6 +28,9 @@ import Testing
         )
         #expect(result.projectDirectory == repo.resolvingSymlinksInPath())
         #expect(result.workingDirectory != result.projectDirectory)
+        #expect(
+            result.baseRevision == (try await SessionWorkspace.git(["rev-parse", "HEAD"], in: result.workingDirectory))
+        )
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(
                 directory: repo,
@@ -49,6 +52,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let result = try await SessionWorkspace.prepare(directory: directory, id: UUID())
         #expect(result.workingDirectory == directory.resolvingSymlinksInPath())
+        #expect(result.baseRevision == nil)
         try await SessionWorkspace.git(["init", "-q"], in: directory)
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(
@@ -57,6 +61,25 @@ import Testing
                 worktreesRoot: directory.appending(path: "trees")
             )
         }
+    }
+
+    @Test func danglingGitLinkFailsInsteadOfUsingThePlainFolder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createSymbolicLink(
+            at: directory.appending(path: ".git"),
+            withDestinationURL: directory.appending(path: "missing")
+        )
+        let error = await #expect(throws: (any Error).self) {
+            try await SessionWorkspace.prepare(
+                directory: directory,
+                id: UUID(),
+                worktreesRoot: directory.appending(path: "trees")
+            )
+        }
+        #expect(error?.localizedDescription.contains(".git entry") == true)
+        await #expect(throws: (any Error).self) { try await SessionWorkspace.repositoryRoot(in: directory) }
     }
 
     @Test func keepsTheSelectedSubdirectory() async throws {

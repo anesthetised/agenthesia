@@ -45,8 +45,9 @@ import Workspace
         try await perform(in: sessionId) { try $0.readText(at: path, line: line, limit: limit) }
     }
 
-    func writeTextFile(at path: String, content: String, in sessionId: ACP.SessionID) async throws {
+    @MainActor func writeTextFile(at path: String, content: String, in sessionId: ACP.SessionID) async throws {
         try await perform(in: sessionId) { try $0.writeText(content, to: path) }
+        controller?.fileDidChange()
     }
 
     func stopAccepting() { closed = true }

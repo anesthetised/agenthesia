@@ -4,6 +4,8 @@ public import Foundation
 public struct SessionWorkspace: Sendable {
     public let projectDirectory: URL
     public let workingDirectory: URL
+    /// The actual new worktree's initial HEAD, before the agent starts; nil outside Git.
+    public let baseRevision: String?
 
     public static func prepare(
         directory: URL,
@@ -25,29 +27,21 @@ public struct SessionWorkspace: Sendable {
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
             throw WorkspaceError(message: "Choose an existing directory.")
         }
-        // A .git entry is also present in linked worktrees and submodules. A broken repository
-        // must fail rather than silently fall back to running in the user's checkout.
-        var ancestor = directory
-        var repository = false
-        while true {
-            if FileManager.default.fileExists(atPath: ancestor.appending(path: ".git").path) {
-                repository = true
-                break
-            }
-            if ancestor.path == "/" { break }
-            ancestor.deleteLastPathComponent()
-        }
-        guard repository else {
+        // A broken repository must fail rather than silently fall back to running in the user's checkout.
+        guard hasGitEntry(atOrAbove: directory) else {
             // Bare repositories cannot supply a working directory.
             if (try? git(["rev-parse", "--is-bare-repository"], in: directory)) == "true" {
                 throw WorkspaceError(message: "Choose a working checkout, not a bare repository.")
             }
-            return SessionWorkspace(projectDirectory: directory, workingDirectory: directory)
+            return SessionWorkspace(projectDirectory: directory, workingDirectory: directory, baseRevision: nil)
         }
-        let root = URL(
-            filePath: try git(["rev-parse", "--show-toplevel"], in: directory),
-            directoryHint: .isDirectory
-        ).resolvingSymlinksInPath()
+        let root: URL
+        do {
+            root = URL(
+                filePath: try git(["rev-parse", "--show-toplevel"], in: directory),
+                directoryHint: .isDirectory
+            ).resolvingSymlinksInPath()
+        } catch { throw brokenRepository(error) }
         let slug = id.uuidString.lowercased()
         let destination = worktreesRoot.appending(path: root.lastPathComponent).appending(path: slug)
             .resolvingSymlinksInPath().standardizedFileURL
@@ -70,7 +64,11 @@ public struct SessionWorkspace: Sendable {
         guard (try? working.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
             throw WorkspaceError(message: "The selected path is not a committed directory at HEAD.")
         }
-        return SessionWorkspace(projectDirectory: root, workingDirectory: working)
+        return SessionWorkspace(
+            projectDirectory: root,
+            workingDirectory: working,
+            baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: worktree)
+        )
     }
 
     /// The main checkout and root of a linked worktree containing `directory`, or nil outside one.
@@ -91,6 +89,24 @@ public struct SessionWorkspace: Sendable {
         return checkout.path == worktree.path ? nil : (checkout, worktree)
     }
 
+    /// Whether `directory` (resolved) or an ancestor has a `.git` entry, as in linked worktrees and submodules.
+    /// Dangling `.git` symlinks count: they are broken repositories, not plain folders.
+    static func hasGitEntry(atOrAbove directory: URL) -> Bool {
+        var ancestor = directory
+        while true {
+            if (try? FileManager.default.attributesOfItem(atPath: ancestor.appending(path: ".git").path)) != nil {
+                return true
+            }
+            if ancestor.path == "/" { return false }
+            ancestor.deleteLastPathComponent()
+        }
+    }
+
+    /// Git reports a broken `.git` entry as "not a git repository"; name the actual problem.
+    static func brokenRepository(_ error: any Error) -> WorkspaceError {
+        WorkspaceError(message: "The .git entry here or in a parent folder is broken. \(error.localizedDescription)")
+    }
+
     struct WorkspaceError: LocalizedError {
         let message: String
         var errorDescription: String? { message }
@@ -98,15 +114,28 @@ public struct SessionWorkspace: Sendable {
 
     /// Async callers (including tests) must not block a cooperative thread: a cold `/usr/bin/git` shim can take seconds.
     @discardableResult static func git(_ arguments: [String], in directory: URL) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
+        let data = try await gitOutput(arguments, in: directory)
+        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines)
+    }
+
+    /// Cancellation skips an unstarted command and discards its result; an admitted subprocess finishes.
+    static func gitOutput(_ arguments: [String], in directory: URL) async throws -> Data {
+        try Task.checkCancellation()
+        let data: Data = try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(with: Result { try git(arguments, in: directory) as String })
+                continuation.resume(with: Result { try gitOutput(arguments, in: directory) as Data })
             }
         }
+        try Task.checkCancellation()
+        return data
     }
 
     /// Blocks the calling thread. stderr goes to a file so a full pipe cannot deadlock and output stays clean.
     @discardableResult static func git(_ arguments: [String], in directory: URL) throws -> String {
+        String(decoding: try gitOutput(arguments, in: directory), as: UTF8.self).trimmingCharacters(in: .newlines)
+    }
+
+    static func gitOutput(_ arguments: [String], in directory: URL) throws -> Data {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/git")
         process.arguments = ["-C", directory.path] + arguments
@@ -117,6 +146,8 @@ public struct SessionWorkspace: Sendable {
         ] {
             environment.removeValue(forKey: key)
         }
+        // Read-only scans must not refresh the index and trigger their own filesystem watcher.
+        environment["GIT_OPTIONAL_LOCKS"] = "0"
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
         let output = Pipe()
@@ -132,11 +163,10 @@ public struct SessionWorkspace: Sendable {
         try process.run()
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .newlines)
         guard process.terminationStatus == 0 else {
             let message = (try? String(contentsOf: errorURL, encoding: .utf8)) ?? ""
             throw WorkspaceError(message: "Git: \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
-        return text
+        return data
     }
 }

@@ -91,6 +91,7 @@ import Testing
             )
             #expect(response.content == "two")
         }
+        #expect(fixture.controller.fileRevision == 2)
         for (id, path) in [
             ("other", fixture.root.appending(path: "bad.txt").path),
             ("s", fixture.directory.appending(path: "bad.txt").path),
@@ -103,6 +104,7 @@ import Testing
             }
             #expect(!FileManager.default.fileExists(atPath: path))
         }
+        #expect(fixture.controller.fileRevision == 2)
         await fixture.controller.close()
     }
 
@@ -149,6 +151,7 @@ import Testing
         await close.value
         #expect(closed)
         #expect(try String(contentsOfFile: path, encoding: .utf8) == "accepted")
+        #expect(fixture.controller.fileRevision == 1)
         await files.close()
     }
 
@@ -249,7 +252,18 @@ import Testing
         }
         await #expect(throws: CancellationError.self) { try await cancelled.value }
         #expect(!FileManager.default.fileExists(atPath: path))
+        #expect(fixture.controller.fileRevision == 0)
         #expect(SessionFileSystem.rpcError(.io(path, 13)).code == RPCError.internalErrorCode)
+        await fixture.controller.close()
+    }
+
+    @Test func failedWritesDoNotAnnounceChanges() async throws {
+        let fixture = try await FileSessionFixture()
+        let files = try await fixture.start()
+        await #expect(throws: RPCError.self) {
+            try await files.writeTextFile(at: fixture.root.path, content: "directory", in: "s")
+        }
+        #expect(fixture.controller.fileRevision == 0)
         await fixture.controller.close()
     }
 }

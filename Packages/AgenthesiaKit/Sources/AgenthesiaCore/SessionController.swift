@@ -48,9 +48,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public private(set) var profile: ACP.AgentProfile?
     public private(set) var pendingInputs: [PendingInput] = []
     public private(set) var pendingPermissions: [PendingPermission] = []
+    /// Successful ACP writes invalidate file browsing without waiting for FSEvents delivery.
+    public private(set) var fileRevision: UInt64 = 0
     /// Explicit roots for this launch; read-only history never re-enables filesystem access.
     public let additionalDirectories: [String]
     @ObservationIgnored var fileSystem: SessionFileSystem?
+
+    func fileDidChange() { fileRevision &+= 1 }
 
     private var failure: (any Error)?
     @ObservationIgnored private let store: PersistenceStore
@@ -111,6 +115,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 protocolVersion: profile.protocolVersion,
                 title: session.title,
                 workingDirectory: session.workingDirectory,
+                baseRevision: session.baseRevision,
                 createdAt: session.createdAt
             )
             do {

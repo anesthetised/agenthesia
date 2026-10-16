@@ -15,11 +15,16 @@ import SwiftUI
     var isLoadingHistory = false
     var closed = false
     private var starting = false
+    /// The saved session being continued, until the new owner has its controller.
+    private var resuming: SessionRecord?
     private var selection = UUID()
     let library: SessionLibrary
+    let files = SessionFiles()
 
     init(library: SessionLibrary = .shared) { self.library = library }
     var displayed: SessionController? { restored ?? owner?.controller }
+    /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
+    var filesSession: SessionRecord? { displayed?.session ?? resuming }
     var canStart: Bool {
         !closed && !starting && (owner == nil || owner?.isClosed == true || owner?.errorMessage != nil)
     }
@@ -54,6 +59,8 @@ import SwiftUI
     /// Continues the selected saved session as this window's live session (ADR-0017).
     func continueRestored() async {
         guard canContinue, let session = (restored ?? owner?.controller)?.session else { return }
+        resuming = session
+        defer { resuming = nil }
         await replaceOwner { await $0.resume(session) }
     }
     private func replaceOwner(_ launch: (LiveSession) async -> Void) async {
@@ -85,7 +92,7 @@ import SwiftUI
         } catch { if selection == token { errorMessage = error.localizedDescription } }
     }
     func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil }
-    func close() async { closed = true; selection = UUID(); await owner?.close() }
+    func close() async { closed = true; selection = UUID(); files.close(); await owner?.close() }
 }
 
 /// AppKit waits for asynchronous event writes and process-group cleanup before terminating.

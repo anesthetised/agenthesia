@@ -35,6 +35,19 @@ import Testing
         #expect(try access.readText(at: path("lines.txt"), line: 0, limit: 0) == "")
     }
 
+    @Test func boundedReadsAcceptExactLimitAndRejectLargerFiles() throws {
+        #expect(try access.readText(at: path("lines.txt"), maximumBytes: 18) == "one\ntwo\nthree\nfour")
+        #expect(throws: ScopedFileAccess.Failure.io(path("lines.txt"), EFBIG)) {
+            try access.readText(at: path("lines.txt"), maximumBytes: 17)
+        }
+        try "".write(to: root.appending(path: "empty"), atomically: true, encoding: .utf8)
+        #expect(try access.readText(at: path("empty"), maximumBytes: 0) == "")
+        #expect(throws: ScopedFileAccess.Failure.io(path("empty"), EINVAL)) {
+            try access.readText(at: path("empty"), maximumBytes: -1)
+        }
+        #expect(try access.readText(at: path("lines.txt"), maximumBytes: Int.max) == "one\ntwo\nthree\nfour")
+    }
+
     @Test func writesFilesAndCreatesDirectories() throws {
         try access.writeText("new", to: path("nested/dir/file.txt"))
         #expect(try String(contentsOf: root.appending(path: "nested/dir/file.txt"), encoding: .utf8) == "new")

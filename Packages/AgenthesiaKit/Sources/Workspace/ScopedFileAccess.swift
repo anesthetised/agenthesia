@@ -39,7 +39,13 @@ public struct ScopedFileAccess: Sendable {
     }
 
     /// Reads a UTF-8 text file. `line` is 1-based; `limit` is a number of lines.
-    public func readText(at path: String, line: Int? = nil, limit: Int? = nil) throws(Failure) -> String {
+    /// `maximumBytes` bounds the whole file before line slicing; exceeding it fails with `EFBIG`.
+    public func readText(
+        at path: String,
+        line: Int? = nil,
+        limit: Int? = nil,
+        maximumBytes: Int? = nil
+    ) throws(Failure) -> String {
         let url = try resolve(path)
         beforeAccess?()
         // O_NONBLOCK prevents a substituted FIFO from blocking before fstat can reject it.
@@ -49,9 +55,27 @@ public struct ScopedFileAccess: Sendable {
         var info = stat()
         guard fstat(descriptor, &info) == 0 else { throw failure(path) }
         guard info.st_mode & S_IFMT == S_IFREG else { throw .notRegularFile(path) }
-        let data: Data
+        if let maximumBytes {
+            guard maximumBytes >= 0 else { throw .io(path, EINVAL) }
+            guard info.st_size <= maximumBytes else { throw .io(path, EFBIG) }
+        }
+        var data = Data()
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
         do {
-            data = try FileHandle(fileDescriptor: descriptor, closeOnDealloc: false).readToEnd() ?? Data()
+            if let maximumBytes {
+                // Read one byte beyond the limit to detect growth after fstat, without unbounded allocation.
+                while true {
+                    let remaining = maximumBytes - data.count
+                    let count = remaining >= 65_536 ? 65_536 : remaining + 1
+                    guard let chunk = try handle.read(upToCount: count), !chunk.isEmpty else { break }
+                    data.append(chunk)
+                    guard data.count <= maximumBytes else { throw Failure.io(path, EFBIG) }
+                }
+            } else {
+                data = try handle.readToEnd() ?? Data()
+            }
+        } catch let error as Failure {
+            throw error
         } catch {
             throw .io(path, Self.posixCode(from: error))
         }

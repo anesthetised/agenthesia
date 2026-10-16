@@ -210,7 +210,8 @@ refreshed ones replace them. It cancels obsolete searches/reads and rejects late
 selection or window replacement. Canonical
 roots are captured once and cannot broaden after symlink substitution.
 
-Git changed paths combine `base...HEAD`, staged, unstaged and nonignored untracked changes. Legacy
+Git changed paths combine `git diff base HEAD` ([ADR-0024](adr/0024-changed-files-session-base.md)),
+staged, unstaged and nonignored untracked changes. Legacy
 sessions without a base explicitly show working changes only; non-Git folders explain that change
 tracking requires Git. Renames include both paths. Full worktree review and editor handoff remain #42
 and #29 respectively. Browsing stops when the displayed session changes or its window closes, rather

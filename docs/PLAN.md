@@ -32,7 +32,8 @@ before implementation.
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
   sessions show working changes only. #114 (compare changed files with the session base rather than
   the merge base) is implemented under [ADR-0024](adr/0024-changed-files-session-base.md) on
-  `feat/changed-files-base`; #29 is the next file-navigation task.
+  `feat/changed-files-base`; #29 (transcript paths, editor handoff) is decided in
+  [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md).
 
 ## Previous batch: session interactions (merged)
 

@@ -29,5 +29,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0022](0022-session-scoped-elicitation.md) | Session-scoped elicitation first | Accepted |
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted |
+| [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Proposed |
 
 Template: Status, Date, Context, Decision, Consequences.

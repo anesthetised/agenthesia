@@ -56,7 +56,7 @@ import Testing
         let session = try #require(original.controller?.session)
         await original.send("hello")
         #expect(manager.resume(session) === original)
-        await original.send("fail")
+        await original.send("exit")
         // The failed owner stays listed with its error until it is ended or continued.
         while original.controller?.status != .closed { await Task.yield() }
         #expect(original.errorMessage != nil && !original.isLive)

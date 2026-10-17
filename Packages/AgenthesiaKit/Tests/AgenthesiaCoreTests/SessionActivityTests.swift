@@ -73,7 +73,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let owner = manager.start(directory: directory, agent: agent)
         await owner.startup?.value
-        await owner.send("fail")
+        await owner.send("exit")
         while owner.controller?.status != .closed { await Task.yield() }
         #expect(owner.activity == .failed)
         await manager.closeAll()

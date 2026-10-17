@@ -1,5 +1,6 @@
 public import ACP
 public import Foundation
+import JSONRPC
 import Observation
 public import Persistence
 
@@ -171,6 +172,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             for id in reduced.unansweredPermissions {
                 events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
             }
+            queuePaused = !reduced.queuedPrompts.isEmpty
             events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
             for id in reduced.unansweredInputs {
                 events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
@@ -251,6 +253,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Accepts a composed message without making the caller own the wire turn.
     public func submit(_ content: [ACP.ContentBlock], intent: SubmissionIntent = .whenReady) async throws {
         try Task.checkCancellation()
+        let intent = intent == .now && (try? Self.validate(content)) == nil ? .allNow : intent
         let generation = stopGeneration
         if intent != .allNow { try Self.validate(content) }
         try await coordinateQueue {
@@ -258,7 +261,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             if intent != .whenReady, self.stopGeneration != generation { throw SessionError.invalidState }
             if intent == .whenReady {
                 let prompt = QueuedPrompt(content: content)
-                if self.status == .idle, self.reduced.queuedPrompts.isEmpty, !self.queuePaused {
+                if self.status == .idle, self.reduced.queuedPrompts.isEmpty {
                     try await self.dispatch([prompt], removingQueued: false)
                 } else {
                     try await self.record([
@@ -284,7 +287,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                     guard self.turnID == turnID, self.promptStarted else { return false }
                     try await connection.inject(prompts.flatMap(\.content), in: agentID)
                     try await self.record(
-                        self.promptEvents(prompts, turnID: turnID, startsTurn: false, removingQueued: true)
+                        self.promptEvents(
+                            prompts,
+                            turnID: turnID,
+                            startsTurn: false,
+                            removingQueued: true,
+                            resumeEmptyQueue: self.stopGeneration == generation
+                        )
                     )
                     return true
                 }
@@ -300,13 +309,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 self.publishTranscript()
                 if inserted { return }
                 // The prior wire turn ended while the preparation was committed. Send a fresh turn.
-                try await self.turnTask?.value
+                try await self.waitForTurn()
                 guard self.status == .idle, self.stopGeneration == generation else { throw SessionError.invalidState }
                 try await self.dispatch(prompts, removingQueued: true)
                 return
             }
             if self.status == .running { try await self.requestStop(interrupted: true) }
-            try await self.turnTask?.value
+            try await self.waitForTurn()
             guard self.status == .idle, self.stopGeneration == generation else { throw SessionError.invalidState }
             if intent == .allNow {
                 // Cancellation may have returned an earlier, not-yet-sent turn to the queue.
@@ -382,14 +391,14 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         _ prompts: [QueuedPrompt],
         turnID: UUID,
         startsTurn: Bool,
-        removingQueued: Bool
+        removingQueued: Bool,
+        resumeEmptyQueue: Bool = true
     ) throws -> [NewEvent] {
         var events: [NewEvent] = []
+        let ids = Set(prompts.map(\.id))
+        let remaining = removingQueued ? reduced.queuedPrompts.filter { !ids.contains($0.id) } : reduced.queuedPrompts
         if removingQueued {
-            let ids = Set(prompts.map(\.id))
-            events.append(
-                try SessionEvent.queueChanged(reduced.queuedPrompts.filter { !ids.contains($0.id) }).storedEvent()
-            )
+            events.append(try SessionEvent.queueChanged(remaining).storedEvent())
         }
         for (index, prompt) in prompts.enumerated() {
             events.append(
@@ -400,6 +409,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                     sentTogether: prompts.count > 1
                 ).storedEvent()
             )
+        }
+        if resumeEmptyQueue, queuePaused, remaining.isEmpty {
+            events.append(try SessionEvent.queuePaused(false).storedEvent())
+            // Like Stop's pause, publish before the write; a newer Stop must win while it is pending.
+            queuePaused = false
         }
         return events
     }
@@ -455,6 +469,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         try await task.value
     }
 
+    /// Steering can follow a rejected prompt on the same usable connection.
+    private func waitForTurn() async throws {
+        do { try await turnTask?.value } catch is RPCError where status == .idle && failure == nil {}
+    }
+
     private func startTurn(
         id: UUID,
         content: [ACP.ContentBlock],
@@ -489,6 +508,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         unsentPrompts: [QueuedPrompt]
     ) async throws {
         var admitted = false
+        var promptRejected = false
         defer {
             turnID = nil
             turnTask = nil
@@ -512,7 +532,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             } else {
                 promptStarted = true
                 admitted = true
-                reason = try await connection.prompt(content, in: agentID)
+                do { reason = try await connection.prompt(content, in: agentID) } catch let error as RPCError {
+                    promptRejected = true
+                    throw error
+                }
                 promptStarted = false
             }
             do { _ = try await injectionTask?.value } catch {
@@ -533,6 +556,26 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             if status == .running || status == .stopping { status = .idle }
         } catch {
             promptStarted = false
+            if promptRejected, status == .running || status == .stopping {
+                queuePaused = true
+                cancelPermissions()
+                cancelInputs()
+                do {
+                    try await record([
+                        try SessionEvent.queuePaused(true).storedEvent(),
+                        try SessionEvent.failed(id: id, message: String(describing: error)).storedEvent(),
+                    ])
+                    do { _ = try await injectionTask?.value } catch {
+                        if !(error is CancellationError && status == .stopping) { throw error }
+                    }
+                    // An admitted cancel must settle before steering can start another prompt.
+                    try await stopTask?.value
+                } catch { throw await fail(error) }
+                if status == .running || status == .stopping {
+                    status = .idle
+                    throw error
+                }
+            }
             if status == .closed, failure == nil {
                 // Deliberate close is a cancellation, not an agent failure.
                 var events = [try SessionEvent.finished(id: id, reason: .cancelled).storedEvent()]
@@ -655,15 +698,17 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             return .cancelled
         }
         let id = UUID()
+        // Turn completion can cancel a request while its initial write is still suspended.
+        permissions[id] = Permission(options: options)
         do {
             try await record([
                 try SessionEvent.permissionRequested(id: id, toolCall: toolCall, options: options).storedEvent()
             ])
         } catch {
+            permissions.removeValue(forKey: id)
             return .cancelled
         }
-        permissions[id] = Permission(options: options)
-        if status == .running, !Task.isCancelled {
+        if status == .running, !Task.isCancelled, permissions[id]?.response == nil {
             pendingPermissions.append(PendingPermission(id: id, options: options))
             publishTranscript()
             await withTaskCancellationHandler {

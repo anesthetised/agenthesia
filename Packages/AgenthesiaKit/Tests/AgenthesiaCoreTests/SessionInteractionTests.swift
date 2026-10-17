@@ -120,18 +120,21 @@ private actor InteractionConnection: ACP.AgentConnection {
     @Test func queueResumeWaitsForConfigConfirmationBeforeDispatch() async throws {
         let (session, connection, _, directory) = try await live(holdsConfig: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try await session.stop()
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         try await session.submit([.init(text: "kept during config")])
+        try await session.stop()
+        try await eventually { session.status == .idle }
         let changing = Task { try await session.setConfigOption("flag", to: .boolean(true)) }
         await connection.waitForConfig()
         let resuming = Task { try await session.resumeQueue() }
         try await eventually { !session.queuePaused }
-        #expect(await connection.prompts.isEmpty)
+        #expect(await connection.prompts.count == 1)
         await connection.releaseConfig()
         try await changing.value
         try await resuming.value
-        await connection.waitForPrompts(1)
-        #expect(await connection.prompts == [[.init(text: "kept during config")]])
+        await connection.waitForPrompts(2)
+        #expect(await connection.prompts.last == [.init(text: "kept during config")])
         await session.close()
     }
 

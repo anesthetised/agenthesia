@@ -10,7 +10,9 @@ struct AgenthesiaApp: App {
             RootView(sessions: lifecycle.sessions)
         }
         .defaultSize(width: 1000, height: 700)
-        .commands { FileCommands() }
+        .commands {
+            FileCommands(); SessionCommands()
+        }
         #if DEBUG
             .commands { RenderingLabCommands() }
         #endif

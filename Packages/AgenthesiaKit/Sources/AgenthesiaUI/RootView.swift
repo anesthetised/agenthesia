@@ -13,38 +13,34 @@ public struct RootView: View {
     @State private var directory = ""
     @State private var executable = ""
     @State private var arguments = ""
-    @State private var showingSetup = true
     @State private var showingLog = false
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
-    public init(sessions: SessionManager) { _model = State(initialValue: SessionWindowModel(sessions: sessions)) }
+    public init(sessions: SessionManager) { self.init(model: SessionWindowModel(sessions: sessions)) }
+
+    init(model: SessionWindowModel) { _model = State(initialValue: model) }
 
     public var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
-            List {
-                SessionSidebarList(sidebar: model.sidebar) { owner in
-                    model.show(owner); showingSetup = false
-                } onShowSaved: { record in
-                    showingSetup = false
-                    prompt = ""
-                    attachments = []
-                    Task { await model.showHistory(record) }
-                }
-                if !showingSetup, filesMatchSession {
+            List(selection: $model.sidebarSelection) {
+                SessionSidebarList(sidebar: model.sidebar)
+                if !model.showingSetup, filesMatchSession {
                     SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
+                        .selectionDisabled(true)
                 }
             }
             .navigationTitle("Agenthesia")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
             .toolbar {
-                Button("New Session", systemImage: "plus") { showingSetup = true }
-                    .disabled(!model.canStart).keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("New Session", systemImage: "plus") { model.showingSetup = true }
+                    .disabled(!model.canStart)
                 Button("Refresh History", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
             }
         } detail: {
             VStack(spacing: 0) {
-                if showingSetup && model.canStart {
+                if model.showingSetup && model.canStart {
                     setup
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -109,19 +105,21 @@ public struct RootView: View {
                     showingQuickOpen = true
                 }
                 .keyboardShortcut("p", modifiers: .command)
-                .disabled(showingSetup || !filesMatchSession)
+                .disabled(model.showingSetup || !filesMatchSession)
                 if model.restored == nil, let owner = model.owner {
                     Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
-                        Task { await model.sessions.end(owner) }
-                    }.disabled(owner.isClosed)
+                        Task { await model.endSession() }
+                    }.disabled(!model.canEnd)
                 }
             }
         }
         .frame(minWidth: 740, minHeight: 500)
+        .focusedSceneValue(\.sessionWindow, model)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
+        // Startup persists the session after assigning its ID; refresh only once that write has settled.
         // Ended sessions move to saved history in every window.
-        .task(id: model.sessions.owners.map(\.sessionID)) { await model.refresh() }
+        .task(id: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID)) { await model.refresh() }
         // Looking at a finished turn in the key window clears its Done mark.
         .onChange(of: viewingUnseenResult, initial: true) {
             if viewingUnseenResult { model.owner?.markSeen() }
@@ -149,7 +147,7 @@ public struct RootView: View {
     }
 
     private var viewingUnseenResult: Bool {
-        appearsActive && !showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
+        appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
     }
 
     private var filesMatchSession: Bool {
@@ -195,7 +193,7 @@ public struct RootView: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 Button("Start Session") {
-                    showingSetup = false
+                    model.showingSetup = false
                     let command = Self.launchCommand(executable: executable, arguments: arguments)
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
                     model.start(
@@ -252,22 +250,27 @@ public struct RootView: View {
                         .help("Reconnect to the agent.")
                 } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
-                        .keyboardShortcut(".", modifiers: .command)
                         .disabled(session.status == .stopping && session.queuePaused)
                 }
                 if editable {
                     Button(
                         editingQueueID != nil
                             ? "Save"
-                            : session.status == .idle && session.queuedPrompts.isEmpty && !session.queuePaused
+                            : session.status == .idle && session.queuedPrompts.isEmpty
                                 ? "Send" : "Queue",
                         systemImage: "arrow.up",
                         action: send
                     )
                     .disabled(!hasDraft || submitting || session.isChangingConfig)
                     Menu("Send options", systemImage: "chevron.down") {
-                        Button("Send Draft Now") { submit(.now) }.keyboardShortcut(.return, modifiers: .command)
-                            .disabled(!hasDraft || submitting || editingQueueID != nil || session.isChangingConfig)
+                        Button(hasDraft ? "Send Draft Now" : "Send Queue Now") { submit(.now) }.keyboardShortcut(
+                            .return,
+                            modifiers: .command
+                        )
+                        .disabled(
+                            (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                                || session.isChangingConfig
+                        )
                         Button("Send Whole Queue Now") { submit(.allNow) }
                             .keyboardShortcut(.return, modifiers: [.command, .shift])
                             .disabled(
@@ -320,7 +323,7 @@ public struct RootView: View {
             return "Waiting for permission · \(keys)"
         }
         if !session.pendingInputs.isEmpty { return "Waiting for input" }
-        if session.queuePaused { return "Queue paused · ⇧⌘R resumes" }
+        if session.queuePaused && !session.queuedPrompts.isEmpty { return "Queue paused · ⇧⌘R resumes" }
         return String(describing: session.status).capitalized
     }
 
@@ -331,7 +334,7 @@ public struct RootView: View {
         guard model.restored == nil, !submitting, let owner = model.owner,
             let session = owner.controller, !session.isChangingConfig,
             [.idle, .running, .stopping].contains(session.status),
-            hasDraft || (intent == .allNow && !session.queuedPrompts.isEmpty)
+            hasDraft || (intent != .whenReady && !session.queuedPrompts.isEmpty)
         else { return }
         let text = prompt, files = attachments, editingID = editingQueueID
         model.errorMessage = nil

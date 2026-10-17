@@ -82,22 +82,33 @@ the worktree point there. A draft that is a bare `/word` lists the matching comm
 `available_commands_update`; choosing one inserts `/name ` as text. The transcript names link
 attachments. `SessionController.submit(_:intent:)` owns the per-session prompt queue
 ([ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)).
-Return sends only when idle with an empty, unpaused queue; otherwise it queues the draft. A completed
-turn drains the queue as one prompt. Queue snapshots record text, attachments, editing, removal and
+Return sends when idle with an empty queue, clearing a retained empty pause; otherwise it queues the
+draft. A completed turn drains the queue as one prompt. Queue snapshots record text, attachments, editing, removal and
 order in the existing event log. Dequeue and one `promptMessage` event per message commit atomically;
 the messages retain their UUIDs, share a turn ID and display “sent together”, with a unique event
 sequence per transcript row. Up in an empty composer recalls the last entry for text editing without
 rebuilding its attachments. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
-Saved entries remain paused after Continue. An ended or failed established session also offers Continue,
-which creates a new connection; failed connections stay closed. Continue requires a persisted session
+Saved entries remain paused after Continue; an empty queue resumes normal sending
+([ADR-0029](adr/0029-empty-queue-recovery.md)). Explicitly sending the last queued entry also clears
+the pause. An ended or failed established session also offers Continue, which creates a new connection; failed connections stay closed. Continue requires a persisted session
 with an agent session ID. Startup failures cannot continue, and ended sessions remain selectable in
 saved history. A dispatch stopped before invoking the wire prompt returns its composed
 messages to the queue by UUID and marks the original transcript rows “not sent”. Queue snapshots are
 built only after preceding lifecycle writes settle, so this compensation cannot overwrite later edits.
 
-⌘Return sends the draft now and leaves the queue in place. ⇧⌘Return sends the queue with the nonempty
-draft last. Steering uses `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel
-tasks to settle, and then starts the next turn; injection-capable connections implement
+An error response to `session/prompt` ends only that turn ([ADR-0027](adr/0027-recoverable-prompt-errors.md)).
+Core records the failed turn and queue pause before returning to idle, retaining the same process,
+connection and agent session. Pending permissions and forms are cancelled durably. The error stays
+in the transcript without requiring Continue or automatically retrying the prompt. Return queues while
+retained entries are paused; an explicit send or queue resume is needed for that work. An empty queue
+accepts a fresh Return immediately. Transport loss, process exit, malformed responses
+and event-log failures still end the session. Saved history always opens read-only, including after
+a recoverable error.
+
+⌘Return sends a nonempty draft now and leaves the queue in place; with an empty or whitespace-only
+draft, it sends the whole queue ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Attachments count as
+a nonempty draft. ⇧⌘Return sends the queue with the nonempty draft last. Steering uses
+`AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel tasks to settle, and then starts the next turn; injection-capable connections implement
 `AgentConnection.inject(_:in:)` without ending the active turn. The default injection implementation
 fails explicitly and no current v1 adapter advertises it. Injection first records complete composed
 content as pending queue entries; only successful wire acknowledgement atomically dequeues it and
@@ -150,10 +161,23 @@ has seen; a window marks the displayed session seen while it is the key window. 
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued.
+The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
+⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
+⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Starting, then each project's
+live and saved rows); from the launch form they select the last/first row. Next Session Needing Input
+uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+disabled without an eligible selection in the focused window. Resume Queue also enables an empty
+paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
+sharing the same row identity with keyboard navigation; the new-session form has no selected row.
+History refresh follows completed startup, after the session record is persisted; an early session ID
+alone must not leave Continue disabled after a later process exit. Opening/restoring windows remains #40.
+
 Closing a window only detaches it and stops its file observation; closing a transcript view only
-detaches its display driver. On quit the delegate uses `terminateLater` and closes every owner
-concurrently: each closes ACP and drains controller writes, terminates the process group, and waits
-for startup if it was in flight. Unexpected process exit and observable controller failure also
+detaches its display driver. On quit the delegate asks for confirmation only if owners are working or
+need input, naming their count. Cancel leaves every owner running. After confirmation (or immediately
+for idle/failed owners), the delegate uses `terminateLater` and closes every owner concurrently: each
+closes ACP and drains controller writes, terminates the process group, and waits for startup if it was
+in flight. Unexpected process exit and observable controller failure also
 trigger cleanup.
 
 ## Session filesystem

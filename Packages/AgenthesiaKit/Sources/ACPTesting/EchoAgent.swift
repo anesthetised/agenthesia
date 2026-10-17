@@ -11,6 +11,7 @@ public import JSONRPC
 ///   its output in `_meta` chunks (`terminal_output_delta`) and an exit status, as Codex does.
 /// - `slow` streams slowly, so the turn can be cancelled.
 /// - `fail` fails the turn with an internal error.
+/// - `exit` closes the connection without replying, ending MockAgent's process.
 ///
 /// With `announcesCommands`, these verbs are offered as slash commands; `/plan` works like `plan`.
 public final class EchoAgent: Sendable {
@@ -197,6 +198,7 @@ public final class EchoAgent: Sendable {
         .init(name: "think", description: "Report a thought"),
         .init(name: "slow", description: "Stream slowly until cancelled"),
         .init(name: "fail", description: "Fail the turn"),
+        .init(name: "exit", description: "Exit without replying"),
     ]
 
     static func modes(current: String) -> ACP.V1.SessionModeState {
@@ -331,6 +333,9 @@ extension EchoAgent {
                 await send(.agentThoughtChunk(.init(content: .init(text: "Thinking about \(text)"))))
             case "fail":
                 throw RPCError.internalError("Echo agent failed on purpose")
+            case "exit":
+                await connection.close()
+                throw CancellationError()
             default:
                 break
             }

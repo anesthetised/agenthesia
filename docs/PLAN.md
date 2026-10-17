@@ -24,7 +24,7 @@ before implementation.
   [ADR-0019](adr/0019-session-config-controls.md)); responses are committed before later notifications.
 - The durable prompt queue supports editing, ordering, grouped sends and steering (#65,
   [ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)). Stop
-  pauses it; continued sessions require explicit queue resume. Ended sessions remain available to Continue.
+  pauses it; continued sessions with retained entries require explicit queue resume. Ended sessions remain available to Continue.
 - Native session-scoped elicitation forms appear in the transcript (#24,
   [ADR-0020](adr/0020-native-elicitation-forms.md), [ADR-0022](adr/0022-session-scoped-elicitation.md)).
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
@@ -34,7 +34,7 @@ before implementation.
   merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). Transcript paths open
   the file pane at a line, and Open in Editor hands off to the chosen editor (#29, #116,
   [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)). M4 is complete.
-- M7 slices 1–2 are implemented in open PR [#118](https://github.com/anesthetised/agenthesia/pull/118)
+- M7 slices 1–2 are merged in PR [#118](https://github.com/anesthetised/agenthesia/pull/118)
   (#37, [ADR-0026](adr/0026-app-wide-session-manager.md)): app-wide ownership supports parallel
   sessions, closing a window detaches it, and the sidebar groups sessions by project with live statuses.
   Local `just lint`, `just test` and `just app` pass; coverage is enforced by CI.
@@ -60,7 +60,8 @@ issues are closed. They were developed in isolated worktrees and integrated in t
 - [ADR-0019](adr/0019-session-config-controls.md): native config controls, idle-only changes and
   agent-confirmed values committed before display; legacy modes stay in the adapter.
 - [ADR-0021](adr/0021-prompt-queue-lifecycle.md): Stop pauses the queue; restored entries require Continue
-  and explicit resume. Command-Return sends the draft only; Command-Shift-Return sends queued entries
+  and explicit resume. Command-Return sends a nonempty draft only; with no draft it sends the queue
+  ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Command-Shift-Return sends queued entries
   plus the nonempty draft last.
 - `AgentProfile.steering` already reports whether the agent supports injection.
 
@@ -115,28 +116,77 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-M4 (Files) is merged: #26–#28, #114 and #29 below. M7 (Parallel sessions, #37–#40) is in progress and
-replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
-session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below). PR #118 implements
-slices 1–2 and closes #37 when merged. After it merges, next is slice 3: quit confirmation and the
-Session menu (#39), then notifications and the Dock badge (#38), then window restoration (#40).
-M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
-#117 (keep the session alive when a prompt returns an error) came out of the M7 manual check; it changes
-ADR-0017 and ADR-0021 behavior, so it needs its own ADR and branch after M7.
-Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+M4 (Files) is merged: #26–#28, #114 and #29 below. M7 slices 1–2 merged in #118, closing
+#37 and replacing window-bound ownership with the app-wide manager
+([ADR-0026](adr/0026-app-wide-session-manager.md)). #39 and #117 were developed concurrently in
+isolated worktrees from `706dbf8` and are integrated on `feat/session-controls-and-recovery`.
+The owner accepted [ADR-0027](adr/0027-recoverable-prompt-errors.md) before #117 implementation.
+
+The combined branch passes `just lint`, `just test` (587 Swift tests and 15 script tests),
+`just coverage` (all module gates; Core 98.1%) and `just app`.
+
+This batch ends at #39 and #117. #40 and #38 have not started. When that work resumes, #40 owns
+window opening, selection and restoration; #38 connects notifications to that mechanism and adds the
+Dock badge. M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
+Use Sol medium for bounded UI work and Sol high for lifecycle changes such as #117.
+Small independent chores such as #73 (CI with Xcode 27) fit Sol at medium effort.
 
 ### M7 slices (2026-10-17)
 
-The owner accepted ADR-0026. Slices 1–2 are implemented on `feat/parallel-sessions` in open PR #118.
-After it merges, continue with slice 3 on a separate branch from main; keep subsequent slices in order.
+The owner accepted ADR-0026. Slices 1–2 are merged; slice 3 (#39) is implemented in this batch.
+Implement slice 5 (#40) before slice 4 (#38), so notification activation reuses window opening and
+selection.
 
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
-| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; implemented in #118, awaiting merge |
-| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium; implemented in #118, awaiting merge |
-| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sonnet, medium |
-| 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
-| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sonnet, medium |
+| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; merged in #118 |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; merged in #118 |
+| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented, verification below |
+| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; not started |
+| 4 | Notifications with actions and the Dock badge (#38), after #40 | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Sol, high; not started |
+
+#39 adds focused-window Session commands, wraparound sidebar navigation (including saved history and
+Starting), next-needing-input navigation, and a count-based quit confirmation before awaited shutdown.
+New regression tests cover command eligibility, independent window selections, navigation, cancellation
+and retry, idle/failed shutdown without confirmation, and resuming a paused empty queue to restore
+normal Return behavior. The isolated #39 branch passed `just lint`, `just test` (579 Swift tests and
+15 script tests), `just coverage` and `just app`; every module met its coverage gate (Core 98.1%).
+`swiftui-pro` review found no blocking issues. Native menu focus/shortcuts and the actual quit alert
+remain manual smoke checks; automated tests exercise selection, eligibility and injected confirmation.
+
+Manual acceptance of the combined #39/#117 PR confirmed new-session/navigation and permission
+shortcuts. Follow-up feedback adds empty-draft Command-Return to send the complete queue
+([ADR-0028](adr/0028-empty-draft-sends-queue.md)), and native sidebar selection synchronized with
+mouse and keyboard navigation. Regressions first reproduced the rejected empty send and the missing
+native selection. The owner subsequently passed queue shortcuts, recoverable `fail`, selected-session
+End, and quit confirmation/cancellation. Native selection is visible in the supplied screenshot.
+The fatal `exit` check exposed disabled Continue: history refreshed on the controller's early ID, before
+its database insert, and was not refreshed when startup completed. Refreshing after startup settles
+preserves the saved-session eligibility guard and makes Continue available after process cleanup.
+A hosted RootView regression blocks the initial insert, then verifies automatic history refresh and
+`exit` → Continue → idle on the same session. Fresh Return after Continue is also covered by the
+ADR-0029 follow-up below.
+The combined follow-ups passed `just lint`, `just test` (591 Swift tests and 15 script tests), `just coverage`
+(all gates; Core 98.2%), and `just app`. Queue, native sidebar and startup-persistence/Continue regressions were verified RED then
+GREEN; the native selection check also fails when the binding is removed. `swiftui-pro` and code review
+found no blockers. The first full run hit an existing shell-descendant timeout test before its PID file
+was created; the isolated retry and subsequent full run passed without changes to that test.
+
+Further acceptance exposed a pause that survived Continue and repeated explicit sends. The owner
+accepted [ADR-0029](adr/0029-empty-queue-recovery.md): idle Return sends into an empty queue;
+Continue clears only an empty queue's pause, and explicitly sending the last queued entry durably
+restores ordinary sending. Retained entries stay paused; a newer Stop wins over a pending send.
+Queue fixtures now create retained entries during a real running turn before Stop, rather than using
+an empty paused queue to force new drafts into it. Regressions reproduced repeated fresh-draft
+queueing after error/Continue and sticky pause after explicit flush before the fix.
+The final follow-up passed `just lint`, `just test` (594 Swift tests and 15 script tests),
+`just coverage` (all gates; Core 98.2%), and `just app`. The new Stop/injection regression fails if the generation
+guard is removed. The atomic-dequeue failure test covers paused sends and verifies that a failed
+batch commits neither the unpause nor the dequeue. `swiftui-pro` and code review found no blockers.
+The owner passed the remaining native checks: repeated Return after `fail`, Return after
+`exit`/Continue, and Return after explicitly draining retained paused entries. The supplied screenshot
+shows separate fresh prompts receiving replies with an empty composer and Idle status. The agreed
+manual acceptance checklist for #39/#117 is complete; retained work still requires explicit dispatch.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
@@ -147,16 +197,35 @@ missing PID after expiry.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.
 
+### Prompt error recovery (#117)
+
+[ADR-0027](adr/0027-recoverable-prompt-errors.md) is accepted and implemented on
+`fix/prompt-error-recovery`. A JSON-RPC error response ends the turn, retains the live connection and
+process, and pauses the queue without retrying it. Transport loss, invalid responses, process exit,
+failed event writes and failed cancellation delivery remain fatal. MockAgent's `fail` and `exit`
+exercise these paths separately, including agents without resume/load support.
+
+Regressions cover error-response codes, a successful next prompt on the same session, replay,
+attachment-preserving queues, explicit send/resume, pending permissions and forms, steering,
+injection preparation, Stop, close and write failures. Register permission requests before awaiting
+their initial event write, so turn completion can cancel them during that write. The regression
+blocks the cancellation write and verifies that the session stays busy until it commits.
+`just lint`, `just test` (582 Swift tests plus 15 script tests), `just coverage` and `just app` pass; Core line
+coverage is 98.1%, above its 90% gate. The error-response and permission-admission regressions each
+reproduced their failure before the fix; inverting the recovery condition also made the regression
+fail. Filesystem tests separately cover retained access after a prompt error and revoked access after
+transport loss.
+
 ### #29 slices (2026-10-17, merged in #116)
 
 The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or more per slice, in order:
 
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
-| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sonnet, medium; done |
-| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sonnet, medium; done |
-| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sonnet, medium; done |
-| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sonnet, medium; done |
+| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sol, medium; done |
+| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sol, medium; done |
+| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sol, medium; done |
+| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sol, medium; done |
 | 5 | Inline code links with index-driven restyling | `Rendering` marks inline code generically; restyle on every index publication, bounded by cached rows; streaming rows keep their text; benchmark before/after | Opus, high; done, [benchmark](benchmarks/2026-10-17/transcript-links/README.md) |
 
 Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess` canonical roots;

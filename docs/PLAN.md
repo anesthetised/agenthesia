@@ -30,9 +30,10 @@ before implementation.
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
 - Quick Open, the side file viewer and changed-file tracking (#26–#28) are merged (#113)
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
-  sessions show working changes only. #114 (compare changed files with the session base rather than
-  the merge base) is implemented under [ADR-0024](adr/0024-changed-files-session-base.md) on
-  `feat/changed-files-base`; #29 is the next file-navigation task.
+  sessions show working changes only. Changed Files compares with the session base rather than the
+  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
+  editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)) is implemented on
+  `feat/clickable-paths`; the owner's manual checks passed.
 
 ## Previous batch: session interactions (merged)
 
@@ -110,12 +111,31 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, is merged. Next is #114 ([ADR-0024](adr/0024-changed-files-session-base.md): Changed Files
-compares `git diff base HEAD` instead of `merge-base(base, HEAD)`; implemented on
-`feat/changed-files-base`, awaiting its pull request), then #29
-(clickable transcript paths and editor handoff), then M7 (Parallel sessions), followed by M8 (Worktrees),
-which also decides whether to pin the base with a ref.
+The first M4 (Files) batch, #26–#28 below, and #114 are merged. Next is #29 (clickable transcript paths
+and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), slices below), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
+the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+
+### #29 slices (2026-10-17)
+
+The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or more per slice, in order:
+
+| # | Slice | Acceptance and verification | Model and effort |
+|---|---|---|---|
+| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sonnet, medium; done |
+| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sonnet, medium; done |
+| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sonnet, medium; done |
+| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sonnet, medium; done |
+| 5 | Inline code links with index-driven restyling | `Rendering` marks inline code generically; restyle on every index publication, bounded by cached rows; streaming rows keep their text; benchmark before/after | Opus, high; done, [benchmark](benchmarks/2026-10-17/transcript-links/README.md) |
+
+Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess` canonical roots;
+`SessionFiles.open` already guards the session identity. Run `swiftui-pro` over changed views before
+committing slices 3–5. The owner approved slice 5's benchmark (200 rows with 20 inline spans each
+against a 10,001-path index, three Release runs). Manual checks by the owner: mouse clicks on tool and inline links, VS Code, Cursor and Zed line jumps,
+Settings and VoiceOver labels pass; Xcode's scheme ignores the line, so Xcode opens files at the start.
+The pane button's ⌥⌘O did not fire, so Open in Editor is a File menu command; its shortcut, the
+changed-file list after an ACP write and the unavailable-file layout were checked again.
+Push and the pull request keep their separate approvals; save `just coverage` output to a log file.
 
 ### M4 parallel batch (2026-10-16)
 

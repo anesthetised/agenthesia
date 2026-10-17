@@ -1,0 +1,31 @@
+{
+  "expectedLinks" : 2000,
+  "indexedPaths" : 10001,
+  "rows" : 200,
+  "runs" : [
+    {
+      "linkMilliseconds" : 42.589334,
+      "links" : 2000,
+      "renderMilliseconds" : 117.0055,
+      "run" : 1,
+      "unchangedMilliseconds" : 39.482125
+    },
+    {
+      "linkMilliseconds" : 41.727208,
+      "links" : 2000,
+      "renderMilliseconds" : 66.759208,
+      "run" : 2,
+      "unchangedMilliseconds" : 41.529208
+    },
+    {
+      "linkMilliseconds" : 41.763708,
+      "links" : 2000,
+      "renderMilliseconds" : 67.593791,
+      "run" : 3,
+      "unchangedMilliseconds" : 40.192542
+    }
+  ],
+  "spansPerRow" : 20,
+  "validationPassed" : true,
+  "workload" : "200 finished agent rows, 20 inline code spans each, against a 10,001-path index"
+}

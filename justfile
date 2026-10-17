@@ -130,3 +130,7 @@ bench-session:
 # Time indexing/search/changes/2 MiB reads in a 10,000-file Git fixture, 3 runs; agree on resource use first
 bench-files:
     swift run --disable-automatic-resolution -c release --package-path {{package}} workspace-bench
+
+# Time linking inline code paths in 200 transcript rows against a 10,001-path index, 3 runs; agree on resource use first
+bench-transcript-links:
+    swift run --disable-automatic-resolution -c release --package-path {{package}} transcript-bench

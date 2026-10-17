@@ -5,9 +5,25 @@ import SwiftUI
 /// File content only; the window owns loading, selection and viewer controls.
 struct FileViewer: View {
     let document: SessionFileDocument
-    @State private var showsSource = false
+    /// A line from a transcript link. Markdown has lines only in its source.
+    let line: Int?
+    @State private var showsSource: Bool
 
-    private var language: CodeLanguage? { CodeLanguage(path: document.url.path(percentEncoded: false)) }
+    init(document: SessionFileDocument, line: Int? = nil) {
+        self.document = document
+        self.line = line
+        _showsSource = State(initialValue: Self.opensSource(document, line: line))
+    }
+
+    private var language: CodeLanguage? { Self.language(of: document) }
+
+    private static func language(of document: SessionFileDocument) -> CodeLanguage? {
+        CodeLanguage(path: document.url.path(percentEncoded: false))
+    }
+
+    static func opensSource(_ document: SessionFileDocument, line: Int?) -> Bool {
+        line != nil && language(of: document) == .markdown
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,10 +38,10 @@ struct FileViewer: View {
             if language == .markdown && !showsSource {
                 MarkdownPreview(text: document.text)
             } else {
-                SourceViewRepresentable(text: document.text, language: language)
+                SourceViewRepresentable(text: document.text, language: language, line: line)
                     .accessibilityLabel("File source")
             }
         }
-        .onChange(of: document.url) { showsSource = false }
+        .onChange(of: document.url) { showsSource = Self.opensSource(document, line: line) }
     }
 }

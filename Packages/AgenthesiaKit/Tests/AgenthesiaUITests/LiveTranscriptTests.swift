@@ -526,6 +526,132 @@ import Testing
         #expect(labels(in: row).contains("Completed"))
     }
 
+    @Test func pathLinksOpenFilesAndOtherLinksAreLeftToAppKit() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "t",
+                    title: "Read",
+                    kind: .read,
+                    locations: [.init(path: "a.swift", line: 5), .init(path: "../outside.swift", line: 1)]
+                )
+            )
+        )
+        let source = LiveTranscriptSource()
+        source.root = recorded.directory
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        var opened: [PathLink] = []
+        controller.openPath = { opened.append($0) }
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let field = try #require(views(LinkTextField.self, in: row).first)
+        var links: [URL] = []
+        field.attributedStringValue.enumerateAttribute(.link, in: NSRange(0..<field.attributedStringValue.length)) {
+            value,
+            _,
+            _ in if let url = value as? URL { links.append(url) }
+        }
+        // The location outside the working directory is not a link.
+        #expect(links.compactMap { PathLink($0) } == [PathLink(path: "a.swift", line: 5)])
+        // A click reaches the field through its field editor, which asks its delegate by selector.
+        window.makeKeyAndOrderFront(nil)
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.clicked(onLink: try #require(links.first), at: 0)
+        #expect(opened == [PathLink(path: "a.swift", line: 5)])
+        // A malformed private link is consumed without opening anything.
+        #expect(field.textView(editor, clickedOnLink: "agenthesia-path://open/", at: 0))
+        #expect(opened.count == 1)
+        #expect(!field.textView(editor, clickedOnLink: URL(string: "https://example.com")!, at: 0))
+        #expect(opened.count == 1)
+    }
+
+    @Test func streamingTextConsumesPathLinks() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Working"))))
+        let source = LiveTranscriptSource()
+        source.running = true
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        var opened: [PathLink] = []
+        controller.openPath = { opened.append($0) }
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let text = try #require(views(TranscriptTextView.self, in: row).first)
+        text.clicked(onLink: try #require(PathLink(path: "b.swift", line: 2).url), at: 0)
+        #expect(opened == [PathLink(path: "b.swift", line: 2)])
+        text.clicked(onLink: "agenthesia-path://open/", at: 0)
+        #expect(opened.count == 1)
+    }
+
+    @Test func inlineCodeInAgentTextLinksIndexedFilesAfterEachPublication() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Fix `a.swift`"))))
+        try await recorded.apply(
+            .agentMessageChunk(.init(content: .init(text: "See `a.swift:3`, `/w/new.swift` and `missing.swift`.")))
+        )
+        let source = LiveTranscriptSource()
+        source.running = true
+        source.state = recorded.state
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift"], roots: ["/w"], revision: 1)
+        source.revision += 1
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        func links(row: Int) throws -> [PathLink] {
+            let view = try #require(controller.table.view(atColumn: 0, row: row, makeIfNecessary: true))
+            let text =
+                views(LinkTextField.self, in: view).first?.attributedStringValue
+                ?? views(TranscriptTextView.self, in: view).first?.attributedString()
+            let string = try #require(text)
+            var links: [PathLink] = []
+            string.enumerateAttribute(.link, in: NSRange(0..<string.length)) { value, _, _ in
+                if let url = value as? URL, let link = PathLink(url) { links.append(link) }
+            }
+            return links
+        }
+        // Streaming text keeps its text; user prompts never link.
+        #expect(try links(row: 1).isEmpty)
+        #expect(try links(row: 0).isEmpty)
+
+        source.running = false
+        source.revision += 1
+        controller.update(source)
+        #expect(try links(row: 1) == [PathLink(path: "a.swift", line: 3)])
+        func field() throws -> LinkTextField? {
+            views(
+                LinkTextField.self,
+                in: try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: false))
+            )
+            .first
+        }
+        let linked = try #require(try field())
+
+        // A rescan that links nothing new leaves the row, and any selection in it, alone.
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift", "other.swift"], roots: ["/w"], revision: 2)
+        source.revision += 1
+        controller.update(source)
+        #expect(try field() === linked)
+
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift", "new.swift"], roots: ["/w"], revision: 3)
+        source.revision += 1
+        controller.update(source)
+        #expect(try links(row: 1) == [PathLink(path: "a.swift", line: 3), PathLink(path: "new.swift")])
+        #expect(try links(row: 0).isEmpty)
+        // Copy returns the agent's Markdown, not the links.
+        #expect(source.message(at: 1).markdown == "See `a.swift:3`, `/w/new.swift` and `missing.swift`.")
+    }
+
     private func host(_ controller: TranscriptTableController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),

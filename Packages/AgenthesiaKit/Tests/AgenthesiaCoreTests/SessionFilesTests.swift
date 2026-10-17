@@ -40,8 +40,46 @@ import Workspace
         #expect(!files.isLoadingIndex)
     }
 
+    @Test func publishesIndexedPathsWithARevision() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "indexed-paths-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "a".write(to: root.appending(path: "a.txt"), atomically: true, encoding: .utf8)
+        let files = SessionFiles()
+        await files.attach(record(root))
+        #expect(files.indexedPaths == ["a.txt"])
+        let first = files.indexRevision
+        try "b".write(to: root.appending(path: "b.txt"), atomically: true, encoding: .utf8)
+        await files.refresh()
+        #expect(files.indexedPaths == ["a.txt", "b.txt"])
+        #expect(files.indexRevision > first)
+        files.close()
+        #expect(files.indexedPaths.isEmpty)
+        #expect(files.indexRevision > first + 1)
+    }
+
     private func record(_ root: URL) -> SessionRecord {
         SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: root.path)
+    }
+
+    @Test func openRemembersTheRequestedLineUntilTheSelectionChanges() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "a\nb\nc".write(to: root.appending(path: "a.txt"), atomically: true, encoding: .utf8)
+        let files = SessionFiles()
+        defer { files.close() }
+        await files.attach(record(root))
+        let id = try #require(files.sessionID)
+        await files.open(path: "a.txt", line: 3, in: id)
+        #expect(files.selectedLine == 3)
+        await files.open(path: "a.txt", in: id)
+        #expect(files.selectedLine == nil)
+        await files.open(path: "a.txt", line: 2, in: UUID())
+        #expect(files.selectedLine == nil)
+        await files.open(path: "a.txt", line: 2, in: id)
+        files.closeDocument()
+        #expect(files.selectedLine == nil)
     }
 
     @Test func browsesNonGitFoldersAndReportsUnavailableChangeTracking() async throws {

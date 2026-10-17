@@ -190,4 +190,27 @@ import Testing
         #expect(source?.language == nil)
         #expect(source?.textView.isEditable == false)
     }
+
+    @Test func linkedLineSelectsInSourceAndMarkdownOpensSource() throws {
+        let text = (1...200).map { "line \($0)" }.joined(separator: "\n")
+        let code = SessionFileDocument(url: URL(filePath: "/workspace/a.unknown"), text: text)
+        let host = NSHostingView(rootView: FileViewer(document: code, line: 120))
+        host.frame = NSRect(x: 0, y: 0, width: 320, height: 300)
+        host.layoutSubtreeIfNeeded()
+        let source = try #require(descendant(of: SourceView.self, in: host))
+        #expect((source.text as NSString).substring(with: source.textView.textSelection) == "line 120")
+
+        let markdown = SessionFileDocument(url: URL(filePath: "/workspace/README.md"), text: text)
+        #expect(FileViewer.opensSource(markdown, line: 3))
+        #expect(!FileViewer.opensSource(markdown, line: nil))
+        #expect(!FileViewer.opensSource(code, line: 3))
+        let markdownHost = NSHostingView(rootView: FileViewer(document: markdown, line: 3))
+        markdownHost.frame = NSRect(x: 0, y: 0, width: 320, height: 300)
+        markdownHost.layoutSubtreeIfNeeded()
+        #expect(descendant(of: SourceView.self, in: markdownHost)?.text == text)
+        let plain = NSHostingView(rootView: FileViewer(document: markdown))
+        plain.frame = markdownHost.frame
+        plain.layoutSubtreeIfNeeded()
+        #expect(descendant(of: SourceView.self, in: plain) == nil)
+    }
 }

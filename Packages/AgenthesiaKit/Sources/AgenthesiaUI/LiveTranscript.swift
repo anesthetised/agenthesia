@@ -11,6 +11,8 @@ struct TranscriptMessage {
     var text: NSAttributedString
     var previousMarkdown: String?
     var update: StreamingMarkdown.Update?
+    /// The signature of inline code links; nil for rows that do not link inline code.
+    var links: Int?
     var tool: ToolCardHeader?
     var input: InputCard?
 }
@@ -52,11 +54,17 @@ final class LiveTranscriptSource: TranscriptSource {
     var revision = 0
     /// Answers go to the controller, which owns the request's lifetime.
     weak var controller: SessionController?
+    /// The session's working directory, against which tool call paths link.
+    var root: URL?
+    /// The displayed session's file index, against which inline code in agent text links.
+    var pathIndex = TranscriptPathIndex()
     var pending: [UUID] = []
     private struct Cached {
         var markdown: String
         var text: NSAttributedString
         var stream: StreamingMarkdown
+        /// `text` with inline code linked against the index of `revision`.
+        var linked: (revision: Int, text: NSAttributedString, signature: Int)?
     }
     private var cache: [Int64: Cached] = [:]
     /// Rows are rebuilt on every update; a diff is computed once per edit.
@@ -74,6 +82,7 @@ final class LiveTranscriptSource: TranscriptSource {
 
     func update(_ controller: SessionController) {
         self.controller = controller
+        root = URL(filePath: controller.session.workingDirectory)
         state = controller.transcript
         inputDrafts = inputDrafts.filter { id, _ in controller.pendingInputs.contains { $0.id == id } }
         pending = controller.pendingPermissions.map(\.id)
@@ -109,7 +118,7 @@ final class LiveTranscriptSource: TranscriptSource {
                 expanded: expanded.contains(item.id),
                 diff: cachedDiff
             )
-            var message = render(id: item.id, role: "Tool", markdown: card.markdown)
+            var message = render(id: item.id, role: "Tool", markdown: card.markdown, links: links(tool))
             message.tool = card.header
             return message
         }
@@ -128,12 +137,19 @@ final class LiveTranscriptSource: TranscriptSource {
                 expanded: expanded.contains(item.id),
                 diff: cachedDiff
             )
-            var message = render(id: item.id, role: "Permission", markdown: card.markdown)
+            var message = render(
+                id: item.id,
+                role: "Permission",
+                markdown: card.markdown,
+                links: links(permission.toolCall)
+            )
             message.tool = card.header
             return message
         }
         let (role, markdown) = Self.content(item)
-        return render(id: item.id, role: role, markdown: markdown)
+        // Streaming rows keep their text until they finish; user prompts never link.
+        let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(at: row)
+        return render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
     }
 
     func toggleExpansion(at row: Int) {
@@ -149,7 +165,42 @@ final class LiveTranscriptSource: TranscriptSource {
         controller?.answerPermission(id, with: permission.options[option].optionId)
     }
 
-    func render(id: Int64, role: String, markdown: String) -> TranscriptMessage {
+    private func links(_ tool: ACP.ToolCall) -> [(display: String, link: PathLink)] {
+        root.map { PathLink.targets(of: tool, root: $0) } ?? []
+    }
+
+    /// `links` mark the inline code that shows a path; they are not part of the Markdown that Copy returns. They are
+    /// resolved, against the file system, only when the row's text changed. `linksInlineCode` links inline code
+    /// against `pathIndex` once per index revision.
+    func render(
+        id: Int64,
+        role: String,
+        markdown: String,
+        links: @autoclosure () -> [(display: String, link: PathLink)] = [],
+        linksInlineCode: Bool = false
+    ) -> TranscriptMessage {
+        var message = renderMarkdown(id: id, role: role, markdown: markdown, links: links())
+        guard linksInlineCode, var cached = cache[id] else { return message }
+        let linked: (revision: Int, text: NSAttributedString, signature: Int)
+        if let current = cached.linked, current.revision == pathIndex.revision {
+            linked = current
+        } else {
+            let result = pathIndex.linkingInlineCode(in: cached.text)
+            linked = (pathIndex.revision, result.text, result.signature)
+            cached.linked = linked
+            cache[id] = cached
+        }
+        message.text = linked.text
+        message.links = linked.signature
+        return message
+    }
+
+    private func renderMarkdown(
+        id: Int64,
+        role: String,
+        markdown: String,
+        links: @autoclosure () -> [(display: String, link: PathLink)]
+    ) -> TranscriptMessage {
         if let cached = cache[id], cached.markdown == markdown {
             return TranscriptMessage(role: role, markdown: markdown, text: cached.text)
         }
@@ -165,8 +216,10 @@ final class LiveTranscriptSource: TranscriptSource {
         }
         let text = NSMutableAttributedString(attributedString: cached.text)
         update.apply(to: text)
+        PathLink.apply(links(), to: text)
         cached.markdown = markdown
         cached.text = text
+        cached.linked = nil
         cache[id] = cached
         return TranscriptMessage(
             role: role,
@@ -438,6 +491,9 @@ final class LiveTranscriptSource: TranscriptSource {
 
 struct LiveTranscript: NSViewRepresentable {
     let session: SessionController
+    let pathIndex: TranscriptPathIndex
+    /// A clicked path link, with the session whose transcript it was in.
+    let onOpenPath: (PathLink, UUID) -> Void
 
     final class Coordinator {
         let table = TranscriptTableController()
@@ -451,8 +507,11 @@ struct LiveTranscript: NSViewRepresentable {
         let coordinator = context.coordinator
         if coordinator.session !== session {
             coordinator.session = session
+            let id = session.session.id
+            coordinator.table.openPath = { onOpenPath($0, id) }
             coordinator.frames.start(session: session, in: view)
         }
+        coordinator.source.pathIndex = pathIndex
         coordinator.source.update(session)
         coordinator.table.update(coordinator.source)
     }

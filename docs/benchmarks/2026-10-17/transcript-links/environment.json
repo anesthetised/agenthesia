@@ -1,0 +1,17 @@
+{
+  "timestampUTC": "2026-10-17",
+  "sourceBase": "9ec2e64be5758093938f37ce1d48457caea87314",
+  "sourceState": "uncommitted #29 slice 5 on feat/clickable-paths",
+  "model": "MacBookPro18,2",
+  "memoryBytes": 34359738368,
+  "logicalCPUs": 10,
+  "swift": "swift-driver version: 1.168.6 Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "before": {
+    "loadAverage": "{ 11.01 11.02 12.45 }",
+    "memoryFree": "87%"
+  },
+  "after": {
+    "loadAverage": "{ 9.70 10.74 12.33 }",
+    "memoryFree": "88%"
+  }
+}

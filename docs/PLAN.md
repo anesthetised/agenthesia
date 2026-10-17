@@ -183,8 +183,10 @@ The final follow-up passed `just lint`, `just test` (594 Swift tests and 15 scri
 `just coverage` (all gates; Core 98.2%), and `just app`. The new Stop/injection regression fails if the generation
 guard is removed. The atomic-dequeue failure test covers paused sends and verifies that a failed
 batch commits neither the unpause nor the dequeue. `swiftui-pro` and code review found no blockers.
-Remaining native checks: repeated Return after `fail`, Return after `exit`/Continue, and Return after
-explicitly draining retained paused entries. Retained work must not dispatch merely on Continue.
+The owner passed the remaining native checks: repeated Return after `fail`, Return after
+`exit`/Continue, and Return after explicitly draining retained paused entries. The supplied screenshot
+shows separate fresh prompts receiving replies with an empty composer and Idle status. The agreed
+manual acceptance checklist for #39/#117 is complete; retained work still requires explicit dispatch.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an

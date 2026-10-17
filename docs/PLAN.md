@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-16)
+## State (2026-10-17)
 
 - Live sessions run end-to-end in one window ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -31,9 +31,9 @@ before implementation.
 - Quick Open, the side file viewer and changed-file tracking (#26–#28) are merged (#113)
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
   sessions show working changes only. Changed Files compares with the session base rather than the
-  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
-  editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)) is implemented on
-  `feat/clickable-paths`; the owner's manual checks passed.
+  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). Transcript paths open
+  the file pane at a line, and Open in Editor hands off to the chosen editor (#29, #116,
+  [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)). M4 is complete.
 
 ## Previous batch: session interactions (merged)
 
@@ -111,12 +111,12 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, and #114 are merged. Next is #29 (clickable transcript paths
-and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), slices below), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
-the base with a ref.
+M4 (Files) is merged: #26–#28, #114 and #29 below. Next is M7 (Parallel sessions, #37–#40), which
+replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) and needs a new ADR
+first, followed by M8 (Worktrees), which also decides whether to pin the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
-### #29 slices (2026-10-17)
+### #29 slices (2026-10-17, merged in #116)
 
 The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or more per slice, in order:
 

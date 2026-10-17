@@ -1,9 +1,9 @@
-import AgenthesiaCore
+public import AgenthesiaCore
 import AppKit
 public import SwiftUI
 
 public struct RootView: View {
-    @State private var model = SessionWindowModel()
+    @State private var model: SessionWindowModel
     @State private var prompt = ""
     @State private var attachments: [URL] = []
     @State private var editingQueueID: UUID?
@@ -17,21 +17,23 @@ public struct RootView: View {
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
-    public init() {}
+    public init(sessions: SessionManager) { _model = State(initialValue: SessionWindowModel(sessions: sessions)) }
 
     public var body: some View {
         NavigationSplitView {
             List {
-                if let owner = model.owner {
-                    Section("Current session") {
-                        Button {
-                            model.showLive(); showingSetup = false
-                        } label: {
-                            Label(
-                                owner.controller?.session.title ?? "Starting session",
-                                systemImage: "bubble.left.and.bubble.right"
-                            )
-                        }.buttonStyle(.plain)
+                if !model.sessions.owners.isEmpty {
+                    Section("Live sessions") {
+                        ForEach(model.sessions.owners) { owner in
+                            Button {
+                                model.show(owner); showingSetup = false
+                            } label: {
+                                Label(
+                                    owner.controller?.session.title ?? owner.resuming?.title ?? "Starting session",
+                                    systemImage: "bubble.left.and.bubble.right"
+                                )
+                            }.buttonStyle(.plain)
+                        }
                     }
                 }
                 Section("Saved sessions") {
@@ -109,7 +111,7 @@ public struct RootView: View {
                         }
                     }.font(.caption).foregroundStyle(.secondary).padding(8)
                 }
-                if showingLog, let owner = model.owner {
+                if showingLog, model.restored == nil, let owner = model.owner {
                     Divider()
                     ScrollView {
                         Text(owner.stderrLog.isEmpty ? "No stderr output." : owner.stderrLog)
@@ -128,19 +130,18 @@ public struct RootView: View {
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(showingSetup || !filesMatchSession)
-                if let owner = model.owner {
+                if model.restored == nil, let owner = model.owner {
                     Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
-                        Task {
-                            await owner.close(); await model.refresh()
-                        }
+                        Task { await model.sessions.end(owner) }
                     }.disabled(owner.isClosed)
                 }
             }
         }
         .frame(minWidth: 740, minHeight: 500)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
-        .task { await model.refresh() }
+        // Ended sessions move to saved history in every window.
+        .task(id: model.sessions.owners.map(\.id)) { await model.refresh() }
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
@@ -209,13 +210,11 @@ public struct RootView: View {
                     showingSetup = false
                     let command = Self.launchCommand(executable: executable, arguments: arguments)
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
-                    Task {
-                        await model.start(
-                            directory: URL(filePath: path),
-                            executable: command.executable,
-                            arguments: command.arguments
-                        )
-                    }
+                    model.start(
+                        directory: URL(filePath: path),
+                        executable: command.executable,
+                        arguments: command.arguments
+                    )
                 }.buttonStyle(.borderedProminent)
                     .disabled(directory.isEmpty || executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -260,12 +259,9 @@ public struct RootView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if [.readOnly, .failed, .closed].contains(session.status) {
-                    Button("Continue", systemImage: "play.fill") { Task { await model.continueRestored() } }
+                    Button("Continue", systemImage: "play.fill") { model.continueRestored() }
                         .disabled(!model.canContinue)
-                        .help(
-                            model.restored != nil && model.restoredIsLive
-                                ? "This session is open in another window." : "Reconnect to the agent."
-                        )
+                        .help("Reconnect to the agent.")
                 } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
                         .keyboardShortcut(".", modifiers: .command)
@@ -396,4 +392,4 @@ public struct RootView: View {
     }
 }
 
-#Preview { RootView() }
+#Preview { RootView(sessions: SessionManager()) }

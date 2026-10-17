@@ -5,7 +5,8 @@ import Observation
 public import Persistence
 import Workspace
 
-/// Window-bound owner. Close explicitly on window close or app quit; worktrees remain on disk.
+/// One agent connection, owned by `SessionManager` (ADR-0026). Close on End Session or app quit;
+/// worktrees remain on disk.
 @MainActor @Observable
 public final class LiveSession {
     public private(set) var controller: SessionController?
@@ -15,14 +16,14 @@ public final class LiveSession {
     public private(set) var diagnostic: String?
     public private(set) var stderrLog = ""
     public private(set) var workingDirectory: URL?
+    /// The saved session this owner continues, known before its controller exists.
+    public private(set) var resuming: SessionRecord?
     @ObservationIgnored private let library: SessionLibrary
     @ObservationIgnored private var process: AgentProcess?
-    @ObservationIgnored private var startup: Task<Void, Never>?
+    @ObservationIgnored private(set) var startup: Task<Void, Never>?
     @ObservationIgnored private var closing: Task<Void, Never>?
     @ObservationIgnored private var exitTask: Task<Void, Never>?
     @ObservationIgnored private var logTask: Task<Void, Never>?
-    /// The session this owner holds in the library, released on cleanup.
-    @ObservationIgnored private var claimed: UUID?
     /// Where attached files from the user's checkout are found in the session worktree (ADR-0018).
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
@@ -33,13 +34,20 @@ public final class LiveSession {
 
     public init(library: SessionLibrary = .shared) { self.library = library }
 
+    public var sessionID: UUID? { controller?.session.id ?? resuming?.id }
+
+    /// Whether the agent is starting or connected; false once closed or failed.
+    public var isLive: Bool {
+        !isClosed && (isStarting || controller.map { [.idle, .running, .stopping].contains($0.status) } == true)
+    }
+
     public func start(
         directory: URL,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = []
     ) async {
-        await run(
+        begin(
             .new(
                 directory: directory,
                 agent: agent,
@@ -47,24 +55,29 @@ public final class LiveSession {
                 additionalDirectories: additionalDirectories
             )
         )
+        await startup?.value
     }
 
     /// Continues a saved session in its working directory with its agent (ADR-0017).
     public func resume(_ session: SessionRecord) async {
-        await run(.saved(session))
+        begin(.saved(session))
+        await startup?.value
     }
 
-    private enum Launch {
+    enum Launch {
         case new(directory: URL, agent: AgentInstallRecord, worktreesRoot: URL?, additionalDirectories: [URL])
         case saved(SessionRecord)
     }
 
-    private func run(_ launch: Launch) async {
+    /// Starts launching without waiting, after the earlier owners of the same session have closed.
+    func begin(_ launch: Launch, after previous: [LiveSession] = []) {
         guard startup == nil, controller == nil, !isClosed else { return }
+        if case .saved(let session) = launch { resuming = session }
         isStarting = true
-        let task = Task { await self.launch(launch) }
-        startup = task
-        await task.value
+        startup = Task {
+            for owner in previous { await owner.close() }
+            await self.launch(launch)
+        }
     }
 
     private func launch(_ launch: Launch) async {
@@ -107,10 +120,6 @@ public final class LiveSession {
                 else {
                     throw LaunchError(message: "The working directory “\(session.workingDirectory)” no longer exists.")
                 }
-                guard await library.claim(session.id) else {
-                    throw LaunchError(message: "This session is already open in another window.")
-                }
-                claimed = session.id
                 workingDirectory = URL(filePath: session.workingDirectory)
                 controller = try await SessionController.history(id: session.id, store: store)
             }
@@ -180,8 +189,6 @@ public final class LiveSession {
         store: PersistenceStore
     ) async throws -> SessionController {
         let id = UUID()
-        _ = await library.claim(id)
-        claimed = id
         let workspace: SessionWorkspace
         if let worktreesRoot {
             workspace = try await SessionWorkspace.prepare(directory: directory, id: id, worktreesRoot: worktreesRoot)
@@ -283,10 +290,6 @@ public final class LiveSession {
     }
 
     private func cleanup() async {
-        if let claimed {
-            self.claimed = nil
-            await library.release(claimed)
-        }
         guard let process else { return }
         _ = await process.terminate()
         await process.waitForStderr()
@@ -312,3 +315,5 @@ public final class LiveSession {
         }
     }
 }
+
+extension LiveSession: Identifiable {}

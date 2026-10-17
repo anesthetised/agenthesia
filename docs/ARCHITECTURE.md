@@ -45,8 +45,10 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 
 ## Live app integration
 
-The main window uses a window-bound `LiveSession` in Core to own the agent process and
-`SessionController` ([ADR-0014](adr/0014-window-bound-live-sessions.md)). `SessionLibrary.shared` opens
+A `LiveSession` in Core owns one agent process and its `SessionController`
+([ADR-0014](adr/0014-window-bound-live-sessions.md)). The app-wide `SessionManager` owns every
+`LiveSession` ([ADR-0026](adr/0026-app-wide-session-manager.md)); windows select one and never end it.
+`SessionLibrary.shared` opens
 one app database away from the main actor and provides project, install, and saved-session discovery.
 The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
 leaves no worktree behind), prepares the workspace, creates metadata, and starts
@@ -126,24 +128,27 @@ decline. Requests without a recorded response after a restart show that none was
 controls. Non-text content is identified with attachment placeholders rather than silently dropped.
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
-Saved history opens read-only. Its Continue action replaces the window's live session with one that
-reattaches the saved session ([ADR-0017](adr/0017-continue-saved-sessions.md)): `LiveSession.resume`
-looks up the session's agent install, checks the executable and the working directory, and launches
-the agent there without creating a workspace. `SessionLibrary` records which sessions have a live owner;
-Continue is disabled for a session that was live in another window when it was selected, and a second
-claim fails with an explanation. The claim is released when the owner cleans up.
+Saved history opens read-only. Its Continue action selects a new owner that reattaches the saved
+session ([ADR-0017](adr/0017-continue-saved-sessions.md)): `LiveSession.resume` looks up the session's
+agent install, checks the executable and the working directory, and launches the agent there without
+creating a workspace. `SessionManager.resume` returns the owner that already has the session live, and
+otherwise closes earlier failed owners of the session before the new one launches, so one owner writes
+to a session's log at a time. Selecting a live session from history shows its owner.
 `SessionController.history(id:store:)` replays the log into a controller that `reopen` attaches through
 `AgentConnection.reopenSession`. Only when the agent accepts does the controller append `failed` for a
 turn without an outcome, `permissionResolved(.cancelled)` for requests without a response, and
 `reopened` with the session's settings and the method used; the transcript shows the last as a
 “Continued” divider. Any failure leaves the log unchanged and the history readable.
 
-A window-close notification starts asynchronous owner shutdown. An AppKit application delegate retains
-a registry solely for pending window cleanup and uses `terminateLater` to await shutdown on app quit.
-The owner closes ACP and drains controller writes, terminates the process group, and waits for startup
-if it was in flight. Unexpected process exit and observable controller failure also trigger cleanup.
-Closing a transcript view only detaches its display driver; selecting history does not terminate the
-window's live session. Starting another session requires ending the current one (or a startup failure).
+The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
+in the background and are listed under Live sessions in start order. End Session (or Cancel Startup)
+closes an owner and removes it, after which its session is listed as saved history; an owner whose
+startup, process or controller failed stays listed with its error until it is ended or continued.
+Closing a window only detaches it and stops its file observation; closing a transcript view only
+detaches its display driver. On quit the delegate uses `terminateLater` and closes every owner
+concurrently: each closes ACP and drains controller writes, terminates the process group, and waits
+for startup if it was in flight. Unexpected process exit and observable controller failure also
+trigger cleanup.
 
 ## Session filesystem
 

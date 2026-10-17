@@ -9,8 +9,6 @@ public actor SessionLibrary {
     )
     private let databaseURL: URL
     private var opening: Task<PersistenceStore, any Error>?
-    /// Sessions with a live owner in this app; one owner writes to a session's log (ADR-0017).
-    private var live: Set<UUID> = []
 
     public init(databaseURL: URL) { self.databaseURL = databaseURL }
 
@@ -37,14 +35,6 @@ public actor SessionLibrary {
         return result.sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// Whether a window owns the session live, so it cannot be continued elsewhere.
-    public func isLive(_ id: UUID) -> Bool { live.contains(id) }
-
-    /// Returns `false` if another owner already holds the session.
-    func claim(_ id: UUID) -> Bool { live.insert(id).inserted }
-
-    func release(_ id: UUID) { live.remove(id) }
-
     func install(id: UUID) async throws -> AgentInstallRecord? {
         try await store().agentInstalls().first { $0.id == id }
     }
@@ -54,7 +44,7 @@ public actor SessionLibrary {
         if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) { return existing }
         let project = ProjectRecord(name: directory.lastPathComponent, rootPath: directory.path)
         do { try await store.createProject(project) } catch {
-            // Another window may have inserted the same canonical directory during the write.
+            // Another session may have inserted the same canonical directory during the write.
             if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) {
                 return existing
             }

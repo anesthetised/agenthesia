@@ -7,7 +7,7 @@ struct AgenthesiaApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(sessions: lifecycle.sessions)
         }
         .defaultSize(width: 1000, height: 700)
         .commands { FileCommands() }

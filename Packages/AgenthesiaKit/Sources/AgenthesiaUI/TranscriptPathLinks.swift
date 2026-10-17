@@ -87,7 +87,9 @@ public struct TranscriptPathIndex: Sendable {
     /// Changes with every published index, so the transcript compares it instead of the paths.
     public var revision: Int
 
-    public init(paths: Set<String> = [], roots: [String] = [], revision: Int = 0) {
+    // Nonisolated so that a nonisolated owner, such as a test double, can create an empty index as a default
+    // value; Swift 6.2 rejects a main-actor default there.
+    public nonisolated init(paths: Set<String> = [], roots: [String] = [], revision: Int = 0) {
         self.paths = paths
         self.roots = roots
         self.revision = revision

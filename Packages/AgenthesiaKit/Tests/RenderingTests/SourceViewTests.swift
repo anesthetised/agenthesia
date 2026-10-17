@@ -266,7 +266,8 @@ import Testing
         // New text forgets the request.
         view.setText("a\nb", language: nil)
         view.layoutSubtreeIfNeeded()
-        #expect(view.scrollView.contentView.bounds.origin.y == 0)
+        // The top is not exactly 0 on every macOS release (macOS 26 in CI rests at -0.5).
+        #expect(abs(view.scrollView.contentView.bounds.origin.y) < 1)
     }
 
     @Test func lineStartsAndPoints() {

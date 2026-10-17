@@ -14,6 +14,10 @@ struct AgenthesiaApp: App {
             .commands { RenderingLabCommands() }
         #endif
 
+        Settings {
+            SettingsView()
+        }
+
         #if DEBUG
             Window("Rendering Lab", id: RenderingLabView.windowID) {
                 RenderingLabView()

@@ -41,6 +41,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
 | `workspace-bench` | Release-build file indexing, fuzzy search, changed paths and bounded-read timings (`just bench-files`). | `Workspace` |
+| `transcript-bench` | Release-build linking of transcript inline code paths against a file index (`just bench-transcript-links`). | `AgenthesiaUI`, `Rendering` |
 
 ## Live app integration
 
@@ -235,8 +236,17 @@ follows the layout correction when highlighting finishes. Markdown opened with a
 
 The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
 as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file
-in that app; with no choice, or an editor that is not installed, the system's default app. Inline code
-links in agent text follow in a later slice.
+in that app; with no choice, or an editor that is not installed, the system's default app.
+
+Inline code in agent messages and thoughts links when it names a file in the displayed session's index.
+`Rendering` marks inline code with the generic `.inlineCode` attribute. `SessionFiles` publishes
+`indexedPaths` with an `indexRevision`; `RootView` passes them as a `TranscriptPathIndex`, and
+`PathReference.indexedPath` matches relative paths, or absolute ones under the canonical root or the
+working directory, without the file system. `LiveTranscriptSource` keeps each row's unlinked text and
+relinks it once per index revision when the row is requested; a row is rebuilt only when its link
+signature changes, so a rescan that links nothing new keeps its selection. Streaming rows and user
+prompts are not linked. `just bench-transcript-links` measures the cost
+([2026-10-17](benchmarks/2026-10-17/transcript-links/README.md)).
 
 ## Persistence implementation
 

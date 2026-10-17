@@ -11,6 +11,8 @@ struct TranscriptMessage {
     var text: NSAttributedString
     var previousMarkdown: String?
     var update: StreamingMarkdown.Update?
+    /// The signature of inline code links; nil for rows that do not link inline code.
+    var links: Int?
     var tool: ToolCardHeader?
     var input: InputCard?
 }
@@ -54,11 +56,15 @@ final class LiveTranscriptSource: TranscriptSource {
     weak var controller: SessionController?
     /// The session's working directory, against which tool call paths link.
     var root: URL?
+    /// The displayed session's file index, against which inline code in agent text links.
+    var pathIndex = TranscriptPathIndex()
     var pending: [UUID] = []
     private struct Cached {
         var markdown: String
         var text: NSAttributedString
         var stream: StreamingMarkdown
+        /// `text` with inline code linked against the index of `revision`.
+        var linked: (revision: Int, text: NSAttributedString, signature: Int)?
     }
     private var cache: [Int64: Cached] = [:]
     /// Rows are rebuilt on every update; a diff is computed once per edit.
@@ -141,7 +147,9 @@ final class LiveTranscriptSource: TranscriptSource {
             return message
         }
         let (role, markdown) = Self.content(item)
-        return render(id: item.id, role: role, markdown: markdown)
+        // Streaming rows keep their text until they finish; user prompts never link.
+        let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(at: row)
+        return render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
     }
 
     func toggleExpansion(at row: Int) {
@@ -162,12 +170,36 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     /// `links` mark the inline code that shows a path; they are not part of the Markdown that Copy returns. They are
-    /// resolved, against the file system, only when the row's text changed.
+    /// resolved, against the file system, only when the row's text changed. `linksInlineCode` links inline code
+    /// against `pathIndex` once per index revision.
     func render(
         id: Int64,
         role: String,
         markdown: String,
-        links: @autoclosure () -> [(display: String, link: PathLink)] = []
+        links: @autoclosure () -> [(display: String, link: PathLink)] = [],
+        linksInlineCode: Bool = false
+    ) -> TranscriptMessage {
+        var message = renderMarkdown(id: id, role: role, markdown: markdown, links: links())
+        guard linksInlineCode, var cached = cache[id] else { return message }
+        let linked: (revision: Int, text: NSAttributedString, signature: Int)
+        if let current = cached.linked, current.revision == pathIndex.revision {
+            linked = current
+        } else {
+            let result = pathIndex.linkingInlineCode(in: cached.text)
+            linked = (pathIndex.revision, result.text, result.signature)
+            cached.linked = linked
+            cache[id] = cached
+        }
+        message.text = linked.text
+        message.links = linked.signature
+        return message
+    }
+
+    private func renderMarkdown(
+        id: Int64,
+        role: String,
+        markdown: String,
+        links: @autoclosure () -> [(display: String, link: PathLink)]
     ) -> TranscriptMessage {
         if let cached = cache[id], cached.markdown == markdown {
             return TranscriptMessage(role: role, markdown: markdown, text: cached.text)
@@ -187,6 +219,7 @@ final class LiveTranscriptSource: TranscriptSource {
         PathLink.apply(links(), to: text)
         cached.markdown = markdown
         cached.text = text
+        cached.linked = nil
         cache[id] = cached
         return TranscriptMessage(
             role: role,
@@ -458,6 +491,7 @@ final class LiveTranscriptSource: TranscriptSource {
 
 struct LiveTranscript: NSViewRepresentable {
     let session: SessionController
+    let pathIndex: TranscriptPathIndex
     /// A clicked path link, with the session whose transcript it was in.
     let onOpenPath: (PathLink, UUID) -> Void
 
@@ -477,6 +511,7 @@ struct LiveTranscript: NSViewRepresentable {
             coordinator.table.openPath = { onOpenPath($0, id) }
             coordinator.frames.start(session: session, in: view)
         }
+        coordinator.source.pathIndex = pathIndex
         coordinator.source.update(session)
         coordinator.table.update(coordinator.source)
     }

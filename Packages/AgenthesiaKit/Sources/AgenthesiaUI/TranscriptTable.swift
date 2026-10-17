@@ -103,8 +103,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let message = session.message(at: row)
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if visible.markdown == message.markdown, visible.tool == message.tool, visible.input == message.input,
-                !(finished && visible.streamingCell != nil && !keepsSelection)
+            if visible.markdown == message.markdown, visible.links == message.links, visible.tool == message.tool,
+                visible.input == message.input, !(finished && visible.streamingCell != nil && !keepsSelection)
             {
                 continue
             }
@@ -138,6 +138,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                 visible.show(message, streaming: true, width: table.tableColumns[0].width - 48, controller: self)
             }
             visible.markdown = message.markdown
+            visible.links = message.links
             changed.insert(row)
         }
         if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }
@@ -261,6 +262,7 @@ final class TranscriptScrollView: NSScrollView {
 private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
+    var links: Int?
     var tool: ToolCardHeader?
     var input: InputCard?
     var streamingCell: TextKitCell?
@@ -279,6 +281,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         stack?.removeFromSuperview()
         actions = nil
         markdown = message.markdown
+        links = message.links
         tool = message.tool
         input = message.input
         let content: NSView
@@ -412,6 +415,7 @@ private final class TranscriptMessageRow: NSTableCellView {
 
     func showFinished(_ message: DemoSession.Message, width: CGFloat, controller: TranscriptTableController) {
         markdown = message.markdown
+        links = message.links
         guard let stack else { return }
         let cell = TextCell()
         cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }

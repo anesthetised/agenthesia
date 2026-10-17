@@ -131,6 +131,13 @@ import Testing
         #expect(try attrs(of: "now", in: text)[.backgroundColor] == nil)
     }
 
+    @Test func marksInlineCodeForCallers() throws {
+        let text = render("see `a/b.swift` and *b*")
+        #expect(try attrs(of: "a/b.swift", in: text)[.inlineCode] as? Bool == true)
+        #expect(try attrs(of: "see", in: text)[.inlineCode] == nil)
+        #expect(try attrs(of: "b", in: render("```\nb\n```"))[.inlineCode] == nil)
+    }
+
     @Test func linksCarryTheirDestination() throws {
         let text = render("see [the **docs**](https://example.com/a) and [nowhere]()")
         let docs = try attrs(of: "docs", in: text)

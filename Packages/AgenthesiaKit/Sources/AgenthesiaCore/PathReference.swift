@@ -55,6 +55,19 @@ public struct PathReference: Equatable, Sendable {
         return (rest.dropLast(marker.count), value)
     }
 
+    /// The path in `paths`, a session's file index, that this reference names. Relative paths are looked up as
+    /// written; absolute ones must be under one of `roots`. Nothing touches the file system (ADR-0025).
+    public func indexedPath(in paths: Set<String>, roots: [String]) -> String? {
+        var relative = Substring(path)
+        if path.hasPrefix("/") {
+            guard
+                let root = roots.lazy.map({ $0.hasSuffix("/") ? $0 : $0 + "/" }).first(where: { path.hasPrefix($0) })
+            else { return nil }
+            relative = relative.dropFirst(root.count)
+        }
+        return paths.contains(String(relative)) ? String(relative) : nil
+    }
+
     /// The path relative to the session's canonical `root`, or nil when it is outside the root, has `..`
     /// components or resolves through a symlink to somewhere else (ADR-0023, ADR-0025).
     public func relativePath(in root: URL) -> String? {

@@ -15,6 +15,21 @@ import Workspace
         #expect(PathReference("/tmp/a.txt:7") == PathReference(path: "/tmp/a.txt", line: 7))
     }
 
+    @Test func findsIndexedPathsWithoutTheFileSystem() {
+        let paths: Set = ["Sources/App.swift", "README.md"]
+        let roots = ["/private/tmp/session", "/tmp/session/"]
+        #expect(PathReference(path: "Sources/App.swift").indexedPath(in: paths, roots: roots) == "Sources/App.swift")
+        #expect(PathReference(path: "/tmp/session/README.md").indexedPath(in: paths, roots: roots) == "README.md")
+        #expect(
+            PathReference(path: "/private/tmp/session/Sources/App.swift").indexedPath(in: paths, roots: roots)
+                == "Sources/App.swift"
+        )
+        #expect(PathReference(path: "Missing.swift").indexedPath(in: paths, roots: roots) == nil)
+        #expect(PathReference(path: "/tmp/sessionREADME.md").indexedPath(in: paths, roots: roots) == nil)
+        #expect(PathReference(path: "/elsewhere/README.md").indexedPath(in: paths, roots: roots) == nil)
+        #expect(PathReference(path: "/tmp/session").indexedPath(in: paths, roots: roots) == nil)
+    }
+
     @Test func dropsLeadingDotSlash() {
         #expect(PathReference("./Sources/App.swift:4") == PathReference(path: "Sources/App.swift", line: 4))
         #expect(PathReference("././a/b") == PathReference(path: "./a/b"))

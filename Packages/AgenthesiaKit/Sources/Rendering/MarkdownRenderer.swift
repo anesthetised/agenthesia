@@ -275,7 +275,10 @@ public struct MarkdownRenderer: Sendable {
         var context = context
         context.font = theme.codeFont
         let text = styled(code, context)
-        text.addAttribute(.backgroundColor, value: theme.codeBackgroundColor, range: NSRange(0..<text.length))
+        text.addAttributes(
+            [.backgroundColor: theme.codeBackgroundColor, .inlineCode: true],
+            range: NSRange(0..<text.length)
+        )
         return text
     }
 
@@ -349,4 +352,9 @@ public struct MarkdownRenderer: Sendable {
     private func withoutTrailingNewline(_ string: String) -> String {
         string.hasSuffix("\n") ? String(string.dropLast()) : string
     }
+}
+
+extension NSAttributedString.Key {
+    /// Marks inline code, so that callers can decorate it, e.g. link file paths, without parsing Markdown again.
+    public static let inlineCode = NSAttributedString.Key("AgenthesiaInlineCode")
 }

@@ -1,6 +1,6 @@
 import ACP
 import AgenthesiaCore
-import AppKit
+public import AppKit
 import Rendering
 
 /// A transcript link to a file in the displayed session. It uses a private scheme so that the transcript can
@@ -74,5 +74,45 @@ struct PathLink: Equatable {
                 search = NSRange(location: next, length: string.length - next)
             }
         }
+    }
+}
+
+/// The displayed session's file index, against which inline code in agent text links (ADR-0025). Public for
+/// `transcript-bench`.
+public struct TranscriptPathIndex: Sendable {
+    /// Relative to the session's working directory.
+    public var paths: Set<String>
+    /// Prefixes under which absolute paths are looked up: the canonical root and the directory the agent was given.
+    public var roots: [String]
+    /// Changes with every published index, so the transcript compares it instead of the paths.
+    public var revision: Int
+
+    public init(paths: Set<String> = [], roots: [String] = [], revision: Int = 0) {
+        self.paths = paths
+        self.roots = roots
+        self.revision = revision
+    }
+
+    /// Links inline code that names an indexed file, without the file system. Returns `text` itself when nothing
+    /// links, and a signature of the links, so a row is rebuilt only when its links change.
+    public func linkingInlineCode(in text: NSAttributedString) -> (text: NSAttributedString, signature: Int) {
+        guard !paths.isEmpty, text.length > 0 else { return (text, 0) }
+        let string = text.string as NSString
+        var linked: NSMutableAttributedString?
+        var hasher = Hasher()
+        text.enumerateAttribute(.inlineCode, in: NSRange(0..<text.length)) { value, range, _ in
+            guard value != nil, text.attribute(.link, at: range.location, effectiveRange: nil) == nil,
+                let reference = PathReference(string.substring(with: range)),
+                let path = reference.indexedPath(in: paths, roots: roots),
+                let url = PathLink(path: path, line: reference.line).url
+            else { return }
+            let target = linked ?? NSMutableAttributedString(attributedString: text)
+            target.addAttributes([.link: url, .foregroundColor: Theme.standard.linkColor], range: range)
+            linked = target
+            hasher.combine(range.location)
+            hasher.combine(url)
+        }
+        guard let linked else { return (text, 0) }
+        return (linked, hasher.finalize())
     }
 }

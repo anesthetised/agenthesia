@@ -69,8 +69,10 @@ public struct RootView: View {
                 } else if let session = model.displayed {
                     HSplitView {
                         VStack(spacing: 0) {
-                            LiveTranscript(session: session) { openFile($0.path, line: $0.line, for: $1) }
-                                .id(session.session.id)
+                            LiveTranscript(session: session, pathIndex: pathIndex(for: session)) {
+                                openFile($0.path, line: $0.line, for: $1)
+                            }
+                            .id(session.session.id)
                             Divider()
                             composer(session)
                         }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
@@ -163,6 +165,16 @@ public struct RootView: View {
 
     private var filesMatchSession: Bool {
         model.files.root != nil && model.files.sessionID == model.displayed?.session.id
+    }
+
+    /// Empty until the file pane's index belongs to the displayed session.
+    private func pathIndex(for session: SessionController) -> TranscriptPathIndex {
+        guard filesMatchSession, let root = model.files.root else { return TranscriptPathIndex() }
+        return TranscriptPathIndex(
+            paths: model.files.indexedPaths,
+            roots: [root.path(percentEncoded: false), session.session.workingDirectory],
+            revision: model.files.indexRevision
+        )
     }
 
     private func openFile(_ path: String, line: Int? = nil, for id: UUID?) {

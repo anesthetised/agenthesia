@@ -593,6 +593,65 @@ import Testing
         #expect(opened.count == 1)
     }
 
+    @Test func inlineCodeInAgentTextLinksIndexedFilesAfterEachPublication() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Fix `a.swift`"))))
+        try await recorded.apply(
+            .agentMessageChunk(.init(content: .init(text: "See `a.swift:3`, `/w/new.swift` and `missing.swift`.")))
+        )
+        let source = LiveTranscriptSource()
+        source.running = true
+        source.state = recorded.state
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift"], roots: ["/w"], revision: 1)
+        source.revision += 1
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        func links(row: Int) throws -> [PathLink] {
+            let view = try #require(controller.table.view(atColumn: 0, row: row, makeIfNecessary: true))
+            let text =
+                views(LinkTextField.self, in: view).first?.attributedStringValue
+                ?? views(TranscriptTextView.self, in: view).first?.attributedString()
+            let string = try #require(text)
+            var links: [PathLink] = []
+            string.enumerateAttribute(.link, in: NSRange(0..<string.length)) { value, _, _ in
+                if let url = value as? URL, let link = PathLink(url) { links.append(link) }
+            }
+            return links
+        }
+        // Streaming text keeps its text; user prompts never link.
+        #expect(try links(row: 1).isEmpty)
+        #expect(try links(row: 0).isEmpty)
+
+        source.running = false
+        source.revision += 1
+        controller.update(source)
+        #expect(try links(row: 1) == [PathLink(path: "a.swift", line: 3)])
+        func field() throws -> LinkTextField? {
+            views(
+                LinkTextField.self,
+                in: try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: false))
+            )
+            .first
+        }
+        let linked = try #require(try field())
+
+        // A rescan that links nothing new leaves the row, and any selection in it, alone.
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift", "other.swift"], roots: ["/w"], revision: 2)
+        source.revision += 1
+        controller.update(source)
+        #expect(try field() === linked)
+
+        source.pathIndex = TranscriptPathIndex(paths: ["a.swift", "new.swift"], roots: ["/w"], revision: 3)
+        source.revision += 1
+        controller.update(source)
+        #expect(try links(row: 1) == [PathLink(path: "a.swift", line: 3), PathLink(path: "new.swift")])
+        #expect(try links(row: 0).isEmpty)
+        // Copy returns the agent's Markdown, not the links.
+        #expect(source.message(at: 1).markdown == "See `a.swift:3`, `/w/new.swift` and `missing.swift`.")
+    }
+
     private func host(_ controller: TranscriptTableController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),

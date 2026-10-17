@@ -11,6 +11,10 @@ public final class SessionFiles {
     public private(set) var isGitRepository = false
     public private(set) var matches: [String] = []
     public private(set) var changedPaths: [String] = []
+    /// Paths of the latest published index, which transcript inline code can link to (ADR-0025).
+    public private(set) var indexedPaths: Set<String> = []
+    /// Changes whenever `indexedPaths` is published, so views compare it instead of the paths.
+    public private(set) var indexRevision = 0
     public private(set) var selectedPath: String?
     /// The one-based line a transcript link asked for in `selectedPath`.
     public private(set) var selectedLine: Int?
@@ -142,6 +146,8 @@ public final class SessionFiles {
             guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
             index = updated
             indexError = nil
+            indexedPaths = Set(updated.paths)
+            indexRevision += 1
             // Keep the visible matches until the refreshed ones replace them.
             search(query, clearing: false)
         } catch {
@@ -184,6 +190,7 @@ public final class SessionFiles {
         search?.cancel(); search = nil
         isSearching = false
         index = nil; matches = []; isLoadingIndex = false
+        if !indexedPaths.isEmpty { indexedPaths = []; indexRevision += 1 }
         if changes { changedPaths = []; changesError = indexError }
     }
 
@@ -270,6 +277,7 @@ public final class SessionFiles {
         closeDocument()
         root = nil; baseRevision = nil; isGitRepository = false
         matches = []; changedPaths = []; index = nil; query = ""
+        if !indexedPaths.isEmpty { indexedPaths = []; indexRevision += 1 }
         lastScan = nil; indexError = nil; changesError = nil; watchError = nil; isLoadingIndex = false;
         isSearching = false;
         needsRefresh = false

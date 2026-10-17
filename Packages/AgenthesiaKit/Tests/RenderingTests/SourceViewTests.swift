@@ -193,6 +193,69 @@ import Testing
         #expect(view.gutter.isHidden)
     }
 
+    private func hostedView(lines: Int) -> SourceView {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let view = SourceView()
+        window.contentView = view
+        view.setText((1...lines).map { "let line\($0) = \($0)" }.joined(separator: "\n"), language: .swift)
+        view.layoutSubtreeIfNeeded()
+        return view
+    }
+
+    private func selectedText(in view: SourceView) -> String {
+        (view.text as NSString).substring(with: view.textView.textSelection)
+    }
+
+    @Test func showLineSelectsAndScrollsToTheLine() {
+        let view = hostedView(lines: 10_000)
+        view.showLine(5_000)
+        view.layoutSubtreeIfNeeded()
+        #expect(selectedText(in: view) == "let line5000 = 5000")
+        let visible = view.gutter.visibleLines().map(\.number)
+        #expect(visible.contains(5_000))
+        #expect(view.scrollView.contentView.bounds.origin.y > 1_000)
+        view.showLine(1)
+        view.layoutSubtreeIfNeeded()
+        #expect(selectedText(in: view) == "let line1 = 1")
+        #expect(view.gutter.visibleLines().map(\.number).contains(1))
+    }
+
+    @Test func showLineClampsPastTheEndAndBelowOne() {
+        let view = hostedView(lines: 300)
+        view.showLine(9_999)
+        view.layoutSubtreeIfNeeded()
+        #expect(selectedText(in: view) == "let line300 = 300")
+        #expect(view.gutter.visibleLines().map(\.number).contains(300))
+        view.showLine(0)
+        #expect(selectedText(in: view) == "let line1 = 1")
+        // An empty last line selects nothing but does not fail.
+        view.setText("a\n", language: nil)
+        view.showLine(2)
+        #expect(view.textView.textSelection == NSRange(location: 2, length: 0))
+    }
+
+    @Test func showLineSurvivesHighlighting() async {
+        let view = hostedView(lines: 5_000)
+        view.showLine(3_000)
+        view.layoutSubtreeIfNeeded()
+        #expect(await renderedColor(of: "let", in: view) == view.theme.color(forCapture: "keyword"))
+        view.layoutSubtreeIfNeeded()
+        #expect(selectedText(in: view) == "let line3000 = 3000")
+        #expect(view.gutter.visibleLines().map(\.number).contains(3_000))
+    }
+
+    @Test func showLineWorksBeforeTheViewIsHosted() {
+        let view = SourceView()
+        view.setText((1...2_000).map { "line \($0)" }.joined(separator: "\n"), language: nil)
+        view.showLine(1_500)
+        #expect(selectedText(in: view) == "line 1500")
+    }
+
     @Test func lineStartsAndPoints() {
         let text = "ab\nçd\n\nlast"
         let starts = SourceView.lineStarts(of: text)

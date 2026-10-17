@@ -22,6 +22,9 @@ public final class SourceView: NSView {
     private(set) var lineStarts = [0]
     /// Counts texts shown, so that colors computed for an earlier text are not applied.
     private var generation = 0
+    /// The line last shown by ``showLine(_:)`` and where it was scrolled to, until the text or the scroll position
+    /// changes.
+    private var shownLine: (range: NSRange, origin: CGPoint)?
 
     #if DEBUG
         /// Benchmark instrumentation: completion of the latest highlight, including applying its attributes.
@@ -89,6 +92,7 @@ public final class SourceView: NSView {
     public func setText(_ text: String, language: CodeLanguage?) {
         self.text = text
         self.language = language
+        shownLine = nil
         lineStarts = Self.lineStarts(of: text)
         textView.text = text
         gutter.lineStarts = lineStarts
@@ -134,8 +138,13 @@ public final class SourceView: NSView {
                 }
             }
             textView.needsLayout = true
-            scrollView.contentView.scroll(to: origin)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
+            if let shownLine, shownLine.origin == origin {
+                // Laying out the recolored text corrects the estimated heights that placed the line.
+                scrollToVisible(shownLine.range)
+            } else {
+                scrollView.contentView.scroll(to: origin)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
             #if DEBUG
                 highlightCompletedAt = .now
             #endif
@@ -143,6 +152,39 @@ public final class SourceView: NSView {
     }
 
     // MARK: - Lines
+
+    /// Selects the one-based `line` and scrolls it into view. A line past the end selects the last line.
+    public func showLine(_ line: Int) {
+        let index = min(max(line, 1), lineCount) - 1
+        let start = lineStarts[index]
+        var end = index + 1 < lineCount ? lineStarts[index + 1] - 1 : (text as NSString).length
+        end = max(start, end)
+        let range = NSRange(location: start, length: end - start)
+        textView.textSelection = range
+        shownLine = (range, scrollView.contentView.bounds.origin)
+        scrollToVisible(range)
+    }
+
+    /// Scrolls by the laid-out fragment: the text view's estimated heights put a deep line off screen.
+    private func scrollToVisible(_ range: NSRange) {
+        let layout = textView.textLayoutManager
+        let content = textView.textContentManager
+        guard let start = content.location(content.documentRange.location, offsetBy: range.location) else { return }
+        let clip = scrollView.contentView
+        // Laying out the new viewport corrects the estimates, which moves the line; follow it.
+        for _ in 0..<8 {
+            layout.ensureLayout(for: NSTextRange(location: start))
+            guard let fragment = layout.textLayoutFragment(for: start) else { return }
+            let frame = fragment.layoutFragmentFrame
+            let y = max(0, frame.midY - clip.bounds.height / 2)
+            let shown = layout.textLayoutFragment(for: CGPoint(x: 0, y: clip.bounds.midY))
+            if shown?.rangeInElement.contains(start) == true, abs(y - clip.bounds.origin.y) < 1 { break }
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scrollView.reflectScrolledClipView(clip)
+            layoutSubtreeIfNeeded()
+        }
+        if shownLine?.range == range { shownLine?.origin = clip.bounds.origin }
+    }
 
     static func lineStarts(of text: String) -> [Int] {
         var starts = [0]

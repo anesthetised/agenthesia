@@ -97,6 +97,29 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func sidebarFollowsTheManagerAndRefreshLoadsProjects() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-sidebar-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        #expect(model.sidebar.starting.count == 1)
+        await owner.startup?.value
+        await model.refresh()
+        #expect(model.projects.count == 1)
+        #expect(model.sidebar.starting.isEmpty)
+        #expect(model.sidebar.groups.map(\.rows.count) == [1])
+        await sessions.end(owner)
+        await model.refresh()
+        guard case .saved(let record) = model.sidebar.groups.first?.rows.first else {
+            Issue.record("Expected the ended session to be saved")
+            return
+        }
+        #expect(record.id == owner.sessionID)
+    }
+
     @Test(arguments: [false, true])
     func establishedSessionsCanContinueAfterEndOrFailureCleanup(failed: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-recovery-\(UUID())")

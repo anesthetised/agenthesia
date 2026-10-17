@@ -3,6 +3,7 @@ import AppKit
 public import SwiftUI
 
 public struct RootView: View {
+    @Environment(\.appearsActive) private var appearsActive
     @State private var model: SessionWindowModel
     @State private var prompt = ""
     @State private var attachments: [URL] = []
@@ -22,34 +23,13 @@ public struct RootView: View {
     public var body: some View {
         NavigationSplitView {
             List {
-                if !model.sessions.owners.isEmpty {
-                    Section("Live sessions") {
-                        ForEach(model.sessions.owners) { owner in
-                            Button {
-                                model.show(owner); showingSetup = false
-                            } label: {
-                                Label(
-                                    owner.controller?.session.title ?? owner.resuming?.title ?? "Starting session",
-                                    systemImage: "bubble.left.and.bubble.right"
-                                )
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                }
-                Section("Saved sessions") {
-                    ForEach(model.savedSessions) { record in
-                        Button {
-                            showingSetup = false
-                            prompt = ""
-                            attachments = []
-                            Task { await model.showHistory(record) }
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(record.title ?? "Session")
-                                Text(record.createdAt, style: .date).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }.buttonStyle(.plain)
-                    }
+                SessionSidebarList(sidebar: model.sidebar) { owner in
+                    model.show(owner); showingSetup = false
+                } onShowSaved: { record in
+                    showingSetup = false
+                    prompt = ""
+                    attachments = []
+                    Task { await model.showHistory(record) }
                 }
                 if !showingSetup, filesMatchSession {
                     SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
@@ -141,7 +121,11 @@ public struct RootView: View {
         .frame(minWidth: 740, minHeight: 500)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         // Ended sessions move to saved history in every window.
-        .task(id: model.sessions.owners.map(\.id)) { await model.refresh() }
+        .task(id: model.sessions.owners.map(\.sessionID)) { await model.refresh() }
+        // Looking at a finished turn in the key window clears its Done mark.
+        .onChange(of: viewingUnseenResult, initial: true) {
+            if viewingUnseenResult { model.owner?.markSeen() }
+        }
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
@@ -162,6 +146,10 @@ public struct RootView: View {
                 onDismiss: { showingQuickOpen = false }
             )
         }
+    }
+
+    private var viewingUnseenResult: Bool {
+        appearsActive && !showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
     }
 
     private var filesMatchSession: Bool {

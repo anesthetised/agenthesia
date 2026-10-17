@@ -9,6 +9,7 @@ public actor SessionLibrary {
     )
     private let databaseURL: URL
     private var opening: Task<PersistenceStore, any Error>?
+    private var installing: Task<Void, Never>?
 
     public init(databaseURL: URL) { self.databaseURL = databaseURL }
 
@@ -25,6 +26,8 @@ public actor SessionLibrary {
         opening = task
         do { return try await task.value } catch { opening = nil; throw error }
     }
+
+    public func projects() async throws -> [ProjectRecord] { try await store().projects() }
 
     public func history() async throws -> [SessionRecord] {
         let store = try await store()
@@ -53,7 +56,19 @@ public actor SessionLibrary {
         return project
     }
 
+    /// Lookups and inserts run one after another: parallel sessions often start with the same agent,
+    /// and awaiting the store lets a second caller run between the lookup and the insert.
     func install(_ agent: AgentInstallRecord) async throws -> AgentInstallRecord {
+        let previous = installing
+        let task = Task {
+            await previous?.value
+            return try await insert(agent)
+        }
+        installing = Task { _ = try? await task.value }
+        return try await task.value
+    }
+
+    private func insert(_ agent: AgentInstallRecord) async throws -> AgentInstallRecord {
         let store = try await store()
         if let existing = try await store.agentInstalls().first(where: {
             $0.executable == agent.executable && $0.arguments == agent.arguments

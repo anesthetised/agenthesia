@@ -5,7 +5,7 @@ import Testing
 @testable import AgenthesiaCore
 
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionManagerTests {
-    private func fixture() throws -> (URL, SessionManager) {
+    fileprivate func fixture() throws -> (URL, SessionManager) {
         let directory = FileManager.default.temporaryDirectory.appending(path: "session-manager-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let manager = SessionManager(
@@ -15,7 +15,7 @@ import Testing
         return (directory, manager)
     }
 
-    private func mock(arguments: [String] = []) throws -> AgentInstallRecord {
+    fileprivate func mock(arguments: [String] = []) throws -> AgentInstallRecord {
         let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
         let binary = try #require(
             [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
@@ -108,4 +108,23 @@ import Testing
         return await withCheckedContinuation { continuation = $0 }
     }
     func release() { continuation?.resume(returning: ProcessInfo.processInfo.environment) }
+}
+
+extension SessionManagerTests {
+    @Test func sessionsStartingTogetherShareOneAgentInstall() async throws {
+        let (directory, manager) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let agent = try mock()
+        let owners = (0..<4).map { _ in
+            manager.start(
+                directory: directory,
+                agent: AgentInstallRecord(name: agent.name, executable: agent.executable)
+            )
+        }
+        for owner in owners { await owner.startup?.value }
+        #expect(owners.allSatisfy { $0.controller != nil && $0.errorMessage == nil })
+        #expect(try await manager.library.store().agentInstalls().count == 1)
+        #expect(try await manager.library.projects().count == 1)
+        await manager.closeAll()
+    }
 }

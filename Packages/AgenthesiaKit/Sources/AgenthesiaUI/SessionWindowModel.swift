@@ -8,6 +8,7 @@ import SwiftUI
 @Observable final class SessionWindowModel {
     var owner: LiveSession?
     var history: [SessionRecord] = []
+    var projects: [ProjectRecord] = []
     var restored: SessionController?
     var errorMessage: String?
     var isLoadingHistory = false
@@ -28,14 +29,15 @@ import SwiftUI
         return owner?.isLive == false && [.failed, .closed].contains(displayed.status)
             && history.contains { $0.id == displayed.session.id }
     }
-    /// Sessions with an owner are listed as live, failed ones included.
     var savedSessions: [SessionRecord] {
         history.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
     }
+    var sidebar: SessionSidebar { SessionSidebar(projects: projects, history: history, owners: sessions.owners) }
 
     func refresh() async {
         do {
             history = try await library.history()
+            projects = try await library.projects()
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }

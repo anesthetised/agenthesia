@@ -18,6 +18,8 @@ public final class LiveSession {
     public private(set) var workingDirectory: URL?
     /// The saved session this owner continues, known before its controller exists.
     public private(set) var resuming: SessionRecord?
+    /// Turns finished when the user last looked at the session in a key window (ADR-0026). In memory only.
+    private var seenTurns = 0
     @ObservationIgnored private let library: SessionLibrary
     @ObservationIgnored private var process: AgentProcess?
     @ObservationIgnored private(set) var startup: Task<Void, Never>?
@@ -33,6 +35,23 @@ public final class LiveSession {
     }
 
     public init(library: SessionLibrary = .shared) { self.library = library }
+
+    /// What the sidebar shows for this session.
+    public var activity: Activity {
+        Activity.derive(
+            starting: isStarting,
+            failed: errorMessage != nil && !isLive,
+            status: controller?.status,
+            needsInput: controller.map { !$0.pendingPermissions.isEmpty || !$0.pendingInputs.isEmpty } ?? false,
+            unseen: hasUnseenResult
+        )
+    }
+
+    /// A turn ended since the user last looked at the session.
+    public var hasUnseenResult: Bool { (controller?.completedTurns ?? 0) > seenTurns }
+
+    /// The user has looked at the session in a key window.
+    public func markSeen() { seenTurns = controller?.completedTurns ?? 0 }
 
     public var sessionID: UUID? { controller?.session.id ?? resuming?.id }
 

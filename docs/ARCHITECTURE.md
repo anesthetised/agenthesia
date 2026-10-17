@@ -141,7 +141,13 @@ turn without an outcome, `permissionResolved(.cancelled)` for requests without a
 “Continued” divider. Any failure leaves the log unchanged and the history readable.
 
 The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
-in the background and are listed under Live sessions in start order. End Session (or Cancel Startup)
+in the background. The sidebar (`SessionSidebar` in Core, `SessionSidebarList` in the UI) has one section
+per project, ordered by its newest session; live sessions come first in start order with a status icon,
+then saved sessions newest first, and owners that have no project yet are listed under Starting.
+`LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
+means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
+has seen; a window marks the displayed session seen while it is the key window. A live session is failed
+only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued.
 Closing a window only detaches it and stops its file observation; closing a transcript view only

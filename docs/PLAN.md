@@ -123,12 +123,13 @@ The owner accepted ADR-0026. One branch, `feat/parallel-sessions`, one commit or
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
 | 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; done |
-| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium; done |
 | 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sonnet, medium |
 | 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
 | 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sonnet, medium |
 
-Pitfalls: the window model keeps its own selection token for history loads; a window may display an
+Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
+second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
 owner the manager already removed, which then reads as ended. Run `swiftui-pro` over changed views.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.

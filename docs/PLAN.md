@@ -30,10 +30,9 @@ before implementation.
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
 - Quick Open, the side file viewer and changed-file tracking (#26–#28) are merged (#113)
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
-  sessions show working changes only. #114 (compare changed files with the session base rather than
-  the merge base) is implemented under [ADR-0024](adr/0024-changed-files-session-base.md) on
-  `feat/changed-files-base`; #29 (transcript paths, editor handoff) is decided in
-  [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md).
+  sessions show working changes only. Changed Files compares with the session base rather than the
+  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
+  editor handoff) is proposed in [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md).
 
 ## Previous batch: session interactions (merged)
 
@@ -111,11 +110,10 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, is merged. Next is #114 ([ADR-0024](adr/0024-changed-files-session-base.md): Changed Files
-compares `git diff base HEAD` instead of `merge-base(base, HEAD)`; implemented on
-`feat/changed-files-base`, awaiting its pull request), then #29
-(clickable transcript paths and editor handoff), then M7 (Parallel sessions), followed by M8 (Worktrees),
-which also decides whether to pin the base with a ref.
+The first M4 (Files) batch, #26–#28 below, and #114 are merged. Next is #29 (clickable transcript paths
+and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), awaiting the owner's
+acceptance), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
+the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
 ### M4 parallel batch (2026-10-16)

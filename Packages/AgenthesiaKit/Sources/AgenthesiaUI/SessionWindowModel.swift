@@ -38,6 +38,28 @@ import SwiftUI
     }
     var sidebar: SessionSidebar { SessionSidebar(projects: projects, history: history, owners: sessions.owners) }
 
+    var sidebarSelection: AnyHashable? {
+        get {
+            showingSetup || closed
+                ? nil : selectedHistoryID.map(AnyHashable.init) ?? owner.map { NavigationTarget.live($0).id }
+        }
+        set {
+            guard !closed, let id = newValue, id != sidebarSelection else { return }
+            if let owner = sessions.owners.first(where: { NavigationTarget.live($0).id == id }) {
+                show(owner)
+            } else if let record = history.first(where: { AnyHashable($0.id) == id }) {
+                showingSetup = false
+                selectedHistoryID = record.id
+                let token = UUID()
+                selection = token
+                Task {
+                    guard selection == token, !closed else { return }
+                    await showHistory(record)
+                }
+            }
+        }
+    }
+
     var canEnd: Bool {
         !closed && !showingSetup && !isLoadingHistory && restored == nil
             && sessions.owners.contains { $0 === owner }
@@ -81,10 +103,7 @@ import SwiftUI
                 }
             }
         guard !rows.isEmpty else { return nil }
-        let selected: AnyHashable? =
-            showingSetup
-            ? nil
-            : selectedHistoryID.map(AnyHashable.init) ?? owner.map { NavigationTarget.live($0).id }
+        let selected = sidebarSelection
         let index = rows.firstIndex { $0.id == selected }
         let start = index ?? (backward ? 0 : rows.count - 1)
         for step in 1...rows.count {

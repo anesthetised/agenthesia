@@ -17,21 +17,18 @@ public struct RootView: View {
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
-    public init(sessions: SessionManager) { _model = State(initialValue: SessionWindowModel(sessions: sessions)) }
+    public init(sessions: SessionManager) { self.init(model: SessionWindowModel(sessions: sessions)) }
+
+    init(model: SessionWindowModel) { _model = State(initialValue: model) }
 
     public var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
-            List {
-                SessionSidebarList(sidebar: model.sidebar) { owner in
-                    model.show(owner)
-                } onShowSaved: { record in
-                    model.showingSetup = false
-                    prompt = ""
-                    attachments = []
-                    Task { await model.showHistory(record) }
-                }
+            List(selection: $model.sidebarSelection) {
+                SessionSidebarList(sidebar: model.sidebar)
                 if !model.showingSetup, filesMatchSession {
                     SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
+                        .selectionDisabled(true)
                 }
             }
             .navigationTitle("Agenthesia")
@@ -265,8 +262,14 @@ public struct RootView: View {
                     )
                     .disabled(!hasDraft || submitting || session.isChangingConfig)
                     Menu("Send options", systemImage: "chevron.down") {
-                        Button("Send Draft Now") { submit(.now) }.keyboardShortcut(.return, modifiers: .command)
-                            .disabled(!hasDraft || submitting || editingQueueID != nil || session.isChangingConfig)
+                        Button(hasDraft ? "Send Draft Now" : "Send Queue Now") { submit(.now) }.keyboardShortcut(
+                            .return,
+                            modifiers: .command
+                        )
+                        .disabled(
+                            (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                                || session.isChangingConfig
+                        )
                         Button("Send Whole Queue Now") { submit(.allNow) }
                             .keyboardShortcut(.return, modifiers: [.command, .shift])
                             .disabled(
@@ -330,7 +333,7 @@ public struct RootView: View {
         guard model.restored == nil, !submitting, let owner = model.owner,
             let session = owner.controller, !session.isChangingConfig,
             [.idle, .running, .stopping].contains(session.status),
-            hasDraft || (intent == .allNow && !session.queuedPrompts.isEmpty)
+            hasDraft || (intent != .whenReady && !session.queuedPrompts.isEmpty)
         else { return }
         let text = prompt, files = attachments, editingID = editingQueueID
         model.errorMessage = nil

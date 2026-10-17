@@ -154,6 +154,45 @@ private actor QueueGate {
         await session.close()
     }
 
+    @Test(arguments: [false, true]) func sendNowWithEmptyDraftSendsTheWholeQueue(working: Bool) async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        if working {
+            try await session.submit([.init(text: "working")])
+            await connection.waitForPrompts(1)
+        } else {
+            try await session.stop()
+        }
+        let attachment = ACP.ContentBlock.resourceLink(.init(uri: "file:///tmp/a", name: "a"))
+        try await session.submit([.init(text: "first"), attachment])
+        try await session.submit([.init(text: "second")])
+        let queued = session.queuedPrompts
+        try await session.submit([.init(text: " \n")], intent: .now)
+        await connection.waitForPrompts(working ? 2 : 1)
+        #expect(await connection.prompts.last == [.init(text: "first"), attachment, .init(text: "second")])
+        #expect(session.queuedPrompts.isEmpty)
+        #expect(session.transcript.items.compactMap(\.message).suffix(2).map(\.localPromptID) == queued.map(\.id))
+        await session.close()
+    }
+
+    @Test func sendNowRequiresContentAndAttachmentOnlyDraftLeavesTheQueue() async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        await #expect(throws: SessionController.SessionError.emptyPrompt) {
+            try await session.submit([], intent: .now)
+        }
+        #expect(await connection.prompts.isEmpty)
+        try await session.stop()
+        try await session.submit([.init(text: "queued")])
+        let queued = session.queuedPrompts
+        let attachment = ACP.ContentBlock.resourceLink(.init(uri: "file:///tmp/a", name: "a"))
+        try await session.submit([attachment], intent: .now)
+        await connection.waitForPrompts(1)
+        #expect(await connection.prompts == [[attachment]])
+        #expect(session.queuedPrompts == queued)
+        await session.close()
+    }
+
     @Test(arguments: [false, true]) func sendNowUsesTheAdvertisedStrategy(all: Bool) async throws {
         for strategy in [ACP.SteeringStrategy.interruptAndSend, .inject] {
             let (session, connection, _, directory) = try await live(strategy: strategy)

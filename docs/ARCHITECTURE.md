@@ -103,9 +103,10 @@ paused; an explicit send or queue resume is needed. Transport loss, process exit
 and event-log failures still end the session. Saved history always opens read-only, including after
 a recoverable error.
 
-⌘Return sends the draft now and leaves the queue in place. ⇧⌘Return sends the queue with the nonempty
-draft last. Steering uses `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel
-tasks to settle, and then starts the next turn; injection-capable connections implement
+⌘Return sends a nonempty draft now and leaves the queue in place; with an empty or whitespace-only
+draft, it sends the whole queue ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Attachments count as
+a nonempty draft. ⇧⌘Return sends the queue with the nonempty draft last. Steering uses
+`AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel tasks to settle, and then starts the next turn; injection-capable connections implement
 `AgentConnection.inject(_:in:)` without ending the active turn. The default injection implementation
 fails explicitly and no current v1 adapter advertises it. Injection first records complete composed
 content as pending queue entries; only successful wire acknowledgement atomically dequeues it and
@@ -164,7 +165,9 @@ The Session menu routes actions through the focused window's `SessionWindowModel
 live and saved rows); from the launch form they select the last/first row. Next Session Needing Input
 uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
-paused queue, restoring normal Return-to-send behavior. Opening/restoring windows remains #40.
+paused queue, restoring normal Return-to-send behavior. The sidebar uses native single selection,
+sharing the same row identity with keyboard navigation; the new-session form has no selected row.
+Opening/restoring windows remains #40.
 
 Closing a window only detaches it and stops its file observation; closing a transcript view only
 detaches its display driver. On quit the delegate asks for confirmation only if owners are working or

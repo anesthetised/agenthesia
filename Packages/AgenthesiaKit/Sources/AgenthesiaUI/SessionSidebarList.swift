@@ -5,8 +5,6 @@ import SwiftUI
 /// Projects → sessions with live statuses (ADR-0026).
 struct SessionSidebarList: View {
     let sidebar: SessionSidebar
-    let onShowLive: (LiveSession) -> Void
-    let onShowSaved: (SessionRecord) -> Void
 
     var body: some View {
         if !sidebar.starting.isEmpty {
@@ -28,30 +26,23 @@ struct SessionSidebarList: View {
 
     private func liveRow(_ owner: LiveSession) -> some View {
         let title = owner.controller?.session.title ?? owner.resuming?.title ?? "Starting session"
-        return Button {
-            onShowLive(owner)
-        } label: {
-            HStack {
-                Text(title).lineLimit(1)
-                Spacer()
-                StatusIcon(activity: owner.activity)
-            }
-            .contentShape(.rect)
+        return HStack {
+            Text(title).lineLimit(1)
+            Spacer()
+            StatusIcon(activity: owner.activity)
         }
-        .buttonStyle(.plain)
+        .contentShape(.rect)
+        .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .accessibilityElement(children: .combine)
     }
 
     private func savedRow(_ record: SessionRecord) -> some View {
-        Button {
-            onShowSaved(record)
-        } label: {
-            VStack(alignment: .leading) {
-                Text(record.title ?? "Session").lineLimit(1)
-                Text(record.createdAt, style: .date).font(.caption).foregroundStyle(.secondary)
-            }
+        VStack(alignment: .leading) {
+            Text(record.title ?? "Session").lineLimit(1)
+            Text(record.createdAt, style: .date).font(.caption).foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
+        .contentShape(.rect)
+        .tag(AnyHashable(record.id))
     }
 }
 

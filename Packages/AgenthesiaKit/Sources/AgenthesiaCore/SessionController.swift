@@ -252,6 +252,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Accepts a composed message without making the caller own the wire turn.
     public func submit(_ content: [ACP.ContentBlock], intent: SubmissionIntent = .whenReady) async throws {
         try Task.checkCancellation()
+        let intent = intent == .now && (try? Self.validate(content)) == nil ? .allNow : intent
         let generation = stopGeneration
         if intent != .allNow { try Self.validate(content) }
         try await coordinateQueue {

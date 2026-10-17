@@ -60,7 +60,8 @@ issues are closed. They were developed in isolated worktrees and integrated in t
 - [ADR-0019](adr/0019-session-config-controls.md): native config controls, idle-only changes and
   agent-confirmed values committed before display; legacy modes stay in the adapter.
 - [ADR-0021](adr/0021-prompt-queue-lifecycle.md): Stop pauses the queue; restored entries require Continue
-  and explicit resume. Command-Return sends the draft only; Command-Shift-Return sends queued entries
+  and explicit resume. Command-Return sends a nonempty draft only; with no draft it sends the queue
+  ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Command-Shift-Return sends queued entries
   plus the nonempty draft last.
 - `AgentProfile.steering` already reports whether the agent supports injection.
 
@@ -152,6 +153,16 @@ normal Return behavior. The isolated #39 branch passed `just lint`, `just test` 
 15 script tests), `just coverage` and `just app`; every module met its coverage gate (Core 98.1%).
 `swiftui-pro` review found no blocking issues. Native menu focus/shortcuts and the actual quit alert
 remain manual smoke checks; automated tests exercise selection, eligibility and injected confirmation.
+
+Manual acceptance of the combined #39/#117 PR confirmed new-session/navigation and permission
+shortcuts. Follow-up feedback adds empty-draft Command-Return to send the complete queue
+([ADR-0028](adr/0028-empty-draft-sends-queue.md)), and native sidebar selection synchronized with
+mouse and keyboard navigation. Regressions first reproduced the rejected empty send and the missing
+native selection. Remaining native checks: queue shortcuts and selection, recoverable `fail` with the
+rebuilt client, fatal `exit`/Continue, selected-session End, and quit confirmation/cancellation.
+The follow-up passed `just lint`, `just test` (590 Swift tests and 15 script tests), `just coverage`
+(all gates; Core 98.3%), and `just app`. Queue and native sidebar regressions were verified RED then
+GREEN; the native selection check also fails when the binding is removed. `swiftui-pro` and code review found no blockers.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an

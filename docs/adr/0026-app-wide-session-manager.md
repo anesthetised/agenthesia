@@ -1,6 +1,6 @@
 # 0026. App-wide session manager
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-17
 - Decider: Project owner
 - Scope: M7 (#37–#40); supersedes the window-bound ownership of ADR-0014 and the live-session claim of
@@ -19,8 +19,8 @@ every live session, independent of any window.
 
 - **Ownership.** A `SessionManager` in Core, on the main actor and `@Observable`, owns every
   `LiveSession`. The app creates one instance and passes it to every window. Starting a session adds an
-  owner; ending it (End Session, startup failure, process exit, controller failure) removes it after
-  cleanup. There is no limit on the number of sessions.
+  owner; End Session removes it after cleanup. A session whose startup, process or controller failed
+  stays with its error until it is ended or continued. There is no limit on the number of sessions.
 - **Windows.** A window holds a selection (a live or saved session, or the launch form) and per-window
   view state: a read-only history controller, the file pane (`SessionFiles`), the composer draft and
   Quick Open. Several windows may show the same live session; each has its own file pane and draft,

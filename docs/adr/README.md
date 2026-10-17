@@ -18,7 +18,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0011](0011-cross-agent-memory.md) | Cross-agent memory | Superseded by [0012](0012-defer-cross-agent-memory.md) |
 | [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted |
 | [0013](0013-source-highlight-attributes.md) | Apply SourceView highlighting as attribute edits | Accepted |
-| [0014](0014-window-bound-live-sessions.md) | Window-bound live sessions | Accepted; disconnected saved history superseded by [0017](0017-continue-saved-sessions.md); window ownership to be superseded by [0026](0026-app-wide-session-manager.md) if accepted |
+| [0014](0014-window-bound-live-sessions.md) | Window-bound live sessions | Accepted; disconnected saved history superseded by [0017](0017-continue-saved-sessions.md); window ownership superseded by [0026](0026-app-wide-session-manager.md) |
 | [0015](0015-agent-terminals.md) | Agent terminals | Accepted; ACP semantics, lifecycle and history superseded by [0016](0016-agent-reported-command-output.md) |
 | [0016](0016-agent-reported-command-output.md) | Agent-reported command output | Accepted |
 | [0017](0017-continue-saved-sessions.md) | Continue saved sessions | Accepted |
@@ -30,6 +30,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted |
 | [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Accepted |
-| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Proposed |
+| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

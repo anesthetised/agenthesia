@@ -1,6 +1,6 @@
 # 0014. Window-bound live sessions
 
-- Status: Accepted
+- Status: Accepted; window ownership superseded by [ADR-0026](0026-app-wide-session-manager.md)
 - Date: 2026-10-08
 - Decider: Project owner
 - Scope: First live app integration (#99); complements ADR-0004, ADR-0005, and ADR-0006.

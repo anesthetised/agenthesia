@@ -113,9 +113,25 @@ all checks. Badge publication runs only after both succeed on main.
 
 M4 (Files) is merged: #26–#28, #114 and #29 below. Next is M7 (Parallel sessions, #37–#40), which
 replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
-session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), proposed on `feat/parallel-sessions`,
-awaiting the owner's acceptance), followed by M8 (Worktrees), which also decides whether to pin the base with a ref.
+session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below), followed by M8 (Worktrees), which also decides whether to pin the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+
+### M7 slices (2026-10-17)
+
+The owner accepted ADR-0026. One branch, `feat/parallel-sessions`, one commit or more per slice, in order:
+
+| # | Slice | Acceptance and verification | Model and effort |
+|---|---|---|---|
+| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium |
+| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sonnet, medium |
+| 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
+| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sonnet, medium |
+
+Pitfalls: the window model keeps its own selection token for history loads; a window may display an
+owner the manager already removed, which then reads as ended. Run `swiftui-pro` over changed views.
+Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
+#40 with slice 5.
 
 ### #29 slices (2026-10-17, merged in #116)
 

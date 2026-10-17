@@ -141,6 +141,9 @@ After it merges, continue with slice 3 on a separate branch from main; keep subs
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
 owner the manager already removed, which then reads as ended. Run `swiftui-pro` over changed views.
+CI exposed a process-readiness polling race: a task can resume after its deadline with the child PID
+already recorded. Check readiness before the deadline; regression tests cover both a ready PID and a
+missing PID after expiry.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.
 

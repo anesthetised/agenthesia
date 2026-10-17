@@ -21,7 +21,7 @@ public struct SettingsView: View {
                 }
             }
             Text(
-                "Open in Editor in the file pane (⌥⌘O) uses this app. Visual Studio Code and Cursor open the file at the selected line; other editors open it at the start. If the app is not installed, the system's default app is used."
+                "Open in Editor (⌥⌘O) uses this app. Visual Studio Code, Cursor and Zed open the file at the selected line; Xcode opens it at the start. If the app is not installed, the system's default app is used."
             )
             .font(.caption).foregroundStyle(.secondary)
         }

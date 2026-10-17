@@ -39,11 +39,14 @@ import Testing
         )
     }
 
-    @Test func editorsWithoutALineTemplateHaveNoURL() throws {
-        for identifier in ["dev.zed.Zed", "com.apple.dt.Xcode"] {
-            let editor = try #require(ExternalEditor.named(identifier))
-            #expect(editor.url(opening: "a.swift", line: 3, in: root) == nil)
-        }
+    @Test func zedOpensAtALineAndXcodeHasNoURL() throws {
+        let zed = try #require(ExternalEditor.named("dev.zed.Zed"))
+        #expect(
+            zed.url(opening: "a.swift", line: 3, in: root)?.absoluteString
+                == "zed://file/Users/me/work%20tree/a.swift:3"
+        )
+        let xcode = try #require(ExternalEditor.named("com.apple.dt.Xcode"))
+        #expect(xcode.url(opening: "a.swift", line: 3, in: root) == nil)
     }
 
     @Test func percentEncodesReservedAndNonASCIICharacters() throws {

@@ -223,8 +223,8 @@ than when the agent process ends; Continue keeps the same session's files across
 candidate (`:line`, `:line:column`, `#Lline`, leading `./` dropped) and resolves it against the session's
 canonical root through `ScopedFileAccess`; paths outside the root, with `..` components or through a
 symlink that leaves the root do not resolve. `ExternalEditor` is the table of editors by bundle
-identifier; VS Code and Cursor have a `scheme://file/<path>:<line>` URL (percent-encoded), Zed and Xcode
-open without a line. Core builds URLs only; `NSWorkspace` is called from AgenthesiaUI.
+identifier; VS Code, Cursor and Zed have a `scheme://file/<path>:<line>` URL (percent-encoded), Xcode
+opens without a line. Core builds URLs only; `NSWorkspace` is called from AgenthesiaUI.
 
 Tool call locations and diff paths that resolve become `.link` ranges with a private `agenthesia-path`
 URL (relative path and optional line). `LiveTranscriptSource` applies them to the cached attributed text

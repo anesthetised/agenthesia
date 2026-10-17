@@ -14,7 +14,7 @@ public struct ExternalEditor: Equatable, Sendable, Identifiable {
     public static let all = [
         ExternalEditor(bundleIdentifier: "com.microsoft.VSCode", name: "Visual Studio Code", lineScheme: "vscode"),
         ExternalEditor(bundleIdentifier: "com.todesktop.230313mzl4w4u92", name: "Cursor", lineScheme: "cursor"),
-        ExternalEditor(bundleIdentifier: "dev.zed.Zed", name: "Zed", lineScheme: nil),
+        ExternalEditor(bundleIdentifier: "dev.zed.Zed", name: "Zed", lineScheme: "zed"),
         ExternalEditor(bundleIdentifier: "com.apple.dt.Xcode", name: "Xcode", lineScheme: nil),
     ]
 

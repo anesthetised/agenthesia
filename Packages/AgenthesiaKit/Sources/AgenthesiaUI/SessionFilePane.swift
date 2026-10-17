@@ -13,14 +13,9 @@ struct SessionFilePane: View {
                 Text(files.selectedPath ?? "File").font(.headline)
                     .lineLimit(1).truncationMode(.middle).help(files.selectedPath ?? "")
                 Spacer()
-                Button("Open in Editor", systemImage: "square.and.pencil") {
-                    if let path = files.selectedPath, let root = files.root {
-                        EditorHandoff.open(path: path, line: files.selectedLine, root: root, editorID: editorID)
-                    }
-                }
-                .labelStyle(.iconOnly)
-                .keyboardShortcut("o", modifiers: [.command, .option])
-                .help("Open in Editor (⌥⌘O)")
+                Button("Open in Editor", systemImage: "square.and.pencil", action: openInEditor)
+                    .labelStyle(.iconOnly)
+                    .help("Open in Editor (⌥⌘O)")
                 Button("Reload File", systemImage: "arrow.clockwise") {
                     if let path = files.selectedPath, let id { onOpen(path, files.selectedLine, id) }
                 }.labelStyle(.iconOnly)
@@ -42,5 +37,17 @@ struct SessionFilePane: View {
                 FileViewer(document: document, line: files.selectedLine)
             }
         }
+        .focusedSceneValue(\.openInEditor, editorAction)
+    }
+
+    /// The File menu's Open in Editor, available while a file is selected.
+    private var editorAction: (() -> Void)? {
+        guard files.selectedPath != nil else { return nil }
+        return openInEditor
+    }
+
+    private func openInEditor() {
+        guard let path = files.selectedPath, let root = files.root else { return }
+        EditorHandoff.open(path: path, line: files.selectedLine, root: root, editorID: editorID)
     }
 }

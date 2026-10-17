@@ -131,8 +131,9 @@ The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or m
 Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess` canonical roots;
 `SessionFiles.open` already guards the session identity. Run `swiftui-pro` over changed views before
 committing slices 3–5. The owner approved slice 5's benchmark (200 rows with 20 inline spans each
-against a 10,001-path index, three Release runs). Manual checks: a real mouse click on tool and inline links, Zed and Xcode line schemes, VS Code and
-Cursor jumps, VoiceOver labels on links.
+against a 10,001-path index, three Release runs). Manual checks by the owner: mouse clicks on tool and inline links, VS Code, Cursor and Zed line jumps,
+Settings and VoiceOver labels pass; Xcode's scheme ignores the line, so Xcode opens files at the start.
+The pane button's ⌥⌘O did not fire, so Open in Editor is a File menu command.
 Push and the pull request keep their separate approvals; save `just coverage` output to a log file.
 
 ### M4 parallel batch (2026-10-16)

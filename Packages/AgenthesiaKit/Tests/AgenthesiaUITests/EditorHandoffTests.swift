@@ -16,10 +16,10 @@ import Testing
     }
 
     @Test func editorsWithoutALineOrWithoutOneRequestedOpenTheFile() throws {
-        let zed = try #require(ExternalEditor.named("dev.zed.Zed"))
+        let xcode = try #require(ExternalEditor.named("com.apple.dt.Xcode"))
         let file = root.appending(path: "a.swift")
         #expect(
-            EditorHandoff.action(path: "a.swift", line: 4, root: root, editor: zed, appURL: app)
+            EditorHandoff.action(path: "a.swift", line: 4, root: root, editor: xcode, appURL: app)
                 == .file(file, app: app)
         )
         let vscode = try #require(ExternalEditor.named("com.microsoft.VSCode"))

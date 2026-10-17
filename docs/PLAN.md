@@ -32,7 +32,7 @@ before implementation.
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
   sessions show working changes only. Changed Files compares with the session base rather than the
   merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
-  editor handoff) is proposed in [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md).
+  editor handoff) is decided in [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md).
 
 ## Previous batch: session interactions (merged)
 
@@ -111,10 +111,28 @@ all checks. Badge publication runs only after both succeed on main.
 ## Next steps
 
 The first M4 (Files) batch, #26–#28 below, and #114 are merged. Next is #29 (clickable transcript paths
-and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), awaiting the owner's
-acceptance), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
+and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), slices below), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
 the base with a ref.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+
+### #29 slices (2026-10-17)
+
+The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or more per slice, in order:
+
+| # | Slice | Acceptance and verification | Model and effort |
+|---|---|---|---|
+| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sonnet, medium |
+| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sonnet, medium |
+| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sonnet, medium |
+| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sonnet, medium |
+| 5 | Inline code links with index-driven restyling | `Rendering` marks inline code generically; restyle on every index publication, bounded by cached rows; streaming rows keep their text; benchmark before/after | Sonnet, high |
+
+Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess` canonical roots;
+`SessionFiles.open` already guards the session identity. Run `swiftui-pro` over changed views before
+committing slices 3–5. Slice 5 needs the owner's approval of its benchmark workload (proposed: 200
+cached rows with 20 inline spans each against a 10,001-path index, three Release runs) before running
+it. Manual checks: Zed and Xcode line schemes, VS Code and Cursor jumps, VoiceOver labels on links.
+Push and the pull request keep their separate approvals; save `just coverage` output to a log file.
 
 ### M4 parallel batch (2026-10-16)
 

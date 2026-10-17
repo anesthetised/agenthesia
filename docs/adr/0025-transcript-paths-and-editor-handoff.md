@@ -1,6 +1,6 @@
 # 0025. Transcript paths and editor handoff
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-17
 - Decider: Project owner
 - Scope: #29; complements ADR-0008 and ADR-0023
@@ -44,6 +44,15 @@ a line.
   are started.
 - The editor receives the session's working directory path, so for a Git session it opens the worktree
   copy, not the user's checkout.
+- **Initial table.** VS Code (`vscode://file/<path>:<line>`) and Cursor (`cursor://file/<path>:<line>`)
+  have line templates. Zed and Xcode open without a line until a manual check confirms their schemes;
+  a confirmed template is a table change, not a new decision.
+- **Details.** A candidate span has no whitespace and either contains `/` or ends in a file extension;
+  a leading `./` is dropped. Links use `.link` with a private `agenthesia-path` URL carrying the
+  percent-encoded relative path and line; the transcript text view intercepts it and never hands it to
+  `NSWorkspace`. A diff path links without a line. The viewer marks the target line by selecting it.
+  Open in Editor is ⌥⌘O and appears in the file pane's toolbar. Settings stores the editor's bundle
+  identifier; "System default" is the initial choice.
 
 ## Alternatives
 

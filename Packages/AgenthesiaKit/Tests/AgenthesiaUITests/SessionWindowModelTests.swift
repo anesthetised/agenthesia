@@ -136,8 +136,11 @@ import Testing
         await model.refresh()
         #expect(!model.canContinue)
         #expect(!model.savedSessions.contains { $0.id == record.id })
-        try await controller.stop()
+        try await controller.submit([.init(text: "write \(directory.appending(path: "not-written.txt").path) text")])
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
         try await controller.submit([.init(text: "retained")])
+        try await controller.stop()
+        while controller.status != .idle { await Task.yield() }
         if failed {
             await owner.send("exit")
             // Observe the real process-cleanup path, which changes failed to closed.
@@ -301,8 +304,11 @@ import Testing
         #expect(first.canResumeQueue && !second.canResumeQueue)
         await first.resumeQueue()
         #expect(!controller.queuePaused)
-        try await controller.stop()
+        try await controller.submit([.init(text: "write \(directory.appending(path: "not-written.txt").path) text")])
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
         try await controller.submit([.init(text: "queued")])
+        try await controller.stop()
+        while controller.status != .idle { await Task.yield() }
         #expect(first.canResumeQueue && !second.canResumeQueue)
         await first.resumeQueue()
         #expect(!controller.queuePaused)

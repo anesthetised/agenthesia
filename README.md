@@ -54,8 +54,9 @@ Worktree review, merge, and discard controls remain separate work.
 
 For a local smoke test, build with `just test`, then point the app at the package's built `MockAgent`
 executable (the build directory depends on the Swift toolchain). Try `hello`, `slow`, `think`, or `fail`.
-`fail` records a failed turn and pauses the queue while keeping the session usable; Command-Return
-sends another draft immediately. `exit` ends the agent without replying and exercises fatal cleanup
+`fail` records a failed turn and pauses retained queue entries while keeping the session usable.
+With an empty queue, Return sends another draft immediately; flushing the last queued entry restores
+ordinary sending. Retained entries require Resume Queue or an explicit send. `exit` ends the agent without replying and exercises fatal cleanup
 and Continue.
 Use `write <absolute-path> <text>` to exercise permission approval and file creation, then
 `read <absolute-path>` to see the content in a tool card. Use a path inside the session directory

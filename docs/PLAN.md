@@ -24,7 +24,7 @@ before implementation.
   [ADR-0019](adr/0019-session-config-controls.md)); responses are committed before later notifications.
 - The durable prompt queue supports editing, ordering, grouped sends and steering (#65,
   [ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)). Stop
-  pauses it; continued sessions require explicit queue resume. Ended sessions remain available to Continue.
+  pauses it; continued sessions with retained entries require explicit queue resume. Ended sessions remain available to Continue.
 - Native session-scoped elicitation forms appear in the transcript (#24,
   [ADR-0020](adr/0020-native-elicitation-forms.md), [ADR-0022](adr/0022-session-scoped-elicitation.md)).
 - Client-side `terminal/*` is deferred (#104), so the rest of M5 waits.
@@ -164,12 +164,27 @@ The fatal `exit` check exposed disabled Continue: history refreshed on the contr
 its database insert, and was not refreshed when startup completed. Refreshing after startup settles
 preserves the saved-session eligibility guard and makes Continue available after process cleanup.
 A hosted RootView regression blocks the initial insert, then verifies automatic history refresh and
-`exit` → Continue → idle on the same session. Only this native recovery check remains to repeat.
+`exit` → Continue → idle on the same session. Fresh Return after Continue is also covered by the
+ADR-0029 follow-up below.
 The combined follow-ups passed `just lint`, `just test` (591 Swift tests and 15 script tests), `just coverage`
 (all gates; Core 98.2%), and `just app`. Queue, native sidebar and startup-persistence/Continue regressions were verified RED then
 GREEN; the native selection check also fails when the binding is removed. `swiftui-pro` and code review
 found no blockers. The first full run hit an existing shell-descendant timeout test before its PID file
 was created; the isolated retry and subsequent full run passed without changes to that test.
+
+Further acceptance exposed a pause that survived Continue and repeated explicit sends. The owner
+accepted [ADR-0029](adr/0029-empty-queue-recovery.md): idle Return sends into an empty queue;
+Continue clears only an empty queue's pause, and explicitly sending the last queued entry durably
+restores ordinary sending. Retained entries stay paused; a newer Stop wins over a pending send.
+Queue fixtures now create retained entries during a real running turn before Stop, rather than using
+an empty paused queue to force new drafts into it. Regressions reproduced repeated fresh-draft
+queueing after error/Continue and sticky pause after explicit flush before the fix.
+The final follow-up passed `just lint`, `just test` (594 Swift tests and 15 script tests),
+`just coverage` (all gates; Core 98.2%), and `just app`. The new Stop/injection regression fails if the generation
+guard is removed. The atomic-dequeue failure test covers paused sends and verifies that a failed
+batch commits neither the unpause nor the dequeue. `swiftui-pro` and code review found no blockers.
+Remaining native checks: repeated Return after `fail`, Return after `exit`/Continue, and Return after
+explicitly draining retained paused entries. Retained work must not dispatch merely on Continue.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an

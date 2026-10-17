@@ -13,6 +13,7 @@ private actor QueueConnection: ACP.AgentConnection {
     var waiter: CheckedContinuation<ACP.StopReason, any Error>?
     var rejectsInjection = false
     var cancelGate: QueueGate?
+    var injectionGate: QueueGate?
     let strategy: ACP.SteeringStrategy
     init(strategy: ACP.SteeringStrategy = .interruptAndSend) { self.strategy = strategy }
     func initialize(client: ACP.Implementation) async throws -> ACP.AgentProfile {
@@ -44,6 +45,7 @@ private actor QueueConnection: ACP.AgentConnection {
     }
     func inject(_ content: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws {
         if rejectsInjection { throw ACP.SteeringError.injectionUnsupported }
+        await injectionGate?.suspend()
         injections.append(content)
     }
     func rejectInjection() { rejectsInjection = true }
@@ -52,6 +54,7 @@ private actor QueueConnection: ACP.AgentConnection {
         await cancelGate?.suspend()
         finish(.cancelled)
     }
+    func suspendInjection(on gate: QueueGate) { injectionGate = gate }
     func suspendCancellation(on gate: QueueGate) { cancelGate = gate }
     func setConfigOption(
         _ configId: ACP.ConfigOptionID,
@@ -102,6 +105,84 @@ private actor QueueGate {
         let connection = QueueConnection(strategy: strategy)
         try await session.start(connection: connection, client: .init(name: "test", version: "1"))
         return (session, connection, store, directory)
+    }
+
+    @Test(arguments: [false, true]) func emptyQueueAllowsFreshReturnAfterErrorOrContinue(reopen: Bool) async throws {
+        var (session, connection, store, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await session.submit([.init(text: "rejected")])
+        await connection.waitForPrompts(1)
+        await connection.rejectTurn()
+        while session.status != .idle { await Task.yield() }
+        if reopen {
+            await session.close()
+            session = try await SessionController.history(id: session.session.id, store: store)
+            connection = QueueConnection()
+            try await session.reopen(connection: connection, client: .init(name: "test", version: "1"))
+        }
+        for index in 0..<2 {
+            try await session.submit([.init(text: "fresh \(index)")])
+            #expect(session.queuedPrompts.isEmpty)
+            #expect(!session.queuePaused)
+            if session.queuedPrompts.isEmpty {
+                await connection.waitForPrompts((reopen ? 0 : 1) + index + 1)
+                await connection.finish(.endTurn)
+                while session.status != .idle { await Task.yield() }
+            }
+        }
+        await session.close()
+    }
+
+    @Test func sendingThePausedQueueRestoresNormalReturn() async throws {
+        let (session, connection, store, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
+        try await session.submit([.init(text: "retained")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
+        try await session.submit([], intent: .now)
+        await connection.waitForPrompts(2)
+        #expect(!session.queuePaused)
+        let restored = try await SessionController.restore(id: session.session.id, store: store)
+        #expect(!restored.queuePaused)
+        await connection.finish(.endTurn)
+        while session.status != .idle { await Task.yield() }
+        try await session.submit([.init(text: "fresh")])
+        #expect(session.queuedPrompts.isEmpty)
+        if session.queuedPrompts.isEmpty { await connection.waitForPrompts(3) }
+        await session.close()
+    }
+
+    @Test(arguments: [false, true]) func injectedQueueResumesUnlessANewerStopWins(stop: Bool) async throws {
+        let (session, connection, store, directory) = try await live(strategy: .inject)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
+        try await session.submit([.init(text: "retained")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
+        try await session.submit([.init(text: "draft")], intent: .now)
+        await connection.waitForPrompts(2)
+        #expect(session.queuePaused)
+        let gate = QueueGate()
+        await connection.suspendInjection(on: gate)
+        let sending = Task { try await session.submit([], intent: .now) }
+        await gate.waitUntilEntered()
+        if stop { try await session.stop() }
+        await gate.open()
+        try await sending.value
+        #expect(session.queuedPrompts.isEmpty)
+        #expect(session.queuePaused == stop)
+        let restored = try await SessionController.restore(id: session.session.id, store: store)
+        #expect(restored.queuePaused == stop)
+        if !stop {
+            try await session.submit([.init(text: "next")])
+            await connection.finish(.endTurn)
+            await connection.waitForPrompts(3)
+            #expect(await connection.prompts.last == [.init(text: "next")])
+        }
+        await session.close()
     }
 
     @Test func queueEditsOrderAndAttachmentsReplayAndDrainTogether() async throws {
@@ -157,18 +238,18 @@ private actor QueueGate {
     @Test(arguments: [false, true]) func sendNowWithEmptyDraftSendsTheWholeQueue(working: Bool) async throws {
         let (session, connection, _, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
-        if working {
-            try await session.submit([.init(text: "working")])
-            await connection.waitForPrompts(1)
-        } else {
-            try await session.stop()
-        }
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         let attachment = ACP.ContentBlock.resourceLink(.init(uri: "file:///tmp/a", name: "a"))
         try await session.submit([.init(text: "first"), attachment])
         try await session.submit([.init(text: "second")])
+        if !working {
+            try await session.stop()
+            while session.status != .idle { await Task.yield() }
+        }
         let queued = session.queuedPrompts
         try await session.submit([.init(text: " \n")], intent: .now)
-        await connection.waitForPrompts(working ? 2 : 1)
+        await connection.waitForPrompts(2)
         #expect(await connection.prompts.last == [.init(text: "first"), attachment, .init(text: "second")])
         #expect(session.queuedPrompts.isEmpty)
         #expect(session.transcript.items.compactMap(\.message).suffix(2).map(\.localPromptID) == queued.map(\.id))
@@ -182,13 +263,16 @@ private actor QueueGate {
             try await session.submit([], intent: .now)
         }
         #expect(await connection.prompts.isEmpty)
-        try await session.stop()
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         try await session.submit([.init(text: "queued")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
         let queued = session.queuedPrompts
         let attachment = ACP.ContentBlock.resourceLink(.init(uri: "file:///tmp/a", name: "a"))
         try await session.submit([attachment], intent: .now)
-        await connection.waitForPrompts(1)
-        #expect(await connection.prompts == [[attachment]])
+        await connection.waitForPrompts(2)
+        #expect(await connection.prompts.last == [attachment])
         #expect(session.queuedPrompts == queued)
         await session.close()
     }
@@ -432,9 +516,10 @@ private actor QueueGate {
         await session.close()
     }
     @Test func concurrentQueueChangesAndDeletionDoNotLoseMessages() async throws {
-        let (session, _, store, directory) = try await live()
+        let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
-        try await session.stop()
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         async let first: Void = session.submit([.init(text: "first")])
         async let second: Void = session.submit([.init(text: "second")])
         _ = try await (first, second)
@@ -453,12 +538,16 @@ private actor QueueGate {
         await session.close()
     }
 
-    @Test func failedAtomicDequeuePreservesTheQueueOnDisk() async throws {
+    @Test(arguments: [false, true]) func failedAtomicDequeuePreservesTheQueueOnDisk(paused: Bool) async throws {
         let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
         try await session.submit([.init(text: "start")])
         await connection.waitForPrompts(1)
         try await session.submit([.init(text: "retained")])
+        if paused {
+            try await session.stop()
+            while session.status != .idle { await Task.yield() }
+        }
         session.appendEvents = { events, id in
             if events.contains(where: {
                 guard let event = try? JSONDecoder().decode(SessionEvent.self, from: $0.payload) else { return false }
@@ -469,9 +558,20 @@ private actor QueueGate {
             }
             return try await store.append(events, to: id)
         }
-        await connection.finish(.endTurn)
+        if paused {
+            await #expect(throws: QueueFailure.self) { try await session.submit([], intent: .allNow) }
+        } else {
+            await connection.finish(.endTurn)
+        }
         while session.status != .failed { await Task.yield() }
         let restored = try await SessionController.restore(id: session.session.id, store: store)
+        #expect(session.queuePaused && restored.queuePaused)
+        let events = try await store.events(in: session.session.id)
+        let committedUnpause = try events.contains(where: {
+            guard $0.event.kind == SessionEvent.kind else { return false }
+            return try JSONDecoder().decode(SessionEvent.self, from: $0.event.payload) == .queuePaused(false)
+        })
+        #expect(!committedUnpause)
         #expect(restored.queuedPrompts.map(\.text) == ["retained"])
         #expect(restored.transcript.items.compactMap(\.message).count == 1)
         #expect(await connection.prompts.count == 1)
@@ -529,17 +629,18 @@ private actor QueueGate {
     @Test func allNowCanSendOnlyTheQueueAndEmptyHistoryContinuesNormally() async throws {
         let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
-        try await session.stop()
-        try await session.submit([.init(text: "only queued")])
-        try await session.submit([], intent: .allNow)
+        try await session.submit([.init(text: "working")])
         await connection.waitForPrompts(1)
-        #expect(session.queuePaused && session.queuedPrompts.isEmpty)
+        try await session.submit([.init(text: "only queued")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
+        try await session.submit([], intent: .allNow)
+        await connection.waitForPrompts(2)
+        #expect(!session.queuePaused && session.queuedPrompts.isEmpty)
         await session.close()
         let continued = try await SessionController.history(id: session.session.id, store: store)
         let reopened = QueueConnection()
         try await continued.reopen(connection: reopened, client: .init(name: "test", version: "1"))
-        // An explicitly paused empty queue remains paused, but can be resumed without a draft.
-        try await continued.resumeQueue()
         #expect(!continued.queuePaused)
         try await continued.submit([.init(text: "new")])
         await reopened.waitForPrompts(1)
@@ -600,8 +701,11 @@ private actor QueueGate {
     @Test func stopBeforeWirePromptRequeuesAndMarksComposedMessagesNotSent() async throws {
         let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
-        try await session.stop()
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         try await session.submit([.init(text: "queued")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
         let gate = QueueGate()
         session.appendEvents = { events, id in
             if events.contains(where: {
@@ -624,9 +728,9 @@ private actor QueueGate {
         try await stopping.value
         try await later.value
         while session.status != .idle { await Task.yield() }
-        #expect(await connection.prompts.isEmpty)
+        #expect(await connection.prompts.count == 1)
         #expect(session.queuedPrompts.map(\.text) == ["queued", "draft", "later"])
-        #expect(session.transcript.items.compactMap(\.message).allSatisfy { $0.notSent })
+        #expect(session.transcript.items.compactMap(\.message).suffix(2).allSatisfy { $0.notSent })
         let restored = try await SessionController.restore(id: session.session.id, store: store)
         #expect(restored.queuedPrompts == session.queuedPrompts)
         #expect(restored.transcript == session.transcript)
@@ -700,8 +804,11 @@ private actor QueueGate {
     @Test func allNowIncludesMessagesReturnedByTheTurnItWaitsFor() async throws {
         let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }
-        try await session.stop()
+        try await session.submit([.init(text: "working")])
+        await connection.waitForPrompts(1)
         try await session.submit([.init(text: "original")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
         let gate = QueueGate()
         session.appendEvents = { events, id in
             if events.contains(where: {
@@ -723,8 +830,8 @@ private actor QueueGate {
         try await original.value
         try await stopping.value
         try await replacement.value
-        await connection.waitForPrompts(1)
-        #expect(await connection.prompts == [[.init(text: "original"), .init(text: "draft")]])
+        await connection.waitForPrompts(2)
+        #expect(await connection.prompts.last == [.init(text: "original"), .init(text: "draft")])
         #expect(session.queuedPrompts.isEmpty)
         await session.close()
     }

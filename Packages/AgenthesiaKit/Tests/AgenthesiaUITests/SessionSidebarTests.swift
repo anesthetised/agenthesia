@@ -119,8 +119,13 @@ import Testing
             let continuing = try #require(model.owner)
             await continuing.startup?.value
             #expect(continuing !== owner)
-            #expect(continuing.controller?.status == .idle)
+            let resumed = try #require(continuing.controller)
+            #expect(resumed.status == .idle && !resumed.queuePaused)
             #expect(continuing.sessionID == controller.session.id)
+            try await resumed.submit([.init(text: "fresh after Continue")])
+            #expect(resumed.queuedPrompts.isEmpty)
+            while resumed.status == .running { await Task.yield() }
+            #expect(resumed.transcript.items.compactMap(\.message).last?.text == "Echo: fresh after Continue")
         }
         await sessions.closeAll()
     }

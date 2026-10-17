@@ -172,6 +172,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             for id in reduced.unansweredPermissions {
                 events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
             }
+            queuePaused = !reduced.queuedPrompts.isEmpty
             events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
             for id in reduced.unansweredInputs {
                 events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
@@ -260,7 +261,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             if intent != .whenReady, self.stopGeneration != generation { throw SessionError.invalidState }
             if intent == .whenReady {
                 let prompt = QueuedPrompt(content: content)
-                if self.status == .idle, self.reduced.queuedPrompts.isEmpty, !self.queuePaused {
+                if self.status == .idle, self.reduced.queuedPrompts.isEmpty {
                     try await self.dispatch([prompt], removingQueued: false)
                 } else {
                     try await self.record([
@@ -286,7 +287,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                     guard self.turnID == turnID, self.promptStarted else { return false }
                     try await connection.inject(prompts.flatMap(\.content), in: agentID)
                     try await self.record(
-                        self.promptEvents(prompts, turnID: turnID, startsTurn: false, removingQueued: true)
+                        self.promptEvents(
+                            prompts,
+                            turnID: turnID,
+                            startsTurn: false,
+                            removingQueued: true,
+                            resumeEmptyQueue: self.stopGeneration == generation
+                        )
                     )
                     return true
                 }
@@ -384,14 +391,14 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         _ prompts: [QueuedPrompt],
         turnID: UUID,
         startsTurn: Bool,
-        removingQueued: Bool
+        removingQueued: Bool,
+        resumeEmptyQueue: Bool = true
     ) throws -> [NewEvent] {
         var events: [NewEvent] = []
+        let ids = Set(prompts.map(\.id))
+        let remaining = removingQueued ? reduced.queuedPrompts.filter { !ids.contains($0.id) } : reduced.queuedPrompts
         if removingQueued {
-            let ids = Set(prompts.map(\.id))
-            events.append(
-                try SessionEvent.queueChanged(reduced.queuedPrompts.filter { !ids.contains($0.id) }).storedEvent()
-            )
+            events.append(try SessionEvent.queueChanged(remaining).storedEvent())
         }
         for (index, prompt) in prompts.enumerated() {
             events.append(
@@ -402,6 +409,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                     sentTogether: prompts.count > 1
                 ).storedEvent()
             )
+        }
+        if resumeEmptyQueue, queuePaused, remaining.isEmpty {
+            events.append(try SessionEvent.queuePaused(false).storedEvent())
+            // Like Stop's pause, publish before the write; a newer Stop must win while it is pending.
+            queuePaused = false
         }
         return events
     }

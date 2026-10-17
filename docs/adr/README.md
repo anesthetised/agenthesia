@@ -14,7 +14,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
 | [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted |
-| [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted; empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md) |
+| [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted; empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0011](0011-cross-agent-memory.md) | Cross-agent memory | Superseded by [0012](0012-defer-cross-agent-memory.md) |
 | [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted |
 | [0013](0013-source-highlight-attributes.md) | Apply SourceView highlighting as attribute edits | Accepted |
@@ -25,13 +25,14 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted |
 | [0019](0019-session-config-controls.md) | Session config controls | Accepted |
 | [0020](0020-native-elicitation-forms.md) | Native elicitation forms | Accepted |
-| [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md) |
+| [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0022](0022-session-scoped-elicitation.md) | Session-scoped elicitation first | Accepted |
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted |
 | [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Accepted |
 | [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted |
-| [0027](0027-recoverable-prompt-errors.md) | Keep sessions alive after prompt error responses | Accepted |
-| [0028](0028-empty-draft-sends-queue.md) | Send the queue when Command-Return has no draft | Accepted |
+| [0027](0027-recoverable-prompt-errors.md) | Keep sessions alive after prompt error responses | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
+| [0028](0028-empty-draft-sends-queue.md) | Send the queue when Command-Return has no draft | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
+| [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

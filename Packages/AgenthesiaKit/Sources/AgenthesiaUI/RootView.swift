@@ -256,7 +256,7 @@ public struct RootView: View {
                     Button(
                         editingQueueID != nil
                             ? "Save"
-                            : session.status == .idle && session.queuedPrompts.isEmpty && !session.queuePaused
+                            : session.status == .idle && session.queuedPrompts.isEmpty
                                 ? "Send" : "Queue",
                         systemImage: "arrow.up",
                         action: send
@@ -323,7 +323,7 @@ public struct RootView: View {
             return "Waiting for permission · \(keys)"
         }
         if !session.pendingInputs.isEmpty { return "Waiting for input" }
-        if session.queuePaused { return "Queue paused · ⇧⌘R resumes" }
+        if session.queuePaused && !session.queuedPrompts.isEmpty { return "Queue paused · ⇧⌘R resumes" }
         return String(describing: session.status).capitalized
     }
 

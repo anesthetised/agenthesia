@@ -114,6 +114,8 @@ all checks. Badge publication runs only after both succeed on main.
 M4 (Files) is merged: #26–#28, #114 and #29 below. Next is M7 (Parallel sessions, #37–#40), which
 replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
 session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below), followed by M8 (Worktrees), which also decides whether to pin the base with a ref.
+#117 (keep the session alive when a prompt returns an error) came out of the M7 manual check; it changes
+ADR-0017 and ADR-0021 behavior, so it needs its own ADR and branch after M7.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
 ### M7 slices (2026-10-17)

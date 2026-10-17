@@ -167,7 +167,8 @@ uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, restoring normal Return-to-send behavior. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.
-Opening/restoring windows remains #40.
+History refresh follows completed startup, after the session record is persisted; an early session ID
+alone must not leave Continue disabled after a later process exit. Opening/restoring windows remains #40.
 
 Closing a window only detaches it and stops its file observation; closing a transcript view only
 detaches its display driver. On quit the delegate asks for confirmation only if owners are working or

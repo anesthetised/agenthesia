@@ -6,7 +6,7 @@ import Testing
 @testable import AgenthesiaCore
 @testable import AgenthesiaUI
 
-@MainActor @Suite(.serialized) struct SessionSidebarTests {
+@MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct SessionSidebarTests {
     @Test func nativeListHighlightsTheSelectedSession() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appending(path: "sidebar-\(UUID())")
@@ -63,8 +63,80 @@ import Testing
         #expect(table.selectedRowIndexes.isEmpty)
     }
 
+    @Test func continueAfterProcessExitUsesHistoryRefreshedAfterStartup() async throws {
+        _ = NSApplication.shared
+        let directory = FileManager.default.temporaryDirectory.appending(path: "sidebar-startup-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
+        let model = SessionWindowModel(sessions: sessions)
+        let host = NSHostingView(rootView: RootView(model: model))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        let gate = SessionPersistenceGate()
+        defer { gate.release(); model.close(); window.close() }
+        let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
+        let binary = try #require(
+            [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
+                .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        )
+        model.start(directory: directory, executable: binary.path, arguments: ["--reopen"])
+        let owner = try #require(model.owner)
+        while owner.controller == nil && owner.isStarting { await Task.yield() }
+        let controller = try #require(owner.controller)
+        let create = controller.createSession
+        controller.createSession = { record in
+            await gate.wait()
+            try await create(record)
+        }
+        while !gate.entered, owner.isStarting { await Task.yield() }
+        try #require(gate.entered)
+        // The ID already exists, but the database insert has not happened yet.
+        await model.refresh()
+        #expect(model.history.isEmpty)
+        for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        gate.release()
+        await owner.startup?.value
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !model.history.contains(where: { $0.id == controller.session.id }), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+            host.layoutSubtreeIfNeeded()
+        }
+        #expect(model.history.contains { $0.id == controller.session.id })
+        await owner.send("exit")
+        while controller.status != .closed { await Task.yield() }
+        #expect(model.canContinue)
+        if model.canContinue {
+            model.continueRestored()
+            let continuing = try #require(model.owner)
+            await continuing.startup?.value
+            #expect(continuing !== owner)
+            #expect(continuing.controller?.status == .idle)
+            #expect(continuing.sessionID == controller.session.id)
+        }
+        await sessions.closeAll()
+    }
+
     private func descendant(in view: NSView) -> NSTableView? {
         if let table = view as? NSTableView, table.numberOfRows > 0 { return table }
         return view.subviews.lazy.compactMap { descendant(in: $0) }.first
     }
+}
+
+@MainActor private final class SessionPersistenceGate {
+    var entered = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    func wait() async {
+        entered = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func release() { continuation?.resume(); continuation = nil }
 }

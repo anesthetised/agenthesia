@@ -158,11 +158,18 @@ Manual acceptance of the combined #39/#117 PR confirmed new-session/navigation a
 shortcuts. Follow-up feedback adds empty-draft Command-Return to send the complete queue
 ([ADR-0028](adr/0028-empty-draft-sends-queue.md)), and native sidebar selection synchronized with
 mouse and keyboard navigation. Regressions first reproduced the rejected empty send and the missing
-native selection. Remaining native checks: queue shortcuts and selection, recoverable `fail` with the
-rebuilt client, fatal `exit`/Continue, selected-session End, and quit confirmation/cancellation.
-The follow-up passed `just lint`, `just test` (590 Swift tests and 15 script tests), `just coverage`
-(all gates; Core 98.3%), and `just app`. Queue and native sidebar regressions were verified RED then
-GREEN; the native selection check also fails when the binding is removed. `swiftui-pro` and code review found no blockers.
+native selection. The owner subsequently passed queue shortcuts, recoverable `fail`, selected-session
+End, and quit confirmation/cancellation. Native selection is visible in the supplied screenshot.
+The fatal `exit` check exposed disabled Continue: history refreshed on the controller's early ID, before
+its database insert, and was not refreshed when startup completed. Refreshing after startup settles
+preserves the saved-session eligibility guard and makes Continue available after process cleanup.
+A hosted RootView regression blocks the initial insert, then verifies automatic history refresh and
+`exit` → Continue → idle on the same session. Only this native recovery check remains to repeat.
+The combined follow-ups passed `just lint`, `just test` (591 Swift tests and 15 script tests), `just coverage`
+(all gates; Core 98.2%), and `just app`. Queue, native sidebar and startup-persistence/Continue regressions were verified RED then
+GREEN; the native selection check also fails when the binding is removed. `swiftui-pro` and code review
+found no blockers. The first full run hit an existing shell-descendant timeout test before its PID file
+was created; the isolated retry and subsequent full run passed without changes to that test.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an

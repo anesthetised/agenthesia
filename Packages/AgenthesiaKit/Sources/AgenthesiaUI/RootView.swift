@@ -117,8 +117,9 @@ public struct RootView: View {
         .frame(minWidth: 740, minHeight: 500)
         .focusedSceneValue(\.sessionWindow, model)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
+        // Startup persists the session after assigning its ID; refresh only once that write has settled.
         // Ended sessions move to saved history in every window.
-        .task(id: model.sessions.owners.map(\.sessionID)) { await model.refresh() }
+        .task(id: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID)) { await model.refresh() }
         // Looking at a finished turn in the key window clears its Done mark.
         .onChange(of: viewingUnseenResult, initial: true) {
             if viewingUnseenResult { model.owner?.markSeen() }

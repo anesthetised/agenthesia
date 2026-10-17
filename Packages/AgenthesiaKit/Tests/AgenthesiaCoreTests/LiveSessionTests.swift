@@ -330,11 +330,10 @@ extension LiveSessionTests {
         return session
     }
 
-    @Test func continuesASavedSessionInOneWindowAtATime() async throws {
+    @Test func continuesASavedSession() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let session = try await savedSession(in: directory, library: library, agent: try mock(arguments: ["--reopen"]))
-        #expect(await !library.isLive(session.id))
         let owner = LiveSession(library: library)
         owner.environment = { (ProcessInfo.processInfo.environment, nil) }
         await owner.resume(session)
@@ -342,13 +341,7 @@ extension LiveSessionTests {
         #expect(owner.errorMessage == nil)
         #expect(controller.status == .idle)
         #expect(owner.workingDirectory?.path == session.workingDirectory)
-        #expect(await library.isLive(session.id))
-        let other = LiveSession(library: library)
-        other.environment = { (ProcessInfo.processInfo.environment, nil) }
-        await other.resume(session)
-        #expect(other.errorMessage?.contains("another window") == true)
-        await other.close()
-        #expect(await library.isLive(session.id))
+        #expect(owner.resuming == session && owner.sessionID == session.id)
         await owner.send("again")
         #expect(
             controller.transcript.items.compactMap { $0.message?.text } == [
@@ -356,7 +349,6 @@ extension LiveSessionTests {
             ]
         )
         await owner.close()
-        #expect(await !library.isLive(session.id))
         #expect(try await library.history().map(\.id) == [session.id])
     }
 
@@ -381,7 +373,6 @@ extension LiveSessionTests {
             #expect(owner.errorMessage?.contains(message) == true, "\(arguments)")
             #expect(!owner.isStarting)
             await owner.close()
-            #expect(await !library.isLive(session.id))
             #expect(try await store.events(in: session.id) == before)
         }
     }

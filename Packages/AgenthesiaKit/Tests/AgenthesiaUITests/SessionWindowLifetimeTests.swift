@@ -6,116 +6,88 @@ import Testing
 @testable import AgenthesiaUI
 
 @MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct SessionWindowLifetimeTests {
-    @Test func closingNativeWindowKeepsOwnerRegisteredUntilCleanupFinishes() async throws {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "window-lifetime-\(UUID())")
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let model = SessionWindowModel(
+    private func delegate(_ directory: URL) -> SessionApplicationDelegate {
+        let delegate = SessionApplicationDelegate()
+        delegate.sessions = SessionManager(
             library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
         )
-        let owner = LiveSession(library: model.library)
-        model.owner = owner
-        let gate = StartupGate()
-        defer { gate.release() }
-        owner.environment = { (await gate.wait(), nil) }
-        let start = Task {
-            await owner.start(directory: directory, agent: AgentInstallRecord(name: "Test", executable: "/bin/sh"))
-        }
-        while !gate.entered { await Task.yield() }
-        let window = host(model)
-        defer { SessionApplicationDelegate.windows.removeValue(forKey: model.id) }
-        #expect(SessionApplicationDelegate.windows[model.id] === model)
-        window.close()
-        while !owner.isClosed { await Task.yield() }
-        #expect(model.closed)
-        #expect(SessionApplicationDelegate.windows[model.id] === model)
-        gate.release()
-        await start.value
-        while SessionApplicationDelegate.windows[model.id] != nil { await Task.yield() }
-        #expect(owner.controller == nil)
+        delegate.sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
+        return delegate
     }
 
-    @Test(arguments: [false, true])
-    func quittingWaitsForAllWindowsIncludingPendingWindowClose(closeWindowFirst: Bool) async throws {
+    @Test func closingNativeWindowDetachesWithoutEndingItsSession() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-lifetime-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let library = SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
-        let models = [SessionWindowModel(library: library), SessionWindowModel(library: library)]
-        let owner = LiveSession(library: library)
-        models[0].owner = owner
+        let sessions = delegate(directory).sessions
+        let model = SessionWindowModel(sessions: sessions)
+        model.start(directory: directory, executable: try mockAgent().executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        let window = host(model)
+        window.close()
+        #expect(model.closed)
+        #expect(owner.isLive && owner.controller?.status == .idle)
+        #expect(sessions.owners.map(\.id) == [owner.id])
+        await sessions.closeAll()
+    }
+
+    @Test func quittingWaitsForEveryOwnerIncludingOneStillStarting() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-lifetime-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let delegate = delegate(directory)
+        let running = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        await running.startup?.value
         let gate = StartupGate()
         defer { gate.release() }
-        owner.environment = { (await gate.wait(), nil) }
-        let start = Task {
-            await owner.start(directory: directory, agent: AgentInstallRecord(name: "Test", executable: "/bin/sh"))
-        }
+        delegate.sessions.environment = { (await gate.wait(), nil) }
+        let starting = delegate.sessions.start(directory: directory, agent: try mockAgent())
         while !gate.entered { await Task.yield() }
-        let windows = models.map(host)
-        defer {
-            for window in windows { window.close() }
-            for model in models { SessionApplicationDelegate.windows.removeValue(forKey: model.id) }
-        }
-        let delegate = SessionApplicationDelegate()
         var replies = 0
         delegate.terminationReply = { _ in
-            #expect(models.allSatisfy { $0.closed })
-            #expect(!owner.isStarting)
+            #expect(!starting.isStarting)
             replies += 1
         }
-        if closeWindowFirst {
-            windows[0].close()
-            while !owner.isClosed { await Task.yield() }
-        }
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
-        while !owner.isClosed { await Task.yield() }
+        while !starting.isClosed { await Task.yield() }
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
         #expect(replies == 0)
         gate.release()
-        await start.value
         while replies == 0 { await Task.yield() }
         #expect(replies == 1)
-        #expect(owner.controller == nil)
-        for window in windows { window.close() }
-        while models.contains(where: { SessionApplicationDelegate.windows[$0.id] != nil }) { await Task.yield() }
+        #expect(starting.controller == nil)
+        #expect(running.controller?.status == .closed)
     }
 
-    @Test(arguments: [false, true]) func closingOrQuittingSettlesAPendingPermission(quit: Bool) async throws {
+    @Test func quittingSettlesAPendingPermissionThatClosingTheWindowKeeps() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-permission-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let model = SessionWindowModel(
-            library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
-        )
-        let owner = LiveSession(library: model.library)
-        model.owner = owner
-        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
-        await owner.start(directory: directory, agent: try mockAgent())
+        let delegate = delegate(directory)
+        let model = SessionWindowModel(sessions: delegate.sessions)
+        model.start(directory: directory, executable: try mockAgent().executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
         let controller = try #require(owner.controller)
         let turn = Task { await owner.send("write \(directory.appending(path: "unwritten.txt").path) text") }
         while controller.pendingPermissions.isEmpty { await Task.yield() }
         let request = controller.pendingPermissions[0]
-        let window = host(model)
-        defer { SessionApplicationDelegate.windows.removeValue(forKey: model.id) }
-        if quit {
-            let delegate = SessionApplicationDelegate()
-            var replies = 0
-            delegate.terminationReply = { _ in replies += 1 }
-            #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
-            while replies == 0 { await Task.yield() }
-        } else {
-            window.close()
-            while SessionApplicationDelegate.windows[model.id] != nil { await Task.yield() }
-        }
+        host(model).close()
+        #expect(controller.pendingPermissions.map(\.id) == [request.id])
+        var replies = 0
+        delegate.terminationReply = { _ in replies += 1 }
+        #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
+        while replies == 0 { await Task.yield() }
         await turn.value
         #expect(controller.status == .closed)
         #expect(controller.pendingPermissions.isEmpty)
         #expect(controller.transcript.items.compactMap(\.permission).map(\.outcome) == [.cancelled])
         // A click that arrives after shutdown is stale.
         #expect(!controller.answerPermission(request.id, with: "allow"))
-        window.close()
     }
 
-    @Test func quittingWithoutWindowsIsImmediate() {
-        #expect(SessionApplicationDelegate.windows.isEmpty)
+    @Test func quittingWithoutSessionsIsImmediate() {
         let delegate = SessionApplicationDelegate()
         delegate.terminationReply = { _ in Issue.record("No asynchronous termination reply is needed") }
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateNow)

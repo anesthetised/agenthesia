@@ -407,17 +407,17 @@ struct MockAgentScenarioTests {
     }
 }
 
-func waitForChildPID(at file: URL) async throws -> Int32 {
-    let deadline = ContinuousClock.now + .seconds(3)
-    while ContinuousClock.now < deadline {
+func waitForChildPID(at file: URL, deadline: ContinuousClock.Instant = .now + .seconds(3)) async throws -> Int32 {
+    while true {
         if let text = try? String(contentsOf: file, encoding: .utf8),
             let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
         {
             return pid
         }
+        // Scheduling delays can outlast the deadline after the child has already written its PID.
+        guard ContinuousClock.now < deadline else { throw TestProcessError.timeout }
         try await Task.sleep(for: .milliseconds(20))
     }
-    throw TestProcessError.timeout
 }
 
 func waitUntilInactive(_ pid: Int32) async throws -> Bool {

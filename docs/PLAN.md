@@ -8,9 +8,9 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-16)
+## State (2026-10-17)
 
-- Live sessions run end-to-end in one window ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
+- Live sessions run end-to-end ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
   ([ADR-0016](adr/0016-agent-reported-command-output.md)).
 - Saved history opens read-only; Continue reattaches it to its agent
@@ -31,9 +31,13 @@ before implementation.
 - Quick Open, the side file viewer and changed-file tracking (#26–#28) are merged (#113)
   under [ADR-0023](adr/0023-session-files.md). New Git sessions retain their initial revision; legacy
   sessions show working changes only. Changed Files compares with the session base rather than the
-  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
-  editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)) is implemented on
-  `feat/clickable-paths`; the owner's manual checks passed.
+  merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). Transcript paths open
+  the file pane at a line, and Open in Editor hands off to the chosen editor (#29, #116,
+  [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)). M4 is complete.
+- M7 slices 1–2 are implemented in open PR [#118](https://github.com/anesthetised/agenthesia/pull/118)
+  (#37, [ADR-0026](adr/0026-app-wide-session-manager.md)): app-wide ownership supports parallel
+  sessions, closing a window detaches it, and the sidebar groups sessions by project with live statuses.
+  Local `just lint`, `just test` and `just app` pass; coverage is enforced by CI.
 
 ## Previous batch: session interactions (merged)
 
@@ -111,12 +115,39 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-The first M4 (Files) batch, #26–#28 below, and #114 are merged. Next is #29 (clickable transcript paths
-and editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md), slices below), then M7 (Parallel sessions), followed by M8 (Worktrees), which also decides whether to pin
-the base with a ref.
+M4 (Files) is merged: #26–#28, #114 and #29 below. M7 (Parallel sessions, #37–#40) is in progress and
+replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
+session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below). PR #118 implements
+slices 1–2 and closes #37 when merged. After it merges, next is slice 3: quit confirmation and the
+Session menu (#39), then notifications and the Dock badge (#38), then window restoration (#40).
+M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
+#117 (keep the session alive when a prompt returns an error) came out of the M7 manual check; it changes
+ADR-0017 and ADR-0021 behavior, so it needs its own ADR and branch after M7.
 Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
 
-### #29 slices (2026-10-17)
+### M7 slices (2026-10-17)
+
+The owner accepted ADR-0026. Slices 1–2 are implemented on `feat/parallel-sessions` in open PR #118.
+After it merges, continue with slice 3 on a separate branch from main; keep subsequent slices in order.
+
+| # | Slice | Acceptance and verification | Model and effort |
+|---|---|---|---|
+| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; implemented in #118, awaiting merge |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium; implemented in #118, awaiting merge |
+| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sonnet, medium |
+| 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
+| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sonnet, medium |
+
+Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
+second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
+owner the manager already removed, which then reads as ended. Run `swiftui-pro` over changed views.
+CI exposed a process-readiness polling race: a task can resume after its deadline with the child PID
+already recorded. Check readiness before the deadline; regression tests cover both a ready PID and a
+missing PID after expiry.
+Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
+#40 with slice 5.
+
+### #29 slices (2026-10-17, merged in #116)
 
 The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or more per slice, in order:
 

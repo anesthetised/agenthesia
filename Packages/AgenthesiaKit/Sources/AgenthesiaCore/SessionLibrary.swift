@@ -9,8 +9,7 @@ public actor SessionLibrary {
     )
     private let databaseURL: URL
     private var opening: Task<PersistenceStore, any Error>?
-    /// Sessions with a live owner in this app; one owner writes to a session's log (ADR-0017).
-    private var live: Set<UUID> = []
+    private var installing: Task<Void, Never>?
 
     public init(databaseURL: URL) { self.databaseURL = databaseURL }
 
@@ -28,6 +27,8 @@ public actor SessionLibrary {
         do { return try await task.value } catch { opening = nil; throw error }
     }
 
+    public func projects() async throws -> [ProjectRecord] { try await store().projects() }
+
     public func history() async throws -> [SessionRecord] {
         let store = try await store()
         var result: [SessionRecord] = []
@@ -36,14 +37,6 @@ public actor SessionLibrary {
         }
         return result.sorted { $0.createdAt > $1.createdAt }
     }
-
-    /// Whether a window owns the session live, so it cannot be continued elsewhere.
-    public func isLive(_ id: UUID) -> Bool { live.contains(id) }
-
-    /// Returns `false` if another owner already holds the session.
-    func claim(_ id: UUID) -> Bool { live.insert(id).inserted }
-
-    func release(_ id: UUID) { live.remove(id) }
 
     func install(id: UUID) async throws -> AgentInstallRecord? {
         try await store().agentInstalls().first { $0.id == id }
@@ -54,7 +47,7 @@ public actor SessionLibrary {
         if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) { return existing }
         let project = ProjectRecord(name: directory.lastPathComponent, rootPath: directory.path)
         do { try await store.createProject(project) } catch {
-            // Another window may have inserted the same canonical directory during the write.
+            // Another session may have inserted the same canonical directory during the write.
             if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) {
                 return existing
             }
@@ -63,7 +56,19 @@ public actor SessionLibrary {
         return project
     }
 
+    /// Lookups and inserts run one after another: parallel sessions often start with the same agent,
+    /// and awaiting the store lets a second caller run between the lookup and the insert.
     func install(_ agent: AgentInstallRecord) async throws -> AgentInstallRecord {
+        let previous = installing
+        let task = Task {
+            await previous?.value
+            return try await insert(agent)
+        }
+        installing = Task { _ = try? await task.value }
+        return try await task.value
+    }
+
+    private func insert(_ agent: AgentInstallRecord) async throws -> AgentInstallRecord {
         let store = try await store()
         if let existing = try await store.agentInstalls().first(where: {
             $0.executable == agent.executable && $0.arguments == agent.arguments

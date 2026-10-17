@@ -33,7 +33,7 @@ before implementation.
   sessions show working changes only. Changed Files compares with the session base rather than the
   merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). #29 (transcript paths,
   editor handoff, [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)) is implemented on
-  `feat/clickable-paths` and awaits the owner's manual checks.
+  `feat/clickable-paths`; the owner's manual checks passed.
 
 ## Previous batch: session interactions (merged)
 
@@ -133,7 +133,8 @@ Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess`
 committing slices 3–5. The owner approved slice 5's benchmark (200 rows with 20 inline spans each
 against a 10,001-path index, three Release runs). Manual checks by the owner: mouse clicks on tool and inline links, VS Code, Cursor and Zed line jumps,
 Settings and VoiceOver labels pass; Xcode's scheme ignores the line, so Xcode opens files at the start.
-The pane button's ⌥⌘O did not fire, so Open in Editor is a File menu command.
+The pane button's ⌥⌘O did not fire, so Open in Editor is a File menu command; its shortcut, the
+changed-file list after an ACP write and the unavailable-file layout were checked again.
 Push and the pull request keep their separate approvals; save `just coverage` output to a log file.
 
 ### M4 parallel batch (2026-10-16)

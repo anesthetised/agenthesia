@@ -11,6 +11,7 @@ import Testing
         delegate.sessions = SessionManager(
             library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite"))
         )
+        delegate.confirmQuit = { _ in true }
         delegate.sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
         return delegate
     }
@@ -41,6 +42,7 @@ import Testing
         await running.startup?.value
         let gate = StartupGate()
         defer { gate.release() }
+        delegate.confirmQuit = { _ in true }
         delegate.sessions.environment = { (await gate.wait(), nil) }
         let starting = delegate.sessions.start(directory: directory, agent: try mockAgent())
         while !gate.entered { await Task.yield() }
@@ -73,6 +75,10 @@ import Testing
         let turn = Task { await owner.send("write \(directory.appending(path: "unwritten.txt").path) text") }
         while controller.pendingPermissions.isEmpty { await Task.yield() }
         let request = controller.pendingPermissions[0]
+        var confirmedCount = 0
+        delegate.confirmQuit = {
+            confirmedCount = $0; return true
+        }
         host(model).close()
         #expect(controller.pendingPermissions.map(\.id) == [request.id])
         var replies = 0
@@ -80,11 +86,88 @@ import Testing
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
         while replies == 0 { await Task.yield() }
         await turn.value
+        #expect(confirmedCount == 1)
         #expect(controller.status == .closed)
         #expect(controller.pendingPermissions.isEmpty)
         #expect(controller.transcript.items.compactMap(\.permission).map(\.outcome) == [.cancelled])
         // A click that arrives after shutdown is stale.
         #expect(!controller.answerPermission(request.id, with: "allow"))
+    }
+
+    @Test func cancellingQuitKeepsStartingOwnersAndAllowsRetry() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "quit-cancel-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let delegate = delegate(directory)
+        let gate = StartupGate()
+        defer { gate.release() }
+        delegate.sessions.environment = { (await gate.wait(), nil) }
+        let owner = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        while !gate.entered { await Task.yield() }
+        var counts: [Int] = []
+        delegate.confirmQuit = {
+            counts.append($0); return false
+        }
+        #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
+        #expect(counts == [1])
+        #expect(!owner.isClosed)
+        var replied = false
+        delegate.confirmQuit = {
+            counts.append($0); return true
+        }
+        delegate.terminationReply = { _ in replied = true }
+        #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
+        gate.release()
+        while !replied { await Task.yield() }
+        #expect(counts == [1, 1])
+        #expect(owner.isClosed)
+    }
+
+    @Test func quitCountsWorkingOwnersAndExcludesIdleOwners() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "quit-count-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let delegate = delegate(directory)
+        let idle = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        await idle.startup?.value
+        let first = StartupGate(), second = StartupGate()
+        delegate.sessions.environment = { (await first.wait(), nil) }
+        let one = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        while !first.entered { await Task.yield() }
+        delegate.sessions.environment = { (await second.wait(), nil) }
+        let two = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        while !second.entered { await Task.yield() }
+        var count = 0
+        delegate.confirmQuit = {
+            count = $0; return false
+        }
+        #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateCancel)
+        #expect(count == 2)
+        #expect(!one.isClosed && !two.isClosed && idle.isLive)
+        first.release(); second.release()
+        await delegate.sessions.closeAll()
+    }
+
+    @Test func idleAndFailedOwnersDoNotAskForQuitConfirmation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "quit-idle-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let delegate = delegate(directory)
+        let idle = delegate.sessions.start(directory: directory, agent: try mockAgent())
+        let failed = delegate.sessions.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "Missing", executable: "/missing-agent")
+        )
+        await idle.startup?.value
+        await failed.startup?.value
+        #expect(idle.activity == .idle && failed.activity == .failed)
+        delegate.confirmQuit = { _ in
+            Issue.record("Idle and failed owners need no confirmation"); return false
+        }
+        var replied = false
+        delegate.terminationReply = { _ in replied = true }
+        #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
+        while !replied { await Task.yield() }
+        #expect(idle.isClosed && failed.isClosed)
     }
 
     @Test func quittingWithoutSessionsIsImmediate() {

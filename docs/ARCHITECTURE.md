@@ -150,10 +150,20 @@ has seen; a window marks the displayed session seen while it is the key window. 
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued.
+The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
+⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
+⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Starting, then each project's
+live and saved rows); from the launch form they select the last/first row. Next Session Needing Input
+uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+disabled without an eligible selection in the focused window. Resume Queue also enables an empty
+paused queue, restoring normal Return-to-send behavior. Opening/restoring windows remains #40.
+
 Closing a window only detaches it and stops its file observation; closing a transcript view only
-detaches its display driver. On quit the delegate uses `terminateLater` and closes every owner
-concurrently: each closes ACP and drains controller writes, terminates the process group, and waits
-for startup if it was in flight. Unexpected process exit and observable controller failure also
+detaches its display driver. On quit the delegate asks for confirmation only if owners are working or
+need input, naming their count. Cancel leaves every owner running. After confirmation (or immediately
+for idle/failed owners), the delegate uses `terminateLater` and closes every owner concurrently: each
+closes ACP and drains controller writes, terminates the process group, and waits for startup if it was
+in flight. Unexpected process exit and observable controller failure also
 trigger cleanup.
 
 ## Session filesystem

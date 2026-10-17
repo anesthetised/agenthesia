@@ -13,7 +13,6 @@ public struct RootView: View {
     @State private var directory = ""
     @State private var executable = ""
     @State private var arguments = ""
-    @State private var showingSetup = true
     @State private var showingLog = false
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
@@ -24,27 +23,27 @@ public struct RootView: View {
         NavigationSplitView {
             List {
                 SessionSidebarList(sidebar: model.sidebar) { owner in
-                    model.show(owner); showingSetup = false
+                    model.show(owner)
                 } onShowSaved: { record in
-                    showingSetup = false
+                    model.showingSetup = false
                     prompt = ""
                     attachments = []
                     Task { await model.showHistory(record) }
                 }
-                if !showingSetup, filesMatchSession {
+                if !model.showingSetup, filesMatchSession {
                     SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
                 }
             }
             .navigationTitle("Agenthesia")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
             .toolbar {
-                Button("New Session", systemImage: "plus") { showingSetup = true }
-                    .disabled(!model.canStart).keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("New Session", systemImage: "plus") { model.showingSetup = true }
+                    .disabled(!model.canStart)
                 Button("Refresh History", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
             }
         } detail: {
             VStack(spacing: 0) {
-                if showingSetup && model.canStart {
+                if model.showingSetup && model.canStart {
                     setup
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -109,16 +108,17 @@ public struct RootView: View {
                     showingQuickOpen = true
                 }
                 .keyboardShortcut("p", modifiers: .command)
-                .disabled(showingSetup || !filesMatchSession)
+                .disabled(model.showingSetup || !filesMatchSession)
                 if model.restored == nil, let owner = model.owner {
                     Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
-                        Task { await model.sessions.end(owner) }
-                    }.disabled(owner.isClosed)
+                        Task { await model.endSession() }
+                    }.disabled(!model.canEnd)
                 }
             }
         }
         .frame(minWidth: 740, minHeight: 500)
+        .focusedSceneValue(\.sessionWindow, model)
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         // Ended sessions move to saved history in every window.
         .task(id: model.sessions.owners.map(\.sessionID)) { await model.refresh() }
@@ -149,7 +149,7 @@ public struct RootView: View {
     }
 
     private var viewingUnseenResult: Bool {
-        appearsActive && !showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
+        appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
     }
 
     private var filesMatchSession: Bool {
@@ -195,7 +195,7 @@ public struct RootView: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 Button("Start Session") {
-                    showingSetup = false
+                    model.showingSetup = false
                     let command = Self.launchCommand(executable: executable, arguments: arguments)
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
                     model.start(
@@ -252,7 +252,6 @@ public struct RootView: View {
                         .help("Reconnect to the agent.")
                 } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
-                        .keyboardShortcut(".", modifiers: .command)
                         .disabled(session.status == .stopping && session.queuePaused)
                 }
                 if editable {

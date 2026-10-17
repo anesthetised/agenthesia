@@ -118,25 +118,39 @@ all checks. Badge publication runs only after both succeed on main.
 M4 (Files) is merged: #26–#28, #114 and #29 below. M7 (Parallel sessions, #37–#40) is in progress and
 replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
 session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below). PR #118 implements
-slices 1–2 and closes #37 when merged. After it merges, next is slice 3: quit confirmation and the
-Session menu (#39), then notifications and the Dock badge (#38), then window restoration (#40).
+slices 1–2 and closes #37 when merged. The owner requested #39 and #117 concurrently in separate
+worktrees from local HEAD `706dbf8`: #39 implements accepted ADR-0026 slice 3; #117 implements accepted
+ADR-0027 (prompt-error recovery), which changes ADR-0017/0021 behavior. Use Sol for these tasks.
+After those streams, implement window opening/selection/restoration (#40) before notifications and the
+Dock badge (#38); notification activation will consume #40's window selection mechanism.
 M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
-#117 (keep the session alive when a prompt returns an error) came out of the M7 manual check; it changes
-ADR-0017 and ADR-0021 behavior, so it needs its own ADR and branch after M7.
-Small independent chores such as #73 (CI with Xcode 27) fit Sonnet at medium effort.
+Small independent chores such as #73 (CI with Xcode 27) fit Sol at medium effort.
 
 ### M7 slices (2026-10-17)
 
 The owner accepted ADR-0026. Slices 1–2 are implemented on `feat/parallel-sessions` in open PR #118.
-After it merges, continue with slice 3 on a separate branch from main; keep subsequent slices in order.
+Slice 3 (#39) is implemented on its isolated branch from local HEAD `706dbf8`, concurrently with
+#117 implementation after the owner accepted ADR-0027; #117 uses Sol high. #40 precedes #38 despite
+the original slice numbering.
 
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
 | 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; implemented in #118, awaiting merge |
-| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sonnet, medium; implemented in #118, awaiting merge |
-| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sonnet, medium |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; implemented in #118, awaiting merge |
+| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented locally, verification below |
 | 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
-| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sonnet, medium |
+| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium |
+
+#39 adds focused-window Session commands, wraparound sidebar navigation (including saved history and
+Starting), next-needing-input navigation, and a count-based quit confirmation before awaited shutdown.
+New regression tests cover command eligibility, independent window selections, navigation, cancellation
+and retry, idle/failed shutdown without confirmation, and resuming a paused empty queue to restore
+normal Return behavior. Local `just lint`, `just test` (579 Swift tests and 15 script tests),
+`just coverage` and `just app` pass; every module meets its coverage gate (Core 98.1%). The final test
+run uses the same compiler instrumentation flags as coverage to reuse its build configuration.
+`swiftui-pro` review found no blocking issues. Native menu focus/shortcuts and the actual quit alert
+remain manual smoke checks; automated tests exercise selection, eligibility and injected confirmation.
+#40 and #38 remain separate work.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
@@ -153,10 +167,10 @@ The owner accepted ADR-0025. One branch, `feat/clickable-paths`, one commit or m
 
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
-| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sonnet, medium; done |
-| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sonnet, medium; done |
-| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sonnet, medium; done |
-| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sonnet, medium; done |
+| 1 | Core: path candidate parsing and resolution; editor table and URL construction | Suffixes `:line`, `:line:col`, `#Lline`; `./` dropped; absolute inside root → relative; outside root, `..`, symlinked escape → nil; percent-encoding of spaces, `#`, `?` and non-ASCII in editor URLs; table without a line template | Sol, medium; done |
+| 2 | `SourceView` line navigation | Scroll a line into view and select it; clamp past the end; works before and after highlighting finishes; hosted-view test | Sol, medium; done |
+| 3 | Structural links and the file pane: tool locations and diff paths, `agenthesia-path` interception, Open in Editor (⌥⌘O), Markdown switches to Source for a line | Click opens the pane at the line for the displayed session only; links never reach `NSWorkspace`; stale clicks after session switch are ignored | Sol, medium; done |
+| 4 | Settings scene with the editor picker | Installed editors only, "System default" first, choice persists; missing editor falls back to the default app | Sol, medium; done |
 | 5 | Inline code links with index-driven restyling | `Rendering` marks inline code generically; restyle on every index publication, bounded by cached rows; streaming rows keep their text; benchmark before/after | Opus, high; done, [benchmark](benchmarks/2026-10-17/transcript-links/README.md) |
 
 Pitfalls: `Rendering` must not import Core; resolution reuses `ScopedFileAccess` canonical roots;

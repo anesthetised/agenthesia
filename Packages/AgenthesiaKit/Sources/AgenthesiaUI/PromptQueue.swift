@@ -18,7 +18,6 @@ struct PromptQueue: View {
                 Spacer()
                 if session.queuePaused, editable {
                     Button("Resume Queue", systemImage: "play.fill", action: resume)
-                        .keyboardShortcut("r", modifiers: [.command, .shift])
                         .help("Resume queued messages (⇧⌘R)")
                         .disabled(session.status == .stopping)
                 }

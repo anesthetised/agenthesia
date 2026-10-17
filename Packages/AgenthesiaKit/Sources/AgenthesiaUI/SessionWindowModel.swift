@@ -6,6 +6,8 @@ import SwiftUI
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
+    var showingSetup = true
+    private var selectedHistoryID: UUID?
     var owner: LiveSession?
     var history: [SessionRecord] = []
     var projects: [ProjectRecord] = []
@@ -24,7 +26,9 @@ import SwiftUI
     var filesSession: SessionRecord? { displayed?.session ?? (owner?.isStarting == true ? owner?.resuming : nil) }
     var canStart: Bool { !closed }
     var canContinue: Bool {
-        guard !closed, let displayed, displayed.session.agentSessionID != nil else { return false }
+        guard !closed, !showingSetup, !isLoadingHistory, let displayed, displayed.session.agentSessionID != nil else {
+            return false
+        }
         if let restored { return restored.status == .readOnly }
         return owner?.isLive == false && [.failed, .closed].contains(displayed.status)
             && history.contains { $0.id == displayed.session.id }
@@ -33,6 +37,85 @@ import SwiftUI
         history.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
     }
     var sidebar: SessionSidebar { SessionSidebar(projects: projects, history: history, owners: sessions.owners) }
+
+    var canEnd: Bool {
+        !closed && !showingSetup && !isLoadingHistory && restored == nil
+            && sessions.owners.contains { $0 === owner }
+    }
+    var canStop: Bool {
+        guard !closed, !showingSetup, !isLoadingHistory, restored == nil, let session = owner?.controller else {
+            return false
+        }
+        return (session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty)
+            && !(session.status == .stopping && session.queuePaused)
+    }
+    var canResumeQueue: Bool {
+        guard !closed, !showingSetup, !isLoadingHistory, restored == nil, let session = owner?.controller else {
+            return false
+        }
+        return [.idle, .running].contains(session.status) && session.queuePaused
+    }
+
+    enum NavigationTarget: Identifiable {
+        case live(LiveSession)
+        case saved(SessionRecord)
+
+        var id: AnyHashable {
+            switch self {
+            case .live(let owner): owner.sessionID.map(AnyHashable.init) ?? AnyHashable(owner.id)
+            case .saved(let record): AnyHashable(record.id)
+            }
+        }
+    }
+
+    /// Wraps in exactly the order shown by SessionSidebarList, including Starting and saved history.
+    func navigationTarget(backward: Bool = false, needsInput: Bool = false) -> NavigationTarget? {
+        guard !closed else { return nil }
+        let sidebar = sidebar
+        let rows =
+            sidebar.starting.map(NavigationTarget.live)
+            + sidebar.groups.flatMap(\.rows).map { row in
+                switch row {
+                case .live(let owner, _): NavigationTarget.live(owner)
+                case .saved(let record): NavigationTarget.saved(record)
+                }
+            }
+        guard !rows.isEmpty else { return nil }
+        let selected: AnyHashable? =
+            showingSetup
+            ? nil
+            : selectedHistoryID.map(AnyHashable.init) ?? owner.map { NavigationTarget.live($0).id }
+        let index = rows.firstIndex { $0.id == selected }
+        let start = index ?? (backward ? 0 : rows.count - 1)
+        for step in 1...rows.count {
+            let row = rows[(start + (backward ? -step : step) + rows.count) % rows.count]
+            if !needsInput { return row }
+            if case .live(let owner) = row, owner.activity == .needsInput { return row }
+        }
+        return nil
+    }
+
+    func navigate(backward: Bool = false, needsInput: Bool = false) async {
+        guard let row = navigationTarget(backward: backward, needsInput: needsInput) else { return }
+        switch row {
+        case .live(let owner): show(owner)
+        case .saved(let record): await showHistory(record)
+        }
+    }
+
+    func endSession() async {
+        guard canEnd, let owner else { return }
+        await sessions.end(owner)
+        await refresh()
+    }
+    func stop() async {
+        guard canStop, let owner else { return }
+        await owner.stop()
+    }
+    func resumeQueue() async {
+        guard canResumeQueue, let session = owner?.controller else { return }
+        do { try await session.resumeQueue() } catch { errorMessage = error.localizedDescription }
+    }
 
     func refresh() async {
         do {
@@ -60,6 +143,9 @@ import SwiftUI
         show(sessions.resume(session))
     }
     func showHistory(_ record: SessionRecord) async {
+        guard !closed else { return }
+        showingSetup = false
+        selectedHistoryID = record.id
         if let live = sessions.owner(of: record.id) { return show(live) }
         let token = UUID()
         selection = token
@@ -72,8 +158,13 @@ import SwiftUI
             restored = controller
         } catch { if selection == token { errorMessage = error.localizedDescription } }
     }
-    func show(_ owner: LiveSession) { self.owner = owner; showLive() }
-    func showLive() { selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil }
+    func show(_ owner: LiveSession) {
+        guard !closed else { return }
+        self.owner = owner; showingSetup = false; showLive()
+    }
+    func showLive() {
+        selectedHistoryID = nil; selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil
+    }
     /// Detaches the window; its sessions keep running.
     func close() { closed = true; selection = UUID(); files.close() }
 }
@@ -83,11 +174,24 @@ import SwiftUI
 public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     public internal(set) var sessions = SessionManager()
     private var terminating = false
+    var confirmQuit: (Int) -> Bool = { count in
+        let alert = NSAlert()
+        alert.messageText = "Quit Agenthesia?"
+        alert.informativeText =
+            count == 1
+            ? "1 session is working or needs input. Quitting will end it."
+            : "\(count) sessions are working or need input. Quitting will end them."
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
     var terminationReply: (NSApplication) -> Void = { $0.reply(toApplicationShouldTerminate: true) }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !sessions.owners.isEmpty else { return .terminateNow }
         if !terminating {
+            let activeCount = sessions.owners.count { [.working, .needsInput].contains($0.activity) }
+            guard activeCount == 0 || confirmQuit(activeCount) else { return .terminateCancel }
             terminating = true
             Task {
                 await sessions.closeAll()

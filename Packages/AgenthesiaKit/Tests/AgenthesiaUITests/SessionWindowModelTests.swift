@@ -206,6 +206,99 @@ import Testing
         model.close()
     }
 
+    @Test func navigationFollowsSidebarAcrossProjectsSavedHistoryAndStartingOwners() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-navigation-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        #expect(model.navigationTarget() == nil)
+        let store = try await sessions.library.store()
+        let agent = try mock()
+        try await store.createAgentInstall(agent)
+        var records: [SessionRecord] = []
+        for index in 0..<2 {
+            let project = ProjectRecord(name: "Project \(index)", rootPath: directory.appending(path: "p\(index)").path)
+            try await store.createProject(project)
+            let record = SessionRecord(
+                projectID: project.id,
+                agentInstallID: agent.id,
+                agentSessionID: "saved",
+                workingDirectory: project.rootPath,
+                createdAt: Date(timeIntervalSince1970: Double(index))
+            )
+            try await store.createSession(record)
+            records.append(record)
+        }
+        let starting = sessions.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "Missing", executable: "/missing")
+        )
+        await starting.startup?.value
+        await model.refresh()
+        #expect(model.navigationTarget()?.id == AnyHashable(starting.id))
+        await model.navigate()
+        #expect(model.owner === starting && !model.showingSetup)
+        #expect(model.canEnd)
+        await model.navigate()
+        #expect(model.displayed?.session.id == records[1].id)
+        #expect(!model.canEnd && !model.canStop && !model.canResumeQueue && model.canContinue)
+        await model.navigate()
+        #expect(model.displayed?.session.id == records[0].id)
+        await model.navigate()
+        #expect(model.owner === starting && model.restored == nil)
+        await model.navigate(backward: true)
+        #expect(model.displayed?.session.id == records[0].id)
+        #expect(model.navigationTarget(needsInput: true) == nil)
+        model.close()
+        #expect(model.navigationTarget() == nil)
+        await sessions.closeAll()
+    }
+
+    @Test func commandsAffectOnlyTheSelectedWindowAndSkipToInput() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-commands-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let first = SessionWindowModel(sessions: sessions)
+        let second = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        first.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(first.owner)
+        second.start(directory: directory, executable: agent.executable, arguments: [])
+        let other = try #require(second.owner)
+        await owner.startup?.value
+        await other.startup?.value
+        await first.refresh()
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("write \(directory.appending(path: "unwritten.txt").path) text") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        #expect(first.canStop && !second.canStop)
+        await second.refresh()
+        await second.navigate(needsInput: true)
+        #expect(second.owner === owner)
+        second.show(other)
+        first.showingSetup = true
+        #expect(!first.canStop && !first.canEnd && !first.canContinue)
+        first.showingSetup = false
+        await first.stop()
+        await turn.value
+        #expect(controller.pendingPermissions.isEmpty)
+        #expect(controller.queuePaused && controller.queuedPrompts.isEmpty)
+        #expect(first.canResumeQueue && !second.canResumeQueue)
+        await first.resumeQueue()
+        #expect(!controller.queuePaused)
+        try await controller.stop()
+        try await controller.submit([.init(text: "queued")])
+        #expect(first.canResumeQueue && !second.canResumeQueue)
+        await first.resumeQueue()
+        #expect(!controller.queuePaused)
+        await first.endSession()
+        #expect(sessions.owners.map(\.id) == [other.id])
+        #expect(second.owner === other && other.isLive)
+        #expect(first.canContinue && !first.canEnd)
+        await sessions.closeAll()
+    }
+
     @Test func transcriptTableDoesNotRetainItsSource() {
         let table = TranscriptTableController()
         weak var retained: DemoSession?

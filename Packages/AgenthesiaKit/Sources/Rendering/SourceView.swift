@@ -25,6 +25,8 @@ public final class SourceView: NSView {
     /// The line last shown by ``showLine(_:)`` and where it was scrolled to, until the text or the scroll position
     /// changes.
     private var shownLine: (range: NSRange, origin: CGPoint)?
+    /// A requested scroll waits for the view to have a size.
+    private var scrollPending = false
 
     #if DEBUG
         /// Benchmark instrumentation: completion of the latest highlight, including applying its attributes.
@@ -93,6 +95,7 @@ public final class SourceView: NSView {
         self.text = text
         self.language = language
         shownLine = nil
+        scrollPending = false
         lineStarts = Self.lineStarts(of: text)
         textView.text = text
         gutter.lineStarts = lineStarts
@@ -162,7 +165,19 @@ public final class SourceView: NSView {
         let range = NSRange(location: start, length: end - start)
         textView.textSelection = range
         shownLine = (range, scrollView.contentView.bounds.origin)
-        scrollToVisible(range)
+        scrollPending = true
+        scrollToShownLine()
+    }
+
+    override public func layout() {
+        super.layout()
+        scrollToShownLine()
+    }
+
+    private func scrollToShownLine() {
+        guard scrollPending, let shownLine, scrollView.contentView.bounds.height > 0 else { return }
+        scrollPending = false
+        scrollToVisible(shownLine.range)
     }
 
     /// Scrolls by the laid-out fragment: the text view's estimated heights put a deep line off screen.
@@ -210,22 +225,28 @@ public final class SourceView: NSView {
 public struct SourceViewRepresentable: NSViewRepresentable {
     public var text: String
     public var language: CodeLanguage?
+    /// A one-based line to select and scroll to when the text is shown.
+    public var line: Int?
 
-    public init(text: String, language: CodeLanguage?) {
+    public init(text: String, language: CodeLanguage?, line: Int? = nil) {
         self.text = text
         self.language = language
+        self.line = line
     }
 
     public func makeNSView(context: Context) -> SourceView {
         let view = SourceView()
-        view.setText(text, language: language)
+        show(in: view)
         return view
     }
 
     public func updateNSView(_ view: SourceView, context: Context) {
-        if view.text != text || view.language != language {
-            view.setText(text, language: language)
-        }
+        if view.text != text || view.language != language { show(in: view) }
+    }
+
+    private func show(in view: SourceView) {
+        view.setText(text, language: language)
+        if let line { view.showLine(line) }
     }
 
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView: SourceView, context: Context) -> CGSize? {

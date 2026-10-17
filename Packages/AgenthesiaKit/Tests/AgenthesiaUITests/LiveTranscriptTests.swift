@@ -526,6 +526,73 @@ import Testing
         #expect(labels(in: row).contains("Completed"))
     }
 
+    @Test func pathLinksOpenFilesAndOtherLinksAreLeftToAppKit() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "t",
+                    title: "Read",
+                    kind: .read,
+                    locations: [.init(path: "a.swift", line: 5), .init(path: "../outside.swift", line: 1)]
+                )
+            )
+        )
+        let source = LiveTranscriptSource()
+        source.root = recorded.directory
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        var opened: [PathLink] = []
+        controller.openPath = { opened.append($0) }
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let field = try #require(views(LinkTextField.self, in: row).first)
+        var links: [URL] = []
+        field.attributedStringValue.enumerateAttribute(.link, in: NSRange(0..<field.attributedStringValue.length)) {
+            value,
+            _,
+            _ in if let url = value as? URL { links.append(url) }
+        }
+        // The location outside the working directory is not a link.
+        #expect(links.compactMap { PathLink($0) } == [PathLink(path: "a.swift", line: 5)])
+        // A click reaches the field through its field editor, which asks its delegate by selector.
+        window.makeKeyAndOrderFront(nil)
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.clicked(onLink: try #require(links.first), at: 0)
+        #expect(opened == [PathLink(path: "a.swift", line: 5)])
+        // A malformed private link is consumed without opening anything.
+        #expect(field.textView(editor, clickedOnLink: "agenthesia-path://open/", at: 0))
+        #expect(opened.count == 1)
+        #expect(!field.textView(editor, clickedOnLink: URL(string: "https://example.com")!, at: 0))
+        #expect(opened.count == 1)
+    }
+
+    @Test func streamingTextConsumesPathLinks() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Working"))))
+        let source = LiveTranscriptSource()
+        source.running = true
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        var opened: [PathLink] = []
+        controller.openPath = { opened.append($0) }
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let text = try #require(views(TranscriptTextView.self, in: row).first)
+        text.clicked(onLink: try #require(PathLink(path: "b.swift", line: 2).url), at: 0)
+        #expect(opened == [PathLink(path: "b.swift", line: 2)])
+        text.clicked(onLink: "agenthesia-path://open/", at: 0)
+        #expect(opened.count == 1)
+    }
+
     private func host(_ controller: TranscriptTableController) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),

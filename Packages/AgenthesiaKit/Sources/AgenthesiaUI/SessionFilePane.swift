@@ -3,7 +3,8 @@ import SwiftUI
 
 struct SessionFilePane: View {
     let files: SessionFiles
-    let onOpen: (String, UUID) -> Void
+    let onOpen: (String, Int?, UUID) -> Void
+    @AppStorage(EditorHandoff.defaultsKey) private var editorID = ""
 
     var body: some View {
         let id = files.sessionID
@@ -12,8 +13,16 @@ struct SessionFilePane: View {
                 Text(files.selectedPath ?? "File").font(.headline)
                     .lineLimit(1).truncationMode(.middle).help(files.selectedPath ?? "")
                 Spacer()
+                Button("Open in Editor", systemImage: "square.and.pencil") {
+                    if let path = files.selectedPath, let root = files.root {
+                        EditorHandoff.open(path: path, line: files.selectedLine, root: root, editorID: editorID)
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .keyboardShortcut("o", modifiers: [.command, .option])
+                .help("Open in Editor (⌥⌘O)")
                 Button("Reload File", systemImage: "arrow.clockwise") {
-                    if let path = files.selectedPath, let id { onOpen(path, id) }
+                    if let path = files.selectedPath, let id { onOpen(path, files.selectedLine, id) }
                 }.labelStyle(.iconOnly)
                 Button("Close File", systemImage: "xmark") {
                     guard files.sessionID == id else { return }
@@ -30,7 +39,7 @@ struct SessionFilePane: View {
                     Text(error).textSelection(.enabled)
                 }
             } else if let document = files.document {
-                FileViewer(document: document)
+                FileViewer(document: document, line: files.selectedLine)
             }
         }
     }

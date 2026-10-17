@@ -69,14 +69,15 @@ public struct RootView: View {
                 } else if let session = model.displayed {
                     HSplitView {
                         VStack(spacing: 0) {
-                            LiveTranscript(session: session).id(session.session.id)
+                            LiveTranscript(session: session) { openFile($0.path, line: $0.line, for: $1) }
+                                .id(session.session.id)
                             Divider()
                             composer(session)
                         }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                         if filesMatchSession, model.files.selectedPath != nil {
                             // The transcript starts under the sidebar, so at the 740 pt window minimum it
                             // takes the sidebar's width (240 pt, more on macOS 26) plus its own minimum.
-                            SessionFilePane(files: model.files) { openFile($0, for: $1) }
+                            SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
                                 .frame(minWidth: 240, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
@@ -164,12 +165,12 @@ public struct RootView: View {
         model.files.root != nil && model.files.sessionID == model.displayed?.session.id
     }
 
-    private func openFile(_ path: String, for id: UUID?) {
+    private func openFile(_ path: String, line: Int? = nil, for id: UUID?) {
         guard let id, model.displayed?.session.id == id, model.files.sessionID == id else { return }
         showingQuickOpen = false
         Task {
             guard model.displayed?.session.id == id, !model.closed else { return }
-            await model.files.open(path: path, in: id)
+            await model.files.open(path: path, line: line, in: id)
         }
     }
 

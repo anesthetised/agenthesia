@@ -12,6 +12,8 @@ public final class SessionFiles {
     public private(set) var matches: [String] = []
     public private(set) var changedPaths: [String] = []
     public private(set) var selectedPath: String?
+    /// The one-based line a transcript link asked for in `selectedPath`.
+    public private(set) var selectedLine: Int?
     public private(set) var document: SessionFileDocument?
     public private(set) var indexError: String?
     public private(set) var changesError: String?
@@ -223,12 +225,13 @@ public final class SessionFiles {
         }
     }
 
-    public func open(path: String, in sessionID: UUID) async {
+    public func open(path: String, line: Int? = nil, in sessionID: UUID) async {
         guard self.sessionID == sessionID, let root else { return }
         read?.cancel()
         selection = UUID()
         let token = selection
         selectedPath = path
+        selectedLine = line
         document = nil
         documentError = nil
         isLoadingDocument = true
@@ -253,7 +256,7 @@ public final class SessionFiles {
     public func closeDocument() {
         selection = UUID()
         read?.cancel(); read = nil
-        selectedPath = nil; document = nil; documentError = nil; isLoadingDocument = false
+        selectedPath = nil; selectedLine = nil; document = nil; documentError = nil; isLoadingDocument = false
     }
 
     public func close() {

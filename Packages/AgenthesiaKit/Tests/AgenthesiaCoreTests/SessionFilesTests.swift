@@ -44,6 +44,26 @@ import Workspace
         SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: root.path)
     }
 
+    @Test func openRemembersTheRequestedLineUntilTheSelectionChanges() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "a\nb\nc".write(to: root.appending(path: "a.txt"), atomically: true, encoding: .utf8)
+        let files = SessionFiles()
+        defer { files.close() }
+        await files.attach(record(root))
+        let id = try #require(files.sessionID)
+        await files.open(path: "a.txt", line: 3, in: id)
+        #expect(files.selectedLine == 3)
+        await files.open(path: "a.txt", in: id)
+        #expect(files.selectedLine == nil)
+        await files.open(path: "a.txt", line: 2, in: UUID())
+        #expect(files.selectedLine == nil)
+        await files.open(path: "a.txt", line: 2, in: id)
+        files.closeDocument()
+        #expect(files.selectedLine == nil)
+    }
+
     @Test func browsesNonGitFoldersAndReportsUnavailableChangeTracking() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

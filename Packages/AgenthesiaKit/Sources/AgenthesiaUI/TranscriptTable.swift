@@ -27,6 +27,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
     private var followingBottom = true
     private var adjustingScroll = false
     private var followScheduled = false
+    /// Opens a file of the displayed session; without it, path links do nothing.
+    var openPath: ((PathLink) -> Void)?
 
     override init() {
         super.init()
@@ -114,7 +116,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                 // The header and body changed; rebuild the row's content in place.
                 visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
             } else if finished, !keepsSelection {
-                visible.showFinished(message, width: table.tableColumns[0].width - 48)
+                visible.showFinished(message, width: table.tableColumns[0].width - 48, controller: self)
             } else if let cell = visible.streamingCell {
                 if let update = message.update, visible.markdown == message.previousMarkdown {
                     cell.textView.apply(update)
@@ -191,6 +193,13 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             controller: self
         )
         return rowView
+    }
+
+    /// Consumes the transcript's own links, so that they never reach `NSWorkspace`; others are left to AppKit.
+    func follow(_ url: URL) -> Bool {
+        guard PathLink.claims(url) else { return false }
+        if let link = PathLink(url) { openPath?(link) }
+        return true
     }
 
     @objc func toggleExpansion(_ sender: NSView) {
@@ -275,11 +284,13 @@ private final class TranscriptMessageRow: NSTableCellView {
         let content: NSView
         if streaming {
             let cell = TextKitCell()
+            cell.textView.followLink = { [weak controller] in controller?.follow($0) ?? false }
             cell.textView.textStorage?.setAttributedString(message.text)
             cell.textView.invalidateIntrinsicContentSize()
             content = cell
         } else {
             let cell = TextCell()
+            cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
             cell.field.preferredMaxLayoutWidth = max(1, width)
             cell.field.attributedStringValue = message.text
             content = cell
@@ -399,10 +410,11 @@ private final class TranscriptMessageRow: NSTableCellView {
         return views + [icon, role, status]
     }
 
-    func showFinished(_ message: DemoSession.Message, width: CGFloat) {
+    func showFinished(_ message: DemoSession.Message, width: CGFloat, controller: TranscriptTableController) {
         markdown = message.markdown
         guard let stack else { return }
         let cell = TextCell()
+        cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
         cell.field.preferredMaxLayoutWidth = max(1, width)
         cell.field.attributedStringValue = message.text
         contentWidth?.isActive = false
@@ -427,10 +439,25 @@ private final class TranscriptMessageRow: NSTableCellView {
     }
 }
 
+/// A selectable text field that lets the transcript handle its links before AppKit opens them.
+final class LinkTextField: NSTextField {
+    var followLink: ((URL) -> Bool)?
+
+    /// The delegate method of the field editor, which AppKit calls on its owner when a link is clicked.
+    @objc(textView:clickedOnLink:atIndex:) func textView(
+        _ textView: NSTextView,
+        clickedOnLink link: Any,
+        at charIndex: Int
+    ) -> Bool {
+        guard let url = link as? URL ?? (link as? String).flatMap({ URL(string: $0) }) else { return false }
+        return followLink?(url) ?? false
+    }
+}
+
 /// A row with a message: a selectable, wrapping text field.
 private final class TextCell: NSView {
     static let id = NSUserInterfaceItemIdentifier("TextCell")
-    let field = NSTextField(wrappingLabelWithString: "")
+    let field = LinkTextField(wrappingLabelWithString: "")
 
     init() {
         super.init(frame: .zero)
@@ -466,7 +493,7 @@ private final class TextCell: NSView {
 /// A row with a message in a TextKit 2 text view, as tall as its text.
 private final class TextKitCell: NSView {
     static let id = NSUserInterfaceItemIdentifier("TextKitCell")
-    let textView = SizingTextView(usingTextLayoutManager: true)
+    let textView = TranscriptTextView(usingTextLayoutManager: true)
 
     init() {
         super.init(frame: .zero)
@@ -497,8 +524,16 @@ private final class TextKitCell: NSView {
 }
 
 /// A text view whose intrinsic height is its text's at its current width.
-private final class SizingTextView: NSTextView {
+final class TranscriptTextView: NSTextView {
     private var measuredWidth: CGFloat = 0
+    var followLink: ((URL) -> Bool)?
+
+    override func clicked(onLink link: Any, at charIndex: Int) {
+        if let url = link as? URL ?? (link as? String).flatMap({ URL(string: $0) }), followLink?(url) == true {
+            return
+        }
+        super.clicked(onLink: link, at: charIndex)
+    }
 
     override var intrinsicContentSize: NSSize {
         guard let layout = textLayoutManager, bounds.width > 0 else {

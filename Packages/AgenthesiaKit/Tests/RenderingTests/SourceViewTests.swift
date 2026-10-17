@@ -249,11 +249,24 @@ import Testing
         #expect(view.gutter.visibleLines().map(\.number).contains(3_000))
     }
 
-    @Test func showLineWorksBeforeTheViewIsHosted() {
+    @Test func showLineWaitsForTheViewToHaveASize() {
         let view = SourceView()
         view.setText((1...2_000).map { "line \($0)" }.joined(separator: "\n"), language: nil)
         view.showLine(1_500)
         #expect(selectedText(in: view) == "line 1500")
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        #expect(view.gutter.visibleLines().map(\.number).contains(1_500))
+        // New text forgets the request.
+        view.setText("a\nb", language: nil)
+        view.layoutSubtreeIfNeeded()
+        #expect(view.scrollView.contentView.bounds.origin.y == 0)
     }
 
     @Test func lineStartsAndPoints() {

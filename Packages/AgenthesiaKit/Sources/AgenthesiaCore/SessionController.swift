@@ -1,5 +1,6 @@
 public import ACP
 public import Foundation
+import JSONRPC
 import Observation
 public import Persistence
 
@@ -300,13 +301,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 self.publishTranscript()
                 if inserted { return }
                 // The prior wire turn ended while the preparation was committed. Send a fresh turn.
-                try await self.turnTask?.value
+                try await self.waitForTurn()
                 guard self.status == .idle, self.stopGeneration == generation else { throw SessionError.invalidState }
                 try await self.dispatch(prompts, removingQueued: true)
                 return
             }
             if self.status == .running { try await self.requestStop(interrupted: true) }
-            try await self.turnTask?.value
+            try await self.waitForTurn()
             guard self.status == .idle, self.stopGeneration == generation else { throw SessionError.invalidState }
             if intent == .allNow {
                 // Cancellation may have returned an earlier, not-yet-sent turn to the queue.
@@ -455,6 +456,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         try await task.value
     }
 
+    /// Steering can follow a rejected prompt on the same usable connection.
+    private func waitForTurn() async throws {
+        do { try await turnTask?.value } catch is RPCError where status == .idle && failure == nil {}
+    }
+
     private func startTurn(
         id: UUID,
         content: [ACP.ContentBlock],
@@ -489,6 +495,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         unsentPrompts: [QueuedPrompt]
     ) async throws {
         var admitted = false
+        var promptRejected = false
         defer {
             turnID = nil
             turnTask = nil
@@ -512,7 +519,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             } else {
                 promptStarted = true
                 admitted = true
-                reason = try await connection.prompt(content, in: agentID)
+                do { reason = try await connection.prompt(content, in: agentID) } catch let error as RPCError {
+                    promptRejected = true
+                    throw error
+                }
                 promptStarted = false
             }
             do { _ = try await injectionTask?.value } catch {
@@ -533,6 +543,26 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             if status == .running || status == .stopping { status = .idle }
         } catch {
             promptStarted = false
+            if promptRejected, status == .running || status == .stopping {
+                queuePaused = true
+                cancelPermissions()
+                cancelInputs()
+                do {
+                    try await record([
+                        try SessionEvent.queuePaused(true).storedEvent(),
+                        try SessionEvent.failed(id: id, message: String(describing: error)).storedEvent(),
+                    ])
+                    do { _ = try await injectionTask?.value } catch {
+                        if !(error is CancellationError && status == .stopping) { throw error }
+                    }
+                    // An admitted cancel must settle before steering can start another prompt.
+                    try await stopTask?.value
+                } catch { throw await fail(error) }
+                if status == .running || status == .stopping {
+                    status = .idle
+                    throw error
+                }
+            }
             if status == .closed, failure == nil {
                 // Deliberate close is a cancellation, not an agent failure.
                 var events = [try SessionEvent.finished(id: id, reason: .cancelled).storedEvent()]
@@ -655,15 +685,17 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             return .cancelled
         }
         let id = UUID()
+        // Turn completion can cancel a request while its initial write is still suspended.
+        permissions[id] = Permission(options: options)
         do {
             try await record([
                 try SessionEvent.permissionRequested(id: id, toolCall: toolCall, options: options).storedEvent()
             ])
         } catch {
+            permissions.removeValue(forKey: id)
             return .cancelled
         }
-        permissions[id] = Permission(options: options)
-        if status == .running, !Task.isCancelled {
+        if status == .running, !Task.isCancelled, permissions[id]?.response == nil {
             pendingPermissions.append(PendingPermission(id: id, options: options))
             publishTranscript()
             await withTaskCancellationHandler {

@@ -116,8 +116,9 @@ import Testing
             try await unstarted.writeTextFile(at: path, content: "bad", in: "s")
         }
         let files = try await fixture.start()
-        // This agent has no prompt handler: a failed turn must revoke filesystem access.
-        await #expect(throws: (any Error).self) { try await fixture.controller.send([.init(text: "fail")]) }
+        // Losing the transport must revoke filesystem access.
+        await fixture.client.close()
+        await #expect(throws: (any Error).self) { try await fixture.controller.send([.init(text: "disconnected")]) }
         #expect(fixture.controller.status == .failed)
         await #expect(throws: RPCError.self) {
             try await files.writeTextFile(at: path, content: "bad", in: "s")
@@ -127,6 +128,19 @@ import Testing
             _ = try await files.readTextFile(at: path, line: nil, limit: nil, in: "s")
         }
         #expect(!FileManager.default.fileExists(atPath: path))
+    }
+
+    @Test func promptErrorKeepsFileSystemAvailable() async throws {
+        let fixture = try await FileSessionFixture()
+        let files = try await fixture.start()
+        // No prompt handler produces a method-not-found response on an otherwise healthy connection.
+        await #expect(throws: RPCError.self) { try await fixture.controller.send([.init(text: "rejected")]) }
+        #expect(fixture.controller.status == .idle)
+        let path = fixture.root.appending(path: "after-error.txt").path
+        try await files.writeTextFile(at: path, content: "still usable", in: "s")
+        #expect(try await files.readTextFile(at: path, line: nil, limit: nil, in: "s") == "still usable")
+        #expect(fixture.controller.fileRevision == 1)
+        await fixture.controller.close()
     }
 
     @Test func closeDrainsAcceptedWritesAndRejectsNewOnes() async throws {

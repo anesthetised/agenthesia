@@ -246,10 +246,28 @@ import Testing
         #expect(try await library.history().isEmpty)
     }
 
-    @Test func closeDuringTurnAndTurnFailureFinishCleanup() async throws {
+    @Test func promptErrorsKeepAgentsWithoutResumeOrLoadAlive() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
-        for prompt in ["slow", "fail"] {
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(directory: directory, agent: try mock(arguments: ["--no-resume", "--no-load"]))
+        let controller = try #require(owner.controller)
+        let record = controller.session
+        await owner.send("fail")
+        #expect(controller.status == .idle && owner.isLive)
+        #expect(owner.activity == .idle && !owner.hasUnseenResult)
+        #expect(controller.queuePaused && controller.transcript.items.last?.notice != nil)
+        await owner.send("again")
+        #expect(owner.controller === controller && controller.session == record)
+        #expect(controller.transcript.items.last?.message?.text == "Echo: again")
+        await owner.close()
+    }
+
+    @Test func closeDuringTurnAndProcessExitFinishCleanup() async throws {
+        let (directory, library) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for prompt in ["slow", "exit"] {
             let owner = LiveSession(library: library)
             owner.environment = { (ProcessInfo.processInfo.environment, nil) }
             await owner.start(directory: directory, agent: try mock())

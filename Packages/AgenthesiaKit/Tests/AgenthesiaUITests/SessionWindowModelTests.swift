@@ -139,7 +139,7 @@ import Testing
         try await controller.stop()
         try await controller.submit([.init(text: "retained")])
         if failed {
-            await owner.send("fail")
+            await owner.send("exit")
             // Observe the real process-cleanup path, which changes failed to closed.
             while controller.status != .closed { await Task.yield() }
             #expect(owner.errorMessage != nil)

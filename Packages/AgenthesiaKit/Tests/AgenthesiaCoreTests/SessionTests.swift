@@ -215,8 +215,16 @@ private actor Gate {
         #expect(controller.transcript.items.compactMap { $0.message?.text } == ["hello", "Echo: hello"])
         #expect(controller.transcript.lastStopReason == .endTurn)
         await #expect(throws: (any Error).self) { try await controller.send([.init(text: "fail")]) }
-        #expect(controller.status == .failed)
+        try #require(controller.status == .idle)
+        #expect(controller.errorMessage == nil)
+        #expect(controller.queuePaused && controller.transcript.queuePaused)
+        #expect(controller.completedTurns == 1)
+        #expect(controller.transcript.activeTurn == nil)
         #expect(controller.transcript.items.last?.notice != nil)
+        let agentID = controller.session.agentSessionID
+        try await controller.send([.init(text: "after failure")])
+        #expect(controller.session.agentSessionID == agentID)
+        #expect(controller.transcript.items.last?.message?.text == "Echo: after failure")
         let replay = try await SessionController.restore(id: controller.session.id, store: fixture.store)
         #expect(replay.status == .readOnly)
         #expect(replay.session.baseRevision == controller.session.baseRevision)
@@ -224,6 +232,36 @@ private actor Gate {
         await #expect(throws: SessionController.SessionError.invalidState) {
             try await replay.send([.init(text: "no")])
         }
+        await controller.close()
+    }
+
+    @Test(arguments: [-32603, -32001, nil] as [Int?])
+    func promptResponseErrorsRecoverButMalformedResultsFail(code: Int?) async throws {
+        let fixture = try Fixture()
+        let controller = SessionController(session: try await fixture.seed(), store: fixture.store)
+        let (server, client) = InMemoryTransport.pair()
+        var steps: [Scenario.Step] = [
+            .expectRequest(method: "initialize", response: .result(["protocolVersion": 1])),
+            .expectRequest(method: "session/new", response: .result(["sessionId": "s"])),
+            .expectRequest(
+                method: "session/prompt",
+                response: code.map { .error(.init(code: $0, message: "Turn rejected")) }
+                    ?? .result(["stopReason": 1])
+            ),
+        ]
+        if code != nil {
+            steps.append(.expectRequest(method: "session/prompt", response: .result(["stopReason": "end_turn"])))
+        }
+        let agent = ScenarioAgent(scenario: Scenario(steps), transport: server)
+        let run = Task { await agent.run() }
+        try await controller.start(
+            connection: await ACP.V1.AgentConnectionAdapter(transport: client, delegate: controller),
+            client: .init(name: "test", version: "1")
+        )
+        await #expect(throws: (any Error).self) { try await controller.send([.init(text: "first")]) }
+        #expect(controller.status == (code == nil ? .failed : .idle))
+        if code != nil { try await controller.send([.init(text: "second")]) }
+        #expect(await run.value == nil)
         await controller.close()
     }
 

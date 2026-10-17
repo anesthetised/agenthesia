@@ -34,7 +34,7 @@ before implementation.
   merge base (#114, #115, [ADR-0024](adr/0024-changed-files-session-base.md)). Transcript paths open
   the file pane at a line, and Open in Editor hands off to the chosen editor (#29, #116,
   [ADR-0025](adr/0025-transcript-paths-and-editor-handoff.md)). M4 is complete.
-- M7 slices 1–2 are implemented in open PR [#118](https://github.com/anesthetised/agenthesia/pull/118)
+- M7 slices 1–2 are merged in PR [#118](https://github.com/anesthetised/agenthesia/pull/118)
   (#37, [ADR-0026](adr/0026-app-wide-session-manager.md)): app-wide ownership supports parallel
   sessions, closing a window detaches it, and the sidebar groups sessions by project with live statuses.
   Local `just lint`, `just test` and `just app` pass; coverage is enforced by CI.
@@ -115,42 +115,43 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-M4 (Files) is merged: #26–#28, #114 and #29 below. M7 (Parallel sessions, #37–#40) is in progress and
-replaces window-bound ownership ([ADR-0014](adr/0014-window-bound-live-sessions.md)) with an app-wide
-session manager ([ADR-0026](adr/0026-app-wide-session-manager.md), slices below). PR #118 implements
-slices 1–2 and closes #37 when merged. The owner requested #39 and #117 concurrently in separate
-worktrees from local HEAD `706dbf8`: #39 implements accepted ADR-0026 slice 3; #117 implements accepted
-ADR-0027 (prompt-error recovery), which changes ADR-0017/0021 behavior. Use Sol for these tasks.
-After those streams, implement window opening/selection/restoration (#40) before notifications and the
-Dock badge (#38); notification activation will consume #40's window selection mechanism.
-M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
+M4 (Files) is merged: #26–#28, #114 and #29 below. M7 slices 1–2 merged in #118, closing
+#37 and replacing window-bound ownership with the app-wide manager
+([ADR-0026](adr/0026-app-wide-session-manager.md)). #39 and #117 were developed concurrently in
+isolated worktrees from `706dbf8` and are integrated on `feat/session-controls-and-recovery`.
+The owner accepted [ADR-0027](adr/0027-recoverable-prompt-errors.md) before #117 implementation.
+
+The combined branch passes `just lint`, `just test` (587 Swift tests and 15 script tests),
+`just coverage` (all module gates; Core 98.1%) and `just app`.
+
+This batch ends at #39 and #117. #40 and #38 have not started. When that work resumes, #40 owns
+window opening, selection and restoration; #38 connects notifications to that mechanism and adds the
+Dock badge. M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
+Use Sol medium for bounded UI work and Sol high for lifecycle changes such as #117.
 Small independent chores such as #73 (CI with Xcode 27) fit Sol at medium effort.
 
 ### M7 slices (2026-10-17)
 
-The owner accepted ADR-0026. Slices 1–2 are implemented on `feat/parallel-sessions` in open PR #118.
-Slice 3 (#39) is implemented on its isolated branch from local HEAD `706dbf8`, concurrently with
-#117 implementation after the owner accepted ADR-0027; #117 uses Sol high. #40 precedes #38 despite
-the original slice numbering.
+The owner accepted ADR-0026. Slices 1–2 are merged; slice 3 (#39) is implemented in this batch.
+Implement slice 5 (#40) before slice 4 (#38), so notification activation reuses window opening and
+selection.
 
 | # | Slice | Acceptance and verification | Model and effort |
 |---|---|---|---|
-| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; implemented in #118, awaiting merge |
-| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; implemented in #118, awaiting merge |
-| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented locally, verification below |
-| 4 | Notifications with actions and the Dock badge (#38) | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Opus, medium |
-| 5 | Multiple windows and restoration (#40) | Value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium |
+| 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; merged in #118 |
+| 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; merged in #118 |
+| 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented, verification below |
+| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; not started |
+| 4 | Notifications with actions and the Dock badge (#38), after #40 | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Sol, high; not started |
 
 #39 adds focused-window Session commands, wraparound sidebar navigation (including saved history and
 Starting), next-needing-input navigation, and a count-based quit confirmation before awaited shutdown.
 New regression tests cover command eligibility, independent window selections, navigation, cancellation
 and retry, idle/failed shutdown without confirmation, and resuming a paused empty queue to restore
-normal Return behavior. Local `just lint`, `just test` (579 Swift tests and 15 script tests),
-`just coverage` and `just app` pass; every module meets its coverage gate (Core 98.1%). The final test
-run uses the same compiler instrumentation flags as coverage to reuse its build configuration.
+normal Return behavior. The isolated #39 branch passed `just lint`, `just test` (579 Swift tests and
+15 script tests), `just coverage` and `just app`; every module met its coverage gate (Core 98.1%).
 `swiftui-pro` review found no blocking issues. Native menu focus/shortcuts and the actual quit alert
 remain manual smoke checks; automated tests exercise selection, eligibility and injected confirmation.
-#40 and #38 remain separate work.
 
 Pitfalls: parallel starts with one agent raced in `SessionLibrary.install` (a duplicate insert failed the
 second start); installs are now serialized. The window model keeps its own selection token for history loads; a window may display an
@@ -160,6 +161,25 @@ already recorded. Check readiness before the deadline; regression tests cover bo
 missing PID after expiry.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.
+
+### Prompt error recovery (#117)
+
+[ADR-0027](adr/0027-recoverable-prompt-errors.md) is accepted and implemented on
+`fix/prompt-error-recovery`. A JSON-RPC error response ends the turn, retains the live connection and
+process, and pauses the queue without retrying it. Transport loss, invalid responses, process exit,
+failed event writes and failed cancellation delivery remain fatal. MockAgent's `fail` and `exit`
+exercise these paths separately, including agents without resume/load support.
+
+Regressions cover error-response codes, a successful next prompt on the same session, replay,
+attachment-preserving queues, explicit send/resume, pending permissions and forms, steering,
+injection preparation, Stop, close and write failures. Register permission requests before awaiting
+their initial event write, so turn completion can cancel them during that write. The regression
+blocks the cancellation write and verifies that the session stays busy until it commits.
+`just lint`, `just test` (582 Swift tests plus 15 script tests), `just coverage` and `just app` pass; Core line
+coverage is 98.1%, above its 90% gate. The error-response and permission-admission regressions each
+reproduced their failure before the fix; inverting the recovery condition also made the regression
+fail. Filesystem tests separately cover retained access after a prompt error and revoked access after
+transport loss.
 
 ### #29 slices (2026-10-17, merged in #116)
 

@@ -95,6 +95,14 @@ saved history. A dispatch stopped before invoking the wire prompt returns its co
 messages to the queue by UUID and marks the original transcript rows “not sent”. Queue snapshots are
 built only after preceding lifecycle writes settle, so this compensation cannot overwrite later edits.
 
+An error response to `session/prompt` ends only that turn ([ADR-0027](adr/0027-recoverable-prompt-errors.md)).
+Core records the failed turn and queue pause before returning to idle, retaining the same process,
+connection and agent session. Pending permissions and forms are cancelled durably. The error stays
+in the transcript without requiring Continue or automatically retrying the prompt. Return queues while
+paused; an explicit send or queue resume is needed. Transport loss, process exit, malformed responses
+and event-log failures still end the session. Saved history always opens read-only, including after
+a recoverable error.
+
 ⌘Return sends the draft now and leaves the queue in place. ⇧⌘Return sends the queue with the nonempty
 draft last. Steering uses `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel
 tasks to settle, and then starts the next turn; injection-capable connections implement

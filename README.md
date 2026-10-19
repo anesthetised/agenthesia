@@ -12,6 +12,12 @@ and accept the result.
 
 > **Status:** early development. Nothing to install yet.
 
+<a href="docs/images/agenthesia.png">
+  <img src="docs/images/agenthesia.png" alt="Agenthesia demo session showing changed files, a tool-call diff, session controls, and a Swift source preview." width="1000">
+</a>
+
+*Current interface with a demo project and illustrative agent output. Click to view the original screenshot.*
+
 ## Highlights (planned for 1.0)
 
 - **Any agent, one interface.** One-click install from the ACP Registry; agents are interchangeable.

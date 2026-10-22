@@ -358,3 +358,47 @@ import Testing
         #expect(RootView.launchCommand(executable: "/opt/my agent", arguments: "").executable == "/opt/my agent")
     }
 }
+
+@MainActor @Suite struct WindowTargetTests {
+    @Test func targetsEncodeAndDecode() throws {
+        let id = UUID()
+        for target in [WindowTarget.launch, .session(id)] {
+            let data = try JSONEncoder().encode(target)
+            #expect(try JSONDecoder().decode(WindowTarget.self, from: data) == target)
+        }
+    }
+
+    @Test func restoresSavedSessionReadOnlyAndFallsBackToLaunch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-target-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        let store = try await sessions.library.store()
+        let project = ProjectRecord(name: "Test", rootPath: directory.path)
+        let agent = AgentInstallRecord(name: "Test", executable: "unused")
+        let record = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            agentSessionID: "saved",
+            workingDirectory: directory.path
+        )
+        try await store.createProject(project)
+        try await store.createAgentInstall(agent)
+        try await store.createSession(record)
+
+        let model = SessionWindowModel(sessions: sessions)
+        #expect(model.target == .launch)
+        await model.restore(.session(record.id))
+        #expect(model.displayed?.status == .readOnly)
+        #expect(model.target == .session(record.id))
+        #expect(model.canContinue)
+
+        let missing = SessionWindowModel(sessions: sessions)
+        await missing.restore(.session(UUID()))
+        #expect(missing.target == .launch && missing.showingSetup && missing.displayed == nil)
+        let launch = SessionWindowModel(sessions: sessions)
+        await launch.restore(.launch)
+        #expect(launch.target == .launch)
+        model.close()
+        #expect(model.target == .launch)
+    }
+}

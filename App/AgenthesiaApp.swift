@@ -6,8 +6,10 @@ struct AgenthesiaApp: App {
     @NSApplicationDelegateAdaptor(SessionApplicationDelegate.self) private var lifecycle
 
     var body: some Scene {
-        WindowGroup {
-            RootView(sessions: lifecycle.sessions)
+        WindowGroup(for: WindowTarget.self) { $target in
+            RootView(sessions: lifecycle.sessions, target: $target)
+        } defaultValue: {
+            .launch
         }
         .defaultSize(width: 1000, height: 700)
         .commands {

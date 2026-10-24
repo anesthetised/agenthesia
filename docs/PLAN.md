@@ -215,10 +215,11 @@ turn that ends while the session is not shown posts the finished banner, and one
 does not. The check found that the badge never appeared because authorization omitted `.badge`; with it the
 Dock shows `1` while a request waits and clears on any answer. A copy built with another bundle identifier
 gave a fresh authorization to prove that. Tapping the finished banner (a System Events click; synthetic
-CGEvent clicks and `AXPress` did not reach the app) brings the app forward, but with a session window
-already open it also creates a blank full-size *New Session* window. It is not our URL (the stray appears
-with the URL open disabled), not a plain reopen, and a scene-level `handlesExternalEvents(matching: [])`
-did not stop it, so SwiftUI creates it when Notification Center activates the app; the cause is open.
+CGEvent clicks and `AXPress` did not reach the app) brings the app forward and shows the session in its own
+window. The blank *New Session* window seen at first came from a second process: Notification Center routes
+a tap by bundle identifier, and with several copies registered (worktrees, derived data) it launched another
+checkout's build next to the running one. A build with its own bundle identifier taps into the running
+process, with no second process and no extra window.
 Not verified: VoiceOver and the first-run prompt text.
 
 Pitfall: `handlesExternalEvents(preferring: [], allowing: ["*"])` is what stops the system opening a new

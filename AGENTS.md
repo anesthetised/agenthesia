@@ -81,10 +81,19 @@ the agent so no real agent or tokens are involved.
   -destination 'platform=macOS' -derivedDataPath .build/xcode-<name>
   PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.<name>test build`. The repository stays
   unchanged. Do this again for each change to the requested permissions.
+- A tapped notification is routed by bundle identifier, not to the process that posted it. Every
+  `Agenthesia.app` on the machine (other worktrees, derived data, deleted copies) is registered with
+  Launch Services, so a tap may launch *another copy* beside yours, with its own blank window. Tap-test
+  with a fresh bundle identifier, list the copies with `lsregister -dump | grep 'Agenthesia.app '`, and
+  watch `ps` for a second `Agenthesia` process after a tap. Apps launched from the command line are
+  matched by their process: address one with `unix id`, not `tell application "Agenthesia"`.
 - Test sessions need a Git repository with a commit (`git init`, then `git commit --allow-empty`), or the
   start fails with `invalid reference: HEAD`. Name directories so they are recognisable, such as
   `agh-<feature>-check`, and start as few sessions as possible: **history is append-only, so test sessions
   can never be deleted** and stay in the owner's sidebar.
+- Guard every click and paste: check that the app under test is frontmost right before sending input and
+  abort otherwise, because the owner may be working at the same time. Click a banner only after it was
+  found.
 - A fixed screen coordinate is only valid for the window position it was measured at, so read the window
   frame first. Repeat a system-dependent check before believing it, and break the code on purpose once to
   see the check fail.

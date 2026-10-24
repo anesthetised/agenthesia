@@ -4,8 +4,10 @@ import SwiftUI
 
 /// Projects → sessions with live statuses (ADR-0026).
 struct SessionSidebarList: View {
-    let sidebar: SessionSidebar
+    let model: SessionWindowModel
     @Environment(\.openWindow) private var openWindow
+
+    private var sidebar: SessionSidebar { model.sidebar }
 
     var body: some View {
         if !sidebar.starting.isEmpty {
@@ -35,23 +37,50 @@ struct SessionSidebarList: View {
         .contentShape(.rect)
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .accessibilityElement(children: .combine)
-        .contextMenu { windowMenu(.live(owner)) }
+        .contextMenu {
+            windowMenu(.live(owner))
+            if let session = owner.controller?.session ?? owner.resuming { discardButton(session) }
+        }
     }
 
     private func savedRow(_ record: SessionRecord) -> some View {
         VStack(alignment: .leading) {
             Text(record.title ?? "Session").lineLimit(1)
-            Text(record.createdAt, style: .date).font(.caption).foregroundStyle(.secondary)
+            Group {
+                if let outcome = model.outcomes[record.id] {
+                    Text("\(record.createdAt, style: .date) · \(outcome.label)")
+                } else {
+                    Text(record.createdAt, style: .date)
+                }
+            }.font(.caption).foregroundStyle(.secondary)
         }
         .contentShape(.rect)
         .tag(AnyHashable(record.id))
-        .contextMenu { windowMenu(.saved(record)) }
+        .contextMenu {
+            windowMenu(.saved(record))
+            discardButton(record)
+        }
+    }
+
+    private func discardButton(_ session: SessionRecord) -> some View {
+        Button("Discard Worktree…") { Task { await model.requestDiscard(session) } }
+            .disabled(!model.canDiscard(session))
     }
 
     /// Shows the session in its own window, or raises the window that already has it.
     @ViewBuilder private func windowMenu(_ target: SessionWindowModel.NavigationTarget) -> some View {
         if let windowTarget = target.windowTarget {
             Button("Open in New Window") { openWindow(value: windowTarget) }
+        }
+    }
+}
+
+extension WorktreeOutcome {
+    /// The short form shown under a saved session.
+    var label: String {
+        switch self {
+        case .merged: "Merged"
+        case .discarded: "Discarded"
         }
     }
 }

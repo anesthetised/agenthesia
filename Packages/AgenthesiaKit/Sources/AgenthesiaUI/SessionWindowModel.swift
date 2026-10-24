@@ -12,6 +12,20 @@ import SwiftUI
     var history: [SessionRecord] = []
     var projects: [ProjectRecord] = []
     var restored: SessionController?
+    /// Sessions whose worktree was merged or discarded, read with history (ADR-0032).
+    var outcomes: [UUID: WorktreeOutcome] = [:]
+    /// The discard waiting for confirmation.
+    var pendingDiscard: PendingDiscard?
+    /// A failed lifecycle action, shown in an alert.
+    var alertMessage: String?
+    var isConfirmingDiscard: Bool {
+        get { pendingDiscard != nil }
+        set { if !newValue { pendingDiscard = nil } }
+    }
+    var isShowingAlert: Bool {
+        get { alertMessage != nil }
+        set { if !newValue { alertMessage = nil } }
+    }
     var errorMessage: String?
     var isLoadingHistory = false
     var closed = false
@@ -23,7 +37,13 @@ import SwiftUI
     var library: SessionLibrary { sessions.library }
     var displayed: SessionController? { restored ?? owner?.controller }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
-    var filesSession: SessionRecord? { displayed?.session ?? (owner?.isStarting == true ? owner?.resuming : nil) }
+    /// A removed worktree has no files left to browse.
+    var filesSession: SessionRecord? {
+        guard let session = displayed?.session ?? (owner?.isStarting == true ? owner?.resuming : nil),
+            outcome(of: session.id) == nil
+        else { return nil }
+        return session
+    }
     var canStart: Bool { !closed }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {
@@ -31,9 +51,9 @@ import SwiftUI
         return .session(id)
     }
     var canContinue: Bool {
-        guard !closed, !showingSetup, !isLoadingHistory, let displayed, displayed.session.agentSessionID != nil else {
-            return false
-        }
+        guard !closed, !showingSetup, !isLoadingHistory, let displayed, displayed.session.agentSessionID != nil,
+            outcome(of: displayed.session.id) == nil, !sessions.isDiscarding(displayed.session.id)
+        else { return false }
         if let restored { return restored.status == .readOnly }
         return owner?.isLive == false && [.failed, .closed].contains(displayed.status)
             && history.contains { $0.id == displayed.session.id }
@@ -76,6 +96,38 @@ import SwiftUI
         return (session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty)
             && !(session.status == .stopping && session.queuePaused)
     }
+    var canDiscard: Bool {
+        guard !showingSetup, !isLoadingHistory, let session = displayed?.session else { return false }
+        return canDiscard(session)
+    }
+    /// The session has a worktree Agenthesia created, without an outcome yet, and is not starting.
+    func canDiscard(_ session: SessionRecord) -> Bool {
+        !closed && outcome(of: session.id) == nil
+            && sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
+    }
+    /// The displayed transcript knows an outcome recorded after the last history refresh.
+    func outcome(of id: UUID) -> WorktreeOutcome? {
+        (displayed?.session.id == id ? displayed?.transcript.worktreeOutcome : nil) ?? outcomes[id]
+    }
+
+    struct PendingDiscard: Identifiable {
+        let session: SessionRecord
+        /// Nil when Git could not count what would be lost; the alert still warns.
+        let summary: SessionManager.DiscardSummary?
+        var id: UUID { session.id }
+
+        var title: String { "Discard the worktree of “\(session.title ?? "Session")”?" }
+        var message: String {
+            guard let summary else {
+                return "Its uncommitted files and the commits on its branch will be deleted. This cannot be undone."
+            }
+            let files =
+                summary.uncommittedFiles == 1 ? "1 uncommitted file" : "\(summary.uncommittedFiles) uncommitted files"
+            let commits = summary.commits == 1 ? "1 commit" : "\(summary.commits) commits"
+            return "\(files) and \(commits) on \(summary.branch) will be deleted. This cannot be undone."
+        }
+    }
+
     var canResumeQueue: Bool {
         guard !closed, !showingSetup, !isLoadingHistory, restored == nil, let session = owner?.controller else {
             return false
@@ -149,10 +201,33 @@ import SwiftUI
         do { try await session.resumeQueue() } catch { errorMessage = error.localizedDescription }
     }
 
+    /// Counts what would be lost and asks for confirmation.
+    func requestDiscard(_ session: SessionRecord) async {
+        guard canDiscard(session) else { return }
+        let summary: SessionManager.DiscardSummary?
+        do { summary = try await sessions.discardSummary(session) } catch let error as SessionManager.DiscardError {
+            alertMessage = error.localizedDescription
+            return
+        } catch { summary = nil }
+        guard !closed else { return }
+        pendingDiscard = PendingDiscard(session: session, summary: summary)
+    }
+    /// Discards the confirmed worktree; a window showing the session then shows it read-only with the outcome.
+    func confirmDiscard() async {
+        guard let pending = pendingDiscard else { return }
+        pendingDiscard = nil
+        let id = pending.session.id
+        let shown = displayed?.session.id == id || owner?.sessionID == id
+        do { try await sessions.discard(pending.session) } catch { alertMessage = error.localizedDescription }
+        await refresh()
+        if shown, !closed, let record = history.first(where: { $0.id == id }) { await showHistory(record) }
+    }
+
     func refresh() async {
         do {
             history = try await library.history()
             projects = try await library.projects()
+            outcomes = try await library.worktreeOutcomes()
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }
@@ -192,8 +267,8 @@ import SwiftUI
     }
     /// Continues the displayed session, or shows the owner that already has it live (ADR-0017, ADR-0026).
     func continueRestored() {
-        guard canContinue, let session = displayed?.session else { return }
-        show(sessions.resume(session))
+        guard canContinue, let session = displayed?.session, let owner = sessions.resume(session) else { return }
+        show(owner)
     }
     func showHistory(_ record: SessionRecord) async {
         guard !closed else { return }

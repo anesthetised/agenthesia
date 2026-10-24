@@ -13,7 +13,7 @@ public struct SessionWorkspace: Sendable {
     public static func prepare(
         directory: URL,
         id: UUID,
-        worktreesRoot: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".agenthesia/worktrees")
+        worktreesRoot: URL = defaultWorktreesRoot
     ) async throws -> SessionWorkspace {
         // Git can run for seconds on large checkouts; keep the blocking calls off the cooperative pool.
         try await withCheckedThrowingContinuation { continuation in

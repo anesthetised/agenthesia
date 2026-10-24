@@ -38,6 +38,18 @@ public actor SessionLibrary {
         return result.sorted { $0.createdAt > $1.createdAt }
     }
 
+    /// Sessions whose worktree was merged or discarded; the outcome is always a session's last event (ADR-0032).
+    public func worktreeOutcomes() async throws -> [UUID: WorktreeOutcome] {
+        try await store().lastEvents().compactMapValues(WorktreeOutcome.init(lastEvent:))
+    }
+
+    /// Appends to a session without a live owner; the caller makes sure none writes to it meanwhile.
+    func record(_ outcome: WorktreeOutcome, for sessionID: UUID) async throws {
+        _ = try await store().append([SessionEvent.worktreeRemoved(outcome).storedEvent()], to: sessionID)
+    }
+
+    func project(id: UUID) async throws -> ProjectRecord? { try await store().projects().first { $0.id == id } }
+
     func install(id: UUID) async throws -> AgentInstallRecord? {
         try await store().agentInstalls().first { $0.id == id }
     }

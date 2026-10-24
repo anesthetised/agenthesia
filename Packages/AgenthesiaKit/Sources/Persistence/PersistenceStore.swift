@@ -159,19 +159,40 @@ public final class PersistenceStore: Sendable {
                 db,
                 sql: "SELECT * FROM event WHERE sessionID = ? AND sequence > ? ORDER BY sequence LIMIT ?",
                 arguments: [sessionID.uuidString, sequence, limit]
-            ).map { row in
-                try StoredEvent(
-                    sessionID: row.decode(forColumn: "sessionID"),
-                    sequence: row.decode(forColumn: "sequence"),
-                    event: NewEvent(
-                        kind: row.decode(forColumn: "kind"),
-                        formatVersion: row.decode(forColumn: "formatVersion"),
-                        payload: row.decode(forColumn: "payload"),
-                        timestamp: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "timestamp"))
-                    )
-                )
-            }
+            ).map(Self.decodeEvent)
         }
+    }
+
+    /// Each session's most recent event, one index lookup per session.
+    public func lastEvents() async throws -> [UUID: StoredEvent] {
+        try await database.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT event.* FROM session JOIN event ON event.sessionID = session.id
+                    AND event.sequence = (SELECT MAX(sequence) FROM event WHERE sessionID = session.id)
+                    """
+            )
+            return try Dictionary(
+                uniqueKeysWithValues: rows.map { row in
+                    let event = try Self.decodeEvent(row)
+                    return (event.sessionID, event)
+                }
+            )
+        }
+    }
+
+    private static func decodeEvent(_ row: Row) throws -> StoredEvent {
+        try StoredEvent(
+            sessionID: row.decode(forColumn: "sessionID"),
+            sequence: row.decode(forColumn: "sequence"),
+            event: NewEvent(
+                kind: row.decode(forColumn: "kind"),
+                formatVersion: row.decode(forColumn: "formatVersion"),
+                payload: row.decode(forColumn: "payload"),
+                timestamp: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "timestamp"))
+            )
+        )
     }
 
     private static func decodeSession(_ row: Row) throws -> SessionRecord {

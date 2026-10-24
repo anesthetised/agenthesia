@@ -20,6 +20,13 @@ public struct SessionCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(model?.canEnd != true)
+            Button("Discard Worktree…") {
+                Task { [model] in
+                    guard let session = model?.displayed?.session else { return }
+                    await model?.requestDiscard(session)
+                }
+            }
+            .disabled(model?.canDiscard != true)
             Divider()
             Button("Stop") { Task { [model] in await model?.stop() } }
                 .keyboardShortcut(".", modifiers: .command)

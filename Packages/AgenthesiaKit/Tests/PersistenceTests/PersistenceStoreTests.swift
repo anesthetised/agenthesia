@@ -180,6 +180,22 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await store.append([], to: first.id).isEmpty)
     }
 
+    @Test func lastEventsHaveTheHighestSequenceOfEachSession() async throws {
+        let (project, agent, first) = try await seed()
+        let second = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/second")
+        let empty = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/empty")
+        try await store.createSession(second)
+        try await store.createSession(empty)
+        let firstEvents = try await store.append([event(1), event(2)], to: first.id)
+        let secondEvents = try await store.append([event(3)], to: second.id)
+        _ = try await store.append([event(4)], to: second.id)
+        let last = try await store.lastEvents()
+        #expect(last.count == 2)
+        #expect(last[first.id] == firstEvents.last)
+        #expect(last[second.id]?.sequence == 2 && last[second.id] != secondEvents.last)
+        #expect(last[empty.id] == nil)
+    }
+
     @Test func oneKiBPayloadsDoNotAllocateAnOverflowPagePerEvent() async throws {
         let (_, _, session) = try await seed()
         let pagesBefore = try #require(await database.read { try Int.fetchOne($0, sql: "PRAGMA page_count") })

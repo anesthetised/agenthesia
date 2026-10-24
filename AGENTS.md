@@ -73,11 +73,33 @@ the agent so no real agent or tokens are involved.
   non-Latin layout it types the wrong characters. Select a field with `set focused`, put the text on the
   clipboard (restore it afterwards) and use the Edit menu's Select All and Paste. System permission
   prompts and notification banners expose their buttons as accessibility actions of the banner group
-  (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. Synthetic
-  clicks and `AXPress` on a banner did not reach the app.
+  (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. To tap a
+  banner use System Events `click at {x, y}`; CGEvent clicks and `AXPress` did not reach the app.
+- **Use a fresh bundle identifier for anything gated by a permission.** macOS remembers the first answer,
+  and what a bundle asked for at that time (a missing `.badge` hid the Dock badge for good). Build a
+  copy: `xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug
+  -destination 'platform=macOS' -derivedDataPath .build/xcode-<name>
+  PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.<name>test build`. The repository stays
+  unchanged. Do this again for each change to the requested permissions.
+- Test sessions need a Git repository with a commit (`git init`, then `git commit --allow-empty`), or the
+  start fails with `invalid reference: HEAD`. Name directories so they are recognisable, such as
+  `agh-<feature>-check`, and start as few sessions as possible: **history is append-only, so test sessions
+  can never be deleted** and stay in the owner's sidebar.
+- A fixed screen coordinate is only valid for the window position it was measured at, so read the window
+  frame first. Repeat a system-dependent check before believing it, and break the code on purpose once to
+  see the check fail.
 - **Ask the owner to leave the machine alone** while a scripted or computer-use check runs, and state
   when it ends. Never type into the owner's apps, and never touch their real data: use a temporary
-  directory and, for history, a copy or a clearly marked temporary row removed afterwards.
+  directory, and do not tamper with the history database to remove test rows.
+- **Clean up before the pull request**, and list what could not be cleaned in the PR description and to
+  the owner:
+  - remove temporary files and directories, `~/.agenthesia/worktrees/<name>`, and the extra derived data
+    folders;
+  - quit the app and restore the clipboard and any System Settings value you changed;
+  - check `git diff` and `git status` for leftover debug logging, `/tmp` paths and experiments, and rebuild
+    the committed state with `just app`;
+  - leftovers the owner has to remove: test sessions in history and the notification entry of each test
+    bundle identifier in System Settings → Notifications.
 - Windows restore after relaunch only with System Settings → Desktop & Dock → *Close windows when quitting
   an application* turned off; tell the owner when the setting can be restored.
 - Record what was checked, what was not (VoiceOver, system prompts) and how in PLAN.md.

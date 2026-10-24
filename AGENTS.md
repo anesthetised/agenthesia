@@ -91,8 +91,8 @@ the agent so no real agent or tokens are involved.
 - **Ask the owner to leave the machine alone** while a scripted or computer-use check runs, and state
   when it ends. Never type into the owner's apps, and never touch their real data: use a temporary
   directory, and do not tamper with the history database to remove test rows.
-- **Clean up before the pull request**, and list what could not be cleaned in the PR description and to
-  the owner:
+- **Clean up before the pull request.** Tell the owner what only they can clean up in the chat, and keep
+  it out of commits, the pull request and the issue:
   - remove temporary files and directories, `~/.agenthesia/worktrees/<name>`, and the extra derived data
     folders;
   - quit the app and restore the clipboard and any System Settings value you changed;

@@ -219,8 +219,7 @@ CGEvent clicks and `AXPress` did not reach the app) brings the app forward, but 
 already open it also creates a blank full-size *New Session* window. It is not our URL (the stray appears
 with the URL open disabled), not a plain reopen, and a scene-level `handlesExternalEvents(matching: [])`
 did not stop it, so SwiftUI creates it when Notification Center activates the app; the cause is open.
-Not verified: VoiceOver and the first-run prompt text. The `agh-attn-check` sessions the checks left in
-history cannot be deleted, because events are append-only.
+Not verified: VoiceOver and the first-run prompt text.
 
 Pitfall: `handlesExternalEvents(preferring: [], allowing: ["*"])` is what stops the system opening a new
 window beside the one that handles the URL; without it every tap added a blank window.

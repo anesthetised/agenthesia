@@ -4,6 +4,7 @@ import SwiftUI
 struct SessionChangedFiles: View {
     let files: SessionFiles
     let onOpen: (String, UUID) -> Void
+    let onReview: () -> Void
 
     var body: some View {
         let id = files.sessionID
@@ -32,6 +33,8 @@ struct SessionChangedFiles: View {
                     .textSelection(.enabled)
             }
             Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
+            Button("Review Changes", systemImage: "doc.text.magnifyingglass", action: onReview)
+                .disabled(!files.isGitRepository)
         }
     }
 }

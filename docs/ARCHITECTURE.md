@@ -277,8 +277,25 @@ roots are captured once and cannot broaden after symlink substitution.
 Git changed paths combine `git diff base HEAD` ([ADR-0024](adr/0024-changed-files-session-base.md)),
 staged, unstaged and nonignored untracked changes. Legacy
 sessions without a base explicitly show working changes only; non-Git folders explain that change
-tracking requires Git. Renames include both paths. Full worktree review remains #42. Browsing stops when the displayed session changes or its window closes, rather
-than when the agent process ends; Continue keeps the same session's files across its startup.
+tracking requires Git. Renames include both paths. Browsing stops when the displayed session changes or
+its window closes, rather than when the agent process ends; Continue keeps the same session's files
+across its startup.
+
+*Review Changes* (⌃⌘R in the Session menu, also in the changed-file list) opens a native sheet with a
+selectable file list and one unified diff. `SessionWorkspace.review` compares the current working tree
+with `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)),
+including staged, unstaged and nonignored untracked files. It retains rename sources and reports a
+missing base branch explicitly. Without `baseBranch`, it compares with `baseRevision`, or HEAD for legacy
+sessions with neither. Paths are relative to the selected working directory.
+
+Core's window-owned `SessionReview` retains selection while that path still differs. The sheet refreshes
+from `SessionFiles.indexRevision`, sharing filesystem, Git metadata, ACP and manual invalidation with
+the file list. Only the selected file is loaded: its immutable base blob is size-checked before reading,
+and the current side uses `SessionFileDocument`. Both sides require UTF-8 without NUL bytes and the
+same 2 MiB limit; unsupported files show a notice. Captured canonical roots cannot broaden through a
+symlink. `UnifiedDiff` runs off the main actor and the existing native Markdown renderer supplies line
+and word highlights. Session replacement or window closure dismisses review and cancels its view tasks.
+Merge remains #43.
 
 ### Transcript paths and Open in Editor
 

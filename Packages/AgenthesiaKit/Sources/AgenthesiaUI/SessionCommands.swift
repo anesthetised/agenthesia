@@ -27,6 +27,9 @@ public struct SessionCommands: Commands {
                 }
             }
             .disabled(model?.canDiscard != true)
+            Button("Review Changes", action: { model?.openReview() })
+                .keyboardShortcut("r", modifiers: [.command, .control])
+                .disabled(model?.canReview != true)
             Divider()
             Button("Stop") { Task { [model] in await model?.stop() } }
                 .keyboardShortcut(".", modifiers: .command)

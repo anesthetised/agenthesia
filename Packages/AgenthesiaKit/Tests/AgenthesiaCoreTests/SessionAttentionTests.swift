@@ -90,6 +90,7 @@ import Testing
         #expect(notice.kind == .permission(requestID: request.id, canDecide: true))
         #expect(notice.sessionID == controller.session.id)
         #expect(notice.body == "Permission needed")
+        #expect(notice.title == controller.session.title && notice.title != "Agent session")
 
         #expect(!attention.decide(requestID: UUID(), in: controller.session.id, allow: true))
         #expect(!attention.decide(requestID: request.id, in: UUID(), allow: true))
@@ -299,6 +300,7 @@ import Testing
             projectID: project.id,
             agentInstallID: agent.id,
             agentSessionID: "saved",
+            title: "Saved session",
             workingDirectory: directory.path
         )
         try await store.createProject(project)
@@ -319,7 +321,7 @@ import Testing
         #expect(owner.controller == nil && owner.activity == .failed)
         await eventually { sink.live.count == 1 }
         let notice = try #require(sink.live.values.first)
-        #expect(notice.kind == .failure && notice.sessionID == record.id)
+        #expect(notice.kind == .failure && notice.sessionID == record.id && notice.title == "Saved session")
         #expect(notice.body.contains("/does-not-exist"))
 
         await manager.end(owner)

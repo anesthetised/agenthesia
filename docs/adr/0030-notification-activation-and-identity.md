@@ -29,6 +29,7 @@ window. It also leaves open what identifies a notification, so that a stale one 
   change and diffs them with those already posted: it posts new ones and removes those that no longer apply.
   Nothing is stored. The system side is an `AttentionSink` seam; `SystemAttention` in AgenthesiaUI
   implements it with `UserNotifications` and the Dock tile, and is created only inside an app bundle.
+- **Title.** A banner is titled with the name the sidebar shows for the session, so it says which one asks.
 - **Identity.** A permission request or form is identified by its request, so answering it anywhere removes
   its notification. A failure is identified by its session, and a finished turn by its session and
   completed-turn count. A notice ends when its cause ends, when the session ends, or when the session

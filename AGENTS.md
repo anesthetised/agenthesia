@@ -67,7 +67,7 @@ To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just 
   approval before opening a pull request; pushing still requires an explicit request.
 - Keep issues accurate: apply labels and a milestone, tick checkboxes as their items land, and link
   commits and pull requests with `Closes`/`Refs`.
-- When planning work, label each issue with its model tier (`light` or `strong`).
+- When planning work, label each issue with its model tier (`agent:light` or `agent:strong`).
 
 ## Code
 

@@ -4,6 +4,7 @@ public import SwiftUI
 
 public struct RootView: View {
     @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.openWindow) private var openWindow
     @State private var model: SessionWindowModel
     /// The window's persisted value: the system restores it after relaunch (ADR-0026).
     @Binding private var target: WindowTarget
@@ -131,6 +132,11 @@ public struct RootView: View {
         .onChange(of: viewingUnseenResult, initial: true) {
             if viewingUnseenResult { model.owner?.markSeen() }
         }
+        // Notifications lead back to a session through its URL (ADR-0030).
+        .onOpenURL { open($0) }
+        .handlesExternalEvents(preferring: [], allowing: ["*"])
+        // A session in front of the user needs no notification (ADR-0026).
+        .onChange(of: shownSessionID, initial: true) { model.sessions.setShown(shownSessionID, in: model) }
         .task {
             await model.restore(target)
             target = model.target
@@ -160,6 +166,23 @@ public struct RootView: View {
 
     private var viewingUnseenResult: Bool {
         appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
+    }
+
+    private func open(_ url: URL) {
+        guard let opened = WindowTarget(url: url) else { return }
+        let windows = NSApp.windows.count { $0.isVisible && $0.canBecomeMain }
+        Task {
+            await model.activate(opened, isBlank: isBlankLaunchForm, windowCount: windows) { openWindow(value: $0) }
+            target = model.target
+        }
+    }
+
+    private var isBlankLaunchForm: Bool {
+        directory.isEmpty && executable.isEmpty && arguments.isEmpty
+    }
+
+    private var shownSessionID: UUID? {
+        appearsActive && !model.showingSetup ? model.displayed?.session.id : nil
     }
 
     private var filesMatchSession: Bool {

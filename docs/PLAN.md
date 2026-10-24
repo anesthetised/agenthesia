@@ -214,10 +214,13 @@ record `allow` and `reject`, clear the banner and the Dock badge, and leave the 
 turn that ends while the session is not shown posts the finished banner, and one that ends while it is shown
 does not. The check found that the badge never appeared because authorization omitted `.badge`; with it the
 Dock shows `1` while a request waits and clears on any answer. A copy built with another bundle identifier
-gave a fresh authorization to prove that. Not verified: tapping the banner itself, since neither a
-synthetic click nor its accessibility press reached the delegate (the URL it opens was checked directly,
-and `NSWorkspace.open` brings the app forward), VoiceOver, and the first-run prompt text. The three
-`agh-attn-check` sessions the checks left in history cannot be deleted, because events are append-only.
+gave a fresh authorization to prove that. Tapping the finished banner (a System Events click; synthetic
+CGEvent clicks and `AXPress` did not reach the app) brings the app forward, but with a session window
+already open it also creates a blank full-size *New Session* window. It is not our URL (the stray appears
+with the URL open disabled), not a plain reopen, and a scene-level `handlesExternalEvents(matching: [])`
+did not stop it, so SwiftUI creates it when Notification Center activates the app; the cause is open.
+Not verified: VoiceOver and the first-run prompt text. The `agh-attn-check` sessions the checks left in
+history cannot be deleted, because events are append-only.
 
 Pitfall: `handlesExternalEvents(preferring: [], allowing: ["*"])` is what stops the system opening a new
 window beside the one that handles the URL; without it every tap added a blank window.

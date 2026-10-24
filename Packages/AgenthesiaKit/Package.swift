@@ -104,7 +104,6 @@ let package = Package(
         .executableTarget(name: "persistence-bench", dependencies: ["Persistence"], swiftSettings: swiftSettings),
         .executableTarget(name: "session-bench", dependencies: ["AgenthesiaCore"], swiftSettings: swiftSettings),
         .executableTarget(name: "workspace-bench", dependencies: ["Workspace"], swiftSettings: swiftSettings),
-        .executableTarget(name: "icon-render", dependencies: ["AgenthesiaUI"], swiftSettings: swiftSettings),
         .executableTarget(
             name: "transcript-bench",
             dependencies: ["AgenthesiaUI", "Rendering"],

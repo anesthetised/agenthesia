@@ -1,16 +1,15 @@
-import AppKit
 public import SwiftUI
 
 /// The app icon: a sleepy moon under stars, one lit star per live session. The moon wakes while a session
 /// needs the user (ADR-0031).
 ///
-/// The asset catalog, the Dock tile and the README art show this drawing. `docs/images/logo-*.svg` repeat it
-/// as static vector art, so change them together.
+/// The Dock tile shows this drawing while sessions run. `App/AppIcon.icon` (the layers the system composes for the
+/// app icon) and `docs/images/logo-*.svg` (README) repeat it as static vector art, so change them together.
 public struct AppIcon: View {
     public nonisolated enum Style: Sendable {
         /// The app icon itself.
         case sky
-        /// The same icon for a dark background, as in README on a dark theme.
+        /// The same icon for a dark background: README on a dark theme and the Dock tile in Dark Mode.
         case night
     }
 
@@ -22,10 +21,8 @@ public struct AppIcon: View {
     /// - Parameters:
     ///   - stars: Lit stars, 0 to `maxStars`.
     ///   - awake: Eyes open, for a session that needs the user.
-    ///   - inset: Leaves the margin and shadow of the system's icon grid around the tile; turn it off for art
-    ///     that is placed on a page.
-    public init(stars: Int, awake: Bool = false, style: Style = .sky, inset: Bool = true) {
-        drawing = Drawing(stars: max(0, min(stars, Self.maxStars)), awake: awake, style: style, inset: inset)
+    public init(stars: Int, awake: Bool = false, style: Style = .sky) {
+        drawing = Drawing(stars: max(0, min(stars, Self.maxStars)), awake: awake, style: style)
     }
 
     public var body: some View {
@@ -33,14 +30,6 @@ public struct AppIcon: View {
         Canvas { context, size in drawing.draw(&context, size: size) }
             .aspectRatio(1, contentMode: .fit)
             .accessibilityLabel("Agenthesia")
-    }
-
-    /// The icon as a PNG of `pixels` × `pixels`, for the asset catalog.
-    public func pngData(pixels: Int) -> Data? {
-        let renderer = ImageRenderer(content: frame(width: CGFloat(pixels), height: CGFloat(pixels)))
-        renderer.scale = 1
-        guard let image = renderer.cgImage else { return nil }
-        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     }
 }
 
@@ -50,7 +39,6 @@ extension AppIcon {
         let stars: Int
         let awake: Bool
         let style: Style
-        let inset: Bool
 
         private struct Palette {
             let sky: [Color]
@@ -91,7 +79,7 @@ extension AppIcon {
             let palette = style == .sky ? Self.sky : Self.night
             let side = min(size.width, size.height)
             // 824 of 1024 is the body of a macOS icon; the rest is margin for the shadow.
-            let body = inset ? side * 824 / 1024 : side
+            let body = side * 824 / 1024
             let origin = CGPoint(x: (size.width - body) / 2, y: (size.height - body) / 2)
             let unit = body / 100
             func point(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: origin.x + x * unit, y: origin.y + y * unit) }
@@ -132,11 +120,9 @@ extension AppIcon {
                 .path(in: CGRect(origin: origin, size: CGSize(width: body, height: body)))
             let night = style == .night
 
-            if inset {
-                context.drawLayer { layer in
-                    layer.addFilter(.shadow(color: .black.opacity(0.3), radius: body * 0.025, x: 0, y: body * 0.012))
-                    layer.fill(tile, with: gradient(palette.sky, from: 0, to: 100))
-                }
+            context.drawLayer { layer in
+                layer.addFilter(.shadow(color: .black.opacity(0.3), radius: body * 0.025, x: 0, y: body * 0.012))
+                layer.fill(tile, with: gradient(palette.sky, from: 0, to: 100))
             }
             context.clip(to: tile)
             context.fill(tile, with: gradient(palette.sky, from: 0, to: 100))

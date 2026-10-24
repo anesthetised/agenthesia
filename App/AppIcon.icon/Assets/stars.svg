@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <!-- Layer of the app icon; the Swift drawing (AgenthesiaUI/AppIcon.swift) and docs/images/logo-*.svg repeat it. -->
+  <path d="M68 23Q68 30 75 30Q68 30 68 37Q68 30 61 30Q68 30 68 23Z" fill="#FFFFFF"/>
+  <path d="M81 44.4Q81 49 85.6 49Q81 49 81 53.6Q81 49 76.4 49Q81 49 81 44.4Z" fill="#FFFFFF"/>
+  <path d="M54 15Q54 19 58 19Q54 19 54 23Q54 19 50 19Q54 19 54 15Z" fill="#FFFFFF"/>
+  <path d="M83 18.6Q83 22 86.4 22Q83 22 83 25.4Q83 22 79.6 22Q83 22 83 18.6Z" fill="#FFFFFF" opacity=".13"/>
+  <path d="M64 47Q64 50 67 50Q64 50 64 53Q64 50 61 50Q64 50 64 47Z" fill="#FFFFFF" opacity=".13"/>
+</svg>

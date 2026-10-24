@@ -33,7 +33,7 @@ public struct RootView: View {
         @Bindable var model = model
         NavigationSplitView {
             List(selection: $model.sidebarSelection) {
-                SessionSidebarList(sidebar: model.sidebar)
+                SessionSidebarList(model: model)
                 if !model.showingSetup, filesMatchSession {
                     SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
                         .selectionDisabled(true)
@@ -127,7 +127,15 @@ public struct RootView: View {
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         // Startup persists the session after assigning its ID; refresh only once that write has settled.
         // Ended sessions move to saved history in every window.
-        .task(id: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID)) { await model.refresh() }
+        // A finished discard records its outcome, which every window reads with history.
+        .task(
+            id: HistoryKey(
+                owners: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID),
+                discarding: model.sessions.discardingIDs
+            )
+        ) {
+            await model.refresh()
+        }
         // Looking at a finished turn in the key window clears its Done mark.
         .onChange(of: viewingUnseenResult, initial: true) {
             if viewingUnseenResult { model.owner?.markSeen() }
@@ -148,6 +156,20 @@ public struct RootView: View {
             finishEditing(); showingQuickOpen = false; fileQuery = ""
         }
         .onChange(of: fileQuery) { model.files.setQuery(fileQuery) }
+        .alert(
+            model.pendingDiscard?.title ?? "",
+            isPresented: $model.isConfirmingDiscard,
+            presenting: model.pendingDiscard
+        ) { pending in
+            Button("Discard", role: .destructive) { Task { await model.confirmDiscard(pending) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text($0.message)
+        }
+        .alert("Cannot Discard the Worktree", isPresented: $model.isShowingAlert, presenting: model.alertMessage) { _ in
+        } message: {
+            Text($0)
+        }
         .sheet(isPresented: $showingQuickOpen) {
             let id = model.files.sessionID
             QuickOpen(
@@ -162,6 +184,11 @@ public struct RootView: View {
                 onDismiss: { showingQuickOpen = false }
             )
         }
+    }
+
+    private struct HistoryKey: Equatable {
+        let owners: [UUID?]
+        let discarding: Set<UUID>
     }
 
     private var viewingUnseenResult: Bool {
@@ -280,9 +307,11 @@ public struct RootView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if [.readOnly, .failed, .closed].contains(session.status) {
-                    Button("Continue", systemImage: "play.fill") { model.continueRestored() }
-                        .disabled(!model.canContinue)
-                        .help("Reconnect to the agent.")
+                    if model.outcome(of: session.session.id) == nil {
+                        Button("Continue", systemImage: "play.fill") { model.continueRestored() }
+                            .disabled(!model.canContinue)
+                            .help("Reconnect to the agent.")
+                    }
                 } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
                     Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
                         .disabled(session.status == .stopping && session.queuePaused)
@@ -349,6 +378,7 @@ public struct RootView: View {
     }
 
     static func statusText(_ session: SessionController) -> String {
+        if let outcome = session.transcript.worktreeOutcome { return "\(outcome.notice) Read-only." }
         if session.status == .readOnly { return "Saved history · read-only" }
         if session.status == .failed { return "Connection failed · Continue to reconnect" }
         if session.status == .closed { return "Session ended" }

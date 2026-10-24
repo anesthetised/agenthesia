@@ -126,6 +126,8 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var title: String?
     public private(set) var usage: ACP.UsageUpdate?
     public private(set) var unsupportedEvents = 0
+    /// Set once the session's worktree was merged or discarded; such a session cannot continue.
+    public private(set) var worktreeOutcome: WorktreeOutcome?
     private var toolIndices: [ACP.ToolCallID: Int] = [:]
     private var inputIndices: [UUID: Int] = [:]
     private var permissionIndices: [UUID: Int] = [:]
@@ -244,6 +246,9 @@ public struct TranscriptState: Equatable, Sendable {
             appendPermission(id, tool: tool, options: options, outcome: nil, sequence: sequence)
         case .permissionResolved(let id, let outcome):
             if let index = permissionIndices[id] { items[index].permission?.outcome = outcome }
+        case .worktreeRemoved(let outcome):
+            worktreeOutcome = outcome
+            items.append(Item(id: sequence, notice: outcome.notice))
         }
     }
 

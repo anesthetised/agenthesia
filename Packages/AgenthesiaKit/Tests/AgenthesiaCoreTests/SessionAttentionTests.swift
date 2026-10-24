@@ -311,7 +311,7 @@ import Testing
         try await store.createProject(project)
         try await store.createAgentInstall(agent)
         try await store.createSession(record)
-        let owner = manager.resume(record)
+        let owner = try #require(manager.resume(record))
         await owner.startup?.value
         return (owner, record)
     }

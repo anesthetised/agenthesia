@@ -62,7 +62,7 @@ import Testing
         #expect(original.errorMessage != nil && !original.isLive)
         #expect(manager.owners.map(\.id) == [original.id])
         #expect(manager.owner(of: session.id) == nil)
-        let continued = manager.resume(session)
+        let continued = try #require(manager.resume(session))
         // A second Continue during startup finds the starting owner.
         #expect(manager.resume(session) === continued)
         #expect(continued.sessionID == session.id)

@@ -35,11 +35,39 @@ public enum SessionEvent: Codable, Equatable, Sendable {
 
     case inputRequested(id: UUID, request: ACP.ElicitationRequest)
     case inputResolved(id: UUID, response: ACP.ElicitationResponse)
+    /// Appended after Git removed the session's worktree and branch; the session is read-only from then on
+    /// and this stays its last event (ADR-0032).
+    case worktreeRemoved(WorktreeOutcome)
 
     static let kind = "session.event"
     static let updateKind = "acp.session/update"
 
     func storedEvent() throws -> NewEvent {
         NewEvent(kind: Self.kind, payload: try JSONEncoder().encode(self))
+    }
+}
+
+/// How a session's worktree ended (ADR-0032).
+public enum WorktreeOutcome: Codable, Equatable, Sendable {
+    case merged(commit: String)
+    case discarded
+
+    /// The outcome recorded by a session's last event, if that event is one.
+    init?(lastEvent: StoredEvent) {
+        guard lastEvent.event.kind == SessionEvent.kind, lastEvent.event.formatVersion == 1,
+            case .worktreeRemoved(let outcome) = try? JSONDecoder().decode(
+                SessionEvent.self,
+                from: lastEvent.event.payload
+            )
+        else { return nil }
+        self = outcome
+    }
+
+    /// The transcript and status line text.
+    public var notice: String {
+        switch self {
+        case .merged(let commit): "Merged as \(commit.prefix(7)); the worktree was removed."
+        case .discarded: "The worktree was discarded."
+        }
     }
 }

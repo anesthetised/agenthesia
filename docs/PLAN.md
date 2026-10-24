@@ -133,8 +133,8 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 
 | # | Issue | Depends on | Tier | Acceptance in short |
 |---|---|---|---|---|
-| 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Implemented on `feat/base-branch` |
-| 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation |
+| 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Merged in #123 |
+| 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation. Implemented and verified on `feat/worktree-discard` |
 | 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch |
 | 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
 
@@ -149,6 +149,37 @@ detached `HEAD`, a subdirectory selection and a non-Git folder; a round trip, a 
 that leave `baseBranch` nil; and the branch surviving start, history and Continue. The first run failed to
 compile against the missing property (RED). `just coverage` passes all gates (Workspace 97.4%, Persistence
 100%, Core 98.3%) and `just app` builds. No UI changed.
+
+#44 implemented: the outcome event and its replay, `SessionWorkspace.Worktree`/`remove`/`discardSummary`,
+`SessionManager.discard`, *Discard Worktree…* in the Session menu and the sidebar context menu, the
+confirmation and error alerts, and the outcome under saved sessions in the sidebar. `SessionManager.resume`
+now returns nil while the session's worktree is being discarded. Workspace tests cover clean, dirty,
+untracked and committed worktrees, a directory deleted by hand, a missing branch, an unregistered directory
+at the expected path, refusal for a wrong id, the user's checkout, a path outside the root, a sibling with the
+same prefix and a non-Git session, and the summary counts; breaking the path check makes the refusal test
+fail. Core tests cover the event coding and replay, discarding a live and a saved session, a failed removal
+(a locked worktree) that appends nothing followed by a successful retry, coalesced discards with Continue
+refused meanwhile, refusal while continuing, and non-Git sessions; removing the replay guard in
+`LiveSession` makes the Continue test fail. UI tests cover `canContinue`, menu eligibility, the alert text,
+and a second window learning the outcome. `just lint`, `just test`, `just coverage` (Core 98.3%, Workspace 97.7%, Persistence 100%) and `just app` pass; `swiftui-pro` asked for model
+bindings instead of `Binding(get:set:)` (applied; `alert(_:item:)` needs Xcode 27, which CI lacks).
+
+#44 follow-up (2026-10-24): fixed two reproduced defects. The alert now passes its captured confirmation
+to `confirmDiscard` because SwiftUI clears the presentation state before the button's task runs. Removal
+checks the exact session branch immediately before `git worktree remove`; a different branch or detached
+HEAD leaves the worktree and branches intact. Missing-directory/missing-branch retries still succeed.
+Regressions failed before the fixes and pass afterward; inverting the branch guard also fails the new
+preservation test. `just lint`, full `just test`, `just coverage` (Workspace 97.7%, Core 98.3%, Persistence
+100%) and `just app` pass. The changed alert was reviewed with `swiftui-pro`.
+
+Computer-use checks in the built app with MockAgent and temporary Git repositories pass: Session menu and
+sidebar context menu, live and saved discard, confirmation counts, Cancel, and the error alert when the
+branch changes after confirmation opens. The rejected removal preserves the dirty files; restoring the
+session branch allows a retry. Successful removal deletes the session worktree and branch, preserves the
+project checkout and other branch, retains the transcript, shows Discarded, and disables Continue and
+repeated discard. After Quit/relaunch, selecting both sessions from history preserves those outcomes without
+starting an agent. Screenshots were captured. VoiceOver, system permission prompts and automatic window
+restoration were not checked.
 
 ### M7 slices (2026-10-17)
 

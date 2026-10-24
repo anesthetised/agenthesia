@@ -466,3 +466,117 @@ import Testing
         #expect(SessionWindowModel.NavigationTarget.live(starting).windowTarget == nil)
     }
 }
+
+@MainActor @Suite(.timeLimit(.minutes(1))) struct DiscardWorktreeWindowTests {
+    @Test(arguments: [false, true])
+    func discardShowsTheSessionReadOnlyInEveryWindow(dismissedBeforeAction: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-discard-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = directory.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        let git = Process()
+        git.executableURL = URL(filePath: "/bin/sh")
+        git.arguments = [
+            "-c",
+            "git init -q && git -c user.name=T -c user.email=t@example.com -c commit.gpgsign=false "
+                + "commit -q --allow-empty -m Initial",
+        ]
+        git.currentDirectoryURL = repo
+        // Waiting synchronously would block the main actor shared by the other suites.
+        let status = try await withCheckedThrowingContinuation { continuation in
+            git.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+            do { try git.run() } catch { continuation.resume(throwing: error) }
+        }
+        #expect(status == 0)
+        let sessions = SessionManager(
+            library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")),
+            worktreesRoot: directory.appending(path: "trees")
+        )
+        sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
+        let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
+        let binary = try #require(
+            [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
+                .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        )
+        let model = SessionWindowModel(sessions: sessions)
+        let other = SessionWindowModel(sessions: sessions)
+        model.start(directory: repo, executable: binary.path, arguments: ["--reopen"])
+        let owner = try #require(model.owner)
+        #expect(!model.canDiscard)
+        await owner.startup?.value
+        await model.refresh()
+        let record = try #require(owner.controller?.session)
+        #expect(model.canDiscard && !model.canContinue)
+        await model.requestDiscard(record)
+        let pending = try #require(model.pendingDiscard)
+        #expect(pending.title == "Discard the worktree of “\(record.title ?? "")”?")
+        #expect(
+            pending.message
+                == "0 uncommitted files and 0 commits on agenthesia/\(record.id.uuidString.lowercased()) will be deleted. This cannot be undone."
+        )
+        if dismissedBeforeAction {
+            // SwiftUI dismisses the alert before its button's asynchronous task gets to run.
+            model.isConfirmingDiscard = false
+            #expect(model.pendingDiscard == nil)
+            #expect(FileManager.default.fileExists(atPath: record.workingDirectory))
+            #expect(owner.isLive)
+        }
+        await model.confirmDiscard(pending)
+        #expect(model.pendingDiscard == nil && model.alertMessage == nil)
+        #expect(sessions.owners.isEmpty)
+        #expect(model.restored?.transcript.worktreeOutcome == .discarded)
+        #expect(model.outcomes == [record.id: .discarded])
+        #expect(!model.canDiscard && !model.canContinue && model.filesSession == nil)
+        #expect(RootView.statusText(try #require(model.restored)) == "The worktree was discarded. Read-only.")
+        #expect(!FileManager.default.fileExists(atPath: record.workingDirectory))
+        // Another window learns the outcome with history, before loading the transcript.
+        await other.refresh()
+        #expect(!other.canDiscard(record))
+        await other.showHistory(record)
+        #expect(!other.canContinue && !other.canDiscard)
+        // A retry from a stale menu reports the recorded outcome instead of asking again.
+        other.outcomes = [:]
+        other.restored = nil
+        await other.requestDiscard(record)
+        #expect(other.pendingDiscard == nil)
+        #expect(other.alertMessage == SessionManager.DiscardError.alreadyRemoved.localizedDescription)
+    }
+
+    @Test func confirmationTextCountsWhatIsLost() {
+        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), title: "Fix", workingDirectory: "/tmp")
+        let one = SessionWindowModel.PendingDiscard(
+            session: record,
+            summary: .init(uncommittedFiles: 1, commits: 1, branch: "agenthesia/x")
+        )
+        #expect(
+            one.message == "1 uncommitted file and 1 commit on agenthesia/x will be deleted. This cannot be undone."
+        )
+        let unknown = SessionWindowModel.PendingDiscard(session: record, summary: nil)
+        #expect(unknown.title == "Discard the worktree of “Fix”?")
+        #expect(unknown.message.hasSuffix("This cannot be undone."))
+    }
+
+    @Test func sessionsWithoutAnAgenthesiaWorktreeCannotBeDiscarded() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-plain-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        let store = try await sessions.library.store()
+        let project = ProjectRecord(name: "Plain", rootPath: directory.path)
+        let agent = AgentInstallRecord(name: "Test", executable: "unused")
+        let record = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            agentSessionID: "saved",
+            workingDirectory: directory.path
+        )
+        try await store.createProject(project)
+        try await store.createAgentInstall(agent)
+        try await store.createSession(record)
+        let model = SessionWindowModel(sessions: sessions)
+        await model.refresh()
+        await model.showHistory(record)
+        #expect(model.canContinue && !model.canDiscard && !model.canDiscard(record))
+        await model.requestDiscard(record)
+        #expect(model.pendingDiscard == nil)
+    }
+}

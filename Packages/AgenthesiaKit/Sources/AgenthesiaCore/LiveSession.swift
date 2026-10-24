@@ -133,6 +133,10 @@ public final class LiveSession {
                     store: store
                 )
             case .saved(let session):
+                controller = try await SessionController.history(id: session.id, store: store)
+                if let outcome = controller.transcript.worktreeOutcome {
+                    throw LaunchError(message: "\(outcome.notice) The session cannot continue.")
+                }
                 var isDirectory: ObjCBool = false
                 guard FileManager.default.fileExists(atPath: session.workingDirectory, isDirectory: &isDirectory),
                     isDirectory.boolValue
@@ -140,7 +144,6 @@ public final class LiveSession {
                     throw LaunchError(message: "The working directory “\(session.workingDirectory)” no longer exists.")
                 }
                 workingDirectory = URL(filePath: session.workingDirectory)
-                controller = try await SessionController.history(id: session.id, store: store)
             }
             guard !isClosed else { return }
             checkout = await SessionWorkspace.linkedCheckout(of: URL(filePath: controller.session.workingDirectory))

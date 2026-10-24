@@ -19,8 +19,8 @@ recommend an approach, and challenge proposals when there are concrete reasons t
 a structured question tool (e.g. `AskUserQuestion`) use it for these consultations, batching the open
 decisions into one call with the recommended option first.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
-When recommending agents or planning work, respect the model tiers: **light** — Sol/High, Sonnet/High;
-**strong** — Astra/High, Opus/High.
+When recommending agents or planning work, respect the model tiers. Codex agents use Sol (**light**) and
+Astra (**strong**); Claude agents use Sonnet (**light**) and Opus (**strong**). Both tiers run at High effort.
 Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
 avoiding unnecessary complexity. When writing or changing SwiftUI or AppKit views, also run `swiftui-pro`
 over them before committing.

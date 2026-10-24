@@ -38,6 +38,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     public private(set) var isChangingConfig = false
+    /// A merge is committing the worktree; no turn starts meanwhile (ADR-0032).
+    public private(set) var isMerging = false
     public enum SubmissionIntent: Equatable, Sendable { case whenReady, now, allNow }
 
     public var queuedPrompts: [QueuedPrompt] { transcript.queuedPrompts }
@@ -422,7 +424,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     private func dispatch(_ prompts: [QueuedPrompt], removingQueued: Bool) async throws {
-        guard status == .idle, !isChangingConfig, let connection, let agentID = session.agentSessionID else {
+        guard status == .idle, !isMerging, !isChangingConfig, let connection, let agentID = session.agentSessionID
+        else {
             throw SessionError.invalidState
         }
         let id = UUID()
@@ -439,11 +442,32 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         publishTranscript()
     }
 
+    /// Reserves the idle session for a merge (ADR-0032): refused while a turn runs or queued prompts wait to be
+    /// sent, and no turn starts until `endMerge`.
+    func beginMerge() -> Bool {
+        guard canBeginMerge else { return false }
+        isMerging = true
+        return true
+    }
+
+    var canBeginMerge: Bool {
+        status == .idle && !isMerging && !isChangingConfig && !steering && injectionTask == nil
+            && (queuePaused || reduced.queuedPrompts.isEmpty)
+    }
+
+    func endMerge() {
+        isMerging = false
+        // A queue resumed during the merge drains now.
+        if status == .idle, !queuePaused, !steering {
+            Task { try? await self.coordinateQueue { try await self.drainQueue() } }
+        }
+    }
+
     private func drainQueue() async throws {
         // A config change can enter while idle before a scheduled drain acquires the queue coordinator.
         // Wait for its confirmation rather than rejecting the drain and stranding an unpaused queue.
         _ = await configTask?.result
-        guard status == .idle, !queuePaused, !steering, !reduced.queuedPrompts.isEmpty else { return }
+        guard status == .idle, !isMerging, !queuePaused, !steering, !reduced.queuedPrompts.isEmpty else { return }
         try await dispatch(reduced.queuedPrompts, removingQueued: true)
     }
 
@@ -462,9 +486,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Owns the turn task: cancelling a UI task waiting here cannot silently cancel the wire request.
     public func send(_ content: [ACP.ContentBlock]) async throws {
         try Task.checkCancellation()
-        guard status == .idle, !isChangingConfig, let connection, let agentID = session.agentSessionID else {
-            throw SessionError.invalidState
-        }
+        guard status == .idle, !isMerging, !isChangingConfig, let connection, let agentID = session.agentSessionID
+        else { throw SessionError.invalidState }
         try Self.validate(content)
         let id = UUID()
         let event = try SessionEvent.prompt(id: id, content: content).storedEvent()

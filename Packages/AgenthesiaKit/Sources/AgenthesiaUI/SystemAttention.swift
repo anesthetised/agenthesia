@@ -74,6 +74,9 @@ import UserNotifications
         self.badge = badge
         super.init()
         center.delegate = self
+        // Sessions end with the app, so a banner from an earlier run can only lead nowhere.
+        center.removeAllDeliveredNotifications()
+        center.removeAllPendingNotificationRequests()
         center.setNotificationCategories([
             UNNotificationCategory(
                 identifier: Payload.decisionCategory,

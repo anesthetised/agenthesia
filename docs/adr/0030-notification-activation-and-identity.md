@@ -33,7 +33,10 @@ window. It also leaves open what identifies a notification, so that a stale one 
   its notification. A failure is identified by its session, and a finished turn by its session and
   completed-turn count. A notice ends when its cause ends, when the session ends, or when the session
   is shown in the key window of the active app; going away from a session with a pending request posts it
-  again.
+  again, while a failure, which no one can answer, is announced once and again only if the session fails
+  anew. A session that failed before it had a controller is reported too. Nothing is posted until the
+  system has answered the authorization request, and banners left over from an earlier run are removed at
+  launch, because sessions do not survive quitting.
 - **Shown sessions.** A window tells `SessionManager.setShown` which session it shows while its scene
   appears active, and clears it when it closes. The set is observable, so notices follow it.
 - **Buttons.** A button re-reads the pending request when pressed, picks the offered `allow_once` or

@@ -11,7 +11,19 @@ import Testing
     private(set) var badge = 0
     private(set) var authorizations = 0
 
-    func requestAuthorization() async { authorizations += 1 }
+    /// While set, `requestAuthorization` waits, as it does while the system prompt is open.
+    var holdAuthorization = false
+    private var held: [CheckedContinuation<Void, Never>] = []
+
+    func requestAuthorization() async {
+        authorizations += 1
+        if holdAuthorization { await withCheckedContinuation { held.append($0) } }
+    }
+    func answerPrompt() {
+        holdAuthorization = false
+        held.forEach { $0.resume() }
+        held = []
+    }
     func post(_ notice: AttentionNotice) {
         posts.append(notice)
         live[notice.id] = notice
@@ -252,5 +264,83 @@ import Testing
         await Task.yield()
         #expect(sink.authorizations == 1)
         await manager.closeAll()
+    }
+
+    @Test func nothingIsPostedBeforeTheSystemHasAnswered() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sink = RecordingSink()
+        sink.holdAuthorization = true
+        let attention = SessionAttention(sessions: manager, sink: sink)
+        defer { withExtendedLifetime(attention) {} }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("write /tmp/attention.txt content") }
+        await eventually { !controller.pendingPermissions.isEmpty }
+        await eventually { sink.badge == 1 }
+        #expect(sink.authorizations == 1 && sink.posts.isEmpty)
+
+        sink.answerPrompt()
+        await eventually { sink.live.count == 1 }
+        #expect(sink.posts.count == 1)
+        let request = try #require(controller.pendingPermissions.first)
+        controller.answerPermission(request.id, with: "allow")
+        await turn.value
+        await manager.closeAll()
+    }
+
+    private func failedResume(_ directory: URL, _ manager: SessionManager) async throws -> (LiveSession, SessionRecord)
+    {
+        let store = try await manager.library.store()
+        let project = ProjectRecord(name: "Test", rootPath: directory.path)
+        let agent = AgentInstallRecord(name: "Missing", executable: "/does-not-exist")
+        let record = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            agentSessionID: "saved",
+            workingDirectory: directory.path
+        )
+        try await store.createProject(project)
+        try await store.createAgentInstall(agent)
+        try await store.createSession(record)
+        let owner = manager.resume(record)
+        await owner.startup?.value
+        return (owner, record)
+    }
+
+    @Test func aStartupThatFailedBeforeHavingAControllerStillNotifies() async throws {
+        let (directory, manager, _) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sink = RecordingSink()
+        let attention = SessionAttention(sessions: manager, sink: sink)
+        defer { withExtendedLifetime(attention) {} }
+        let (owner, record) = try await failedResume(directory, manager)
+        #expect(owner.controller == nil && owner.activity == .failed)
+        await eventually { sink.live.count == 1 }
+        let notice = try #require(sink.live.values.first)
+        #expect(notice.kind == .failure && notice.sessionID == record.id)
+        #expect(notice.body.contains("/does-not-exist"))
+
+        await manager.end(owner)
+        await eventually { sink.live.isEmpty }
+    }
+
+    @Test func aFailureSeenInTheWindowIsNotAnnouncedAgainWhenTheUserLeaves() async throws {
+        let (directory, manager, _) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sink = RecordingSink()
+        let attention = SessionAttention(sessions: manager, sink: sink)
+        defer { withExtendedLifetime(attention) {} }
+        let (owner, record) = try await failedResume(directory, manager)
+        await eventually { sink.live.count == 1 }
+
+        let window = NSObject()
+        manager.setShown(record.id, in: window)
+        await eventually { sink.live.isEmpty }
+        manager.setShown(nil, in: window)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(sink.live.isEmpty && sink.posts.count == 1)
+        await manager.end(owner)
     }
 }

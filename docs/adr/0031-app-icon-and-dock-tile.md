@@ -16,7 +16,9 @@ asset-catalog icon, such as the macOS 26 appearances, does not apply to a tile t
 ## Decision
 
 - **The icon.** A sleepy moon under stars. Its sky is the `sky` palette; `night` is the same icon for a dark
-  README background and is not an app icon, since the Dock has no dark variant.
+  README background. The app icon has one appearance for now: a classic `AppIcon.appiconset` carries no dark
+  variant for macOS (`actool` keeps only the default images), so the Dark, Clear and Tinted icon styles of
+  macOS 26 need a layered `.icon` from Icon Composer, which is separate work (#45).
 - **One drawing.** `AppIcon` (AgenthesiaUI, SwiftUI `Canvas`) draws the icon for the Dock tile and renders the
   PNGs of `AppIcon.appiconset` (`just icon`, the `icon-render` tool). README shows static SVGs,
   `docs/images/logo-light.svg` and `logo-dark.svg`, which repeat the drawing with three stars lit; they are

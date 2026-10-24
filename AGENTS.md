@@ -19,6 +19,8 @@ recommend an approach, and challenge proposals when there are concrete reasons t
 a structured question tool (e.g. `AskUserQuestion`) use it for these consultations, batching the open
 decisions into one call with the recommended option first.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
+When recommending agents or planning work, respect the model tiers: **light** — Sol/High, Sonnet/High;
+**strong** — Astra/High, Opus/High.
 Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
 avoiding unnecessary complexity. When writing or changing SwiftUI or AppKit views, also run `swiftui-pro`
 over them before committing.
@@ -57,11 +59,14 @@ To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just 
 - Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `docs:`, `chore:`,
   `refactor:`, `test:`, `ci:`, `perf:`, `build:`. An optional scope is the module name, e.g.
   `feat(acp): …`.
-- When a commit or pull request closes an issue, include `Closes #<n>` in its message or description.
+- When a commit or pull request closes an issue, include `Closes #<n>` in its message or description;
+  use `Refs #<n>` when it only contributes to one.
 - Add a co-author trailer for the agent, e.g. `Co-Authored-By: <Agent Name> <email>`.
 - Committing is fine at any time. **Never push** unless explicitly asked to.
 - Track substantial changes in issues and implement them on separate branches. Obtain the user's
   approval before opening a pull request; pushing still requires an explicit request.
+- Keep issues accurate: apply labels and a milestone, tick checkboxes as their items land, and link
+  commits and pull requests with `Closes`/`Refs`.
 
 ## Code
 

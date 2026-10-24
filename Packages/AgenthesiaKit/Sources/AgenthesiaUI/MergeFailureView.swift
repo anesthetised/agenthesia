@@ -15,7 +15,7 @@ struct MergeFailureView: View {
                 Text(
                     "Ask the agent to merge \(base ?? "the base branch") into its branch and resolve the "
                         + "conflicts, then merge again."
-                ).foregroundStyle(.secondary)
+                ).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .failed(let output):
                 heading("Git stopped the merge, and the project checkout was left as it was.")
                 self.output(output)
@@ -26,7 +26,9 @@ struct MergeFailureView: View {
     }
 
     private func heading(_ text: String) -> some View {
+        // The sheet is sized before the failure appears; without this the text is cut off to fit.
         Label(text, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func output(_ text: String) -> some View {

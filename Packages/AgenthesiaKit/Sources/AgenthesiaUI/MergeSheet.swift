@@ -14,16 +14,19 @@ struct MergeSheet: View {
                 ProgressView("Checking the merge…").controlSize(.small)
             case .blocked(let explanation):
                 Label(explanation, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             case .ready(let base, let files, let commits):
                 Text(Self.summary(base: base, files: files, commits: commits)).foregroundStyle(.secondary)
             }
-            Text("Commit message").font(.subheadline)
-            // Return adds a line here; a vertical TextField would submit and press Merge.
-            TextEditor(text: $request.message)
-                .font(.body)
-                .frame(minHeight: 90)
-                .accessibilityLabel("Commit message")
-                .disabled(request.isMerging)
+            if !request.isBlocked {
+                Text("Commit message").font(.subheadline)
+                // Return adds a line here; a vertical TextField would submit and press Merge.
+                TextEditor(text: $request.message)
+                    .font(.body)
+                    .frame(minHeight: 90)
+                    .accessibilityLabel("Commit message")
+                    .disabled(request.isMerging)
+            }
             if let failure = request.failure { MergeFailureView(failure: failure, base: request.session.baseBranch) }
             HStack {
                 if request.isMerging {

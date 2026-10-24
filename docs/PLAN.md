@@ -244,8 +244,25 @@ blocker and conflict states kept in the sheet, and the read-only result. Removin
 `just app` pass. `swiftui-pro` asked to split the sheet's types into files and not to rely on colour
 alone for failures (applied); a vertical `TextField` was rejected because Return would press Merge.
 
-Not verified yet: the running app with MockAgent (clean merge, conflict, dirty checkout). Commit signing
-cannot be tested automatically.
+Checks in the built app (2026-10-25), scripted because the session had no computer-use tools (see
+AGENTS.md): a copy with its own bundle identifier ran with `CFFIXED_USER_HOME` pointing at a temporary
+directory, so its history, worktrees and Git identity never touched the owner's. MockAgent worked in a
+temporary repository with a `commit-msg` hook that appends a line, and wrote `notes.txt` through a real
+permission request. With a turn waiting for permission, *Merge into main…* explains that the session is
+busy and offers no Merge button. A dirty project checkout shows its blocker, and Git is left untouched.
+With the base branch advanced on the same file, Merge reports `file.txt`, leaves the base branch and the
+checkout as they were (no `SQUASH_MSG`) and the agent usable; the worktree only gains the intermediate commit.
+After the base was reset, the same sheet merged: one commit on `main` with the edited multi-line message and
+the hook's line (so the hook ran in the app's environment), the tree of the session including its
+untracked files, the worktree and branch gone, the session read-only with “Merged into main as a21ca50.”,
+“Merged” in the sidebar, and Continue, Discard, Review and Merge disabled. After Quit and relaunch the
+session opens from history read-only without starting an agent. The check found two defects, both fixed
+and re-checked in a rebuilt copy: the failure text in the sheet was cut off to one line, and the commit
+message field stayed visible beside a blocker. MockAgent's `write` needs an absolute path. Screenshots were
+captured; the test app was quit, the clipboard restored and temporary files removed. The owner can remove
+the notification entry of `io.github.anesthetised.Agenthesia.mergetest` in System Settings → Notifications
+(its first-run prompt appeared). Not verified: VoiceOver, commit signing (needs the owner's key and
+pinentry), and a hook that hangs.
 
 ### M7 slices (2026-10-17)
 

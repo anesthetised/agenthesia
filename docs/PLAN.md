@@ -206,9 +206,18 @@ notices from the manager and the sessions the windows report as shown, and drive
 place or opening the session's window with `openWindow(value:)`. Tests cover derivation, identity and
 removal, shown-window suppression, the badge, one-time authorization, `canDecide`, the payload and button
 routing, URL parsing and window activation; removing the shown-session filter fails the suppression test.
-Scripted checks of the built app: with a blank window, several windows, no window and a cold start the URL
-shows the session once and leaves no stray launch window. The system permission prompt, real banners with
-their Allow once and Reject buttons, the tap and the badge are manual checks.
+Checks of the built app, scripted because the session had no computer-use tools (see AGENTS.md): with a
+blank window, several windows, no window and a cold start the URL shows the session once and leaves no stray
+launch window. With a MockAgent session and Finder in front: the system permission prompt appears at the
+first session start; a permission request posts a banner with Allow once and Reject, and both buttons
+record `allow` and `reject`, clear the banner and the Dock badge, and leave the app in the background; a
+turn that ends while the session is not shown posts the finished banner, and one that ends while it is shown
+does not. The check found that the badge never appeared because authorization omitted `.badge`; with it the
+Dock shows `1` while a request waits and clears on any answer. A copy built with another bundle identifier
+gave a fresh authorization to prove that. Not verified: tapping the banner itself, since neither a
+synthetic click nor its accessibility press reached the delegate (the URL it opens was checked directly,
+and `NSWorkspace.open` brings the app forward), VoiceOver, and the first-run prompt text. The three
+`agh-attn-check` sessions the checks left in history cannot be deleted, because events are append-only.
 
 Pitfall: `handlesExternalEvents(preferring: [], allowing: ["*"])` is what stops the system opening a new
 window beside the one that handles the URL; without it every tap added a blank window.

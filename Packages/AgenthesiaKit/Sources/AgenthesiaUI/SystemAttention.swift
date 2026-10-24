@@ -87,7 +87,7 @@ import UserNotifications
     }
 
     func requestAuthorization() async {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
     }
 
     func post(_ notice: AttentionNotice) {

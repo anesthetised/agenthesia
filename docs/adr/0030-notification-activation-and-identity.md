@@ -39,8 +39,9 @@ window. It also leaves open what identifies a notification, so that a stale one 
 - **Buttons.** A button re-reads the pending request when pressed, picks the offered `allow_once` or
   `reject_once` option, and does nothing for a request that is gone. Buttons never bring the app forward.
 - **Badge and permission.** The badge counts sessions that need input whether or not they are shown.
-  Authorization is requested once, when the first session appears in the process; the system remembers the
-  answer.
+  Authorization is requested once, when the first session appears in the process, for alerts, sounds and
+  badges; without the badge option the Dock never shows the count, and macOS then offers no *Badge app
+  icon* switch. The system remembers the answer.
 
 ## Alternatives
 

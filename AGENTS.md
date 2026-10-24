@@ -68,6 +68,13 @@ the agent so no real agent or tokens are involved.
   show in the tree, so check `CGWindowListCopyWindowInfo`); `screencapture -x` takes screenshots. Run the
   action and the screenshot in one command, because other apps take focus between commands. Keys and
   clicks go to whichever app is frontmost, so activate Agenthesia first and verify it before sending input.
+- Scripting pitfalls: setting a text field's value through accessibility does not update SwiftUI state
+  (the Start button stays disabled), and `keystroke` follows the active keyboard layout, so with a
+  non-Latin layout it types the wrong characters. Select a field with `set focused`, put the text on the
+  clipboard (restore it afterwards) and use the Edit menu's Select All and Paste. System permission
+  prompts and notification banners expose their buttons as accessibility actions of the banner group
+  (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. Synthetic
+  clicks and `AXPress` on a banner did not reach the app.
 - **Ask the owner to leave the machine alone** while a scripted or computer-use check runs, and state
   when it ends. Never type into the owner's apps, and never touch their real data: use a temporary
   directory and, for history, a copy or a clearly marked temporary row removed afterwards.

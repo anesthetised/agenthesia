@@ -69,12 +69,14 @@ are retained after close or failed startup; review (#42) and merge (#43) remain 
 Discard (ADR-0032) goes through `SessionManager.discard`. It refuses while the session is starting or
 being continued, coalesces concurrent calls and makes Continue unavailable while it runs. It ends the
 session's owners, then `SessionWorkspace.remove` runs `git worktree remove --force` (or `git worktree prune`
-for a directory deleted by hand) and `git branch -D agenthesia/<id>` in the project checkout; a missing
-branch is not an error, so a failed attempt can be retried. `SessionWorkspace.Worktree` only matches a
-working directory at or inside `<worktrees root>/<project directory name>/<session id>`, so non-Git
+for a directory deleted by hand) and `git branch -D agenthesia/<id>` in the project checkout; once the
+directory is gone, a missing branch is not an error, so a failed attempt can be retried.
+`SessionWorkspace.Worktree` only matches a working directory at or inside
+`<worktrees root>/<project directory name>/<session id>`, so non-Git
 sessions and legacy sessions in the user's own checkout never lose files, and a directory at that path
-which Git does not list as a worktree is left in place. Only after Git succeeds is
-`SessionEvent.worktreeRemoved(.discarded)` appended; replay sets `TranscriptState.worktreeOutcome`, adds
+which Git does not list as a worktree is left in place. An existing worktree must still be on the exact
+`agenthesia/<id>` branch; another branch, detached HEAD or a failed branch check prevents removal. Only after
+Git succeeds is `SessionEvent.worktreeRemoved(.discarded)` appended; replay sets `TranscriptState.worktreeOutcome`, adds
 a notice, and `LiveSession` refuses to continue such a session. Nothing is appended to a session after
 its outcome, so `SessionLibrary.worktreeOutcomes` reads each session's last event
 (`PersistenceStore.lastEvents`, one index lookup per session) for the sidebar and menus without replaying

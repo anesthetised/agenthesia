@@ -213,8 +213,8 @@ import SwiftUI
         pendingDiscard = PendingDiscard(session: session, summary: summary)
     }
     /// Discards the confirmed worktree; a window showing the session then shows it read-only with the outcome.
-    func confirmDiscard() async {
-        guard let pending = pendingDiscard else { return }
+    /// The alert supplies its captured value because dismissal clears `pendingDiscard` before this task runs.
+    func confirmDiscard(_ pending: PendingDiscard) async {
         pendingDiscard = nil
         let id = pending.session.id
         let shown = displayed?.session.id == id || owner?.sessionID == id

@@ -160,8 +160,8 @@ public struct RootView: View {
             model.pendingDiscard?.title ?? "",
             isPresented: $model.isConfirmingDiscard,
             presenting: model.pendingDiscard
-        ) { _ in
-            Button("Discard", role: .destructive) { Task { await model.confirmDiscard() } }
+        ) { pending in
+            Button("Discard", role: .destructive) { Task { await model.confirmDiscard(pending) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text($0.message)

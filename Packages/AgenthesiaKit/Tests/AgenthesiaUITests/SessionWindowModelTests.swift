@@ -468,7 +468,8 @@ import Testing
 }
 
 @MainActor @Suite(.timeLimit(.minutes(1))) struct DiscardWorktreeWindowTests {
-    @Test func discardShowsTheSessionReadOnlyInEveryWindow() async throws {
+    @Test(arguments: [false, true])
+    func discardShowsTheSessionReadOnlyInEveryWindow(dismissedBeforeAction: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-discard-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
         let repo = directory.appending(path: "repo")
@@ -513,7 +514,14 @@ import Testing
             pending.message
                 == "0 uncommitted files and 0 commits on agenthesia/\(record.id.uuidString.lowercased()) will be deleted. This cannot be undone."
         )
-        await model.confirmDiscard()
+        if dismissedBeforeAction {
+            // SwiftUI dismisses the alert before its button's asynchronous task gets to run.
+            model.isConfirmingDiscard = false
+            #expect(model.pendingDiscard == nil)
+            #expect(FileManager.default.fileExists(atPath: record.workingDirectory))
+            #expect(owner.isLive)
+        }
+        await model.confirmDiscard(pending)
         #expect(model.pendingDiscard == nil && model.alertMessage == nil)
         #expect(sessions.owners.isEmpty)
         #expect(model.restored?.transcript.worktreeOutcome == .discarded)

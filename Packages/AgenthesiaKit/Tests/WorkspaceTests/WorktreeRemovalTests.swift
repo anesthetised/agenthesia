@@ -89,14 +89,38 @@ import Testing
         #expect(try await fixture.branches() == ["main"])
     }
 
-    @Test func aMissingBranchIsNotAnError() async throws {
+    @Test func aMissingWorktreeAndBranchAreNotAnError() async throws {
         let fixture = try await Fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let (_, worktree) = try await fixture.prepare()
-        try await SessionWorkspace.git(["checkout", "-q", "--detach"], in: worktree.directory)
+        try await SessionWorkspace.git(["worktree", "remove", worktree.directory.path], in: fixture.repo)
         try await SessionWorkspace.git(["branch", "-D", worktree.branch], in: fixture.repo)
         try await SessionWorkspace.remove(worktree)
         #expect(!FileManager.default.fileExists(atPath: worktree.directory.path))
+    }
+
+    @Test(arguments: ["user-work", "agenthesia/another-session", "detached", "missing-branch"])
+    func leavesAWorktreeOffItsSessionBranchInPlace(state: String) async throws {
+        let fixture = try await Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let (_, worktree) = try await fixture.prepare()
+        if state == "detached" || state == "missing-branch" {
+            try await SessionWorkspace.git(["checkout", "-q", "--detach"], in: worktree.directory)
+            if state == "missing-branch" {
+                try await SessionWorkspace.git(["branch", "-D", worktree.branch], in: fixture.repo)
+            }
+        } else {
+            try await SessionWorkspace.git(["checkout", "-qb", state], in: worktree.directory)
+        }
+        let keep = worktree.directory.appending(path: "keep.txt")
+        try "uncommitted work".write(to: keep, atomically: true, encoding: .utf8)
+        let branches = try await fixture.branches()
+        await #expect(throws: SessionWorkspace.WorkspaceError.self) { try await SessionWorkspace.remove(worktree) }
+        #expect(FileManager.default.fileExists(atPath: keep.path))
+        #expect(try await fixture.branches() == branches)
+        #expect(
+            try await SessionWorkspace.git(["worktree", "list"], in: fixture.repo).contains(worktree.directory.path)
+        )
     }
 
     @Test func leavesAnUnregisteredDirectoryInPlace() async throws {

@@ -71,7 +71,7 @@ extension SessionWorkspace {
     }
 
     /// Removes the worktree and its branch; idempotent, so a failed attempt can be retried. A directory deleted
-    /// by hand is pruned. A directory at the expected path that Git does not list as a worktree is left alone.
+    /// by hand is pruned. An existing directory must be a listed worktree on this session's branch.
     public static func remove(_ worktree: Worktree) async throws {
         try await blocking {
             let project = worktree.projectDirectory
@@ -89,6 +89,15 @@ extension SessionWorkspace {
                     throw WorkspaceError(
                         message:
                             "“\(worktree.directory.path)” is not a worktree of “\(project.path)”; it was left in place."
+                    )
+                }
+                // Refuse detached HEAD and any failure to verify the branch, as well as another named branch.
+                guard
+                    (try? git(["symbolic-ref", "--quiet", "HEAD"], in: worktree.directory))
+                        == "refs/heads/\(worktree.branch)"
+                else {
+                    throw WorkspaceError(
+                        message: "The worktree is no longer on “\(worktree.branch)”. It was left in place."
                     )
                 }
                 try git(["worktree", "remove", "--force", worktree.directory.path], in: project)

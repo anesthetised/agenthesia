@@ -94,7 +94,8 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
     func requestAuthorization() async
     func post(_ notice: AttentionNotice)
     func remove(ids: [String])
-    func setBadge(_ count: Int)
+    /// `badge` counts the sessions that need input; `live` counts the sessions that are running at all.
+    func setDock(badge: Int, live: Int)
 }
 
 /// Keeps notifications and the Dock badge in step with the sessions (ADR-0026, ADR-0030).
@@ -108,6 +109,7 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
         let failed: Set<UUID>
         let shown: Set<UUID>
         let badge: Int
+        let live: Int
     }
 
     private let sessions: SessionManager
@@ -141,7 +143,8 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
                 notices: AttentionNotice.derive(sessions.owners, shown: sessions.shownSessionIDs),
                 failed: AttentionNotice.failedSessions(sessions.owners),
                 shown: sessions.shownSessionIDs,
-                badge: sessions.owners.count { $0.activity == .needsInput }
+                badge: sessions.owners.count { $0.activity == .needsInput },
+                live: sessions.owners.count { $0.activity != .failed }
             )
         } onChange: { [weak self] in
             Task { @MainActor in self?.track() }
@@ -167,7 +170,7 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
         if !obsolete.isEmpty { sink.remove(ids: obsolete.sorted()) }
         for notice in notices where !posted.contains(notice.id) { sink.post(notice) }
         posted = wanted
-        sink.setBadge(snapshot.badge)
+        sink.setDock(badge: snapshot.badge, live: snapshot.live)
     }
 
     private func isWanted(_ notice: AttentionNotice) -> Bool {

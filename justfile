@@ -45,6 +45,10 @@ app configuration="Debug":
 run: app
     open {{derived_data}}/Build/Products/Debug/Agenthesia.app
 
+# Render the app icon PNGs into the asset catalog from the Swift drawing
+icon:
+    swift run --package-path {{package}} icon-render "$PWD"
+
 # Run and save sequential fresh-process measurements; agree on resource use before running
 [positional-arguments]
 bench *args:

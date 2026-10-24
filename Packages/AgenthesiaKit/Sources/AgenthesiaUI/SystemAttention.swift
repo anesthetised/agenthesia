@@ -2,7 +2,7 @@ import AgenthesiaCore
 import AppKit
 import UserNotifications
 
-/// Posts notices to Notification Center and shows the Dock badge (ADR-0026, ADR-0030).
+/// Posts notices to Notification Center and shows the Dock badge and tile (ADR-0026, ADR-0030, ADR-0031).
 @MainActor final class SystemAttention: NSObject, AttentionSink, UNUserNotificationCenterDelegate {
     /// What a notification carries and what its buttons do. Pure, so it is tested without the system.
     struct Payload: Equatable {
@@ -62,16 +62,20 @@ import UserNotifications
     private let center: UNUserNotificationCenter
     private let open: (URL) -> Void
     private let badge: (String?) -> Void
+    private let icon: (DockIconState) -> Void
+    private var shownIcon: DockIconState?
     weak var attention: SessionAttention?
 
     init(
         center: UNUserNotificationCenter = .current(),
         open: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
-        badge: @escaping (String?) -> Void = { NSApp.dockTile.badgeLabel = $0 }
+        badge: @escaping (String?) -> Void = { NSApp.dockTile.badgeLabel = $0 },
+        icon: ((DockIconState) -> Void)? = nil
     ) {
         self.center = center
         self.open = open
         self.badge = badge
+        self.icon = icon ?? DockTileRenderer().show
         super.init()
         center.delegate = self
         // Sessions end with the app, so a banner from an earlier run can only lead nowhere.
@@ -110,7 +114,14 @@ import UserNotifications
         center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
-    func setBadge(_ count: Int) { badge(count > 0 ? String(count) : nil) }
+    func setDock(badge count: Int, live: Int) {
+        badge(count > 0 ? String(count) : nil)
+        // Redrawing the tile is not free, and the same state arrives on every change of any session.
+        let state = DockIconState(live: live, awake: count > 0)
+        guard state != shownIcon else { return }
+        shownIcon = state
+        icon(state)
+    }
 
     func handle(action: String, userInfo: [String: String]) {
         switch Payload.route(action: action, userInfo: userInfo) {

@@ -3,16 +3,10 @@ public import SwiftUI
 /// The app icon: a sleepy moon under stars, one lit star per live session. The moon wakes while a session
 /// needs the user (ADR-0031).
 ///
-/// The Dock tile shows this drawing while sessions run. `App/AppIcon.icon` (the layers the system composes for the
+/// The Dock tile shows this drawing while sessions run, always in the sky of the Default icon style.
+/// `App/AppIcon.icon` (the layers the system composes for the
 /// app icon) and `docs/images/logo-*.svg` (README) repeat it as static vector art, so change them together.
 public struct AppIcon: View {
-    public nonisolated enum Style: Sendable {
-        /// The app icon itself.
-        case sky
-        /// The same icon for a dark background: README on a dark theme and the Dock tile in Dark Mode.
-        case night
-    }
-
     /// Places for stars; sessions beyond them are shown by the Dock badge instead.
     public static let maxStars = 5
 
@@ -21,8 +15,8 @@ public struct AppIcon: View {
     /// - Parameters:
     ///   - stars: Lit stars, 0 to `maxStars`.
     ///   - awake: Eyes open, for a session that needs the user.
-    public init(stars: Int, awake: Bool = false, style: Style = .sky) {
-        drawing = Drawing(stars: max(0, min(stars, Self.maxStars)), awake: awake, style: style)
+    public init(stars: Int, awake: Bool = false) {
+        drawing = Drawing(stars: max(0, min(stars, Self.maxStars)), awake: awake)
     }
 
     public var body: some View {
@@ -38,7 +32,6 @@ extension AppIcon {
     nonisolated struct Drawing: Sendable {
         let stars: Int
         let awake: Bool
-        let style: Style
 
         private struct Palette {
             let sky: [Color]
@@ -55,13 +48,6 @@ extension AppIcon {
             cheek: rgb(0xFB923C),
             star: .white
         )
-        private static let night = Palette(
-            sky: [rgb(0x1A2852), rgb(0x060A1A)],
-            moon: [rgb(0xFFF2C4), rgb(0xF2B93B)],
-            face: rgb(0x3D2600),
-            cheek: rgb(0xF97316),
-            star: rgb(0xFFE7A3)
-        )
         private static func rgb(_ hex: UInt32) -> Color {
             Color(
                 red: Double((hex >> 16) & 0xFF) / 255,
@@ -76,7 +62,7 @@ extension AppIcon {
         ]
 
         func draw(_ context: inout GraphicsContext, size: CGSize) {
-            let palette = style == .sky ? Self.sky : Self.night
+            let palette = Self.sky
             let side = min(size.width, size.height)
             // 824 of 1024 is the body of a macOS icon; the rest is margin for the shadow.
             let body = side * 824 / 1024
@@ -118,7 +104,6 @@ extension AppIcon {
 
             let tile = RoundedRectangle(cornerRadius: body * 0.225, style: .continuous)
                 .path(in: CGRect(origin: origin, size: CGSize(width: body, height: body)))
-            let night = style == .night
 
             context.drawLayer { layer in
                 layer.addFilter(.shadow(color: .black.opacity(0.3), radius: body * 0.025, x: 0, y: body * 0.012))
@@ -128,9 +113,7 @@ extension AppIcon {
             context.fill(tile, with: gradient(palette.sky, from: 0, to: 100))
 
             context.drawLayer { layer in
-                layer.addFilter(
-                    .shadow(color: .black.opacity(night ? 0.5 : 0.2), radius: 2 * unit, x: 0, y: 2 * unit)
-                )
+                layer.addFilter(.shadow(color: .black.opacity(0.2), radius: 2 * unit, x: 0, y: 2 * unit))
                 // A full moon with a bite taken out is a crescent thick enough to hold a face.
                 let crescent = ellipse(46, 54, 30, 30).subtracting(ellipse(66, 37, 22, 22))
                 layer.fill(crescent, with: gradient(palette.moon, from: 24, to: 84))
@@ -173,11 +156,7 @@ extension AppIcon {
                     endPoint: point(0, 100)
                 )
             )
-            context.stroke(
-                tile,
-                with: .color(night ? .white.opacity(0.14) : .black.opacity(0.07)),
-                lineWidth: 1.4 * unit
-            )
+            context.stroke(tile, with: .color(.black.opacity(0.07)), lineWidth: 1.4 * unit)
         }
     }
 }

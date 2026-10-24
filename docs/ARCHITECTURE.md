@@ -178,7 +178,7 @@ Notifications and the Dock badge follow [ADR-0030](adr/0030-notification-activat
 delegate creates it with `SystemAttention` (UI, `UserNotifications` and the Dock tile) inside an app bundle.
 The Dock tile follows [ADR-0031](adr/0031-app-icon-and-dock-tile.md): `AttentionSink.setDock(badge:live:)`
 reaches `SystemAttention`, which draws `AppIcon` (UI) into the tile while sessions are live, one star each, and
-removes it otherwise, in the night sky while the app's appearance is dark. The app icon itself is the layered
+removes it otherwise. The app icon itself is the layered
 `App/AppIcon.icon`, which the system composes for each icon style.
 Windows report the session they show while their scene appears active. A tap opens
 `agenthesia://session/<id>` (declared in `App/Info.plist`), which `RootView` handles with `onOpenURL`.

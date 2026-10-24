@@ -42,12 +42,11 @@ import Testing
         #expect(image.colorAt(x: 64, y: 64)?.alphaComponent == 1)
     }
 
-    @Test func starsEyesAndStyleChangeTheDrawing() throws {
+    @Test func starsAndEyesChangeTheDrawing() throws {
         let base = AppIcon(stars: 2)
         #expect(try difference(base, AppIcon(stars: 2)) == 0)
         #expect(try difference(base, AppIcon(stars: 3)) > 0)
         #expect(try difference(base, AppIcon(stars: 2, awake: true)) > 0)
-        #expect(try difference(base, AppIcon(stars: 2, style: .night)) > 0)
     }
 
     @Test func starsBeyondTheSlotsAreClamped() throws {
@@ -61,13 +60,5 @@ import Testing
         #expect(DockIconState(live: 3, awake: false).stars == 3)
         #expect(DockIconState(live: 12, awake: true).stars == AppIcon.maxStars)
         #expect(DockIconState(live: 2, awake: false) != DockIconState(live: 2, awake: true))
-    }
-
-    @Test func theDockTileUsesTheNightSkyInDarkMode() throws {
-        #expect(AppIcon.Style(try #require(NSAppearance(named: .darkAqua))) == .night)
-        #expect(AppIcon.Style(try #require(NSAppearance(named: .aqua))) == .sky)
-        // High-contrast variants resolve to their base appearance.
-        #expect(AppIcon.Style(try #require(NSAppearance(named: .accessibilityHighContrastDarkAqua))) == .night)
-        #expect(AppIcon.Style(try #require(NSAppearance(named: .accessibilityHighContrastAqua))) == .sky)
     }
 }

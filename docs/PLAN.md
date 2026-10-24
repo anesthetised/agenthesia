@@ -247,11 +247,12 @@ variants), so macOS 26 can build the Default, Dark and Tinted renditions; an `ap
 drops its dark entries. `AppIcon` (UI) draws a sleepy moon with up to five stars for the Dock tile, README shows
 the static `docs/images/logo-light.svg` and `logo-dark.svg`, and the three are kept in step by hand.
 `AttentionSink.setDock(badge:live:)` replaces `setBadge`, and `SystemAttention` draws the tile while sessions
-are live: one star per session that has not failed, open eyes while one needs input, the night sky in Dark Mode,
-and the icon from `AppIcon.icon` back when none runs.
+are live: one star per session that has not failed, open eyes while one needs input, and the icon from
+`AppIcon.icon` back when none runs. The tile is always the light sky: the Dark, Clear and Tinted icon styles are
+the system's, and the app has no public way to read them (see the ADR). The version that followed the app's
+appearance is kept at the tag `app-icon-dark-mode-tile`.
 
-Tests cover the stars' clamping, the eyes, the style, the style chosen for each appearance, the transparent
-margin and the live count the sink receives (a failed session stops counting). Rendering is stable to the eye but
+Tests cover the stars' clamping, the eyes, the transparent margin and the live count the sink receives (a failed session stops counting). Rendering is stable to the eye but
 not to the byte: the same icon drawn after a few others differs in rounding, so tests compare pixels with a
 tolerance. Checked in a built process, not in the app: a scratch executable put `NSHostingView<AppIcon>` into
 `NSApp.dockTile.contentView`, and a screenshot of the Dock showed the tile at the size of its neighbours, asleep
@@ -262,8 +263,7 @@ Services kept the Dock's generic icon for an already registered build path until
 the bundle.
 Not verified: the whole path with a real session in the running app (it would add a session to the owner's
 history, which cannot be deleted), how the Dark, Clear and Tinted renditions look in the system (the Icon Composer
-file was written by hand and only compiled, and switching the owner's icon style was not done), VoiceOver, and the
-live tile beside system icons in those styles.
+file was written by hand and only compiled, and switching the owner's icon style was not done) and VoiceOver.
 
 ### Prompt error recovery (#117)
 

@@ -1,9 +1,18 @@
-# Agenthesia
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+    <img src="docs/images/logo-light.svg" alt="Agenthesia, a sleepy moon under three stars" width="128">
+  </picture>
+</p>
 
-[![CI](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml)
-[![Coverage](https://raw.githubusercontent.com/anesthetised/agenthesia/badges/coverage.svg)](https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml)
+<h1 align="center">Agenthesia</h1>
 
-A native, opinionated macOS client for coding agents.
+<p align="center">A native, opinionated macOS client for coding agents.</p>
+
+<p align="center">
+  <a href="https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml"><img src="https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/anesthetised/agenthesia/actions/workflows/ci.yml"><img src="https://raw.githubusercontent.com/anesthetised/agenthesia/badges/coverage.svg" alt="Coverage"></a>
+</p>
 
 Agenthesia speaks the [Agent Client Protocol](https://agentclientprotocol.com) (ACP), so it works with
 any ACP-compatible agent — Claude, Codex, Gemini CLI and many more. It does not ship its own agent:

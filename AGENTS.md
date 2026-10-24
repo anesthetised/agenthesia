@@ -127,6 +127,9 @@ the agent so no real agent or tokens are involved.
 - Keep issues accurate: apply labels and a milestone, tick checkboxes as their items land, and link
   commits and pull requests with `Closes`/`Refs`.
 - When planning work, label each issue with its model tier (`agent:light` or `agent:strong`).
+- A pull request refers to the issue it belongs to and takes that issue's milestone and its type labels
+  (`enhancement`, `bug`, `documentation`, …); the model-tier labels stay on issues. When the change
+  delivers only part of an issue, use `Refs` and leave the issue open. When no issue fits, open one first.
 
 ## Code
 

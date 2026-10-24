@@ -9,6 +9,7 @@ import Testing
     private(set) var live: [String: AttentionNotice] = [:]
     private(set) var posts: [AttentionNotice] = []
     private(set) var badge = 0
+    private(set) var liveSessions = 0
     private(set) var authorizations = 0
 
     /// While set, `requestAuthorization` waits, as it does while the system prompt is open.
@@ -29,7 +30,10 @@ import Testing
         live[notice.id] = notice
     }
     func remove(ids: [String]) { for id in ids { live[id] = nil } }
-    func setBadge(_ count: Int) { badge = count }
+    func setDock(badge: Int, live: Int) {
+        self.badge = badge
+        liveSessions = live
+    }
 }
 
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionAttentionTests {
@@ -310,6 +314,25 @@ import Testing
         let owner = manager.resume(record)
         await owner.startup?.value
         return (owner, record)
+    }
+
+    @Test func theDockCountsLiveSessionsAndASessionThatFailedStopsCounting() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sink = RecordingSink()
+        let attention = SessionAttention(sessions: manager, sink: sink)
+        defer { withExtendedLifetime(attention) {} }
+        #expect(sink.liveSessions == 0)
+        let first = manager.start(directory: directory, agent: agent)
+        let second = manager.start(directory: directory, agent: agent)
+        await first.startup?.value
+        await second.startup?.value
+        await eventually { sink.liveSessions == 2 }
+        await second.send("exit")
+        await eventually { sink.liveSessions == 1 }
+        await manager.end(first)
+        await manager.end(second)
+        await eventually { sink.liveSessions == 0 }
     }
 
     @Test func aStartupThatFailedBeforeHavingAControllerStillNotifies() async throws {

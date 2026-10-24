@@ -1,0 +1,70 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.61176,0.78824,1.00000,1.00000",
+          "srgb:0.20784,0.38824,0.84706,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.10196,0.15686,0.32157,1.00000",
+          "srgb:0.02353,0.03922,0.10196,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "moon.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "moon-night.svg"
+            }
+          ],
+          "name": "moon"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "stars.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "stars-night.svg"
+            }
+          ],
+          "name": "stars"
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

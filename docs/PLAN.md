@@ -239,6 +239,32 @@ whatever the app does. With it off, three windows (launch form plus two saved se
 Quit and relaunch with no agent started, and File → New Window twice opened two separate launch forms.
 The context menu itself is a manual check (the accessibility tree did not expose it to scripting).
 
+#### App icon and Dock tile (#45)
+
+The icon half of #45; its first-run flow is separate work. [ADR-0031](adr/0031-app-icon-and-dock-tile.md) is
+accepted. The app icon is the layered `App/AppIcon.icon` (sky fill, moon and stars as SVG layers with night
+variants), so macOS 26 can build the Default, Dark and Tinted renditions; an `appiconset` cannot, because `actool`
+drops its dark entries. `AppIcon` (UI) draws a sleepy moon with up to five stars for the Dock tile, README shows
+the static `docs/images/logo-light.svg` and `logo-dark.svg`, and the three are kept in step by hand.
+`AttentionSink.setDock(badge:live:)` replaces `setBadge`, and `SystemAttention` draws the tile while sessions
+are live: one star per session that has not failed, open eyes while one needs input, and the icon from
+`AppIcon.icon` back when none runs. The tile is always the light sky: the Dark, Clear and Tinted icon styles are
+the system's, and the app has no public way to read them (see the ADR). The version that followed the app's
+appearance is kept at the tag `app-icon-dark-mode-tile`.
+
+Tests cover the stars' clamping, the eyes, the transparent margin and the live count the sink receives (a failed session stops counting). Rendering is stable to the eye but
+not to the byte: the same icon drawn after a few others differs in rounding, so tests compare pixels with a
+tolerance. Checked in a built process, not in the app: a scratch executable put `NSHostingView<AppIcon>` into
+`NSApp.dockTile.contentView`, and a screenshot of the Dock showed the tile at the size of its neighbours, asleep
+with three stars and then awake with one star and the badge `1`. The `.icon` compiles with `actool`, and the
+built catalog holds Aqua, DarkAqua and Tintable stacks with the night layers and a separate dark gradient; the
+default rendition, viewed as the compiled `AppIcon.icns`, matches the design. After adding the first icon, Launch
+Services kept the Dock's generic icon for an already registered build path until `lsregister -f` re-registered
+the bundle.
+Not verified: the whole path with a real session in the running app (it would add a session to the owner's
+history, which cannot be deleted), how the Dark, Clear and Tinted renditions look in the system (the Icon Composer
+file was written by hand and only compiled, and switching the owner's icon style was not done) and VoiceOver.
+
 ### Prompt error recovery (#117)
 
 [ADR-0027](adr/0027-recoverable-prompt-errors.md) is accepted and implemented on

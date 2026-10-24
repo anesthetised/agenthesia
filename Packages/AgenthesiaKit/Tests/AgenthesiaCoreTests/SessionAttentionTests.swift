@@ -55,7 +55,8 @@ import Testing
                 Issue.record("Timed out waiting for the condition", sourceLocation: sourceLocation)
                 return
             }
-            await Task.yield()
+            // Sleep rather than spin: a busy loop starves the other suites on a small CI runner.
+            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 
@@ -255,14 +256,14 @@ import Testing
         let sink = RecordingSink()
         let attention = SessionAttention(sessions: manager, sink: sink)
         defer { withExtendedLifetime(attention) {} }
-        await Task.yield()
+        try await Task.sleep(for: .milliseconds(50))
         #expect(sink.authorizations == 0)
         let first = manager.start(directory: directory, agent: agent)
         await eventually { sink.authorizations == 1 }
         let second = manager.start(directory: directory, agent: agent)
         await first.startup?.value
         await second.startup?.value
-        await Task.yield()
+        try await Task.sleep(for: .milliseconds(50))
         #expect(sink.authorizations == 1)
         await manager.closeAll()
     }
@@ -341,7 +342,7 @@ import Testing
         manager.setShown(record.id, in: window)
         await eventually { sink.live.isEmpty }
         manager.setShown(nil, in: window)
-        for _ in 0..<20 { await Task.yield() }
+        try await Task.sleep(for: .milliseconds(100))
         #expect(sink.live.isEmpty && sink.posts.count == 1)
         await manager.end(owner)
     }

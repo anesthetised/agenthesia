@@ -134,8 +134,8 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 | # | Issue | Depends on | Tier | Acceptance in short |
 |---|---|---|---|---|
 | 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Merged in #123 |
-| 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation. Implemented and verified on `feat/worktree-discard` |
-| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch |
+| 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation. Merged in #124 |
+| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch. Implemented on `feat/worktree-review`; verification below |
 | 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
 
 #42 and #44 can run in parallel in separate worktrees after #41; #43 reuses the removal and the event of
@@ -180,6 +180,43 @@ project checkout and other branch, retains the transcript, shows Discarded, and 
 repeated discard. After Quit/relaunch, selecting both sessions from history preserves those outcomes without
 starting an agent. Screenshots were captured. VoiceOver, system permission prompts and automatic window
 restoration were not checked.
+
+#42 implemented (2026-10-25): `SessionWorkspace.review` resolves the base branch's merge base and
+returns net working-tree changes, statuses and rename sources, plus nonignored untracked files.
+Without a base branch it uses `baseRevision`, or HEAD for legacy working changes; a missing base branch
+is an explicit error. `reviewContents` size-checks an immutable blob before loading it. Core's
+`SessionReview` loads the selected file only, applies `SessionFileDocument`'s UTF-8/NUL and 2 MiB limits
+to both sides, rejects outside symlinks and replaced roots, and retains a still-differing selection.
+The native review sheet opens from the Session menu (⌃⌘R; ⇧⌘R remains Resume Queue) and Changed Files.
+It shares `SessionFiles` invalidation, shows status and rename source, and renders through `UnifiedDiff`
+and the native Markdown preview off the main actor. Merge remains #43.
+
+The UI reference was T3's Changes entry point and
+[DiffPanel](https://github.com/pingdotgg/t3code/blob/main/apps/web/src/components/DiffPanel.tsx).
+A system sheet with a native selectable list and one unified diff follows VISION principles 2–3 and
+keeps the existing 740 pt main-window minimum; layout and base-selection settings are omitted under
+principle 6 and ADR-0032.
+
+Focused tests pass: committed/staged/unstaged/untracked changes, a base advanced independently,
+renames, deletion, subdirectory scope, base-revision and HEAD fallback, missing branch, bounded
+historical reads, binary and invalid UTF-8 contents, outside symlinks and root substitution. Replacing
+the merge-base calculation with the base branch tip makes the divergence test fail (then restored).
+Hosted native-view tests pass in Aqua and Dark Aqua at 640 and 900 pt, covering the file list, Down-arrow
+navigation, two-way selection, selectable read-only diff text, watcher-driven updates with selection
+retained, binary notices and command eligibility. `swiftui-pro` review found no blocking issues.
+`just lint`, full `just test` (650 Swift tests and 15 script tests) and `just coverage` pass all gates
+(Workspace 98.0%, Core 98.4%, Persistence 100%); `just app` builds.
+
+Computer-use checks in the built app with one MockAgent session and a temporary Git repository pass:
+⌃⌘R and the Changed Files action open review; committed, staged, unstaged, added, deleted, renamed and
+untracked files show correctly, while an unrelated base-branch commit is omitted. Tab into the list
+and Up/Down change the selected diff. An external edit refreshes its contents without moving selection.
+Binary and oversized files show their notices. Renaming the base branch produces an error naming it;
+restoring it reloads review. End Session and Quit/relaunch preserve review for read-only saved history
+without starting an agent. Light and dark screenshots were captured; the light pass used a process-only
+`NSRequiresAquaSystemAppearance` argument, without changing System Settings. The test app was quit and
+temporary repository/worktree files removed. No code fix was needed. VoiceOver, system permission
+prompts and automatic window restoration were not checked.
 
 ### M7 slices (2026-10-17)
 

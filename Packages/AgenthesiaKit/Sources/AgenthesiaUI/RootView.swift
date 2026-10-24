@@ -35,8 +35,12 @@ public struct RootView: View {
             List(selection: $model.sidebarSelection) {
                 SessionSidebarList(model: model)
                 if !model.showingSetup, filesMatchSession {
-                    SessionChangedFiles(files: model.files) { openFile($0, for: $1) }
-                        .selectionDisabled(true)
+                    SessionChangedFiles(
+                        files: model.files,
+                        onOpen: { openFile($0, for: $1) },
+                        onReview: model.openReview
+                    )
+                    .selectionDisabled(true)
                 }
             }
             .navigationTitle("Agenthesia")
@@ -153,7 +157,10 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            finishEditing(); showingQuickOpen = false; fileQuery = ""
+            finishEditing(); showingQuickOpen = false; fileQuery = ""; model.review = nil
+        }
+        .onChange(of: model.files.sessionID) {
+            if model.review?.id != model.files.sessionID { model.review = nil }
         }
         .onChange(of: fileQuery) { model.files.setQuery(fileQuery) }
         .alert(
@@ -183,6 +190,9 @@ public struct RootView: View {
                 },
                 onDismiss: { showingQuickOpen = false }
             )
+        }
+        .sheet(item: $model.review) { review in
+            SessionReviewView(review: review, files: model.files)
         }
     }
 

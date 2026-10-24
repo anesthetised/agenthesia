@@ -32,6 +32,17 @@ import SwiftUI
     private var selection = UUID()
     let sessions: SessionManager
     let files = SessionFiles()
+    var review: SessionReview?
+
+    var canReview: Bool {
+        !closed && !showingSetup && !isLoadingHistory && files.root != nil && files.isGitRepository
+            && files.sessionID == displayed?.session.id
+    }
+
+    func openReview() {
+        guard canReview, let session = displayed?.session, let root = files.root else { return }
+        review = SessionReview(session: session, root: root)
+    }
 
     init(sessions: SessionManager) { self.sessions = sessions }
     var library: SessionLibrary { sessions.library }
@@ -295,7 +306,7 @@ import SwiftUI
     }
     /// Detaches the window; its sessions keep running.
     func close() {
-        closed = true; selection = UUID(); files.close()
+        closed = true; selection = UUID(); files.close(); review = nil
         sessions.setShown(nil, in: self)
     }
 }

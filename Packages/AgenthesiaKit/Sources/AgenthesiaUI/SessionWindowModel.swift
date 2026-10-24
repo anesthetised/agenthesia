@@ -25,6 +25,11 @@ import SwiftUI
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
     var filesSession: SessionRecord? { displayed?.session ?? (owner?.isStarting == true ? owner?.resuming : nil) }
     var canStart: Bool { !closed }
+    /// The displayed session's identity, or the launch form while none is shown or still starting.
+    var target: WindowTarget {
+        guard !closed, !showingSetup, let id = displayed?.session.id ?? owner?.sessionID else { return .launch }
+        return .session(id)
+    }
     var canContinue: Bool {
         guard !closed, !showingSetup, !isLoadingHistory, let displayed, displayed.session.agentSessionID != nil else {
             return false
@@ -88,6 +93,14 @@ import SwiftUI
             case .saved(let record): AnyHashable(record.id)
             }
         }
+
+        /// The window value that shows this session; nil while a starting session has no identity yet.
+        var windowTarget: WindowTarget? {
+            switch self {
+            case .live(let owner): owner.sessionID.map(WindowTarget.session)
+            case .saved(let record): .session(record.id)
+            }
+        }
     }
 
     /// Wraps in exactly the order shown by SessionSidebarList, including Starting and saved history.
@@ -142,6 +155,16 @@ import SwiftUI
             projects = try await library.projects()
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
+    }
+    /// Shows the target as the window opens, including after relaunch; a vanished session opens the launch form.
+    func restore(_ target: WindowTarget) async {
+        guard case .session(let id) = target else { return }
+        await refresh()
+        if let record = history.first(where: { $0.id == id }) {
+            await showHistory(record)
+        } else if let live = sessions.owner(of: id) {
+            show(live)
+        }
     }
     func start(directory: URL, executable: String, arguments: [String]) {
         guard canStart else { return }

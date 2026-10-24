@@ -5,6 +5,8 @@ public import SwiftUI
 public struct RootView: View {
     @Environment(\.appearsActive) private var appearsActive
     @State private var model: SessionWindowModel
+    /// The window's persisted value: the system restores it after relaunch (ADR-0026).
+    @Binding private var target: WindowTarget
     @State private var prompt = ""
     @State private var attachments: [URL] = []
     @State private var editingQueueID: UUID?
@@ -17,9 +19,14 @@ public struct RootView: View {
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
-    public init(sessions: SessionManager) { self.init(model: SessionWindowModel(sessions: sessions)) }
+    public init(sessions: SessionManager, target: Binding<WindowTarget> = .constant(.launch)) {
+        self.init(model: SessionWindowModel(sessions: sessions), target: target)
+    }
 
-    init(model: SessionWindowModel) { _model = State(initialValue: model) }
+    init(model: SessionWindowModel, target: Binding<WindowTarget> = .constant(.launch)) {
+        _model = State(initialValue: model)
+        _target = target
+    }
 
     public var body: some View {
         @Bindable var model = model
@@ -124,6 +131,11 @@ public struct RootView: View {
         .onChange(of: viewingUnseenResult, initial: true) {
             if viewingUnseenResult { model.owner?.markSeen() }
         }
+        .task {
+            await model.restore(target)
+            target = model.target
+        }
+        .onChange(of: model.target) { target = model.target }
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {

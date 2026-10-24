@@ -15,7 +15,9 @@ Agenthesia is a native, opinionated macOS client for coding agents built on the 
   lands.
 
 Consult the user before implementing architectural decisions. Present alternatives and their trade-offs,
-recommend an approach, and challenge proposals when there are concrete reasons to disagree.
+recommend an approach, and challenge proposals when there are concrete reasons to disagree. Agents with
+a structured question tool (e.g. `AskUserQuestion`) use it for these consultations, batching the open
+decisions into one call with the recommended option first.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
 Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
 avoiding unnecessary complexity. When writing or changing SwiftUI or AppKit views, also run `swiftui-pro`

@@ -145,3 +145,62 @@ import Testing
     }
     func release() { continuation?.resume(); continuation = nil }
 }
+
+@MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct WindowRestorationTests {
+    private final class Box { var value: WindowTarget; init(_ value: WindowTarget) { self.value = value } }
+
+    private func host(_ model: SessionWindowModel, _ box: Box) -> (NSHostingView<RootView>, NSWindow) {
+        _ = NSApplication.shared
+        let binding = Binding(get: { box.value }, set: { box.value = $0 })
+        let host = NSHostingView(rootView: RootView(model: model, target: binding))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        return (host, window)
+    }
+
+    private func settle(_ host: NSView) async { for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() } }
+
+    @Test func restoredWindowShowsItsSessionAndPublishesSelectionChanges() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "restore-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        let store = try await sessions.library.store()
+        let project = ProjectRecord(name: "Project", rootPath: directory.path)
+        let agent = AgentInstallRecord(name: "Mock", executable: "unused")
+        let record = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            agentSessionID: "saved",
+            workingDirectory: project.rootPath
+        )
+        try await store.createProject(project)
+        try await store.createAgentInstall(agent)
+        try await store.createSession(record)
+
+        let model = SessionWindowModel(sessions: sessions)
+        let box = Box(.session(record.id))
+        let (host, window) = host(model, box)
+        defer { model.close(); window.close() }
+        await settle(host)
+        #expect(model.displayed?.status == .readOnly && model.canContinue)
+        #expect(box.value == .session(record.id))
+        model.showingSetup = true
+        await settle(host)
+        #expect(box.value == .launch)
+
+        let stale = SessionWindowModel(sessions: sessions)
+        let staleBox = Box(.session(UUID()))
+        let (staleHost, staleWindow) = self.host(stale, staleBox)
+        defer { stale.close(); staleWindow.close() }
+        await settle(staleHost)
+        #expect(stale.showingSetup && staleBox.value == .launch)
+    }
+}

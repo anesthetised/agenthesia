@@ -166,6 +166,17 @@ import SwiftUI
             show(live)
         }
     }
+    /// Shows a session a notification led to (ADR-0030). A blank launch form that is the only window
+    /// fills in place, which also covers an activation with no window open: the system makes that window
+    /// to receive the URL. Otherwise the session gets its own window, or the one that already shows it.
+    func activate(_ target: WindowTarget, isBlank: Bool, windowCount: Int, openWindow: (WindowTarget) -> Void) async {
+        guard !closed, case .session = target else { return }
+        if isBlank, self.target == .launch, windowCount <= 1 {
+            await restore(target)
+        } else {
+            openWindow(target)
+        }
+    }
     func start(directory: URL, executable: String, arguments: [String]) {
         guard canStart else { return }
         show(
@@ -208,7 +219,10 @@ import SwiftUI
         selectedHistoryID = nil; selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil
     }
     /// Detaches the window; its sessions keep running.
-    func close() { closed = true; selection = UUID(); files.close() }
+    func close() {
+        closed = true; selection = UUID(); files.close()
+        sessions.setShown(nil, in: self)
+    }
 }
 
 /// Owns the app's live sessions; AppKit waits for their event writes and process-group cleanup before
@@ -216,6 +230,7 @@ import SwiftUI
 public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     public internal(set) var sessions = SessionManager()
     private var terminating = false
+    private var attention: SessionAttention?
     var confirmQuit: (Int) -> Bool = { count in
         let alert = NSAlert()
         alert.messageText = "Quit Agenthesia?"
@@ -228,6 +243,15 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
         return alert.runModal() == .alertFirstButtonReturn
     }
     var terminationReply: (NSApplication) -> Void = { $0.reply(toApplicationShouldTerminate: true) }
+
+    public func applicationDidFinishLaunching(_ notification: Notification) {
+        // Notification Center needs an app bundle, so package tests and the CLI never reach it.
+        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+        let system = SystemAttention()
+        let attention = SessionAttention(sessions: sessions, sink: system)
+        system.attention = attention
+        self.attention = attention
+    }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !sessions.owners.isEmpty else { return .terminateNow }

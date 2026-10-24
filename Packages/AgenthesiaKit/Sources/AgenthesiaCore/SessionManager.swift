@@ -8,6 +8,9 @@ public final class SessionManager {
     /// Owners in start order until End Session removes them; failed owners stay with their error.
     public private(set) var owners: [LiveSession] = []
     public let library: SessionLibrary
+    /// What each window shows while it is key in the active app; those sessions need no notification.
+    private var shown: [ObjectIdentifier: UUID] = [:]
+    public var shownSessionIDs: Set<UUID> { Set(shown.values) }
     // Test seam applied to new owners; production uses the login-shell resolver.
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
 
@@ -40,6 +43,11 @@ public final class SessionManager {
     }
 
     public func owner(of id: UUID) -> LiveSession? { owners.first { $0.isLive && $0.sessionID == id } }
+
+    /// Records the session a window shows in the key window of the active app, or `nil` once it does not.
+    public func setShown(_ sessionID: UUID?, in window: AnyObject) {
+        shown[ObjectIdentifier(window)] = sessionID
+    }
 
     /// Closes the owner and removes it; its session remains in saved history.
     public func end(_ owner: LiveSession) async {

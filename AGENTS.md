@@ -19,8 +19,8 @@ recommend an approach, and challenge proposals when there are concrete reasons t
 a structured question tool (e.g. `AskUserQuestion`) use it for these consultations, batching the open
 decisions into one call with the recommended option first.
 Recommend when to switch reasoning effort and which level to use for the upcoming work.
-When recommending agents or planning work, respect the model tiers: **light** — Sol/High, Sonnet/High;
-**strong** — Astra/High, Opus/High.
+When recommending agents or planning work, respect the model tiers. Codex agents use Sol (**light**) and
+Astra (**strong**); Claude agents use Sonnet (**light**) and Opus (**strong**). Both tiers run at High effort.
 Use available skills when appropriate, especially `ponytail` for keeping coding solutions simple and
 avoiding unnecessary complexity. When writing or changing SwiftUI or AppKit views, also run `swiftui-pro`
 over them before committing.
@@ -53,6 +53,65 @@ Obtain the user's approval before running benchmarks; agree on the workload and 
 
 To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just mock-chat` for the bundled
 `MockAgent`.
+
+### Testing the running app
+
+Automated tests cover logic and hosted views; what only the real app shows (system prompts, banners, the
+Dock, menus, window opening and restoration) is checked in the built app, with the bundled `MockAgent` as
+the agent so no real agent or tokens are involved.
+
+- **Prefer computer use.** When the session has computer-use tools, drive `just run`'s app with them and
+  save screenshots as evidence. Request access for Agenthesia and any system surface involved, such as
+  Notification Center or System Settings.
+- **Without computer use**, script the app and say so. `osascript` with System Events reads the
+  accessibility tree and sets field values; a small CGEvent tool posts clicks (a right-click does not
+  show in the tree, so check `CGWindowListCopyWindowInfo`); `screencapture -x` takes screenshots. Run the
+  action and the screenshot in one command, because other apps take focus between commands. Keys and
+  clicks go to whichever app is frontmost, so activate Agenthesia first and verify it before sending input.
+- Scripting pitfalls: setting a text field's value through accessibility does not update SwiftUI state
+  (the Start button stays disabled), and `keystroke` follows the active keyboard layout, so with a
+  non-Latin layout it types the wrong characters. Select a field with `set focused`, put the text on the
+  clipboard (restore it afterwards) and use the Edit menu's Select All and Paste. System permission
+  prompts and notification banners expose their buttons as accessibility actions of the banner group
+  (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. To tap a
+  banner use System Events `click at {x, y}`; CGEvent clicks and `AXPress` did not reach the app.
+- **Use a fresh bundle identifier for anything gated by a permission.** macOS remembers the first answer,
+  and what a bundle asked for at that time (a missing `.badge` hid the Dock badge for good). Build a
+  copy: `xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug
+  -destination 'platform=macOS' -derivedDataPath .build/xcode-<name>
+  PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.<name>test build`. The repository stays
+  unchanged. Do this again for each change to the requested permissions.
+- A tapped notification is routed by bundle identifier, not to the process that posted it. Every
+  `Agenthesia.app` on the machine (other worktrees, derived data, deleted copies) is registered with
+  Launch Services, so a tap may launch *another copy* beside yours, with its own blank window. Tap-test
+  with a fresh bundle identifier, list the copies with `lsregister -dump | grep 'Agenthesia.app '`, and
+  watch `ps` for a second `Agenthesia` process after a tap. Apps launched from the command line are
+  matched by their process: address one with `unix id`, not `tell application "Agenthesia"`.
+- Test sessions need a Git repository with a commit (`git init`, then `git commit --allow-empty`), or the
+  start fails with `invalid reference: HEAD`. Name directories so they are recognisable, such as
+  `agh-<feature>-check`, and start as few sessions as possible: **history is append-only, so test sessions
+  can never be deleted** and stay in the owner's sidebar.
+- Guard every click and paste: check that the app under test is frontmost right before sending input and
+  abort otherwise, because the owner may be working at the same time. Click a banner only after it was
+  found.
+- A fixed screen coordinate is only valid for the window position it was measured at, so read the window
+  frame first. Repeat a system-dependent check before believing it, and break the code on purpose once to
+  see the check fail.
+- **Ask the owner to leave the machine alone** while a scripted or computer-use check runs, and state
+  when it ends. Never type into the owner's apps, and never touch their real data: use a temporary
+  directory, and do not tamper with the history database to remove test rows.
+- **Clean up before the pull request.** Tell the owner what only they can clean up in the chat, and keep
+  it out of commits, the pull request and the issue:
+  - remove temporary files and directories, `~/.agenthesia/worktrees/<name>`, and the extra derived data
+    folders;
+  - quit the app and restore the clipboard and any System Settings value you changed;
+  - check `git diff` and `git status` for leftover debug logging, `/tmp` paths and experiments, and rebuild
+    the committed state with `just app`;
+  - leftovers the owner has to remove: test sessions in history and the notification entry of each test
+    bundle identifier in System Settings → Notifications.
+- Windows restore after relaunch only with System Settings → Desktop & Dock → *Close windows when quitting
+  an application* turned off; tell the owner when the setting can be restored.
+- Record what was checked, what was not (VoiceOver, system prompts) and how in PLAN.md.
 
 ## Git
 

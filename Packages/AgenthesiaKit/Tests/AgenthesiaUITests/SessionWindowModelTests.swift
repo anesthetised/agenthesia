@@ -97,6 +97,55 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func activationFillsALoneBlankWindowAndOtherwiseOpensTheSessionsWindow() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-activation-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let owner = sessions.start(directory: directory, agent: try mock())
+        await owner.startup?.value
+        let record = try #require(owner.controller?.session)
+        let target = WindowTarget.session(record.id)
+        var opened: [WindowTarget] = []
+
+        // The system makes a blank window to receive the URL when none is open.
+        let blank = SessionWindowModel(sessions: sessions)
+        await blank.activate(target, isBlank: true, windowCount: 1) { opened.append($0) }
+        #expect(opened.isEmpty && blank.owner === owner && blank.target == target)
+
+        // A window that already shows a session, or a form being filled in, is left alone.
+        let busy = SessionWindowModel(sessions: sessions)
+        await busy.activate(target, isBlank: false, windowCount: 1) { opened.append($0) }
+        await blank.activate(target, isBlank: true, windowCount: 1) { opened.append($0) }
+        // Several windows: raise or open the session's own window instead of repurposing this one.
+        let other = SessionWindowModel(sessions: sessions)
+        await other.activate(target, isBlank: true, windowCount: 3) { opened.append($0) }
+        #expect(opened == [target, target, target])
+        #expect(busy.target == .launch && other.target == .launch)
+
+        // Neither the launch target nor a closed window opens anything.
+        await other.activate(.launch, isBlank: true, windowCount: 1) { opened.append($0) }
+        other.close()
+        await other.activate(target, isBlank: true, windowCount: 1) { opened.append($0) }
+        #expect(opened.count == 3 && other.target == .launch)
+        await sessions.closeAll()
+    }
+
+    @Test func aWindowReportsTheSessionItShowsOnlyWhileAskedAndClosingClearsIt() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-shown-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let first = SessionWindowModel(sessions: sessions)
+        let second = SessionWindowModel(sessions: sessions)
+        let id = UUID()
+        sessions.setShown(id, in: first)
+        sessions.setShown(id, in: second)
+        #expect(sessions.shownSessionIDs == [id])
+        first.close()
+        #expect(sessions.shownSessionIDs == [id])
+        sessions.setShown(nil, in: second)
+        #expect(sessions.shownSessionIDs.isEmpty)
+    }
+
     @Test func sidebarFollowsTheManagerAndRefreshLoadsProjects() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-sidebar-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

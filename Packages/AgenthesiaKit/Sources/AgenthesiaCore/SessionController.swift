@@ -16,6 +16,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public struct PendingPermission: Identifiable, Equatable, Sendable {
         public let id: UUID
         public let options: [ACP.PermissionOption]
+        /// What the agent wants to do, as named when it asked.
+        public let toolTitle: String?
     }
 
     /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
@@ -709,7 +711,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             return .cancelled
         }
         if status == .running, !Task.isCancelled, permissions[id]?.response == nil {
-            pendingPermissions.append(PendingPermission(id: id, options: options))
+            pendingPermissions.append(PendingPermission(id: id, options: options, toolTitle: toolCall.title))
             publishTranscript()
             await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in

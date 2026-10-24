@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-17)
+## State (2026-10-24)
 
 - Live sessions run end-to-end ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -142,8 +142,8 @@ selection.
 | 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; merged in #118 |
 | 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; merged in #118 |
 | 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented, verification below |
-| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; implemented on `feat/window-restoration`, see below |
-| 4 | Notifications with actions and the Dock badge (#38), after #40 | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Sol, high; not started |
+| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; merged in #120, see below |
+| 4 | Notifications with actions and the Dock badge (#38), after #40 | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Sol, high; implemented on `feat/notifications-dock-badge`, see below |
 
 #39 adds focused-window Session commands, wraparound sidebar navigation (including saved history and
 Starting), next-needing-input navigation, and a count-based quit confirmation before awaited shutdown.
@@ -196,6 +196,34 @@ already recorded. Check readiness before the deadline; regression tests cover bo
 missing PID after expiry.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.
+
+#### Notifications and the Dock badge (#38)
+
+[ADR-0030](adr/0030-notification-activation-and-identity.md) is accepted. `SessionAttention` (Core) derives
+notices from the manager and the sessions the windows report as shown, and drives an `AttentionSink`;
+`SystemAttention` (UI) posts them through `UserNotifications` and sets the Dock badge. A tap opens
+`agenthesia://session/<id>`; `RootView` handles it with `onOpenURL`, filling a lone blank launch form in
+place or opening the session's window with `openWindow(value:)`. Tests cover derivation, identity and
+removal, shown-window suppression, the badge, one-time authorization, `canDecide`, the payload and button
+routing, URL parsing and window activation; removing the shown-session filter fails the suppression test.
+Checks of the built app, scripted because the session had no computer-use tools (see AGENTS.md): with a
+blank window, several windows, no window and a cold start the URL shows the session once and leaves no stray
+launch window. With a MockAgent session and Finder in front: the system permission prompt appears at the
+first session start; a permission request posts a banner with Allow once and Reject, and both buttons
+record `allow` and `reject`, clear the banner and the Dock badge, and leave the app in the background; a
+turn that ends while the session is not shown posts the finished banner, and one that ends while it is shown
+does not. The check found that the badge never appeared because authorization omitted `.badge`; with it the
+Dock shows `1` while a request waits and clears on any answer. A copy built with another bundle identifier
+gave a fresh authorization to prove that. Tapping the finished banner (a System Events click; synthetic
+CGEvent clicks and `AXPress` did not reach the app) brings the app forward and shows the session in its own
+window. The blank *New Session* window seen at first came from a second process: Notification Center routes
+a tap by bundle identifier, and with several copies registered (worktrees, derived data) it launched another
+checkout's build next to the running one. A build with its own bundle identifier taps into the running
+process, with no second process and no extra window.
+Not verified: VoiceOver and the first-run prompt text.
+
+Pitfall: `handlesExternalEvents(preferring: [], allowing: ["*"])` is what stops the system opening a new
+window beside the one that handles the URL; without it every tap added a blank window.
 
 #### Window restoration (#40)
 

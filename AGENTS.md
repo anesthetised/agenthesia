@@ -54,6 +54,27 @@ Obtain the user's approval before running benchmarks; agree on the workload and 
 To try the protocol layer by hand: `just cli chat -- <agent command>`, or `just mock-chat` for the bundled
 `MockAgent`.
 
+### Testing the running app
+
+Automated tests cover logic and hosted views; what only the real app shows (system prompts, banners, the
+Dock, menus, window opening and restoration) is checked in the built app, with the bundled `MockAgent` as
+the agent so no real agent or tokens are involved.
+
+- **Prefer computer use.** When the session has computer-use tools, drive `just run`'s app with them and
+  save screenshots as evidence. Request access for Agenthesia and any system surface involved, such as
+  Notification Center or System Settings.
+- **Without computer use**, script the app and say so. `osascript` with System Events reads the
+  accessibility tree and sets field values; a small CGEvent tool posts clicks (a right-click does not
+  show in the tree, so check `CGWindowListCopyWindowInfo`); `screencapture -x` takes screenshots. Run the
+  action and the screenshot in one command, because other apps take focus between commands. Keys and
+  clicks go to whichever app is frontmost, so activate Agenthesia first and verify it before sending input.
+- **Ask the owner to leave the machine alone** while a scripted or computer-use check runs, and state
+  when it ends. Never type into the owner's apps, and never touch their real data: use a temporary
+  directory and, for history, a copy or a clearly marked temporary row removed afterwards.
+- Windows restore after relaunch only with System Settings → Desktop & Dock → *Close windows when quitting
+  an application* turned off; tell the owner when the setting can be restored.
+- Record what was checked, what was not (VoiceOver, system prompts) and how in PLAN.md.
+
 ## Git
 
 - Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `docs:`, `chore:`,

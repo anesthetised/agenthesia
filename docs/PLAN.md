@@ -239,9 +239,9 @@ whatever the app does. With it off, three windows (launch form plus two saved se
 Quit and relaunch with no agent started, and File → New Window twice opened two separate launch forms.
 The context menu itself is a manual check (the accessibility tree did not expose it to scripting).
 
-#### App icon and Dock tile
+#### App icon and Dock tile (#45)
 
-[ADR-0031](adr/0031-app-icon-and-dock-tile.md) is accepted. `AppIcon` (UI) draws a sleepy moon with up to five
+The icon half of #45; its first-run flow is separate work. [ADR-0031](adr/0031-app-icon-and-dock-tile.md) is accepted. `AppIcon` (UI) draws a sleepy moon with up to five
 stars; `just icon` renders the PNGs of `AppIcon.appiconset` from it, README uses the static
 `docs/images/logo-light.svg` and `logo-dark.svg`. `AttentionSink.setDock(badge:live:)` replaces `setBadge`, and
 `SystemAttention` draws the tile while sessions are live: one star per session that has not failed, open eyes

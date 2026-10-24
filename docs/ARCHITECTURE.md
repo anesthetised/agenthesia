@@ -64,7 +64,7 @@ The new worktree's actual initial HEAD is retained as the session's `baseRevisio
 the agent. The branch checked out in the selected checkout at that moment is retained as `baseBranch`
 (ADR-0032); a detached `HEAD` records none, and such a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
 unborn repositories fail explicitly. Worktrees
-are retained after close or failed startup; review (#42) and merge (#43) remain part of the worktree milestone.
+are retained after close or failed startup until the session is merged or discarded.
 
 Discard (ADR-0032) goes through `SessionManager.discard`. It refuses while the session is starting or
 being continued, coalesces concurrent calls and makes Continue unavailable while it runs. It ends the
@@ -82,6 +82,27 @@ its outcome, so `SessionLibrary.worktreeOutcomes` reads each session's last even
 (`PersistenceStore.lastEvents`, one index lookup per session) for the sidebar and menus without replaying
 history. The confirmation counts uncommitted paths (`git status --porcelain -uall`) and commits on the
 session branch since `baseRevision`.
+
+Merge (ADR-0032) goes through `SessionManager.merge` and squashes the session into `baseBranch` in the
+project checkout. `SessionWorkspace.mergeCheck` reports blockers without writing: no base branch, a
+missing base branch, a checkout on another branch or with tracked changes, a worktree that is missing,
+off its branch or has unresolved conflicts, and nothing to merge; otherwise it counts files changed from
+the merge base and the session's commits. `SessionWorkspace.merge` repeats the check, commits uncommitted
+work in the worktree (`--no-verify`, unsigned, squashed away), runs `git merge --squash` and `git commit -F`
+in the checkout, and returns the new commit. The final commit gets the login shell's environment
+(`ShellEnvironment`, as for agents), so hooks and signing find their tools when the app was opened from the
+Dock. A conflict, a refused squash, a rejecting hook or an empty squash runs `git reset --merge`, which
+restores the checkout and removes `SQUASH_MSG`.
+
+While a merge runs, the manager refuses Continue, discard and a second merge, and `SessionController`
+holds turns (`beginMerge`/`endMerge`): dispatches are refused and the composer is disabled. A merge
+starts only when the live owner, if any, is idle with no queued send pending; a saved session merges
+without starting its agent. The agent stays attached until the commit exists, so it can resolve a
+conflict. Then the owners end first, because closing may still record events and the outcome must stay
+the last one, `worktreeRemoved(.merged(commit:into:))` is appended, and the worktree and branch are
+removed. A failed removal is reported, the merge stays recorded, and *Discard Worktree…* finishes the
+removal without replacing the outcome. Quit waits for a running merge. The sheet's default message is the
+agent's session title, or the first line of the first prompt.
 
 `AgenthesiaUI` owns presentation and window integration. Its shared `TranscriptTableController` uses
 `NSTableView`, with TextKit 2 for streaming messages. `LiveTranscriptSource` lazily renders requested
@@ -295,7 +316,8 @@ and the current side uses `SessionFileDocument`. Both sides require UTF-8 withou
 same 2 MiB limit; unsupported files show a notice. Captured canonical roots cannot broaden through a
 symlink. `UnifiedDiff` runs off the main actor and the existing native Markdown renderer supplies line
 and word highlights. Session replacement or window closure dismisses review and cancels its view tasks.
-Merge remains #43.
+*Merge…* in review and *Merge into <base>…* in the Session menu open the merge sheet, above the review
+when it is shown.
 
 ### Transcript paths and Open in Editor
 

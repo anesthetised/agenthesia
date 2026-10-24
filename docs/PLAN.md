@@ -41,7 +41,8 @@ before implementation.
 - M7 is complete: session controls and prompt error recovery (#119), window restoration (#120),
   notifications and the Dock badge (#121). The app icon and the Dock tile (#122) deliver the icon half of
   #45; its first-run flow remains open.
-- M8 (Worktrees) is planned below under [ADR-0032](adr/0032-worktree-merge-and-discard.md).
+- M8 (Worktrees) follows [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123), discard
+  (#124) and review (#125) are merged; squash merge (#43) is implemented on `feat/worktree-merge`.
 
 ## Previous batch: session interactions (merged)
 
@@ -135,8 +136,8 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 |---|---|---|---|---|
 | 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Merged in #123 |
 | 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation. Merged in #124 |
-| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch. Implemented on `feat/worktree-review`; verification below |
-| 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
+| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch. Merged in #125 |
+| 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure. Implemented on `feat/worktree-merge`; verification below |
 
 #42 and #44 can run in parallel in separate worktrees after #41; #43 reuses the removal and the event of
 #44 and opens from the review view of #42. Each slice is its own branch and pull request, and closes its
@@ -217,6 +218,34 @@ without starting an agent. Light and dark screenshots were captured; the light p
 `NSRequiresAquaSystemAppearance` argument, without changing System Settings. The test app was quit and
 temporary repository/worktree files removed. No code fix was needed. VoiceOver, system permission
 prompts and automatic window restoration were not checked.
+
+#43 implemented (2026-10-25): `SessionWorkspace.mergeCheck` and `merge`, `SessionManager.merge` with the
+turn hold in `SessionController`, the `merged(commit:into:)` outcome, and the merge sheet from review and the
+Session menu. The owner settled four questions the ADR left open: the final commit runs in the login shell's
+environment, the default message is the agent's session title or else the first prompt line, a saved
+session merges without starting its agent, and a hanging hook has no Cancel (quit waits for the merge).
+The owners end before the outcome is appended, rather than after as the issue listed, because closing
+can still record events and the outcome must stay last. No `merged` event had been written before, so
+the payload gained the base branch without a migration.
+
+Workspace tests with temporary repositories cover committed, uncommitted, untracked and deleted changes
+squashed into one commit with the session's exact tree and message; a base advanced independently; a
+conflict, a rejecting `pre-commit` hook, an untracked file the merge would overwrite and changes already on
+the base, each restoring the checkout without `SQUASH_MSG`; hooks found only on the given `PATH`
+(`commit-msg` and `pre-commit`); and every blocker (dirty checkout, other branch, detached checkout, missing
+base, no base, nothing to merge, worktree off its branch or missing, unresolved worktree conflicts) leaving
+refs, the checkout and the worktree untouched. Core tests cover a live and a saved merge, refusal during a
+turn, prompts, Continue, discard and a second merge refused while merging, quit waiting for a merge, a
+conflict that keeps the agent usable, a failed removal that keeps the merge and lets Discard finish it,
+and a session without a base branch. UI tests cover command eligibility and title, the default message,
+blocker and conflict states kept in the sheet, and the read-only result. Removing the hold from
+`dispatch`, any of the three `git reset --merge` calls, or the outcome guard in discard makes a test fail.
+`just lint`, full `just test`, `just coverage` (Core 98.0%, Workspace 97.9%, Persistence 100%) and
+`just app` pass. `swiftui-pro` asked to split the sheet's types into files and not to rely on colour
+alone for failures (applied); a vertical `TextField` was rejected because Return would press Merge.
+
+Not verified yet: the running app with MockAgent (clean merge, conflict, dirty checkout). Commit signing
+cannot be tested automatically.
 
 ### M7 slices (2026-10-17)
 

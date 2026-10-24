@@ -241,21 +241,29 @@ The context menu itself is a manual check (the accessibility tree did not expose
 
 #### App icon and Dock tile (#45)
 
-The icon half of #45; its first-run flow is separate work. [ADR-0031](adr/0031-app-icon-and-dock-tile.md) is accepted. `AppIcon` (UI) draws a sleepy moon with up to five
-stars; `just icon` renders the PNGs of `AppIcon.appiconset` from it, README uses the static
-`docs/images/logo-light.svg` and `logo-dark.svg`. `AttentionSink.setDock(badge:live:)` replaces `setBadge`, and
-`SystemAttention` draws the tile while sessions are live: one star per session that has not failed, open eyes
-while one needs input, and the catalog icon back when none runs.
+The icon half of #45; its first-run flow is separate work. [ADR-0031](adr/0031-app-icon-and-dock-tile.md) is
+accepted. The app icon is the layered `App/AppIcon.icon` (sky fill, moon and stars as SVG layers with night
+variants), so macOS 26 can build the Default, Dark and Tinted renditions; an `appiconset` cannot, because `actool`
+drops its dark entries. `AppIcon` (UI) draws a sleepy moon with up to five stars for the Dock tile, README shows
+the static `docs/images/logo-light.svg` and `logo-dark.svg`, and the three are kept in step by hand.
+`AttentionSink.setDock(badge:live:)` replaces `setBadge`, and `SystemAttention` draws the tile while sessions
+are live: one star per session that has not failed, open eyes while one needs input, the night sky in Dark Mode,
+and the icon from `AppIcon.icon` back when none runs.
 
-Tests cover the stars' clamping, the eyes, the style, the inset margin and the live count the sink receives
-(a failed session stops counting). Rendering is stable to the eye but not to the byte: the same icon drawn
-after a few others differs in rounding, so tests compare pixels with a tolerance, and `just icon` gives the same
-files only when run the same way. Checked in a built process, not in the app: a scratch executable put
-`NSHostingView<AppIcon>` into `NSApp.dockTile.contentView`, and a screenshot of the Dock showed the tile at the
-size of its neighbours, asleep with three stars and then awake with one star and the badge `1`.
+Tests cover the stars' clamping, the eyes, the style, the style chosen for each appearance, the transparent
+margin and the live count the sink receives (a failed session stops counting). Rendering is stable to the eye but
+not to the byte: the same icon drawn after a few others differs in rounding, so tests compare pixels with a
+tolerance. Checked in a built process, not in the app: a scratch executable put `NSHostingView<AppIcon>` into
+`NSApp.dockTile.contentView`, and a screenshot of the Dock showed the tile at the size of its neighbours, asleep
+with three stars and then awake with one star and the badge `1`. The `.icon` compiles with `actool`, and the
+built catalog holds Aqua, DarkAqua and Tintable stacks with the night layers and a separate dark gradient; the
+default rendition, viewed as the compiled `AppIcon.icns`, matches the design. After adding the first icon, Launch
+Services kept the Dock's generic icon for an already registered build path until `lsregister -f` re-registered
+the bundle.
 Not verified: the whole path with a real session in the running app (it would add a session to the owner's
-history, which cannot be deleted), VoiceOver, and how the tile looks beside system icons in the macOS 26 tinted
-and clear appearances, where it is expected to stay as drawn.
+history, which cannot be deleted), how the Dark, Clear and Tinted renditions look in the system (the Icon Composer
+file was written by hand and only compiled, and switching the owner's icon style was not done), VoiceOver, and the
+live tile beside system icons in those styles.
 
 ### Prompt error recovery (#117)
 

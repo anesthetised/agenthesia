@@ -50,6 +50,8 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let workingDirectory: String
     /// Initial Git HEAD for new sessions. Legacy and non-Git sessions have no known base.
     public let baseRevision: String?
+    /// Branch the session started from, the target of a merge. Detached, legacy and non-Git sessions have none.
+    public let baseBranch: String?
     public let createdAt: Date
 
     public init(
@@ -61,6 +63,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         title: String? = nil,
         workingDirectory: String,
         baseRevision: String? = nil,
+        baseBranch: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -71,6 +74,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         self.title = title
         self.workingDirectory = workingDirectory
         self.baseRevision = baseRevision
+        self.baseBranch = baseBranch
         self.createdAt = createdAt
     }
 }

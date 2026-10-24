@@ -6,6 +6,9 @@ public struct SessionWorkspace: Sendable {
     public let workingDirectory: URL
     /// The actual new worktree's initial HEAD, before the agent starts; nil outside Git.
     public let baseRevision: String?
+    /// The branch checked out in the selected checkout when the worktree was created; nil for a detached `HEAD`
+    /// or outside Git. Such a session cannot be merged back.
+    public let baseBranch: String?
 
     public static func prepare(
         directory: URL,
@@ -33,7 +36,12 @@ public struct SessionWorkspace: Sendable {
             if (try? git(["rev-parse", "--is-bare-repository"], in: directory)) == "true" {
                 throw WorkspaceError(message: "Choose a working checkout, not a bare repository.")
             }
-            return SessionWorkspace(projectDirectory: directory, workingDirectory: directory, baseRevision: nil)
+            return SessionWorkspace(
+                projectDirectory: directory,
+                workingDirectory: directory,
+                baseRevision: nil,
+                baseBranch: nil
+            )
         }
         let root: URL
         do {
@@ -54,6 +62,10 @@ public struct SessionWorkspace: Sendable {
         )
         // Keep the selected subdirectory, e.g. one package of a monorepo.
         let prefix = try git(["rev-parse", "--show-prefix"], in: directory)
+        // A detached HEAD makes this exit non-zero; that only means there is no branch to merge back into.
+        let branch = (try? git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory)).flatMap {
+            $0.isEmpty ? nil : $0
+        }
         try git(["worktree", "add", "--quiet", "-b", "agenthesia/\(slug)", destination.path, "HEAD"], in: root)
         let worktree = destination.resolvingSymlinksInPath().standardizedFileURL
         let working = (prefix.isEmpty ? worktree : worktree.appending(path: prefix))
@@ -67,7 +79,8 @@ public struct SessionWorkspace: Sendable {
         return SessionWorkspace(
             projectDirectory: root,
             workingDirectory: working,
-            baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: worktree)
+            baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: worktree),
+            baseBranch: branch
         )
     }
 

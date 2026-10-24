@@ -133,7 +133,7 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 
 | # | Issue | Depends on | Tier | Acceptance in short |
 |---|---|---|---|---|
-| 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions |
+| 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Implemented on `feat/base-branch` |
 | 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation |
 | 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch |
 | 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
@@ -143,6 +143,12 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 issue. Pitfalls: the removal must never touch a directory outside the worktrees root (sessions of non-Git
 folders run in the user's own directory); `git` commands run in the project checkout for merge and branch
 deletion, and in the worktree for the intermediate commit.
+
+#41 verified: `just lint` and `just test` pass. New tests cover a named branch, a branch with a slash, a
+detached `HEAD`, a subdirectory selection and a non-Git folder; a round trip, a v1 and a v2 database upgrade
+that leave `baseBranch` nil; and the branch surviving start, history and Continue. The first run failed to
+compile against the missing property (RED). `just coverage` passes all gates (Workspace 97.4%, Persistence
+100%, Core 98.3%) and `just app` builds. No UI changed.
 
 ### M7 slices (2026-10-17)
 

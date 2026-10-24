@@ -61,7 +61,8 @@ reads its errors from stderr only. Git checkouts get a new branch and worktree f
 `~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.
 After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
 The new worktree's actual initial HEAD is retained as the session's `baseRevision` before launching
-the agent. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
+the agent. The branch checked out in the selected checkout at that moment is retained as `baseBranch`
+(ADR-0032); a detached `HEAD` records none, and such a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
 unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup. Review, merge, discard, and richer worktree metadata remain
 part of the worktree milestone.
@@ -308,7 +309,7 @@ The initial `v1` migration creates four tables:
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
 | `agent_install` | Local UUID, name, executable, argument array and creation time. Agents are configured manually; registry installation metadata belongs to the installer milestone. |
-| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision. |
+| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision and `v3-session-base-branch` the optional branch the session started from. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
 The event log uses an ordinary rowid table with a unique composite primary-key index. This keeps

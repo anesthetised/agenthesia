@@ -226,7 +226,8 @@ public final class LiveSession {
                 agentInstallID: install.id,
                 title: "\(install.name) · \(project.name)",
                 workingDirectory: workspace.workingDirectory.path,
-                baseRevision: workspace.baseRevision
+                baseRevision: workspace.baseRevision,
+                baseBranch: workspace.baseBranch
             ),
             store: store,
             additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }

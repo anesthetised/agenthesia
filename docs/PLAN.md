@@ -205,9 +205,18 @@ Hosted native-view tests pass in Aqua and Dark Aqua at 640 and 900 pt, covering 
 navigation, two-way selection, selectable read-only diff text, watcher-driven updates with selection
 retained, binary notices and command eligibility. `swiftui-pro` review found no blocking issues.
 `just lint`, full `just test` (650 Swift tests and 15 script tests) and `just coverage` pass all gates
-(Workspace 98.0%, Core 98.4%, Persistence 100%); `just app` builds. The running-app MockAgent
-pass, screenshots, VoiceOver and system permission prompts remain unchecked; the owner has been asked
-for a free-machine window.
+(Workspace 98.0%, Core 98.4%, Persistence 100%); `just app` builds.
+
+Computer-use checks in the built app with one MockAgent session and a temporary Git repository pass:
+⌃⌘R and the Changed Files action open review; committed, staged, unstaged, added, deleted, renamed and
+untracked files show correctly, while an unrelated base-branch commit is omitted. Tab into the list
+and Up/Down change the selected diff. An external edit refreshes its contents without moving selection.
+Binary and oversized files show their notices. Renaming the base branch produces an error naming it;
+restoring it reloads review. End Session and Quit/relaunch preserve review for read-only saved history
+without starting an agent. Light and dark screenshots were captured; the light pass used a process-only
+`NSRequiresAquaSystemAppearance` argument, without changing System Settings. The test app was quit and
+temporary repository/worktree files removed. No code fix was needed. VoiceOver, system permission
+prompts and automatic window restoration were not checked.
 
 ### M7 slices (2026-10-17)
 

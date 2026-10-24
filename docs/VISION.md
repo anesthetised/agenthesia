@@ -41,6 +41,14 @@ These principles decide what goes into the product and what does not. When in do
 9. **Speed is a feature.** Instant launch, 60 fps while streaming, modest memory use. A performance
    regression is a bug.
 
+## UI/UX reference
+
+T3 Code is the reference for UI and UX. Before designing a flow, look at how T3 Code
+does it and start from there; depart from it only for a reason stated in the principles above (native
+controls, keyboard-first, fewer settings) and record the reason in the issue or ADR. For product
+behavior outside UI/UX, T3 Code is a comparison, not a template, as in
+[ADR-0032](adr/0032-worktree-merge-and-discard.md).
+
 ## Non-goals (for now)
 
 - Code editing beyond basic changes; autocomplete; language servers.

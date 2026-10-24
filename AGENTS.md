@@ -121,6 +121,9 @@ the agent so no real agent or tokens are involved.
 - When a commit or pull request closes an issue, include `Closes #<n>` in its message or description;
   use `Refs #<n>` when it only contributes to one.
 - Add a co-author trailer for the agent, e.g. `Co-Authored-By: <Agent Name> <email>`.
+- Pull requests are squash-merged, so each lands on `main` as one commit. Commits on a branch are
+  working history: commit freely, and write the pull request title and description in Conventional
+  Commits form with `Closes`/`Refs`, because they become the squashed commit's message.
 - Committing is fine at any time. **Never push** unless explicitly asked to.
 - Track substantial changes in issues and implement them on separate branches. Obtain the user's
   approval before opening a pull request; pushing still requires an explicit request.

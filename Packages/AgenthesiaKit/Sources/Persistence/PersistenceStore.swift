@@ -86,13 +86,13 @@ public final class PersistenceStore: Sendable {
             try db.execute(
                 sql: """
                     INSERT INTO session
-                    (id, projectID, agentInstallID, agentSessionID, protocolVersion, title, workingDirectory, baseRevision, createdAt)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, projectID, agentInstallID, agentSessionID, protocolVersion, title, workingDirectory, baseRevision, baseBranch, createdAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     session.id.uuidString, session.projectID.uuidString, session.agentInstallID.uuidString,
                     session.agentSessionID, session.protocolVersion, session.title, session.workingDirectory,
-                    session.baseRevision,
+                    session.baseRevision, session.baseBranch,
                     session.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
@@ -184,6 +184,7 @@ public final class PersistenceStore: Sendable {
             title: row.decode(forColumn: "title"),
             workingDirectory: row.decode(forColumn: "workingDirectory"),
             baseRevision: row.decode(forColumn: "baseRevision"),
+            baseBranch: row.decode(forColumn: "baseBranch"),
             createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
         )
     }

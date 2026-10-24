@@ -26,7 +26,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let repo = directory.appending(path: "repo")
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-        try await git(["init", "-q"], in: repo)
+        try await git(["init", "-q", "-b", "feature/x"], in: repo)
         try "initial".write(to: repo.appending(path: "file.txt"), atomically: true, encoding: .utf8)
         try await git(["add", "."], in: repo)
         try await git(["commit", "-qm", "Initial"], in: repo)
@@ -42,13 +42,16 @@ import Testing
         await owner.close()
         let session = try #require(launched)
         #expect(session.baseRevision == initial)
+        #expect(session.baseBranch == "feature/x")
         #expect(try await library.history().first?.baseRevision == initial)
+        #expect(try await library.history().first?.baseBranch == "feature/x")
         let resumed = LiveSession(library: library)
         resumed.environment = { (ProcessInfo.processInfo.environment, nil) }
         await resumed.resume(session)
         let continued = resumed.controller?.session
         await resumed.close()
         #expect(continued?.baseRevision == initial)
+        #expect(continued?.baseBranch == "feature/x")
     }
 
     @discardableResult private func git(_ arguments: [String], in directory: URL) async throws -> String {

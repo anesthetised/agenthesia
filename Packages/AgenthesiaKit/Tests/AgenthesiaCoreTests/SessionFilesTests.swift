@@ -253,11 +253,13 @@ import Workspace
         while scans == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(scans >= 1)
         // A new attachment and its explicit refresh are not delayed by the previous scans.
+        // The interval is far above any scan time, so a loaded machine cannot make a scan look throttled.
         files.close()
+        files.scanInterval = .seconds(30)
         await files.attach(record(root))
         let started = ContinuousClock.now
         await files.refresh()
-        #expect(ContinuousClock.now - started < .milliseconds(900))
+        #expect(ContinuousClock.now - started < files.scanInterval)
     }
 
     @Test func watcherFailureKeepsIndexAndChangesAndIsRetried() async throws {

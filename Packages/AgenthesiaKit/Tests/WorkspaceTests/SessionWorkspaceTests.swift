@@ -63,6 +63,46 @@ import Testing
         }
     }
 
+    @Test(arguments: ["main", "feature/x", nil, "subdirectory"] as [String?])
+    func recordsTheBranchTheSessionStartedFrom(branch: String?) async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repo = directory.appending(path: "repo")
+        let package = repo.appending(path: "packages/foo")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        try await SessionWorkspace.git(
+            ["init", "-q", "-b", branch == "subdirectory" ? "feature/x" : branch ?? "main"],
+            in: repo
+        )
+        try "committed".write(to: package.appending(path: "file"), atomically: true, encoding: .utf8)
+        try await SessionWorkspace.git(["add", "."], in: repo)
+        try await SessionWorkspace.git(
+            [
+                "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit",
+                "-qm", "Initial",
+            ],
+            in: repo
+        )
+        if branch == nil { try await SessionWorkspace.git(["checkout", "-q", "--detach"], in: repo) }
+        let selected = branch == "subdirectory" ? package : repo
+        let result = try await SessionWorkspace.prepare(
+            directory: selected,
+            id: UUID(),
+            worktreesRoot: directory.appending(path: "trees")
+        )
+        #expect(result.baseBranch == (branch == "subdirectory" ? "feature/x" : branch))
+        #expect(
+            result.baseRevision == (try await SessionWorkspace.git(["rev-parse", "HEAD"], in: result.workingDirectory))
+        )
+    }
+
+    @Test func nonRepositoryHasNoBaseBranch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(try await SessionWorkspace.prepare(directory: directory, id: UUID()).baseBranch == nil)
+    }
+
     @Test func danglingGitLinkFailsInsteadOfUsingThePlainFolder() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

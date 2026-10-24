@@ -38,6 +38,10 @@ before implementation.
   (#37, [ADR-0026](adr/0026-app-wide-session-manager.md)): app-wide ownership supports parallel
   sessions, closing a window detaches it, and the sidebar groups sessions by project with live statuses.
   Local `just lint`, `just test` and `just app` pass; coverage is enforced by CI.
+- M7 is complete: session controls and prompt error recovery (#119), window restoration (#120),
+  notifications and the Dock badge (#121). The app icon and the Dock tile (#122) deliver the icon half of
+  #45; its first-run flow remains open.
+- M8 (Worktrees) is planned below under [ADR-0032](adr/0032-worktree-merge-and-discard.md).
 
 ## Previous batch: session interactions (merged)
 
@@ -116,20 +120,29 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-M4 (Files) is merged: #26–#28, #114 and #29 below. M7 slices 1–2 merged in #118, closing
-#37 and replacing window-bound ownership with the app-wide manager
-([ADR-0026](adr/0026-app-wide-session-manager.md)). #39 and #117 were developed concurrently in
-isolated worktrees from `706dbf8` and are integrated on `feat/session-controls-and-recovery`.
-The owner accepted [ADR-0027](adr/0027-recoverable-prompt-errors.md) before #117 implementation.
+M8 (Worktrees) is next; its slices follow. M4 (Files) and M7 (Parallel sessions) are merged, and the
+sections after M8 record how they were built and verified. Small independent chores such as #73 (CI
+with Xcode 27) fit the light tier.
 
-The combined branch passes `just lint`, `just test` (587 Swift tests and 15 script tests),
-`just coverage` (all module gates; Core 98.1%) and `just app`.
+### M8 slices (2026-10-24)
 
-This batch ends at #39 and #117. #40 and #38 have not started. When that work resumes, #40 owns
-window opening, selection and restoration; #38 connects notifications to that mechanism and adds the
-Dock badge. M8 (Worktrees) follows M7 and also decides whether to pin the base with a ref.
-Use Sol medium for bounded UI work and Sol high for lifecycle changes such as #117.
-Small independent chores such as #73 (CI with Xcode 27) fit Sol at medium effort.
+The owner accepted [ADR-0032](adr/0032-worktree-merge-and-discard.md) after comparing T3 Code: the base
+branch is recorded at start, the base is not pinned, merge is a local squash in the project checkout, and a
+merged or discarded session is read-only. Each issue is written to be picked up by an agent of its tier
+without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong: Opus or Astra; both at High).
+
+| # | Issue | Depends on | Tier | Acceptance in short |
+|---|---|---|---|---|
+| 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions |
+| 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation |
+| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch |
+| 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
+
+#42 and #44 can run in parallel in separate worktrees after #41; #43 reuses the removal and the event of
+#44 and opens from the review view of #42. Each slice is its own branch and pull request, and closes its
+issue. Pitfalls: the removal must never touch a directory outside the worktrees root (sessions of non-Git
+folders run in the user's own directory); `git` commands run in the project checkout for merge and branch
+deletion, and in the worktree for the intermediate commit.
 
 ### M7 slices (2026-10-17)
 

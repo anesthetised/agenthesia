@@ -10,7 +10,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0003](0003-own-acp-implementation.md) | Own ACP implementation | Accepted |
 | [0004](0004-agent-runtime.md) | Agent runtime | Accepted |
 | [0005](0005-event-log.md) | Event log as the source of truth | Accepted |
-| [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted |
+| [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted; merge and discard detailed by [0032](0032-worktree-merge-and-discard.md) |
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
 | [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted |
@@ -28,7 +28,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0022](0022-session-scoped-elicitation.md) | Session-scoped elicitation first | Accepted |
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
-| [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted |
+| [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted; base pin settled by [0032](0032-worktree-merge-and-discard.md) |
 | [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Accepted |
 | [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted |
 | [0027](0027-recoverable-prompt-errors.md) | Keep sessions alive after prompt error responses | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
@@ -36,5 +36,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
+| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

@@ -142,7 +142,7 @@ selection.
 | 1 | `SessionManager` in Core owns every `LiveSession`; windows select one; closing a window detaches; quit closes all owners; the `SessionLibrary` live claim moves into the manager | Several sessions run at once; Continue on a live session selects it; a failed session stays until ended or continued; quit waits for every owner, including one still starting | Opus, high; merged in #118 |
 | 2 | Sidebar: projects → sessions with derived statuses and the in-memory *done* mark | Status priority (needs input, failed, working, done, idle) is a pure tested function; showing a session in a key window clears *done*; accessibility labels | Sol, medium; merged in #118 |
 | 3 | Quit confirmation and the Session menu (#39) | Confirmation only when a session works or needs input; previous, next and next-needing-input navigation in sidebar order | Sol, medium; implemented, verification below |
-| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; not started |
+| 5 | Multiple windows and restoration (#40) | Window opening and selection are shared with later notification activation; value-based `WindowGroup` restores selections read-only with Continue; no agent starts on relaunch | Sol, medium; implemented on `feat/window-restoration`, see below |
 | 4 | Notifications with actions and the Dock badge (#38), after #40 | Posted only when the session is not in the key window of the active app; Allow once and Reject only for `allow_once`/`reject_once`; badge counts sessions needing input; system seams injected | Sol, high; not started |
 
 #39 adds focused-window Session commands, wraparound sidebar navigation (including saved history and
@@ -196,6 +196,20 @@ already recorded. Check readiness before the deadline; regression tests cover bo
 missing PID after expiry.
 Issues close with the slice that completes them: #37 with slice 2, #39 with slice 3, #38 with slice 4,
 #40 with slice 5.
+
+#### Window restoration (#40)
+
+Windows use `WindowGroup(for: WindowTarget.self)` (`.launch` or `.session(id)`). `RootView` publishes the
+displayed target through the group's binding, which the system persists, and `SessionWindowModel.restore`
+shows a saved session read-only (Continue available) or falls back to the launch form when the record is
+gone. The sidebar context menu's Open in New Window calls `openWindow(value:)`, which raises the window that
+already shows the session. Notification activation (#38) reuses the same call.
+
+Hosted tests cover restoring, publishing and falling back. The owner's relaunch check needs System Settings →
+Desktop & Dock → *Close windows when quitting an application* turned off: with it on, nothing is restored,
+whatever the app does. With it off, three windows (launch form plus two saved sessions) came back after
+Quit and relaunch with no agent started, and File → New Window twice opened two separate launch forms.
+The context menu itself is a manual check (the accessibility tree did not expose it to scripting).
 
 ### Prompt error recovery (#117)
 

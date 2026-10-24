@@ -402,3 +402,18 @@ import Testing
         #expect(model.target == .launch)
     }
 }
+
+@MainActor @Suite struct NavigationTargetWindowTests {
+    @Test func savedAndIdentifiedLiveSessionsHaveWindowTargets() throws {
+        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/tmp")
+        #expect(SessionWindowModel.NavigationTarget.saved(record).windowTarget == .session(record.id))
+        let directory = FileManager.default.temporaryDirectory.appending(path: "nav-target-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        let starting = sessions.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "x", executable: "/does-not-exist")
+        )
+        #expect(SessionWindowModel.NavigationTarget.live(starting).windowTarget == nil)
+    }
+}

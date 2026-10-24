@@ -93,6 +93,14 @@ import SwiftUI
             case .saved(let record): AnyHashable(record.id)
             }
         }
+
+        /// The window value that shows this session; nil while a starting session has no identity yet.
+        var windowTarget: WindowTarget? {
+            switch self {
+            case .live(let owner): owner.sessionID.map(WindowTarget.session)
+            case .saved(let record): .session(record.id)
+            }
+        }
     }
 
     /// Wraps in exactly the order shown by SessionSidebarList, including Starting and saved history.

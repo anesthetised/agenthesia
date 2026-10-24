@@ -35,5 +35,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0028](0028-empty-draft-sends-queue.md) | Send the queue when Command-Return has no draft | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
+| [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

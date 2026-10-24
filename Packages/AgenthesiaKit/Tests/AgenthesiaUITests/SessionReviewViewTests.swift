@@ -30,7 +30,8 @@ import Testing
         let files = SessionFiles()
         await files.attach(session)
         defer { files.close() }
-        let host = NSHostingView(rootView: SessionReviewView(review: review, files: files))
+        let model = SessionWindowModel(sessions: SessionManager())
+        let host = NSHostingView(rootView: SessionReviewView(review: review, files: files, model: model))
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 500),
             styleMask: [.titled, .resizable],

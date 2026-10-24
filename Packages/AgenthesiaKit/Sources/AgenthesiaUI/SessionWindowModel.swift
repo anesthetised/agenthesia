@@ -16,8 +16,11 @@ import SwiftUI
     var outcomes: [UUID: WorktreeOutcome] = [:]
     /// The discard waiting for confirmation.
     var pendingDiscard: PendingDiscard?
+    /// The merge sheet; it opens above the review when that is shown.
+    var merge: MergeRequest?
     /// A failed lifecycle action, shown in an alert.
     var alertMessage: String?
+    var alertTitle = ""
     var isConfirmingDiscard: Bool {
         get { pendingDiscard != nil }
         set { if !newValue { pendingDiscard = nil } }
@@ -111,11 +114,23 @@ import SwiftUI
         guard !showingSetup, !isLoadingHistory, let session = displayed?.session else { return false }
         return canDiscard(session)
     }
-    /// The session has a worktree Agenthesia created, without an outcome yet, and is not starting.
+    /// The session has a worktree Agenthesia created, without an outcome yet, and is not starting. A merge whose
+    /// removal failed leaves its worktree for Discard to remove.
     func canDiscard(_ session: SessionRecord) -> Bool {
-        !closed && outcome(of: session.id) == nil
+        guard !closed else { return false }
+        switch outcome(of: session.id) {
+        case nil: break
+        case .merged: guard FileManager.default.fileExists(atPath: session.workingDirectory) else { return false }
+        case .discarded: return false
+        }
+        return sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
+    }
+    var canMerge: Bool {
+        guard !closed, !showingSetup, !isLoadingHistory, let session = displayed?.session else { return false }
+        return outcome(of: session.id) == nil
             && sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
     }
+    var mergeCommandTitle: String { displayed?.session.baseBranch.map { "Merge into \($0)…" } ?? "Merge…" }
     /// The displayed transcript knows an outcome recorded after the last history refresh.
     func outcome(of id: UUID) -> WorktreeOutcome? {
         (displayed?.session.id == id ? displayed?.transcript.worktreeOutcome : nil) ?? outcomes[id]
@@ -217,7 +232,7 @@ import SwiftUI
         guard canDiscard(session) else { return }
         let summary: SessionManager.DiscardSummary?
         do { summary = try await sessions.discardSummary(session) } catch let error as SessionManager.DiscardError {
-            alertMessage = error.localizedDescription
+            showAlert("Cannot Discard the Worktree", error)
             return
         } catch { summary = nil }
         guard !closed else { return }
@@ -229,7 +244,48 @@ import SwiftUI
         pendingDiscard = nil
         let id = pending.session.id
         let shown = displayed?.session.id == id || owner?.sessionID == id
-        do { try await sessions.discard(pending.session) } catch { alertMessage = error.localizedDescription }
+        do { try await sessions.discard(pending.session) } catch { showAlert("Cannot Discard the Worktree", error) }
+        await refreshShowing(id, shown: shown)
+    }
+
+    /// Opens the merge sheet for the displayed session, then asks Git what blocks the merge.
+    func requestMerge() async {
+        guard canMerge, let displayed else { return }
+        let request = MergeRequest(session: displayed.session, message: displayed.transcript.mergeMessage)
+        merge = request
+        do { request.check = try await sessions.mergeCheck(request.session) } catch {
+            request.check = .blocked(error.localizedDescription)
+        }
+    }
+    /// Merges; failures stay in the sheet so the message is kept for another attempt. After the commit exists the
+    /// sheet and review close, and a window showing the session shows it read-only with the outcome.
+    func confirmMerge(_ request: MergeRequest) async {
+        guard request.canMerge else { return }
+        request.isMerging = true
+        request.failure = nil
+        defer { request.isMerging = false }
+        let id = request.session.id
+        let shown = displayed?.session.id == id || owner?.sessionID == id
+        do {
+            try await sessions.merge(request.session, message: request.message)
+        } catch let error as SessionManager.MergeError {
+            guard case .worktreeKept = error else { request.failure = error; return }
+            showAlert("The Worktree Was Not Removed", error)
+        } catch {
+            request.failure = .failed(error.localizedDescription)
+            return
+        }
+        if merge === request { merge = nil }
+        if review?.id == id { review = nil }
+        await refreshShowing(id, shown: shown)
+    }
+
+    private func showAlert(_ title: String, _ error: any Error) {
+        alertTitle = title
+        alertMessage = error.localizedDescription
+    }
+
+    private func refreshShowing(_ id: UUID, shown: Bool) async {
         await refresh()
         if shown, !closed, let record = history.first(where: { $0.id == id }) { await showHistory(record) }
     }
@@ -306,7 +362,7 @@ import SwiftUI
     }
     /// Detaches the window; its sessions keep running.
     func close() {
-        closed = true; selection = UUID(); files.close(); review = nil
+        closed = true; selection = UUID(); files.close(); review = nil; merge = nil
         sessions.setShown(nil, in: self)
     }
 }
@@ -340,7 +396,8 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !sessions.owners.isEmpty else { return .terminateNow }
+        // A merge in saved history has no owner but must finish before the app quits.
+        guard !sessions.owners.isEmpty || !sessions.mergingIDs.isEmpty else { return .terminateNow }
         if !terminating {
             let activeCount = sessions.owners.count { [.working, .needsInput].contains($0.activity) }
             guard activeCount == 0 || confirmQuit(activeCount) else { return .terminateCancel }

@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 extension SessionWorkspace {
     /// Why a session cannot be merged now. Finding one writes nothing (ADR-0032).

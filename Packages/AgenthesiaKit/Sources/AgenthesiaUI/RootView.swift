@@ -131,11 +131,12 @@ public struct RootView: View {
         .background(SessionWindowLifetime(model: model).frame(width: 0, height: 0))
         // Startup persists the session after assigning its ID; refresh only once that write has settled.
         // Ended sessions move to saved history in every window.
-        // A finished discard records its outcome, which every window reads with history.
+        // A finished discard or merge records its outcome, which every window reads with history.
         .task(
             id: HistoryKey(
                 owners: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID),
-                discarding: model.sessions.discardingIDs
+                discarding: model.sessions.discardingIDs,
+                merging: model.sessions.mergingIDs
             )
         ) {
             await model.refresh()
@@ -173,7 +174,7 @@ public struct RootView: View {
         } message: {
             Text($0.message)
         }
-        .alert("Cannot Discard the Worktree", isPresented: $model.isShowingAlert, presenting: model.alertMessage) { _ in
+        .alert(model.alertTitle, isPresented: $model.isShowingAlert, presenting: model.alertMessage) { _ in
         } message: {
             Text($0)
         }
@@ -192,13 +193,18 @@ public struct RootView: View {
             )
         }
         .sheet(item: $model.review) { review in
-            SessionReviewView(review: review, files: model.files)
+            SessionReviewView(review: review, files: model.files, model: model)
+        }
+        // Above the review when it is shown, which presents the sheet itself.
+        .sheet(item: model.review == nil ? $model.merge : .constant(nil)) { request in
+            MergeSheet(request: request) { Task { await model.confirmMerge(request) } }
         }
     }
 
     private struct HistoryKey: Equatable {
         let owners: [UUID?]
         let discarding: Set<UUID>
+        let merging: Set<UUID>
     }
 
     private var viewingUnseenResult: Bool {
@@ -280,7 +286,7 @@ public struct RootView: View {
     }
 
     private func composer(_ session: SessionController) -> some View {
-        let editable = [.idle, .running, .stopping].contains(session.status)
+        let editable = [.idle, .running, .stopping].contains(session.status) && !session.isMerging
         return VStack(alignment: .leading, spacing: 8) {
             if !session.queuedPrompts.isEmpty {
                 PromptQueue(
@@ -389,6 +395,7 @@ public struct RootView: View {
 
     static func statusText(_ session: SessionController) -> String {
         if let outcome = session.transcript.worktreeOutcome { return "\(outcome.notice) Read-only." }
+        if session.isMerging { return "Merging…" }
         if session.status == .readOnly { return "Saved history · read-only" }
         if session.status == .failed { return "Connection failed · Continue to reconnect" }
         if session.status == .closed { return "Session ended" }

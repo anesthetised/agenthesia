@@ -118,7 +118,7 @@ import Testing
         let merge = Task { try await manager.merge(session, message: "Gated") }
         while !gate.entered { await Task.yield() }
 
-        #expect(manager.isMerging(session.id) && manager.isMergingAny && controller.isMerging)
+        #expect(manager.isMerging(session.id) && manager.mergingIDs == [session.id] && controller.isMerging)
         #expect(await owner.submit("hello") == false)
         #expect(controller.transcript.items.allSatisfy { $0.message?.role != .user })
         #expect(manager.resume(session) == nil)

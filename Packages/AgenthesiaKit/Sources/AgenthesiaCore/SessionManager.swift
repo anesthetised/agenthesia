@@ -138,7 +138,7 @@ public final class SessionManager {
     }
 
     public func isMerging(_ id: UUID) -> Bool { merging[id] != nil }
-    public var isMergingAny: Bool { !merging.isEmpty }
+    public var mergingIDs: Set<UUID> { Set(merging.keys) }
 
     public enum MergeCheck: Equatable, Sendable {
         /// Files changed from the merge base, uncommitted ones included, and the commits on the session branch.

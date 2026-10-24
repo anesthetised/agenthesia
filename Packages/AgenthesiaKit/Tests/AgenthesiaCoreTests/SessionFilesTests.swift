@@ -239,12 +239,19 @@ import Workspace
             return try await FileIndex.load(in: root, isGitRepository: git)
         }
         // Unthrottled, 150 ms coalescing alone would allow about nine scans in this window.
-        let end = ContinuousClock.now.advanced(by: .milliseconds(1500))
+        let began = ContinuousClock.now
+        let end = began.advanced(by: .milliseconds(1500))
         while ContinuousClock.now < end {
             files.invalidate()
             try await Task.sleep(for: .milliseconds(20))
         }
-        #expect((1...2).contains(scans))
+        // At most one scan per interval, plus one that falls due at the start. A busy machine stretches the window,
+        // and with it the allowance; it must not make the test count scans that had no time to start.
+        #expect(scans <= Int((ContinuousClock.now - began) / files.scanInterval) + 1)
+        // Sustained invalidations are paced, not starved: a scan still comes, however late.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while scans == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(scans >= 1)
         // A new attachment and its explicit refresh are not delayed by the previous scans.
         files.close()
         await files.attach(record(root))

@@ -172,6 +172,13 @@ sharing the same row identity with keyboard navigation; the new-session form has
 History refresh follows completed startup, after the session record is persisted; an early session ID
 alone must not leave Continue disabled after a later process exit. Opening/restoring windows remains #40.
 
+Notifications and the Dock badge follow [ADR-0030](adr/0030-notification-activation-and-identity.md).
+`SessionAttention` (Core) derives `AttentionNotice`s from the manager's owners and
+`SessionManager.shownSessionIDs`, diffs them with what it posted, and drives an `AttentionSink`; the
+delegate creates it with `SystemAttention` (UI, `UserNotifications` and the Dock tile) inside an app bundle.
+Windows report the session they show while their scene appears active. A tap opens
+`agenthesia://session/<id>` (declared in `App/Info.plist`), which `RootView` handles with `onOpenURL`.
+
 Closing a window only detaches it and stops its file observation; closing a transcript view only
 detaches its display driver. On quit the delegate asks for confirmation only if owners are working or
 need input, naming their count. Cancel leaves every owner running. After confirmation (or immediately

@@ -165,6 +165,27 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func discardIsRefusedWhileTheSessionWaitsForSignIn() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let signInFile = fixture.directory.appending(path: "signed-in").path(percentEncoded: false)
+        let agent = AgentInstallRecord(
+            name: "Mock",
+            executable: fixture.agent.executable,
+            arguments: ["--auth", "--auth-file", signInFile]
+        )
+        let owner = manager.start(directory: fixture.repo, agent: agent)
+        await owner.startup?.value
+        #expect(owner.signIn != nil)
+        // The session has a worktree but no history yet; it can only be ended.
+        let session = try #require(owner.controller?.session)
+        #expect(!manager.canDiscard(session, project: try await project(of: session, in: manager)))
+        await #expect(throws: SessionManager.DiscardError.starting) { try await manager.discard(session) }
+        #expect(FileManager.default.fileExists(atPath: session.workingDirectory))
+        await manager.closeAll()
+    }
+
     @Test func sessionsOutsideAnAgenthesiaWorktreeAreNeverRemoved() async throws {
         let fixture = try await fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }

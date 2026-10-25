@@ -64,7 +64,17 @@ public struct RootView: View {
                             }
                             .id(session.session.id)
                             Divider()
-                            composer(session)
+                            if let signIn = model.signIn {
+                                SignInPanel(
+                                    agentName: model.owner?.agentName ?? "the agent",
+                                    signIn: signIn,
+                                    continuing: session.session.agentSessionID != nil,
+                                    onSignIn: model.signIn(with:),
+                                    onCancel: model.cancelSignIn
+                                )
+                            } else {
+                                composer(session)
+                            }
                         }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
                         if filesMatchSession, model.files.selectedPath != nil {
                             // The transcript starts under the sidebar, so at the 740 pt window minimum it
@@ -194,6 +204,9 @@ public struct RootView: View {
         }
         .sheet(item: $model.review) { review in
             SessionReviewView(review: review, files: model.files, model: model)
+        }
+        .sheet(item: $model.signInTerminal) { terminal in
+            SignInTerminalSheet(terminal: terminal) { model.signInTerminal = nil }
         }
         // Above the review when it is shown, which presents the sheet itself.
         .sheet(item: model.review == nil ? $model.merge : .constant(nil)) { request in

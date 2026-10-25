@@ -27,6 +27,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.9.0"),
         .package(url: "https://github.com/krzyzanowskim/STTextView", from: "2.4.1"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.99.1"),
         // SwiftTreeSitter moved to tree-sitter/swift-tree-sitter; grammars use both URLs, so the new one is mirrored
         // to the old one (.swiftpm/configuration/mirrors.json).
         .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", from: "0.9.0"),
@@ -89,7 +90,10 @@ let package = Package(
         ),
         .target(
             name: "AgenthesiaUI",
-            dependencies: ["ACP", "AgentRuntime", "Persistence", "AgenthesiaCore", "Rendering"],
+            dependencies: [
+                "ACP", "AgentRuntime", "Persistence", "AgenthesiaCore", "Rendering",
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+            ],
             swiftSettings: swiftSettings + [.defaultIsolation(MainActor.self)]
         ),
         .executableTarget(

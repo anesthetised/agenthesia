@@ -1,3 +1,4 @@
+import ACP
 public import AgenthesiaCore
 public import AppKit
 import Observation
@@ -99,6 +100,29 @@ import SwiftUI
                 }
             }
         }
+    }
+
+    /// The sign-in the displayed live session waits for (ADR-0033).
+    var signIn: LiveSession.SignIn? { closed || showingSetup || restored != nil ? nil : owner?.signIn }
+    /// A terminal sign-in, shown as a sheet. Clearing it cancels a running command or hides a failed one.
+    var signInTerminal: SignInTerminal? {
+        get { closed || restored != nil ? nil : owner?.signInTerminal }
+        set {
+            guard newValue == nil, let owner, let terminal = owner.signInTerminal else { return }
+            if terminal.exitMessage == nil {
+                Task { await owner.cancelSignIn() }
+            } else {
+                owner.dismissSignInTerminal()
+            }
+        }
+    }
+    func signIn(with id: ACP.AuthMethodID) {
+        guard signIn != nil, let owner else { return }
+        Task { await owner.signIn(with: id) }
+    }
+    func cancelSignIn() {
+        guard let owner else { return }
+        Task { await owner.cancelSignIn() }
     }
 
     var canEnd: Bool {

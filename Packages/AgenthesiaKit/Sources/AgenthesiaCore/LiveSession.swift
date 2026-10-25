@@ -23,6 +23,8 @@ public final class LiveSession {
     public private(set) var signIn: SignIn?
     /// A terminal sign-in method's command, while it runs and after it fails.
     public private(set) var signInTerminal: SignInTerminal?
+    /// The configured agent's name, once its install is known.
+    public var agentName: String? { agent?.name }
     /// Turns finished when the user last looked at the session in a key window (ADR-0026). In memory only.
     private var seenTurns = 0
     @ObservationIgnored private let library: SessionLibrary

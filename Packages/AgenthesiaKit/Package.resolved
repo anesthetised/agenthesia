@@ -1,5 +1,5 @@
 {
-  "originHash" : "2e9af2cba46e4faa504e5a8e8b970a5031f6590c80bf33a597587fc76006e0be",
+  "originHash" : "96826fa63edf32377730416d594ead85303eed0d7235b01aced0c40094b61716",
   "pins" : [
     {
       "identity" : "coretextswift",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "b83108d10f42680d78f23fe4d4d80fc88dab3212",
         "version" : "7.11.1"
+      }
+    },
+    {
+      "identity" : "h",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rarestype/h",
+      "state" : {
+        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
+        "version" : "1.0.1"
       }
     },
     {
@@ -62,6 +71,24 @@
       "state" : {
         "revision" : "25cb61d3482054b09ae76ca4f281b1bfe7fe5a43",
         "version" : "0.9.0"
+      }
+    },
+    {
+      "identity" : "swift-png",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tayloraswift/swift-png",
+      "state" : {
+        "revision" : "2d17c6c51c098628574c0383f1119892655a73a2",
+        "version" : "4.5.2"
+      }
+    },
+    {
+      "identity" : "swiftterm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/SwiftTerm",
+      "state" : {
+        "revision" : "2f573f73af5e768d90847dce20c97fa9535d7164",
+        "version" : "1.99.1"
       }
     },
     {

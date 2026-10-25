@@ -43,7 +43,7 @@ before implementation.
   #45; its first-run flow remains open.
 - M8 (Worktrees) is complete under [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123),
   discard (#124), review (#125) and squash merge (#127).
-- Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is implemented on `feat/sign-in`.
+- Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is implemented and checked in the built app.
 
 ## Previous batch: session interactions (merged)
 
@@ -122,8 +122,7 @@ all checks. Badge publication runs only after both succeed on main.
 
 ## Next steps
 
-Agent sign-in (#32) is in progress; the rest of M5 (#61, #67) waits for an agent that calls
-`terminal/create` (#104). Then #126 (the CI rendering crash, strong tier) and M6 (Registry), whose
+The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI rendering crash, strong tier) and M6 (Registry), whose
 installers need an ADR first. Small independent chores such as #73 (CI with Xcode 27) fit the light
 tier. The sections after this one record how M8, M7 and M4 were built and verified.
 
@@ -150,6 +149,14 @@ Turning off `auth.terminal`, the discard guard, or the terminal's output feed ea
 `just lint`, `just coverage` (694 Swift tests; Core 97.9%, AgentRuntime 92.9%) and `just app` pass.
 `swiftui-pro` asked to put each type in its own file (applied). Pitfall: MockAgent's stdio transport read
 standard input as soon as it was created, so `--login` creates it only in the agent modes.
+
+Built app, checked by script (no computer use in the session) with MockAgent `--auth` in a temporary Git
+repository, a temporary `CFFIXED_USER_HOME` and a fresh bundle identifier: the panel with both methods, the
+*Needs input* mark in the sidebar and the Dock badge; the terminal sheet showing the prompt; a wrong answer
+leaving the output and "Sign-in exited with status 1." until Close; the right answer closing the sheet and
+opening the composer in the same worktree; Cancel killing the login process; the agent method opening the
+composer. Not checked: VoiceOver, the system notification banner of the sign-in notice, a real
+`claude-agent-acp` or `codex-acp`.
 
 ### M8 slices (2026-10-24)
 

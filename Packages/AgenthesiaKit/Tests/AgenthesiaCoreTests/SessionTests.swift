@@ -124,6 +124,8 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         #expect(state.items.compactMap(\.toolCall).map(\.status) == [.completed, .failed])
         #expect(state.items.compactMap(\.toolCall).first?.title == "Read")
         #expect(state.title == "Title")
+        // The agent's title wins over the first prompt as the default merge message.
+        #expect(state.mergeMessage == "Title")
         #expect(state.usage?.used == 10)
         #expect(state.lastStopReason == .endTurn)
         #expect(state.activeTurn == nil)

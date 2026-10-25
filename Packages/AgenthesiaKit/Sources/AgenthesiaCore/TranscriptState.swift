@@ -134,6 +134,14 @@ public struct TranscriptState: Equatable, Sendable {
 
     public init() {}
 
+    /// The default merge commit message: the agent's session title, or else the first line of the first prompt.
+    public var mergeMessage: String {
+        if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        let prompt = items.lazy.compactMap(\.message).first { $0.role == .user }?.text ?? ""
+        return prompt.split(whereSeparator: \.isNewline).lazy
+            .map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+    }
+
     /// Requests without a recorded response, oldest first.
     public var unansweredPermissions: [UUID] {
         permissionIndices.sorted { $0.value < $1.value }.compactMap {

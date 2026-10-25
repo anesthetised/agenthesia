@@ -30,6 +30,8 @@ public struct SessionCommands: Commands {
             Button("Review Changes", action: { model?.openReview() })
                 .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(model?.canReview != true)
+            Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
+                .disabled(model?.canMerge != true)
             Divider()
             Button("Stop") { Task { [model] in await model?.stop() } }
                 .keyboardShortcut(".", modifiers: .command)

@@ -82,3 +82,18 @@ checkout from the branch when a thread resumes.
 - A conflict is resolved in the session (the agent merges the base into its branch), never in the user's
   checkout.
 - The worktree is not refreshed when the base branch moves; review and merge use the merge base.
+
+## Notes
+
+Refinements made while implementing the merge (#43, 2026-10-25); they add detail and change no decision above.
+
+- The merged outcome also names the base branch, `merged(commit, into)`, for the read-only notice. It is
+  appended once the squash commit exists, after the session's owners end (closing can still record events,
+  and the outcome must stay the last one) and before the worktree is removed. If the removal then fails,
+  the merge stays recorded and *Discard Worktree…* removes what is left without replacing the outcome.
+- A merge is also blocked while a merge, cherry-pick, revert or rebase is in progress in the project
+  checkout, because `git reset --merge` after a failure would abort it. The intermediate commit runs no
+  hooks at all; `--no-verify` alone still runs `prepare-commit-msg` and `post-commit`.
+- The final commit runs in the login shell's environment, as agents do, so hooks and signing find their
+  tools when the app was opened from the Dock. The default message is the agent's session title, or the
+  first line of the first prompt.

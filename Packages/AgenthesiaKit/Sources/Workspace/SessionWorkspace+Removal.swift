@@ -76,16 +76,7 @@ extension SessionWorkspace {
         try await blocking {
             let project = worktree.projectDirectory
             if FileManager.default.fileExists(atPath: worktree.directory.path) {
-                let listed: Data = try gitOutput(["worktree", "list", "--porcelain", "-z"], in: project)
-                let paths = listed.split(separator: 0).compactMap { field -> String? in
-                    let line = String(decoding: field, as: UTF8.self)
-                    return line.hasPrefix("worktree ") ? String(line.dropFirst("worktree ".count)) : nil
-                }
-                guard
-                    paths.contains(where: {
-                        URL(filePath: $0).resolvingSymlinksInPath().standardizedFileURL.path == worktree.directory.path
-                    })
-                else {
+                guard try isRegistered(worktree) else {
                     throw WorkspaceError(
                         message:
                             "“\(worktree.directory.path)” is not a worktree of “\(project.path)”; it was left in place."
@@ -110,12 +101,23 @@ extension SessionWorkspace {
         }
     }
 
-    private static func hasBranch(_ worktree: Worktree) -> Bool {
+    /// Whether the project lists the worktree's directory among its worktrees.
+    static func isRegistered(_ worktree: Worktree) throws -> Bool {
+        let listed: Data = try gitOutput(["worktree", "list", "--porcelain", "-z"], in: worktree.projectDirectory)
+        return listed.split(separator: 0).contains { field in
+            let line = String(decoding: field, as: UTF8.self)
+            return line.hasPrefix("worktree ")
+                && URL(filePath: String(line.dropFirst("worktree ".count))).resolvingSymlinksInPath()
+                    .standardizedFileURL.path == worktree.directory.path
+        }
+    }
+
+    static func hasBranch(_ worktree: Worktree) -> Bool {
         (try? git(["rev-parse", "--verify", "--quiet", "refs/heads/\(worktree.branch)"], in: worktree.projectDirectory))
             != nil
     }
 
-    private static func blocking<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+    static func blocking<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async { continuation.resume(with: Result { try work() }) }
         }

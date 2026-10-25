@@ -144,15 +144,25 @@ public struct SessionWorkspace: Sendable {
     }
 
     /// Blocks the calling thread. stderr goes to a file so a full pipe cannot deadlock and output stays clean.
-    @discardableResult static func git(_ arguments: [String], in directory: URL) throws -> String {
-        String(decoding: try gitOutput(arguments, in: directory), as: UTF8.self).trimmingCharacters(in: .newlines)
+    @discardableResult static func git(
+        _ arguments: [String],
+        in directory: URL,
+        environment: [String: String]? = nil
+    ) throws -> String {
+        String(decoding: try gitOutput(arguments, in: directory, environment: environment), as: UTF8.self)
+            .trimmingCharacters(in: .newlines)
     }
 
-    static func gitOutput(_ arguments: [String], in directory: URL) throws -> Data {
+    /// `environment` replaces the app's own, e.g. with the login shell's so hooks find their tools.
+    static func gitOutput(
+        _ arguments: [String],
+        in directory: URL,
+        environment base: [String: String]? = nil
+    ) throws -> Data {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/git")
         process.arguments = ["-C", directory.path] + arguments
-        var environment = ProcessInfo.processInfo.environment
+        var environment = base ?? ProcessInfo.processInfo.environment
         for key in [
             "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
             "GIT_ALTERNATE_OBJECT_DIRECTORIES",

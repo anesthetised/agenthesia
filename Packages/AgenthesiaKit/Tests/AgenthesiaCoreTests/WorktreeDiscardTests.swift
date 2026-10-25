@@ -13,7 +13,7 @@ import Testing
         let agent: AgentInstallRecord
     }
 
-    private func fixture() async throws -> Fixture {
+    func fixture() async throws -> Fixture {
         let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-discard-\(UUID())")
         let repo = directory.appending(path: "repo")
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
@@ -37,17 +37,17 @@ import Testing
     }
 
     /// Starts a session in a fresh worktree and waits until it is idle.
-    private func start(_ fixture: Fixture, in directory: URL? = nil) async throws -> (LiveSession, SessionRecord) {
+    func start(_ fixture: Fixture, in directory: URL? = nil) async throws -> (LiveSession, SessionRecord) {
         let owner = fixture.manager.start(directory: directory ?? fixture.repo, agent: fixture.agent)
         await owner.startup?.value
         return (owner, try #require(owner.controller?.session))
     }
 
-    private func project(of session: SessionRecord, in manager: SessionManager) async throws -> ProjectRecord? {
+    func project(of session: SessionRecord, in manager: SessionManager) async throws -> ProjectRecord? {
         try await manager.library.projects().first { $0.id == session.projectID }
     }
 
-    private func branches(_ repo: URL) async throws -> [String] {
+    func branches(_ repo: URL) async throws -> [String] {
         try await git(["branch", "--format=%(refname:short)"], in: repo).split(separator: "\n").map(String.init)
     }
 
@@ -182,7 +182,7 @@ import Testing
     }
 
     @Test func outcomesRoundTripThroughTheEventLog() throws {
-        for outcome in [WorktreeOutcome.discarded, .merged(commit: String(repeating: "a", count: 40))] {
+        for outcome in [WorktreeOutcome.discarded, .merged(commit: String(repeating: "a", count: 40), into: "main")] {
             let stored = StoredEvent(
                 sessionID: UUID(),
                 sequence: 1,
@@ -195,7 +195,8 @@ import Testing
             #expect(transcript.items.map(\.notice) == [outcome.notice])
         }
         #expect(
-            WorktreeOutcome.merged(commit: "0123456789abcdef").notice == "Merged as 0123456; the worktree was removed."
+            WorktreeOutcome.merged(commit: "0123456789abcdef", into: "feature/x").notice
+                == "Merged into feature/x as 0123456."
         )
         let other = StoredEvent(
             sessionID: UUID(),
@@ -205,7 +206,7 @@ import Testing
         #expect(WorktreeOutcome(lastEvent: other) == nil)
     }
 
-    @discardableResult private func git(_ arguments: [String], in directory: URL) async throws -> String {
+    @discardableResult func git(_ arguments: [String], in directory: URL) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(
@@ -234,7 +235,7 @@ import Testing
     }
 }
 
-@MainActor private final class DiscardGate {
+@MainActor final class DiscardGate {
     var entered = false
     private var continuation: CheckedContinuation<([String: String], String?), Never>?
     func wait() async -> ([String: String], String?) {

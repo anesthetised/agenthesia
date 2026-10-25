@@ -41,7 +41,8 @@ before implementation.
 - M7 is complete: session controls and prompt error recovery (#119), window restoration (#120),
   notifications and the Dock badge (#121). The app icon and the Dock tile (#122) deliver the icon half of
   #45; its first-run flow remains open.
-- M8 (Worktrees) is planned below under [ADR-0032](adr/0032-worktree-merge-and-discard.md).
+- M8 (Worktrees) follows [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123), discard
+  (#124) and review (#125) are merged; squash merge (#43) is implemented on `feat/worktree-merge`.
 
 ## Previous batch: session interactions (merged)
 
@@ -135,8 +136,8 @@ without this conversation; tiers follow AGENTS.md (light: Sonnet or Sol; strong:
 |---|---|---|---|---|
 | 1 | #41 Record the base branch | — | light | `baseBranch` stored at start; nil for detached `HEAD`, non-Git and legacy sessions. Merged in #123 |
 | 2 | #44 Discard and the worktree outcome | #41 | strong | `worktreeRemoved` event, safe removal of Agenthesia's worktrees only, Continue disabled, confirmation. Merged in #124 |
-| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch. Implemented on `feat/worktree-review`; verification below |
-| 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure |
+| 3 | #42 Review view | #41 | light | `baseBranch...HEAD` plus uncommitted, file by file; ADR-0024 fallback without a base branch. Merged in #125 |
+| 4 | #43 Squash merge | #44, #42 | strong | Preconditions, intermediate commit, squash and final commit with hooks, rollback on failure. Implemented on `feat/worktree-merge`; verification below |
 
 #42 and #44 can run in parallel in separate worktrees after #41; #43 reuses the removal and the event of
 #44 and opens from the review view of #42. Each slice is its own branch and pull request, and closes its
@@ -217,6 +218,74 @@ without starting an agent. Light and dark screenshots were captured; the light p
 `NSRequiresAquaSystemAppearance` argument, without changing System Settings. The test app was quit and
 temporary repository/worktree files removed. No code fix was needed. VoiceOver, system permission
 prompts and automatic window restoration were not checked.
+
+#43 implemented (2026-10-25): `SessionWorkspace.mergeCheck` and `merge`, `SessionManager.merge` with the
+turn hold in `SessionController`, the `merged(commit:into:)` outcome, and the merge sheet from review and the
+Session menu. The owner settled four questions the ADR left open: the final commit runs in the login shell's
+environment, the default message is the agent's session title or else the first prompt line, a saved
+session merges without starting its agent, and a hanging hook has no Cancel (quit waits for the merge).
+The owners end before the outcome is appended, rather than after as the issue listed, because closing
+can still record events and the outcome must stay last. No `merged` event had been written before, so
+the payload gained the base branch without a migration.
+
+Workspace tests with temporary repositories cover committed, uncommitted, untracked and deleted changes
+squashed into one commit with the session's exact tree and message; a base advanced independently; a
+conflict, a rejecting `pre-commit` hook, an untracked file the merge would overwrite and changes already on
+the base, each restoring the checkout without `SQUASH_MSG`; hooks found only on the given `PATH`
+(`commit-msg` and `pre-commit`); and every blocker (dirty checkout, other branch, detached checkout, missing
+base, no base, nothing to merge, worktree off its branch or missing, unresolved worktree conflicts) leaving
+refs, the checkout and the worktree untouched. Core tests cover a live and a saved merge, refusal during a
+turn, prompts, Continue, discard and a second merge refused while merging, quit waiting for a merge, a
+conflict that keeps the agent usable, a failed removal that keeps the merge and lets Discard finish it,
+and a session without a base branch. UI tests cover command eligibility and title, the default message,
+blocker and conflict states kept in the sheet, and the read-only result. Removing the hold from
+`dispatch`, any of the three `git reset --merge` calls, or the outcome guard in discard makes a test fail.
+`just lint`, full `just test`, `just coverage` (Core 98.0%, Workspace 97.9%, Persistence 100%) and
+`just app` pass. `swiftui-pro` asked to split the sheet's types into files and not to rely on colour
+alone for failures (applied); a vertical `TextField` was rejected because Return would press Merge.
+
+Checks in the built app (2026-10-25), scripted because the session had no computer-use tools (see
+AGENTS.md): a copy with its own bundle identifier ran with `CFFIXED_USER_HOME` pointing at a temporary
+directory, so its history, worktrees and Git identity never touched the owner's. MockAgent worked in a
+temporary repository with a `commit-msg` hook that appends a line, and wrote `notes.txt` through a real
+permission request. With a turn waiting for permission, *Merge into main…* explains that the session is
+busy and offers no Merge button. A dirty project checkout shows its blocker, and Git is left untouched.
+With the base branch advanced on the same file, Merge reports `file.txt`, leaves the base branch and the
+checkout as they were (no `SQUASH_MSG`) and the agent usable; the worktree only gains the intermediate commit.
+After the base was reset, the same sheet merged: one commit on `main` with the edited multi-line message and
+the hook's line (so the hook ran in the app's environment), the tree of the session including its
+untracked files, the worktree and branch gone, the session read-only with “Merged into main as a21ca50.”,
+“Merged” in the sidebar, and Continue, Discard, Review and Merge disabled. After Quit and relaunch the
+session opens from history read-only without starting an agent. The check found two defects, both fixed
+and re-checked in a rebuilt copy: the failure text in the sheet was cut off to one line, and the commit
+message field stayed visible beside a blocker. MockAgent's `write` needs an absolute path. Screenshots were
+captured; the test app was quit, the clipboard restored and temporary files removed. The owner can remove
+the notification entry of `io.github.anesthetised.Agenthesia.mergetest` in System Settings → Notifications
+(its first-run prompt appeared). Not verified: VoiceOver, commit signing (needs the owner's key and
+pinentry), and a hook that hangs.
+
+#43 review follow-up (2026-10-25): a `/code-review` pass found ten issues; nine are fixed. A history write
+failing after the commit and a failing `git reset --merge` no longer read as "the checkout was left as it
+was"; the alert about a kept worktree appears after the sheets close; the intermediate commit runs no hooks
+(`--no-verify` still ran `prepare-commit-msg` and `post-commit`); a merge, cherry-pick, revert or rebase in
+progress in the checkout blocks the merge instead of being aborted by the reset; discarding a merged
+session's leftover worktree says nothing is lost; leftovers are found at history refresh, not per sidebar
+render; ADR-0032 gained notes for the refinements; and duplicated text and code were shared. The message
+file is now written before anything changes. Not fixed: a removal that deletes the directory but fails to
+delete the branch leaves `agenthesia/<id>` for the user to delete, because the app cannot see it without
+running Git per row. New tests cover the hooks, the in-progress operation, a failed restore (a held
+`index.lock`), the failed history write, and the kept worktree through the window model; removing the
+hooks override, the operation check or the restore classification makes a test fail.
+
+CI on #127 (2026-10-25) stalled the whole test process for about 43 seconds and ran into its 120-second
+limit; main had finished its 650 tests in 34 seconds. Every suite that starts Git or an agent was slow at
+once, and the stack of the stalled process stood in a test's `while controller.status != .running { await
+Task.yield() }`: after the 60-second limit cancelled the test, the loop kept spinning on the main actor
+shared by every other test. Waits in the merge tests now poll with `Task.sleep` under a deadline and fail
+instead of spinning, and the three merge suites run one test at a time (`.serialized`), because eleven
+Workspace tests started Git processes at once. The Workspace fixture writes its Git configuration in one
+write instead of four processes. The first cause of the stall (a thundering herd of Git processes, or the
+spin after the first timeout) was not reproduced locally, where the suites take 4–13 seconds.
 
 ### M7 slices (2026-10-17)
 

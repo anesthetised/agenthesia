@@ -5,6 +5,7 @@ import SwiftUI
 struct SessionReviewView: View {
     @Bindable var review: SessionReview
     let files: SessionFiles
+    @Bindable var model: SessionWindowModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -63,8 +64,13 @@ struct SessionReviewView: View {
                     Text("Automatic refresh is unavailable: \(error)").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button("Merge…") { Task { await model.requestMerge() } }
+                    .disabled(!model.canMerge)
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }.padding()
+        }
+        .sheet(item: $model.merge) { request in
+            MergeSheet(request: request) { Task { await model.confirmMerge(request) } }
         }
         .frame(
             minWidth: 640,

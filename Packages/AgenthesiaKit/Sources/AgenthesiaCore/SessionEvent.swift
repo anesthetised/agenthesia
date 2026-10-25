@@ -49,7 +49,8 @@ public enum SessionEvent: Codable, Equatable, Sendable {
 
 /// How a session's worktree ended (ADR-0032).
 public enum WorktreeOutcome: Codable, Equatable, Sendable {
-    case merged(commit: String)
+    /// The squash commit on the base branch. The worktree may outlive a failed removal; Discard finishes it.
+    case merged(commit: String, into: String)
     case discarded
 
     /// The outcome recorded by a session's last event, if that event is one.
@@ -66,7 +67,7 @@ public enum WorktreeOutcome: Codable, Equatable, Sendable {
     /// The transcript and status line text.
     public var notice: String {
         switch self {
-        case .merged(let commit): "Merged as \(commit.prefix(7)); the worktree was removed."
+        case .merged(let commit, let base): "Merged into \(base) as \(commit.prefix(7))."
         case .discarded: "The worktree was discarded."
         }
     }

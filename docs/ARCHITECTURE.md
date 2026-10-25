@@ -29,7 +29,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands ([ADR-0015](adr/0015-agent-terminals.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
@@ -52,9 +52,23 @@ A `LiveSession` in Core owns one agent process and its `SessionController`
 one app database away from the main actor and provides project, install, and saved-session discovery.
 The owner resolves the login-shell environment, checks that the agent executable exists (so a typo
 leaves no worktree behind), prepares the workspace, creates metadata, and starts
-the ACP v1 adapter with filesystem access and form elicitation enabled; terminal and terminal-auth
-capabilities remain disabled.
-Agents must already be authenticated; authentication failures are displayed.
+the ACP v1 adapter with filesystem access, form elicitation and terminal auth enabled; the `terminal`
+capability remains disabled.
+
+Sign-in follows [ADR-0033](adr/0033-agent-sign-in.md). When `session/new`, `session/load` or
+`session/resume` answers `-32000`, `SessionController` returns to `ready` without writing anything,
+keeping the connection and profile, and throws `authenticationRequired`. `LiveSession` then publishes
+`signIn` with the agent's methods; the session counts as *Needs input*, posts a notice, and the manager
+treats it as starting, so it cannot be discarded or merged. An agent method calls `authenticate` on the
+open connection and then `SessionController.retry`, which repeats only the session request. A terminal
+method closes the connection, stops the agent, and runs the agent's command with the method's `args` and
+`env` (plus `TERM=xterm-256color`) as a `TerminalProcess` in the session's working directory, exposed to the
+UI as `SignInTerminal`; status 0 launches the agent again and starts or reopens the session on the new
+connection. Another `-32000` returns to the method list with a message. Cancel stops the attempt (the
+terminal's process group, or the agent for an agent method, which the next attempt launches again);
+closing the session also stops the terminal and waits for it. The window replaces the composer with
+`SignInPanel` and shows the terminal in a sheet hosting SwiftTerm's `TerminalView`, which feeds the
+command's output stream and sends typing and size changes back.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
@@ -406,8 +420,9 @@ records, supplies a draft `SessionRecord`, constructs an `AgentConnection` with 
 its delegate, and calls `start(connection:client:)`. Start initializes the connection, creates the
 remote session, persists its local metadata, then records the initial config options. Notifications
 arriving before `session/new` returns are buffered (at most 16 MiB) and committed after the baseline;
-updates for other remote session IDs are ignored. Initialization/authentication failures close the
-connection; authentication UI remains separate work.
+updates for other remote session IDs are ignored. Initialization failures close the connection; a
+`-32000` answer to the session request leaves the controller ready for `retry` or a new connection
+(ADR-0033).
 
 The controller owns one prompt task. `send` records the prompt before sending it to the agent;
 cancelling a task waiting on `send` does not cancel that owned turn. `stop` records the intent and sends
@@ -519,12 +534,15 @@ Process exit and stderr completion are separate events. Waiting for stderr first
 then allows up to 500 ms for the final drain, so calling it while the agent runs cannot close its pipe.
 CLI initialization errors display at most the last ten retained lines.
 
-`TerminalProcess` runs an agent terminal's command ([ADR-0015](adr/0015-agent-terminals.md)). It is
-spawned with `posix_spawn` as the leader of a new session; the pseudo-terminal's slave side is opened
-in the child after the session is created, so it becomes the controlling terminal, with an 80×24 window.
+`TerminalProcess` runs an agent terminal's command ([ADR-0015](adr/0015-agent-terminals.md)) or a sign-in
+method ([ADR-0033](adr/0033-agent-sign-in.md)). It is spawned with `posix_spawn` as the leader of a new
+session; the pseudo-terminal's slave side is opened in the child after the session is created, so it
+becomes the controlling terminal, with an 80×24 window unless the caller gives another size.
 A bare command is resolved through the command environment's `PATH` and a relative one against its
-working directory; a missing executable fails creation with `ENOENT`. Nothing is written to the
-terminal. The master side is read continuously, because a terminal's last close waits for its output
+working directory; a missing executable fails creation with `ENOENT`. Agent terminals write nothing to
+the terminal; sign-in writes typing in order on a private queue (dropping what a command has not read
+within a second) and sets the window size, both refused once the master side is closed. Output observers
+receive the retained bytes, then each chunk as it is read, until the end of output. The master side is read continuously, because a terminal's last close waits for its output
 to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
 batches so that noisy commands append in amortized constant time. A process source reaps the
 command. Both sources run on a private serial queue. The initial sizing slave remains open until the
@@ -594,7 +612,7 @@ not allowed (Apple system frameworks are fine).
 | Dependency | License | Used by |
 |---|---|---|
 | [GRDB](https://github.com/groue/GRDB.swift) (7.11.1+) | MIT | `Persistence` |
-| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) | MIT | `AgenthesiaUI` |
+| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (1.99.1+; with swift-png and h, Apache-2.0, linked on other platforms only) | MIT | `AgenthesiaUI` |
 | [swift-markdown](https://github.com/swiftlang/swift-markdown) (with swift-cmark, BSD-2-Clause) | Apache-2.0 | `Rendering` |
 | [STTextView](https://github.com/krzyzanowskim/STTextView) (with STTextKitPlus, BSD-3-Clause, and CoreTextSwift, MIT) | GPL-3.0 or commercial; used under GPL-3.0 | `Rendering` |
 | [SwiftTreeSitter](https://github.com/tree-sitter/swift-tree-sitter) (with tree-sitter, MIT) | BSD-3-Clause | `Rendering` |
@@ -606,6 +624,8 @@ Dependencies are added when the milestone that needs them starts, not up front.
 
 ### Pinning notes
 
+- **SwiftTerm** builds with a build tool plugin, so `xcodebuild` runs with `-skipPackagePluginValidation`
+  (`just app`) and Xcode asks once to *Trust & Enable* it.
 - **Grammars** are pinned to exact versions: grammar releases change node names, which breaks highlight
   queries.
 - **JavaScript, Python and YAML grammars come from forks** (`anesthetised/tree-sitter-{javascript,python,yaml}`,

@@ -231,14 +231,17 @@ import Testing
         defer { try? FileManager.default.removeItem(at: directory) }
         let sessions = manager(directory)
         let model = SessionWindowModel(sessions: sessions)
+        let signInFile = directory.appending(path: "signed-in").path(percentEncoded: false)
         for agent in [
-            AgentInstallRecord(name: "Missing", executable: "/does-not-exist"), try mock(arguments: ["--auth"]),
+            AgentInstallRecord(name: "Missing", executable: "/does-not-exist"),
+            try mock(arguments: ["--auth", "--auth-file", signInFile]),
         ] {
             model.start(directory: directory, executable: agent.executable, arguments: agent.arguments)
             let owner = try #require(model.owner)
             await owner.startup?.value
             await model.refresh()
-            #expect(owner.errorMessage != nil)
+            // A failed start, or one waiting for sign-in (ADR-0033): neither has history yet.
+            #expect((owner.errorMessage != nil) != (owner.signIn != nil))
             #expect(!model.canContinue)
             #expect(model.savedSessions.isEmpty)
             model.continueRestored()

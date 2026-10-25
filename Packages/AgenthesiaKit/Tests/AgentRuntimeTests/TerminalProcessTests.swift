@@ -138,6 +138,47 @@ import Testing
         #expect(await terminal.terminate() == .signaled(SIGTERM))
     }
 
+    @Test func forwardsInputAndTheWindowSize() async throws {
+        let terminal = try TerminalProcess(
+            launching: AgentCommand(
+                executable: "/bin/sh",
+                arguments: ["-c", "stty size; read line; echo \"got:$line\"; stty size"]
+            ),
+            columns: 100,
+            rows: 30
+        )
+        try await waitForOutput("30 100", from: terminal)
+        terminal.resize(columns: 120, rows: 40)
+        terminal.write(Data("hello\n".utf8))
+        #expect(await terminal.waitForExit() == .exited(0))
+        let output = text(terminal.output)
+        #expect(output.contains("got:hello"))
+        #expect(output.hasSuffix("40 120\n"))
+        // Input after the end is dropped rather than written to a closed or reused descriptor.
+        terminal.write(Data("late\n".utf8))
+        terminal.resize(columns: 10, rows: 10)
+    }
+
+    @Test func streamsRetainedAndLaterOutputToEachObserver() async throws {
+        let terminal = try TerminalProcess(
+            launching: AgentCommand(executable: "/bin/sh", arguments: ["-c", "echo one; read line; echo two"])
+        )
+        try await waitForOutput("one", from: terminal)
+        let first = terminal.outputUpdates()
+        let second = terminal.outputUpdates()
+        terminal.write(Data("\n".utf8))
+        #expect(await terminal.waitForExit() == .exited(0))
+        for updates in [first, second] {
+            var received = Data()
+            for await chunk in updates { received += chunk }
+            #expect(String(decoding: received, as: UTF8.self) == String(decoding: terminal.output.bytes, as: UTF8.self))
+        }
+        // An observer arriving after the end gets the retained output and finishes.
+        var late = Data()
+        for await chunk in terminal.outputUpdates() { late += chunk }
+        #expect(text(TerminalOutput(bytes: late)).hasSuffix("two\n"))
+    }
+
     @Test func escalatesToSigkill() async throws {
         let terminal = try TerminalProcess(
             launching: AgentCommand(

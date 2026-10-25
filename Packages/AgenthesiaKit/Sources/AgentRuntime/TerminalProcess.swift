@@ -14,16 +14,15 @@ public struct TerminalOutput: Sendable, Hashable {
     }
 }
 
-/// A command run for an agent in a pseudo-terminal (ADR-0015).
+/// A command run in a pseudo-terminal: an agent's terminal (ADR-0015) or a sign-in method (ADR-0033).
 ///
 /// The command is executed directly, without a shell, as the leader of a new session and process group
-/// with the pseudo-terminal as its controlling terminal. Nothing is written to its input. Output is read
-/// continuously, since a terminal's last close waits until its output has been read, and the newest
-/// bytes are retained up to the output limit.
+/// with the pseudo-terminal as its controlling terminal. Output is read continuously, since a terminal's
+/// last close waits until its output has been read, and the newest bytes are retained up to the output
+/// limit. Agent terminals write nothing to the input; ``write(_:)`` and ``resize(columns:rows:)`` serve
+/// an interactive sign-in.
 public actor TerminalProcess {
     public static let defaultOutputLimit = 1_048_576
-    static let columns: UInt16 = 80
-    static let rows: UInt16 = 24
 
     public nonisolated let processIdentifier: Int32
 
@@ -35,10 +34,17 @@ public actor TerminalProcess {
 
     /// Resolves a bare `executable` through the command environment's `PATH`, and a relative one against
     /// its working directory. Throws `ENOENT` when no executable is found.
-    public init(launching command: AgentCommand, outputLimit: Int = defaultOutputLimit) throws {
+    public init(
+        launching command: AgentCommand,
+        outputLimit: Int = defaultOutputLimit,
+        columns: UInt16 = 80,
+        rows: UInt16 = 24
+    ) throws {
         try self.init(
             launching: command,
             outputLimit: outputLimit,
+            columns: columns,
+            rows: rows,
             readerQueue: DispatchQueue(label: "Agenthesia.TerminalProcess", qos: .userInitiated),
             afterSpawn: { _ in }
         )
@@ -47,6 +53,8 @@ public actor TerminalProcess {
     init(
         launching command: AgentCommand,
         outputLimit: Int = defaultOutputLimit,
+        columns: UInt16 = 80,
+        rows: UInt16 = 24,
         readerQueue: DispatchQueue,
         afterSpawn: @Sendable (Int32) -> Void
     ) throws {
@@ -77,7 +85,7 @@ public actor TerminalProcess {
 
         let pid: pid_t
         do {
-            var size = winsize(ws_row: Self.rows, ws_col: Self.columns, ws_xpixel: 0, ws_ypixel: 0)
+            var size = winsize(ws_row: rows, ws_col: columns, ws_xpixel: 0, ws_ypixel: 0)
             guard terminal >= 0, ioctl(terminal, TIOCSWINSZ, &size) == 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
@@ -126,6 +134,15 @@ public actor TerminalProcess {
 
     /// The newest raw output, at most the output limit.
     public nonisolated var output: TerminalOutput { reader.output }
+
+    /// The retained output, then each later chunk as it is read; finishes at the end of output.
+    public nonisolated func outputUpdates() -> AsyncStream<Data> { reader.updates() }
+
+    /// Writes to the terminal's input in order, off the caller's thread. Input after the end is dropped.
+    public nonisolated func write(_ data: Data) { reader.write(data) }
+
+    /// Sets the terminal's window size; the kernel signals the foreground process group.
+    public nonisolated func resize(columns: UInt16, rows: UInt16) { reader.resize(columns: columns, rows: rows) }
 
     /// Waits for the command to exit, then up to 500 ms for the end of its output. A descendant
     /// holding the terminal open cannot keep this suspended indefinitely.
@@ -183,23 +200,31 @@ private final class TerminalReader: Sendable {
         var truncated = false
         var finished = false
         var waiters: [CheckedContinuation<Void, Never>] = []
+        var observers: [UUID: AsyncStream<Data>.Continuation] = [:]
     }
 
     private let limit: Int
     private let master: Int32
     private let source: any DispatchSourceRead
     private let state = Mutex(State())
+    /// The master descriptor until it is closed, so input and resizing never reach a reused descriptor.
+    private let descriptor: Mutex<Int32?>
+    private let input = DispatchQueue(label: "Agenthesia.TerminalProcess.input", qos: .userInitiated)
 
     init(master: Int32, limit: Int, queue: DispatchQueue) {
         self.master = master
         self.limit = limit
+        descriptor = Mutex(master)
         source = DispatchSource.makeReadSource(fileDescriptor: master, queue: queue)
         // The handlers keep the reader alive until the source is cancelled.
         source.setEventHandler { [self] in
             _ = read(upTo: 16_384)
         }
         source.setCancelHandler { [self] in
-            Darwin.close(master)
+            descriptor.withLock { descriptor in
+                descriptor = nil
+                Darwin.close(master)
+            }
             finish()
         }
         let registered = DispatchSemaphore(value: 0)
@@ -246,6 +271,58 @@ private final class TerminalReader: Sendable {
         }
     }
 
+    func updates() -> AsyncStream<Data> {
+        let (stream, continuation) = AsyncStream.makeStream(of: Data.self)
+        let id = UUID()
+        let registered = state.withLock { state in
+            let retained = state.bytes.suffix(limit)
+            if !retained.isEmpty { continuation.yield(Data(retained)) }
+            guard !state.finished else { return false }
+            state.observers[id] = continuation
+            return true
+        }
+        guard registered else {
+            continuation.finish()
+            return stream
+        }
+        continuation.onTermination = { [weak self] _ in
+            _ = self?.state.withLock { $0.observers.removeValue(forKey: id) }
+        }
+        return stream
+    }
+
+    func write(_ data: Data) {
+        input.async { [self] in
+            descriptor.withLock { descriptor in
+                guard let descriptor else { return }
+                var remaining = data[...]
+                // A command that stops reading must not hold the queue for good; the rest is dropped.
+                let deadline = ContinuousClock.now + .seconds(1)
+                while !remaining.isEmpty, ContinuousClock.now < deadline {
+                    let count = remaining.withUnsafeBytes { Darwin.write(descriptor, $0.baseAddress, $0.count) }
+                    if count > 0 {
+                        remaining = remaining.dropFirst(count)
+                    } else if count < 0, errno == EAGAIN {
+                        var ready = pollfd(fd: descriptor, events: Int16(POLLOUT), revents: 0)
+                        _ = poll(&ready, 1, 50)
+                    } else if count < 0, errno == EINTR {
+                        continue
+                    } else {
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    func resize(columns: UInt16, rows: UInt16) {
+        descriptor.withLock { descriptor in
+            guard let descriptor else { return }
+            var size = winsize(ws_row: rows, ws_col: columns, ws_xpixel: 0, ws_ypixel: 0)
+            _ = ioctl(descriptor, TIOCSWINSZ, &size)
+        }
+    }
+
     /// Waits for end of file; after `timeout`, stops reading and closes the terminal.
     func waitForEnd(timeout: Duration) async {
         let timer = Task { [source] in
@@ -263,6 +340,7 @@ private final class TerminalReader: Sendable {
     private func append(_ chunk: ArraySlice<UInt8>) {
         state.withLock { state in
             state.bytes.append(contentsOf: chunk)
+            for observer in state.observers.values { observer.yield(Data(chunk)) }
             // Dropping in batches keeps appends amortized O(1) for noisy commands.
             if state.bytes.count > limit + limit / 4 {
                 state.bytes = Data(state.bytes.suffix(limit))
@@ -272,11 +350,16 @@ private final class TerminalReader: Sendable {
     }
 
     private func finish() {
-        let waiters = state.withLock { state in
+        let (waiters, observers) = state.withLock { state in
             state.finished = true
-            defer { state.waiters.removeAll() }
-            return state.waiters
+            defer {
+                state.waiters.removeAll()
+                state.observers.removeAll()
+            }
+            return (state.waiters, state.observers.values)
         }
         for waiter in waiters { waiter.resume() }
+        // Outside the lock: finishing runs `onTermination`, which takes it.
+        for observer in observers { observer.finish() }
     }
 }

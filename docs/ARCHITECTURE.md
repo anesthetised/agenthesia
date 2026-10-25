@@ -85,14 +85,15 @@ session branch since `baseRevision`.
 
 Merge (ADR-0032) goes through `SessionManager.merge` and squashes the session into `baseBranch` in the
 project checkout. `SessionWorkspace.mergeCheck` reports blockers without writing: no base branch, a
-missing base branch, a checkout on another branch or with tracked changes, a worktree that is missing,
-off its branch or has unresolved conflicts, and nothing to merge; otherwise it counts files changed from
-the merge base and the session's commits. `SessionWorkspace.merge` repeats the check, commits uncommitted
-work in the worktree (`--no-verify`, unsigned, squashed away), runs `git merge --squash` and `git commit -F`
-in the checkout, and returns the new commit. The final commit gets the login shell's environment
+missing base branch, a checkout on another branch, with tracked changes or with a merge, cherry-pick,
+revert or rebase in progress, a worktree that is missing, off its branch or has unresolved conflicts, and
+nothing to merge; otherwise it counts files changed from the merge base and the session's commits.
+`SessionWorkspace.merge` repeats the check, commits uncommitted work in the worktree (no hooks at all,
+unsigned, squashed away), runs `git merge --squash` and `git commit -F` in the checkout, and returns the new
+commit. The final commit gets the login shell's environment
 (`ShellEnvironment`, as for agents), so hooks and signing find their tools when the app was opened from the
 Dock. A conflict, a refused squash, a rejecting hook or an empty squash runs `git reset --merge`, which
-restores the checkout and removes `SQUASH_MSG`.
+restores the checkout and removes `SQUASH_MSG`; if that reset fails as well, the failure says so.
 
 While a merge runs, the manager refuses Continue, discard and a second merge, and `SessionController`
 holds turns (`beginMerge`/`endMerge`): dispatches are refused and the composer is disabled. A merge
@@ -100,8 +101,9 @@ starts only when the live owner, if any, is idle with no queued send pending; a 
 without starting its agent. The agent stays attached until the commit exists, so it can resolve a
 conflict. Then the owners end first, because closing may still record events and the outcome must stay
 the last one, `worktreeRemoved(.merged(commit:into:))` is appended, and the worktree and branch are
-removed. A failed removal is reported, the merge stays recorded, and *Discard Worktree…* finishes the
-removal without replacing the outcome. Quit waits for a running merge. The sheet's default message is the
+removed. A failed history write after the commit is reported with the commit and keeps the worktree. A
+failed removal is reported after the sheets close, the merge stays recorded, and *Discard Worktree…*
+finishes the removal without replacing the outcome; its confirmation says that nothing of it is lost. Quit waits for a running merge. The sheet's default message is the
 agent's session title, or the first line of the first prompt.
 
 `AgenthesiaUI` owns presentation and window integration. Its shared `TranscriptTableController` uses

@@ -194,6 +194,25 @@ import Testing
         await #expect(throws: SessionManager.DiscardError.alreadyRemoved) { try await manager.discard(session) }
     }
 
+    @Test func aFailedHistoryWriteAfterTheCommitKeepsTheWorktree() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let (owner, session) = try await helpers.start(fixture)
+        try write("hello", to: "greeting.txt", in: session)
+        manager.recordMerge = { _, _ in throw CocoaError(.fileWriteOutOfSpace) }
+
+        do {
+            _ = try await manager.merge(session, message: "Unrecorded")
+            Issue.record("The failed history write was ignored.")
+        } catch SessionManager.MergeError.notRecorded(let commit, _) {
+            #expect(try await helpers.git(["rev-parse", "main"], in: fixture.repo) == commit)
+        }
+        #expect(owner.isClosed && !manager.isMerging(session.id))
+        #expect(try await manager.library.worktreeOutcomes().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: session.workingDirectory))
+    }
+
     @Test func aSessionWithoutABaseBranchIsBlocked() async throws {
         let fixture = try await fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }

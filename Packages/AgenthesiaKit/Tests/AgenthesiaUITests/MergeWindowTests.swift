@@ -135,6 +135,46 @@ import Testing
         await model.sessions.closeAll()
     }
 
+    @Test func aKeptWorktreeIsReportedAfterTheSheetsCloseAndDiscardFinishesIt() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let model = fixture.model
+        let path = fixture.record.workingDirectory
+        try "hello".write(to: URL(filePath: path).appending(path: "greeting"), atomically: true, encoding: .utf8)
+        // A locked worktree needs a second --force, so Git refuses to remove it after the commit.
+        try await shell("git worktree lock '\(path)'", in: fixture.repo)
+        await model.requestMerge()
+        let request = try #require(model.merge)
+        request.message = "Locked"
+
+        await model.confirmMerge(request)
+        #expect(model.merge == nil && request.failure == nil)
+        #expect(model.alertTitle == "The Merge Did Not Finish")
+        #expect(model.alertMessage?.contains("Use Discard Worktree… to remove it.") == true)
+        #expect(model.leftoverWorktrees == [fixture.record.id] && model.canDiscard(fixture.record))
+        guard case .merged(_, "main") = model.outcomes[fixture.record.id] else {
+            Issue.record("The merge was not recorded.")
+            return
+        }
+        await model.requestDiscard(fixture.record)
+        let pending = try #require(model.pendingDiscard)
+        #expect(pending.mergedInto == "main")
+        #expect(
+            pending.message
+                == "Its changes are already merged into main. The leftover worktree and its branch will be removed."
+        )
+
+        try await shell("git worktree unlock '\(path)'", in: fixture.repo)
+        model.alertMessage = nil
+        await model.confirmDiscard(pending)
+        #expect(model.alertMessage == nil && model.leftoverWorktrees.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: path) && !model.canDiscard(fixture.record))
+        guard case .merged = model.outcomes[fixture.record.id] else {
+            Issue.record("Discard replaced the merge.")
+            return
+        }
+    }
+
     @Test func theSummaryCountsFilesAndCommits() {
         #expect(
             MergeSheet.summary(base: "main", files: 1, commits: 1)

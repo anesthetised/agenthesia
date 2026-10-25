@@ -29,7 +29,10 @@ public final class LiveSession {
     /// Where attached files from the user's checkout are found in the session worktree (ADR-0018).
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
-    @ObservationIgnored var environment: @Sendable () async -> (values: [String: String], diagnostic: String?) = {
+    @ObservationIgnored var environment = LiveSession.shellEnvironment
+
+    /// The login shell's environment, shared by agent launches and merge commits.
+    static let shellEnvironment: @Sendable () async -> (values: [String: String], diagnostic: String?) = {
         let resolution = await ShellEnvironment.shared.resolve()
         return (resolution.environment, resolution.diagnostic)
     }

@@ -14,6 +14,8 @@ import SwiftUI
     var restored: SessionController?
     /// Sessions whose worktree was merged or discarded, read with history (ADR-0032).
     var outcomes: [UUID: WorktreeOutcome] = [:]
+    /// Merged sessions whose worktree removal failed, found at each history refresh rather than on every render.
+    var leftoverWorktrees: Set<UUID> = []
     /// The discard waiting for confirmation.
     var pendingDiscard: PendingDiscard?
     /// The merge sheet; it opens above the review when that is shown.
@@ -120,7 +122,7 @@ import SwiftUI
         guard !closed else { return false }
         switch outcome(of: session.id) {
         case nil: break
-        case .merged: guard FileManager.default.fileExists(atPath: session.workingDirectory) else { return false }
+        case .merged: guard leftoverWorktrees.contains(session.id) else { return false }
         case .discarded: return false
         }
         return sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
@@ -140,10 +142,16 @@ import SwiftUI
         let session: SessionRecord
         /// Nil when Git could not count what would be lost; the alert still warns.
         let summary: SessionManager.DiscardSummary?
+        /// The base branch of a merge whose worktree is left over; nothing of it is lost.
+        var mergedInto: String?
         var id: UUID { session.id }
 
         var title: String { "Discard the worktree of “\(session.title ?? "Session")”?" }
         var message: String {
+            if let mergedInto {
+                return
+                    "Its changes are already merged into \(mergedInto). The leftover worktree and its branch will be removed."
+            }
             guard let summary else {
                 return "Its uncommitted files and the commits on its branch will be deleted. This cannot be undone."
             }
@@ -230,6 +238,10 @@ import SwiftUI
     /// Counts what would be lost and asks for confirmation.
     func requestDiscard(_ session: SessionRecord) async {
         guard canDiscard(session) else { return }
+        if case .merged(_, let base) = outcome(of: session.id) {
+            pendingDiscard = PendingDiscard(session: session, summary: nil, mergedInto: base)
+            return
+        }
         let summary: SessionManager.DiscardSummary?
         do { summary = try await sessions.discardSummary(session) } catch let error as SessionManager.DiscardError {
             showAlert("Cannot Discard the Worktree", error)
@@ -266,18 +278,26 @@ import SwiftUI
         defer { request.isMerging = false }
         let id = request.session.id
         let shown = displayed?.session.id == id || owner?.sessionID == id
+        var committed: SessionManager.MergeError?
         do {
             try await sessions.merge(request.session, message: request.message)
         } catch let error as SessionManager.MergeError {
-            guard case .worktreeKept = error else { request.failure = error; return }
-            showAlert("The Worktree Was Not Removed", error)
+            switch error {
+            case .worktreeKept, .notRecorded: committed = error
+            default:
+                request.failure = error
+                return
+            }
         } catch {
-            request.failure = .failed(error.localizedDescription)
+            // Refused before Git ran, so nothing changed.
+            request.failure = .blocked(error.localizedDescription)
             return
         }
         if merge === request { merge = nil }
         if review?.id == id { review = nil }
         await refreshShowing(id, shown: shown)
+        // After the sheets have gone, so the alert is not lost behind a dismissing sheet.
+        if let committed { showAlert("The Merge Did Not Finish", committed) }
     }
 
     private func showAlert(_ title: String, _ error: any Error) {
@@ -295,6 +315,15 @@ import SwiftUI
             history = try await library.history()
             projects = try await library.projects()
             outcomes = try await library.worktreeOutcomes()
+            leftoverWorktrees = Set(
+                history.filter {
+                    if case .merged = outcomes[$0.id] {
+                        FileManager.default.fileExists(atPath: $0.workingDirectory)
+                    } else {
+                        false
+                    }
+                }.map(\.id)
+            )
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }

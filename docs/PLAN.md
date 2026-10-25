@@ -264,6 +264,19 @@ the notification entry of `io.github.anesthetised.Agenthesia.mergetest` in Syste
 (its first-run prompt appeared). Not verified: VoiceOver, commit signing (needs the owner's key and
 pinentry), and a hook that hangs.
 
+#43 review follow-up (2026-10-25): a `/code-review` pass found ten issues; nine are fixed. A history write
+failing after the commit and a failing `git reset --merge` no longer read as "the checkout was left as it
+was"; the alert about a kept worktree appears after the sheets close; the intermediate commit runs no hooks
+(`--no-verify` still ran `prepare-commit-msg` and `post-commit`); a merge, cherry-pick, revert or rebase in
+progress in the checkout blocks the merge instead of being aborted by the reset; discarding a merged
+session's leftover worktree says nothing is lost; leftovers are found at history refresh, not per sidebar
+render; ADR-0032 gained notes for the refinements; and duplicated text and code were shared. The message
+file is now written before anything changes. Not fixed: a removal that deletes the directory but fails to
+delete the branch leaves `agenthesia/<id>` for the user to delete, because the app cannot see it without
+running Git per row. New tests cover the hooks, the in-progress operation, a failed restore (a held
+`index.lock`), the failed history write, and the kept worktree through the window model; removing the
+hooks override, the operation check or the restore classification makes a test fail.
+
 ### M7 slices (2026-10-17)
 
 The owner accepted ADR-0026. Slices 1–2 are merged; slice 3 (#39) is implemented in this batch.

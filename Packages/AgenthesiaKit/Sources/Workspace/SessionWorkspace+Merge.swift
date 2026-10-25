@@ -10,6 +10,8 @@ extension SessionWorkspace {
         case worktreeUnavailable
         case unresolvedConflicts
         case nothingToMerge
+        /// A merge, cherry-pick, revert or rebase is in progress in the project checkout.
+        case checkoutOperationInProgress
 
         public var explanation: String {
             switch self {
@@ -26,6 +28,9 @@ extension SessionWorkspace {
             case .unresolvedConflicts:
                 "The session worktree has unresolved conflicts. Ask the agent to resolve them before merging."
             case .nothingToMerge: "The session has no changes to merge."
+            case .checkoutOperationInProgress:
+                "A merge, cherry-pick, revert or rebase is in progress in the project checkout. Finish or abort it "
+                    + "to merge."
             }
         }
     }
@@ -42,6 +47,8 @@ extension SessionWorkspace {
         case conflicts([String])
         /// Git refused the squash or the final commit, for example in a hook; the checkout was restored.
         case failed(String)
+        /// Restoring the checkout with `git reset --merge` failed as well; Git's output of both.
+        case notRestored(String)
     }
 
     /// What blocks merging the session into `baseBranch`, or what the merge would bring. Read-only.
@@ -63,13 +70,18 @@ extension SessionWorkspace {
         return try await blocking {
             if case .blocked(let blocker) = try check(worktree, baseBranch) { throw MergeFailure.blocked(blocker) }
             let project = worktree.projectDirectory
+            // Written before anything changes, so a failed write cannot strand a squash in the checkout.
+            let file = FileManager.default.temporaryDirectory.appending(path: "agenthesia-merge-\(UUID().uuidString)")
+            try message.write(to: file, atomically: true, encoding: .utf8)
+            defer { try? FileManager.default.removeItem(at: file) }
             if !(try git(["status", "--porcelain", "--untracked-files=all"], in: worktree.directory)).isEmpty {
                 try git(["add", "-A"], in: worktree.directory)
-                // Squashed away below, so it skips hooks and signing.
+                // Squashed away below, so it runs no hooks at all (`--no-verify` would still run
+                // prepare-commit-msg and post-commit) and is not signed.
                 try git(
                     [
-                        "-c", "commit.gpgSign=false", "commit", "--quiet", "--no-verify", "-m",
-                        "Uncommitted session changes",
+                        "-c", "commit.gpgSign=false", "-c", "core.hooksPath=/dev/null", "commit", "--quiet",
+                        "--no-verify", "-m", "Uncommitted session changes",
                     ],
                     in: worktree.directory,
                     environment: environment
@@ -80,25 +92,29 @@ extension SessionWorkspace {
             } catch let error as WorkspaceError {
                 let unmerged =
                     (try? gitOutput(["diff", "--name-only", "--diff-filter=U", "-z"], in: project)) ?? Data()
-                try git(["reset", "--merge"], in: project)
+                try restore(project, after: error.message)
                 let conflicts = unmerged.split(separator: 0).map { String(decoding: $0, as: UTF8.self) }
                 throw conflicts.isEmpty ? MergeFailure.failed(error.message) : .conflicts(conflicts)
             }
             // The session's changes may already be on the base branch.
             if (try? git(["diff", "--cached", "--quiet"], in: project)) != nil {
-                try git(["reset", "--merge"], in: project)
+                try restore(project, after: "Nothing to merge.")
                 throw MergeFailure.blocked(.nothingToMerge)
             }
-            let file = FileManager.default.temporaryDirectory.appending(path: "agenthesia-merge-\(UUID().uuidString)")
-            try message.write(to: file, atomically: true, encoding: .utf8)
-            defer { try? FileManager.default.removeItem(at: file) }
             do {
                 try git(["commit", "--quiet", "-F", file.path], in: project, environment: environment)
             } catch let error as WorkspaceError {
-                try git(["reset", "--merge"], in: project)
+                try restore(project, after: error.message)
                 throw MergeFailure.failed(error.message)
             }
             return try git(["rev-parse", "HEAD"], in: project)
+        }
+    }
+
+    /// `git reset --merge` after a failed squash; if that fails too, the checkout is reported as not restored.
+    private static func restore(_ project: URL, after failure: String) throws {
+        do { try git(["reset", "--merge"], in: project) } catch let error as WorkspaceError {
+            throw MergeFailure.notRestored("\(failure)\n\n\(error.message)")
         }
     }
 
@@ -116,6 +132,11 @@ extension SessionWorkspace {
         }
         guard try git(["status", "--porcelain", "--untracked-files=no"], in: project).isEmpty else {
             return .blocked(.checkoutHasChanges)
+        }
+        // `git reset --merge` after a failure would silently abort the user's own operation.
+        for state in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"] {
+            let path = try git(["rev-parse", "--path-format=absolute", "--git-path", state], in: project)
+            if FileManager.default.fileExists(atPath: path) { return .blocked(.checkoutOperationInProgress) }
         }
         guard FileManager.default.fileExists(atPath: worktree.directory.path), try isRegistered(worktree),
             (try? git(["symbolic-ref", "--quiet", "HEAD"], in: worktree.directory)) == branch

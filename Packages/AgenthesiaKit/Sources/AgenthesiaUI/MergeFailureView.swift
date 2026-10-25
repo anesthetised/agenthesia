@@ -17,7 +17,10 @@ struct MergeFailureView: View {
                         + "conflicts, then merge again."
                 ).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .failed(let output):
-                heading("Git stopped the merge, and the project checkout was left as it was.")
+                heading(SessionManager.MergeError.failedHeading)
+                self.output(output)
+            case .notRestored(let output):
+                heading(SessionManager.MergeError.notRestoredHeading)
                 self.output(output)
             default:
                 heading(failure.localizedDescription)

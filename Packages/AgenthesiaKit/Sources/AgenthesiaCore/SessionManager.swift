@@ -1,4 +1,3 @@
-import AgentRuntime
 public import Foundation
 import Observation
 public import Persistence
@@ -19,6 +18,8 @@ public final class SessionManager {
     private var merging: [UUID: Task<String, any Error>] = [:]
     // Test seam applied to new owners and merges; production uses the login-shell resolver.
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
+    // Test seam for a history write failing after the merge commit; production appends to the library.
+    @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
     private let worktreesRoot: URL
 
     /// `worktreesRoot` defaults to `~/.agenthesia/worktrees`.
@@ -151,14 +152,22 @@ public final class SessionManager {
         case blocked(String)
         /// Conflicting paths, relative to the project root.
         case conflicts([String])
-        /// Git's output, for example from a rejecting hook.
+        /// Git's output, for example from a rejecting hook; the checkout was restored.
         case failed(String)
+        /// Restoring the checkout failed after Git stopped the merge; Git's output.
+        case notRestored(String)
+        /// The commit exists, but history could not record it; the worktree was kept.
+        case notRecorded(commit: String, reason: String)
         /// The commit exists and is recorded, but the worktree is still there; Discard Worktree… removes it.
         case worktreeKept(commit: String, reason: String)
 
         static let busyExplanation =
             "The session is working, starting, or being merged or discarded. Merge once it is idle, with no "
             + "queued prompts waiting to be sent."
+        public static let failedHeading = "Git stopped the merge, and the project checkout was left as it was."
+        public static let notRestoredHeading =
+            "Git stopped the merge, and restoring the project checkout failed too. Check it with `git status`; "
+            + "`git reset --merge` there undoes the merge."
 
         public var errorDescription: String? {
             switch self {
@@ -167,7 +176,11 @@ public final class SessionManager {
             case .conflicts(let paths):
                 "The session’s changes conflict with the base branch in \(paths.count == 1 ? "1 file" : "\(paths.count) files"). "
                     + "The project checkout was left as it was."
-            case .failed(let output): "Git stopped the merge, and the project checkout was left as it was.\n\n\(output)"
+            case .failed(let output): "\(Self.failedHeading)\n\n\(output)"
+            case .notRestored(let output): "\(Self.notRestoredHeading)\n\n\(output)"
+            case .notRecorded(let commit, let reason):
+                "Merged as \(commit.prefix(7)), but history could not record the merge, so the worktree was kept. "
+                    + reason
             case .worktreeKept(let commit, let reason):
                 "Merged as \(commit.prefix(7)), but the worktree could not be removed. \(reason) "
                     + "Use Discard Worktree… to remove it."
@@ -179,6 +192,7 @@ public final class SessionManager {
             case .blocked(let blocker): self = .blocked(blocker.explanation)
             case .conflicts(let paths): self = .conflicts(paths)
             case .failed(let output): self = .failed(output)
+            case .notRestored(let output): self = .notRestored(output)
             }
         }
     }
@@ -206,12 +220,12 @@ public final class SessionManager {
             throw MergeError.blocked(SessionWorkspace.MergeBlocker.noBaseBranch.explanation)
         }
         let controller = owner(of: id)?.controller
-        guard canBeginMerge(id), controller?.beginMerge() ?? true else { throw MergeError.busy }
+        guard !isOccupied(id), controller?.beginMerge() ?? true else { throw MergeError.busy }
         let task = Task {
             defer { controller?.endMerge() }
             let (worktree, outcome) = try await removableWorktree(session)
             guard outcome == nil else { throw DiscardError.alreadyRemoved }
-            let resolve = environment ?? Self.shellEnvironment
+            let resolve = environment ?? LiveSession.shellEnvironment
             let commit: String
             do {
                 commit = try await SessionWorkspace.merge(
@@ -225,7 +239,16 @@ public final class SessionManager {
             }
             // Closing may still record events (a cancelled form), and the outcome must stay the last one.
             for owner in owners where owner.sessionID == id { await end(owner) }
-            try await library.record(.merged(commit: commit, into: base), for: id)
+            let merged = WorktreeOutcome.merged(commit: commit, into: base)
+            do {
+                if let recordMerge {
+                    try await recordMerge(merged, id)
+                } else {
+                    try await library.record(merged, for: id)
+                }
+            } catch {
+                throw MergeError.notRecorded(commit: commit, reason: error.localizedDescription)
+            }
             do { try await SessionWorkspace.remove(worktree) } catch {
                 throw MergeError.worktreeKept(commit: commit, reason: error.localizedDescription)
             }
@@ -238,14 +261,10 @@ public final class SessionManager {
 
     /// Nothing else runs on the session, and its live owner, if any, is idle with no queued send pending.
     private func canBeginMerge(_ id: UUID) -> Bool {
-        guard !isMerging(id), !isDiscarding(id), !isStarting(id) else { return false }
-        return owner(of: id)?.controller?.canBeginMerge ?? true
+        !isOccupied(id) && owner(of: id)?.controller?.canBeginMerge ?? true
     }
 
-    private static let shellEnvironment: @Sendable () async -> (values: [String: String], diagnostic: String?) = {
-        let resolution = await ShellEnvironment.shared.resolve()
-        return (resolution.environment, resolution.diagnostic)
-    }
+    private func isOccupied(_ id: UUID) -> Bool { isMerging(id) || isDiscarding(id) || isStarting(id) }
 
     /// Starting a new session or continuing a saved one.
     private func isStarting(_ id: UUID) -> Bool { owners.contains { $0.sessionID == id && $0.isStarting } }

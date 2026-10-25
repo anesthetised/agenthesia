@@ -3,19 +3,28 @@ import Testing
 
 @testable import Workspace
 
-@Suite(.timeLimit(.minutes(1))) struct WorktreeMergeTests {
+@Suite(.serialized, .timeLimit(.minutes(1))) struct WorktreeMergeTests {
     typealias Fixture = WorktreeRemovalTests.Fixture
 
     /// A repository whose merge commits need no global configuration and run only the hooks a test installs.
     func fixture() async throws -> Fixture {
         let fixture = try await Fixture()
-        let hooks = fixture.repo.appending(path: ".git/hooks")
-        for (key, value) in [
-            ("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgSign", "false"),
-            ("core.hooksPath", hooks.path),
-        ] {
-            try await SessionWorkspace.git(["config", key, value], in: fixture.repo)
-        }
+        // One write instead of a `git config` process per key: these tests start many Git processes already.
+        let config = fixture.repo.appending(path: ".git/config")
+        let settings = """
+
+            [user]
+            \tname = Test
+            \temail = test@example.com
+            [commit]
+            \tgpgSign = false
+            [core]
+            \thooksPath = \(fixture.repo.appending(path: ".git/hooks").path)
+            """
+        let handle = try FileHandle(forWritingTo: config)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(settings.utf8))
         return fixture
     }
 

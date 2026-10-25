@@ -277,6 +277,16 @@ running Git per row. New tests cover the hooks, the in-progress operation, a fai
 `index.lock`), the failed history write, and the kept worktree through the window model; removing the
 hooks override, the operation check or the restore classification makes a test fail.
 
+CI on #127 (2026-10-25) stalled the whole test process for about 43 seconds and ran into its 120-second
+limit; main had finished its 650 tests in 34 seconds. Every suite that starts Git or an agent was slow at
+once, and the stack of the stalled process stood in a test's `while controller.status != .running { await
+Task.yield() }`: after the 60-second limit cancelled the test, the loop kept spinning on the main actor
+shared by every other test. Waits in the merge tests now poll with `Task.sleep` under a deadline and fail
+instead of spinning, and the three merge suites run one test at a time (`.serialized`), because eleven
+Workspace tests started Git processes at once. The Workspace fixture writes its Git configuration in one
+write instead of four processes. The first cause of the stall (a thundering herd of Git processes, or the
+spin after the first timeout) was not reproduced locally, where the suites take 4–13 seconds.
+
 ### M7 slices (2026-10-17)
 
 The owner accepted ADR-0026. Slices 1–2 are merged; slice 3 (#39) is implemented in this batch.

@@ -4,7 +4,7 @@ import Testing
 @testable import AgenthesiaCore
 @testable import Persistence
 
-@MainActor @Suite(.timeLimit(.minutes(1))) struct WorktreeMergeTests {
+@MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct WorktreeMergeTests {
     typealias Fixture = WorktreeDiscardTests.Fixture
     let helpers = WorktreeDiscardTests()
 
@@ -18,6 +18,24 @@ import Testing
             try await helpers.git(["config", key, value], in: fixture.repo)
         }
         return fixture
+    }
+
+    /// Polls without spinning: a condition that never holds fails the test instead of starving the main actor,
+    /// which every other test of the process shares.
+    func waitUntil(
+        _ what: String,
+        timeout: Duration = .seconds(20),
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ condition: () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !condition() {
+            guard !Task.isCancelled, ContinuousClock.now < deadline else {
+                Issue.record("Timed out waiting until \(what).", sourceLocation: sourceLocation)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     func write(_ text: String, to path: String, in session: SessionRecord) throws {
@@ -94,13 +112,13 @@ import Testing
         let controller = try #require(owner.controller)
         try write("hello", to: "greeting.txt", in: session)
         #expect(await owner.submit("slow"))
-        while controller.status != .running { await Task.yield() }
+        await waitUntil("the turn runs") { controller.status == .running }
 
         #expect(try await manager.mergeCheck(session) == .blocked(SessionManager.MergeError.busyExplanation))
         await #expect(throws: SessionManager.MergeError.busy) { try await manager.merge(session, message: "Busy") }
         #expect(!manager.isMerging(session.id) && !controller.isMerging)
         await owner.stop()
-        while controller.status != .idle { await Task.yield() }
+        await waitUntil("the turn ends") { controller.status == .idle }
         // Stop paused the empty queue, which does not block a merge.
         _ = try await manager.merge(session, message: "After the turn")
         await manager.closeAll()
@@ -116,7 +134,7 @@ import Testing
         let gate = DiscardGate()
         manager.environment = { await gate.wait() }
         let merge = Task { try await manager.merge(session, message: "Gated") }
-        while !gate.entered { await Task.yield() }
+        await waitUntil("the merge asks for its environment") { gate.entered }
 
         #expect(manager.isMerging(session.id) && manager.mergingIDs == [session.id] && controller.isMerging)
         #expect(await owner.submit("hello") == false)
@@ -161,7 +179,7 @@ import Testing
         #expect(try await manager.library.worktreeOutcomes().isEmpty)
         // The agent can be asked to resolve the conflict.
         #expect(await owner.submit("merge the base branch"))
-        while controller.status != .idle || controller.completedTurns == 0 { await Task.yield() }
+        await waitUntil("the agent finishes its turn") { controller.status == .idle && controller.completedTurns > 0 }
         await manager.closeAll()
     }
 

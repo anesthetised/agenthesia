@@ -5,7 +5,7 @@ import Testing
 @testable import AgenthesiaCore
 @testable import AgenthesiaUI
 
-@MainActor @Suite(.timeLimit(.minutes(1))) struct MergeWindowTests {
+@MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct MergeWindowTests {
     struct Fixture {
         let directory: URL
         let repo: URL

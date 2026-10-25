@@ -37,5 +37,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
 | [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted |
+| [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

@@ -8,7 +8,7 @@ import Testing
 private func play(
     _ scenario: Scenario,
     router: Router = Router(),
-    timeout: Duration = .seconds(5)
+    timeout: Duration = ScenarioAgent.defaultTimeout
 ) async -> (Connection, Task<ScenarioAgent.Mismatch?, Never>) {
     let (agentSide, clientSide) = InMemoryTransport.pair()
     let agent = ScenarioAgent(scenario: scenario, transport: agentSide, timeout: timeout)
@@ -121,6 +121,14 @@ private func play(
             timeout: .milliseconds(50)
         )
         #expect(await run.value?.message.contains("closed") == true)
+    }
+
+    /// CI delayed main-actor clients by more than the former 5-second default, failing #129's tests.
+    @Test func waitsForAClientDelayedBySeveralSeconds() async throws {
+        let (client, run) = await play(Scenario([.expectRequest(method: "initialize", response: .result(nil))]))
+        try await Task.sleep(for: .seconds(6))
+        _ = try await client.request(method: "initialize", params: nil)
+        #expect(await run.value == nil)
     }
 
     @Test func reportsClosedConnectionsAndUnknownDeferredRequests() async {

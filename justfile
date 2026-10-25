@@ -22,6 +22,10 @@ test *args: test-scripts
 test-scripts:
     python3 -m unittest discover -s scripts -p 'test_*.py'
 
+# Allow macOS to finish writing test crash reports before CI uploads them (ReportCrash is asynchronous).
+wait-for-test-crash-reports:
+    sleep 30
+
 # Run package tests with coverage and enforce per-module thresholds (e.g. `just coverage --badge out.svg`)
 coverage *args:
     scripts/coverage.py clean {{package}}

@@ -43,7 +43,8 @@ before implementation.
   #45; its first-run flow remains open.
 - M8 (Worktrees) is complete under [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123),
   discard (#124), review (#125) and squash merge (#127).
-- Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is implemented and checked in the built app.
+- Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is merged in #128.
+- `ScenarioAgent` tolerates a saturated main actor in CI (#129); the saturation itself remains.
 
 ## Previous batch: session interactions (merged)
 
@@ -161,6 +162,29 @@ and system-prompt checks were not performed for this CI-only change.
 The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI rendering crash, strong tier) and M6 (Registry), whose
 installers need an ADR first. Small independent chores such as #73 (CI with Xcode 27) fit the light
 tier. The sections after this one record how M8, M7 and M4 were built and verified.
+
+### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
+
+The CI runner is not frozen during these failures; its main actor is saturated. In the failed run on
+`0fcb77a`, tests that take a fraction of a second locally (in-memory `EchoAgent` sessions, hosted views)
+each took 40–43 seconds and finished in one burst, as a shared serial queue does when it drains: hundreds
+of `@MainActor` tests (`SessionController`, hosted AppKit and SwiftUI views) share one main thread on a
+3-core runner. `ScenarioAgent` runs off the main actor, and its 5-second wait for the next client message
+expired while the controller was still queued, so it reported a mismatch and closed the transport. That
+yields every symptom in the issue: `start` throwing `.closed`, a prompt error read as transport loss
+(`.failed`, then `.invalidState`), a non-`nil` mismatch, and a test waiting for a notification that never
+comes until its time limit. The stack sample taken at the 120-second process timeout showed every thread
+idle, so no test was spinning or blocking a thread at that point.
+
+The default wait is now 50 seconds (`ScenarioAgent.defaultTimeout`): playback still ends, and closes the
+transport so the test's awaits fail with its step, before a suite's one-minute time limit. A regression
+test answers after 6 seconds and fails with `.closed` on the old default. A temporary experiment (not
+committed) blocked the main actor for 6 seconds during `SessionController.start` against a scenario: it
+failed with `.closed` at 5 seconds and passed at 50. `just lint` and `just test` pass.
+
+Not addressed: the saturation itself. Other waits tuned to a quiet machine can fail the same way, and
+the test process's output reaches the CI log in buffered bursts, so its timestamps do not show when a test
+ran, and output still buffered when the process is killed is lost.
 
 ### Agent sign-in (#32, 2026-10-25)
 

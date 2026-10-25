@@ -8,6 +8,8 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
         /// `canDecide` when the agent offered both `allow_once` and `reject_once`.
         case permission(requestID: UUID, canDecide: Bool)
         case input(requestID: UUID)
+        /// The agent waits for the user to sign in (ADR-0033).
+        case signIn
         case failure
         case finished
     }
@@ -52,6 +54,17 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
                     kind: .input(requestID: $0.id),
                     title: title,
                     body: $0.request.message
+                )
+            }
+            if owner.signIn != nil {
+                notices.append(
+                    .init(
+                        id: "sign-in.\(session)",
+                        sessionID: session,
+                        kind: .signIn,
+                        title: title,
+                        body: "Sign-in needed"
+                    )
                 )
             }
             switch owner.activity {

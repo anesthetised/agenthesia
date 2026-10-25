@@ -60,6 +60,27 @@ jobs:
           path: Packages/AgenthesiaKit/.build
           key: ${{ steps.package-cache.outputs.cache-primary-key }}
 
+      # ReportCrash writes asynchronously, including when a cache hit skips the save step above.
+      - name: Wait for test crash reports
+        if: ${{ failure() && steps.coverage.outcome == 'failure' }}
+        run: just wait-for-test-crash-reports
+
+      # An exception's stderr stack omits the other threads needed to investigate #126.
+      - name: Upload test crash reports
+        if: ${{ failure() && steps.coverage.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-crashes-${{ github.run_attempt }}
+          path: |
+            ~/Library/Logs/DiagnosticReports/swiftpm-testing*.ips
+            ~/Library/Logs/DiagnosticReports/AgenthesiaKitPackageTests*.ips
+            ~/Library/Logs/DiagnosticReports/xctest*.ips
+            /Library/Logs/DiagnosticReports/swiftpm-testing*.ips
+            /Library/Logs/DiagnosticReports/AgenthesiaKitPackageTests*.ips
+            /Library/Logs/DiagnosticReports/xctest*.ips
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload coverage badge
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7

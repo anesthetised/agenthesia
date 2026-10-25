@@ -119,6 +119,42 @@ CI pins Xcode 26.6 and runs package coverage and the app build in parallel with 
 build caches. The aggregate `Lint, test, build` status requires both jobs to pass; cache hits still run
 all checks. Badge publication runs only after both succeed on main.
 
+### CI Markdown attribute crash (#126, 2026-10-25)
+
+The [original failed run](https://github.com/anesthetised/agenthesia/actions/runs/40134242723/attempts/1)
+used macOS 26.6.2 (25G83), Xcode 26.6 and Swift 6.3.3. It aborted during the first quarter-second of
+the test run in `NSAttributeDictionary.mutableCopyWithZone`, called by `MarkdownRenderer.inlineCode`.
+This is a copy of the string's existing font/color attributes; the stack does not identify the new
+background color or inline-code marker as the nil value. The string is local and has not been published,
+and paragraph styles are applied later. Inspection found no mutation of shared attributes on this path.
+Cold AppKit initialization remains a hypothesis, not a diagnosis.
+
+On macOS 27.0.1 / Xcode 27.1, all 71 Rendering tests passed. Six fresh-process runs combining
+`marksInlineCodeForCallers`, `hostedSettingsKeepTheStoredChoice` and
+`previewIsSelectableReadOnlyAndAccessible` passed, as did an isolated inline-code control. These runs
+used `just test --build-system native -Xswiftc -profile-generate -Xswiftc -profile-coverage-mapping`
+with the test-name filter, to retain CI's single test bundle and instrumentation. They do not prove
+safety on the failing OS/toolchain.
+
+Thread Sanitizer reported no races in the 73-test Rendering/hosting diagnostic run, but
+`SourceViewTests.highlightsALargeFile` exhausted its existing highlighting wait under the sanitizer,
+so that run failed. The three-test cold-initialization scenario passed separately under Thread Sanitizer.
+These are correctness diagnostics, not benchmarks; no performance conclusion is drawn from their timings.
+
+The failed CI run retained no full crash report, so the other threads and framework image versions are
+unavailable. After a coverage failure, CI allows 30 seconds for macOS to write test-runner `.ips`
+reports, then attempts to upload them from both DiagnosticReports directories. Missing reports produce
+a warning, and the failed check stays failed.
+The artifact is named `test-crashes-<attempt>` and retained for 14 days. Inspect it on the next recurrence
+before choosing a fix. No renderer change or reproducing regression has been justified; #126 stays open.
+
+Validation: `just lint`, full `just test` (674 Swift tests and 15 script tests), `just coverage` (all gates;
+Rendering 97.9%), `just app` and `actionlint .github/workflows/ci.yml` pass. Coverage discarded one corrupt raw profile
+through its existing merge policy. Review found and addressed the asynchronous report-writing gap;
+the wait recipe also resolves correctly with `just --dry-run wait-for-test-crash-reports`. Uploading a real
+report on macOS 26 remains unverified until CI runs the change and a crash recurs. Native-app, VoiceOver
+and system-prompt checks were not performed for this CI-only change.
+
 ## Next steps
 
 M8 (Worktrees) is next; its slices follow. M4 (Files) and M7 (Parallel sessions) are merged, and the

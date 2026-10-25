@@ -78,7 +78,7 @@ the agent so no real agent or tokens are involved.
 - **Use a fresh bundle identifier for anything gated by a permission.** macOS remembers the first answer,
   and what a bundle asked for at that time (a missing `.badge` hid the Dock badge for good). Build a
   copy: `xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug
-  -destination 'platform=macOS' -derivedDataPath .build/xcode-<name>
+  -destination 'platform=macOS' -derivedDataPath .build/xcode-<name> -skipPackagePluginValidation
   PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.<name>test build`. The repository stays
   unchanged. Do this again for each change to the requested permissions.
 - A tapped notification is routed by bundle identifier, not to the process that posted it. Every

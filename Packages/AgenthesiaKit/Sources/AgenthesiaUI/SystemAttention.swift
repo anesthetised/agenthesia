@@ -34,7 +34,7 @@ import UserNotifications
                 info["request"] = requestID.uuidString
                 category = nil
                 sound = true
-            case .failure:
+            case .signIn, .failure:
                 category = nil
                 sound = true
             case .finished:

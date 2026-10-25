@@ -40,10 +40,10 @@ lint:
 format:
     swift format format --in-place --recursive --parallel {{sources}}
 
-# Build the app with xcodebuild
+# Build the app with xcodebuild; SwiftTerm's build tool plugin needs -skipPackagePluginValidation (ADR-0033)
 app configuration="Debug":
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration {{configuration}} \
-        -destination 'platform=macOS' -derivedDataPath {{derived_data}} build
+        -destination 'platform=macOS' -derivedDataPath {{derived_data}} -skipPackagePluginValidation build
 
 # Build and launch the app
 run: app
@@ -79,7 +79,7 @@ bench-path:
 # Build an optimized Debug build, which has the Rendering Lab, for measurements
 lab-build:
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
-        -destination 'platform=macOS' -derivedDataPath .build/xcode-lab build -quiet \
+        -destination 'platform=macOS' -derivedDataPath .build/xcode-lab -skipPackagePluginValidation build -quiet \
         SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
 
 # Launch the optimized lab build

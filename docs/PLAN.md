@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-24)
+## State (2026-10-25)
 
 - Live sessions run end-to-end ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -41,8 +41,9 @@ before implementation.
 - M7 is complete: session controls and prompt error recovery (#119), window restoration (#120),
   notifications and the Dock badge (#121). The app icon and the Dock tile (#122) deliver the icon half of
   #45; its first-run flow remains open.
-- M8 (Worktrees) follows [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123), discard
-  (#124) and review (#125) are merged; squash merge (#43) is implemented on `feat/worktree-merge`.
+- M8 (Worktrees) is complete under [ADR-0032](adr/0032-worktree-merge-and-discard.md): the base branch (#123),
+  discard (#124), review (#125) and squash merge (#127).
+- Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is implemented and checked in the built app.
 
 ## Previous batch: session interactions (merged)
 
@@ -157,9 +158,41 @@ and system-prompt checks were not performed for this CI-only change.
 
 ## Next steps
 
-M8 (Worktrees) is next; its slices follow. M4 (Files) and M7 (Parallel sessions) are merged, and the
-sections after M8 record how they were built and verified. Small independent chores such as #73 (CI
-with Xcode 27) fit the light tier.
+The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI rendering crash, strong tier) and M6 (Registry), whose
+installers need an ADR first. Small independent chores such as #73 (CI with Xcode 27) fit the light
+tier. The sections after this one record how M8, M7 and M4 were built and verified.
+
+### Agent sign-in (#32, 2026-10-25)
+
+The owner accepted [ADR-0033](adr/0033-agent-sign-in.md): sign-in is offered when the session request gets
+`-32000`, in the same session and worktree; agent methods use `authenticate` on the open connection, and
+terminal methods run in a SwiftTerm sheet before the agent is launched again. Checking the adapters'
+sources showed why both kinds are needed: `claude-agent-acp` offers only terminal methods, and only to a
+client declaring `auth.terminal`; `codex-acp` offers only agent methods.
+
+Slices, one commit each on `feat/sign-in`: `TerminalProcess` input, resizing and output observers; a
+retryable `SessionController` (`authenticationRequired`, `retry`); `LiveSession` sign-in with the notice
+and MockAgent's terminal login (`--auth`, `--auth-file`, `--login`); the panel, the terminal sheet and the
+SwiftTerm dependency. A session waiting for sign-in counts as starting for discard and merge, because a new
+one has no history yet.
+
+Tests: terminal input, window size and observers; a start and a reopen that wait without writing, retry
+on the same connection, a new connection after a terminal sign-in, close while waiting; against the real
+MockAgent process, agent and terminal sign-in, a failed and an ineffective terminal sign-in, Cancel, close
+during the terminal, and Continue; the notice and the badge; discard refused while waiting; the method rows,
+the panel at 480 pt, the window model's sheet binding, and SwiftTerm showing output and sending typing.
+Turning off `auth.terminal`, the discard guard, or the terminal's output feed each makes a test fail.
+`just lint`, `just coverage` (694 Swift tests; Core 97.9%, AgentRuntime 92.9%) and `just app` pass.
+`swiftui-pro` asked to put each type in its own file (applied). Pitfall: MockAgent's stdio transport read
+standard input as soon as it was created, so `--login` creates it only in the agent modes.
+
+Built app, checked by script (no computer use in the session) with MockAgent `--auth` in a temporary Git
+repository, a temporary `CFFIXED_USER_HOME` and a fresh bundle identifier: the panel with both methods, the
+*Needs input* mark in the sidebar and the Dock badge; the terminal sheet showing the prompt; a wrong answer
+leaving the output and "Sign-in exited with status 1." until Close; the right answer closing the sheet and
+opening the composer in the same worktree; Cancel killing the login process; the agent method opening the
+composer. Not checked: VoiceOver, the system notification banner of the sign-in notice, a real
+`claude-agent-acp` or `codex-acp`.
 
 ### M8 slices (2026-10-24)
 

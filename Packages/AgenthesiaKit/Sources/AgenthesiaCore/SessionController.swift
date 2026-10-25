@@ -35,6 +35,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case unsupportedAdditionalDirectories
         /// The agent can neither resume nor load sessions.
         case cannotReopen
+        /// The agent answered the session request with `-32000`; sign in, then `retry` or start again (ADR-0033).
+        case authenticationRequired
     }
 
     public private(set) var isChangingConfig = false
@@ -99,95 +101,122 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public func start(connection: any ACP.AgentConnection, client: ACP.Implementation) async throws {
         guard status == .ready else { throw SessionError.invalidState }
+        try await open(connection: connection, client: client)
+    }
+
+    /// Reattaches a saved session from `history(id:store:)` (ADR-0017). Writes nothing unless the agent accepts.
+    public func reopen(connection: any ACP.AgentConnection, client: ACP.Implementation) async throws {
+        guard status == .ready, session.agentSessionID != nil else { throw SessionError.invalidState }
+        try await open(connection: connection, client: client)
+    }
+
+    /// Repeats the session request of a start or reopen that required sign-in, on the same connection, after
+    /// the caller authenticated it (ADR-0033). A terminal sign-in starts a new connection with `start` or
+    /// `reopen` instead.
+    public func retry() async throws {
+        guard status == .ready, connection != nil, profile != nil else { throw SessionError.invalidState }
+        try await open(connection: nil, client: nil)
+    }
+
+    /// Initializes `connection` when given, then creates the remote session, or reopens it when the record
+    /// already has its agent's id. `-32000` from that request leaves the controller ready, having written
+    /// nothing, and throws ``SessionError/authenticationRequired``.
+    private func open(connection: (any ACP.AgentConnection)?, client: ACP.Implementation?) async throws {
         status = .starting
-        self.connection = connection
         do {
-            let profile = try await connection.initialize(client: client)
-            guard status == .starting else { throw SessionError.invalidState }
-            self.profile = profile
-            guard additionalDirectories.isEmpty || profile.acceptsAdditionalDirectories else {
-                throw SessionError.unsupportedAdditionalDirectories
+            if let connection, let client {
+                self.connection = connection
+                profile = nil
+                let profile = try await connection.initialize(client: client)
+                guard status == .starting else { throw SessionError.invalidState }
+                self.profile = profile
+                guard additionalDirectories.isEmpty || profile.acceptsAdditionalDirectories else {
+                    throw SessionError.unsupportedAdditionalDirectories
+                }
             }
-            let remote = try await connection.newSession(
-                cwd: session.workingDirectory,
-                additionalDirectories: additionalDirectories,
-                mcpServers: []
-            )
-            guard status == .starting else { throw SessionError.invalidState }
-            session = SessionRecord(
-                id: session.id,
-                projectID: session.projectID,
-                agentInstallID: session.agentInstallID,
-                agentSessionID: remote.sessionId,
-                protocolVersion: profile.protocolVersion,
-                title: session.title,
-                workingDirectory: session.workingDirectory,
-                baseRevision: session.baseRevision,
-                baseBranch: session.baseBranch,
-                createdAt: session.createdAt
-            )
+            guard let connection = self.connection, let profile else { throw SessionError.invalidState }
             do {
-                try await createSession(session)
-            } catch {
-                failure = failure ?? error
-                throw error
+                if let agentID = session.agentSessionID {
+                    try await reopenRemote(agentID, connection: connection)
+                } else {
+                    try await createRemote(connection: connection, profile: profile)
+                }
+            } catch let error as RPCError where error.code == RPCError.authRequiredCode && status == .starting {
+                status = .ready
+                startupUpdates.removeAll()
+                startupBytes = 0
+                throw SessionError.authenticationRequired
             }
-            guard status == .starting else { throw SessionError.invalidState }
-            try await begin([try SessionEvent.started(configOptions: remote.configOptions).storedEvent()])
+        } catch SessionError.authenticationRequired {
+            throw SessionError.authenticationRequired
         } catch {
             if status == .closed, failure == nil { throw CancellationError() }
             throw await fail(error)
         }
     }
 
-    /// Reattaches a saved session from `history(id:store:)` (ADR-0017). Writes nothing unless the agent accepts.
-    public func reopen(connection: any ACP.AgentConnection, client: ACP.Implementation) async throws {
-        guard status == .ready, let agentID = session.agentSessionID else { throw SessionError.invalidState }
-        status = .starting
-        self.connection = connection
+    private func createRemote(connection: any ACP.AgentConnection, profile: ACP.AgentProfile) async throws {
+        let remote = try await connection.newSession(
+            cwd: session.workingDirectory,
+            additionalDirectories: additionalDirectories,
+            mcpServers: []
+        )
+        guard status == .starting else { throw SessionError.invalidState }
+        session = SessionRecord(
+            id: session.id,
+            projectID: session.projectID,
+            agentInstallID: session.agentInstallID,
+            agentSessionID: remote.sessionId,
+            protocolVersion: profile.protocolVersion,
+            title: session.title,
+            workingDirectory: session.workingDirectory,
+            baseRevision: session.baseRevision,
+            baseBranch: session.baseBranch,
+            createdAt: session.createdAt
+        )
         do {
-            let profile = try await connection.initialize(client: client)
-            guard status == .starting else { throw SessionError.invalidState }
-            self.profile = profile
-            guard additionalDirectories.isEmpty || profile.acceptsAdditionalDirectories else {
-                throw SessionError.unsupportedAdditionalDirectories
-            }
-            let reopened = try await connection.reopenSession(
-                agentID,
-                cwd: session.workingDirectory,
-                additionalDirectories: additionalDirectories,
-                mcpServers: []
-            )
-            guard status == .starting else { throw SessionError.invalidState }
-            let state: ACP.SessionState
-            let method: SessionEvent.ReopenMethod
-            switch reopened {
-            case .resumed(let resumed): (state, method) = (resumed, .resume)
-            case .loaded(let loaded): (state, method) = (loaded, .load)
-            case .unavailable: throw SessionError.cannotReopen
-            }
-            // Close what an earlier run left open, so the new baseline starts with no turn or request pending.
-            var events: [NewEvent] = []
-            if let turn = reduced.activeTurn {
-                events.append(
-                    try SessionEvent.failed(id: turn, message: "Interrupted: Agenthesia stopped during this turn.")
-                        .storedEvent()
-                )
-            }
-            for id in reduced.unansweredPermissions {
-                events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
-            }
-            queuePaused = !reduced.queuedPrompts.isEmpty
-            events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
-            for id in reduced.unansweredInputs {
-                events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
-            }
-            events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
-            try await begin(events)
+            try await createSession(session)
         } catch {
-            if status == .closed, failure == nil { throw CancellationError() }
-            throw await fail(error)
+            failure = failure ?? error
+            throw error
         }
+        guard status == .starting else { throw SessionError.invalidState }
+        try await begin([try SessionEvent.started(configOptions: remote.configOptions).storedEvent()])
+    }
+
+    private func reopenRemote(_ agentID: ACP.SessionID, connection: any ACP.AgentConnection) async throws {
+        let reopened = try await connection.reopenSession(
+            agentID,
+            cwd: session.workingDirectory,
+            additionalDirectories: additionalDirectories,
+            mcpServers: []
+        )
+        guard status == .starting else { throw SessionError.invalidState }
+        let state: ACP.SessionState
+        let method: SessionEvent.ReopenMethod
+        switch reopened {
+        case .resumed(let resumed): (state, method) = (resumed, .resume)
+        case .loaded(let loaded): (state, method) = (loaded, .load)
+        case .unavailable: throw SessionError.cannotReopen
+        }
+        // Close what an earlier run left open, so the new baseline starts with no turn or request pending.
+        var events: [NewEvent] = []
+        if let turn = reduced.activeTurn {
+            events.append(
+                try SessionEvent.failed(id: turn, message: "Interrupted: Agenthesia stopped during this turn.")
+                    .storedEvent()
+            )
+        }
+        for id in reduced.unansweredPermissions {
+            events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
+        }
+        queuePaused = !reduced.queuedPrompts.isEmpty
+        events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
+        for id in reduced.unansweredInputs {
+            events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
+        }
+        events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
+        try await begin(events)
     }
 
     /// Enqueues the baseline and all early updates without yielding, before accepting live writes.

@@ -161,19 +161,20 @@ import Testing
         #expect(restored.pendingPermissions.isEmpty)
     }
 
-    @Test func failedLaunchAndAuthenticationAreVisible() async throws {
+    /// An agent that requires sign-in waits for it instead (`LiveSessionSignInTests`).
+    @Test func failedLaunchIsVisible() async throws {
         let (directory, library) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
-        for agent in [
-            AgentInstallRecord(name: "Missing", executable: "/does-not-exist"), try mock(arguments: ["--auth"]),
-        ] {
-            let owner = LiveSession(library: library)
-            owner.environment = { (ProcessInfo.processInfo.environment, nil) }
-            await owner.start(directory: directory, agent: agent)
-            #expect(owner.errorMessage != nil)
-            #expect(!owner.isStarting)
-            await owner.close()
-        }
+        let owner = LiveSession(library: library)
+        owner.environment = { (ProcessInfo.processInfo.environment, nil) }
+        await owner.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "Missing", executable: "/does-not-exist")
+        )
+        #expect(owner.errorMessage != nil)
+        #expect(!owner.isStarting)
+        #expect(owner.signIn == nil)
+        await owner.close()
         #expect(try await library.history().isEmpty)
     }
 

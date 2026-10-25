@@ -254,6 +254,30 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func aSessionWaitingForSignInNotifiesAndCountsTowardTheBadge() async throws {
+        let (directory, manager, mock) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sink = RecordingSink()
+        let attention = SessionAttention(sessions: manager, sink: sink)
+        defer { withExtendedLifetime(attention) {} }
+        let agent = AgentInstallRecord(
+            name: mock.name,
+            executable: mock.executable,
+            arguments: ["--auth", "--auth-file", directory.appending(path: "signed-in").path(percentEncoded: false)]
+        )
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        await eventually { sink.badge == 1 }
+        let notice = try #require(sink.live.values.first)
+        #expect(notice.kind == .signIn)
+        #expect(notice.body == "Sign-in needed")
+        #expect(notice.sessionID == owner.sessionID)
+
+        await owner.signIn(with: "mock-login")
+        await eventually { sink.badge == 0 && sink.live.isEmpty }
+        await manager.closeAll()
+    }
+
     @Test func authorizationIsRequestedOnceWhenTheFirstSessionStarts() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

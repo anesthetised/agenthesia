@@ -23,7 +23,8 @@ public final class EchoAgent: Sendable {
         public var deleteSession = true
         /// Whether `session/resume` and `session/load` accept unknown ids, as if an earlier process saved them.
         public var reopensUnknownSessions = false
-        /// Whether `session/new` fails with `-32000` until `authenticate` succeeds.
+        /// Whether `session/new`, `session/load` and `session/resume` fail with `-32000` until `authenticate`
+        /// succeeds.
         public var requiresAuthentication = false
         /// Whether sessions expose legacy session modes.
         public var modes = true
@@ -120,6 +121,9 @@ public final class EchoAgent: Sendable {
 
         router.on(M.LoadSession.self) { request in
             guard options.loadSession else { throw RPCError.methodNotFound(M.LoadSession.method) }
+            if options.requiresAuthentication, await !state.isAuthenticated {
+                throw RPCError(code: RPCError.authRequiredCode, message: "Authentication required")
+            }
             guard
                 let history = await state.reopen(
                     request.sessionId,
@@ -140,6 +144,9 @@ public final class EchoAgent: Sendable {
 
         router.on(M.ResumeSession.self) { request in
             guard options.resumeSession else { throw RPCError.methodNotFound(M.ResumeSession.method) }
+            if options.requiresAuthentication, await !state.isAuthenticated {
+                throw RPCError(code: RPCError.authRequiredCode, message: "Authentication required")
+            }
             guard
                 await state.reopen(request.sessionId, cwd: request.cwd, adopting: options.reopensUnknownSessions) != nil
             else {

@@ -267,7 +267,10 @@ public final class SessionManager {
     private func isOccupied(_ id: UUID) -> Bool { isMerging(id) || isDiscarding(id) || isStarting(id) }
 
     /// Starting a new session or continuing a saved one.
-    private func isStarting(_ id: UUID) -> Bool { owners.contains { $0.sessionID == id && $0.isStarting } }
+    /// Starting includes waiting for sign-in: a new session has no history until it has started (ADR-0033).
+    private func isStarting(_ id: UUID) -> Bool {
+        owners.contains { $0.sessionID == id && ($0.isStarting || $0.signIn != nil) }
+    }
 
     private func worktree(of session: SessionRecord, project: ProjectRecord) -> SessionWorkspace.Worktree? {
         SessionWorkspace.Worktree(

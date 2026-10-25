@@ -182,9 +182,9 @@ test answers after 6 seconds and fails with `.closed` on the old default. A temp
 committed) blocked the main actor for 6 seconds during `SessionController.start` against a scenario: it
 failed with `.closed` at 5 seconds and passed at 50. `just lint` and `just test` pass.
 
-Not addressed: the saturation itself. Other waits tuned to a quiet machine can fail the same way, and
-the test process's output reaches the CI log in buffered bursts, so its timestamps do not show when a test
-ran, and output still buffered when the process is killed is lost.
+Not addressed: the saturation itself (#133); other waits tuned to a quiet machine can fail the same way.
+The test process's output also reaches the CI log in buffered bursts, so its timestamps do not show when a
+test ran, and output still buffered when the process is killed is lost (#134).
 
 ### Agent sign-in (#32, 2026-10-25)
 

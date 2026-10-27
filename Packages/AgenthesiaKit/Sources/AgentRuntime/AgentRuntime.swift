@@ -1,4 +1,4 @@
-/// Agent processes, login-shell environment, ACP Registry, installers and the managed Node runtime.
+/// Agent processes, login-shell environment and ACP Registry metadata.
 ///
-/// See docs/adr/0004-agent-runtime.md.
+/// Installers and user-runtime checks are planned in docs/adr/0034-agent-installs-with-user-runtimes.md.
 public enum AgentRuntime {}

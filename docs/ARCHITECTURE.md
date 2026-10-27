@@ -29,7 +29,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry client, installers (binary, npm), managed Node runtime. | `ACP` |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache; planned installers (binary, npm), user-runtime checks and local agent discovery ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)). | `ACP` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
@@ -559,8 +559,29 @@ becomes LF, and a carriage return inside a line keeps only the text after it. Th
 the start at a character boundary to the byte limit. An incomplete trailing escape sequence or
 character of a running command is withheld. Cursor movement is not interpreted.
 
+`AgentRegistry.Catalog` reads the stable v1 registry, retains metadata and unsupported distribution
+kinds, and selects the exact macOS architecture's binary before npm. Python-only agents have an
+explicit unsupported result. Unknown fields are ignored; invalid known metadata, duplicate IDs and
+unsupported schema majors reject the response. Package references are metadata, not shell commands;
+the installer must still pin an unversioned package to the entry's version.
+
+`AgentRegistry.Client` refreshes the official HTTPS index with a 1 MiB response limit and bounded
+request/resource timeouts. Concurrent refreshes share one request per client; cancelling a waiter does
+not cancel shared work, and that waiter throws after the bounded refresh completes. Use one client per
+cache directory. Raw catalog data, ETag and last validation time are stored in one atomically replaced
+`registry-v1.json` file on a Dispatch queue. A 304 reuses only a validated cache whose ETag was sent.
+Refresh failures return a valid old catalog with an explicit warning and its original validation time;
+without a valid cache they throw. Cancellation throws rather than returning stale data. Cache write
+failure leaves fetched metadata usable with a warning, but cannot guarantee offline availability.
+The client uses an ephemeral URLSession without shared caches, cookies or credentials, and follows
+redirects only within the registry's HTTPS origin. It does not download icons, install or start agents,
+and is not wired into the app yet (#36).
+
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
-Registry installation and the managed Node runtime are also still planned. The shell-only
+Registry installation and local agent discovery are still planned. [ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)
+replaces managed Node with checked user-provided Node/npm, private versioned installs and explicit
+environment refresh. The current shell resolver still caches its result for its lifetime; Check Again
+and runtime recovery belong to M6. The shell-only
 `posix_spawn` adoption addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).

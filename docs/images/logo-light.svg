@@ -1,17 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Agenthesia">
-  <!-- Static copy of AppIcon (AgenthesiaUI/AppIcon.swift) with three stars lit; change them together. -->
+  <!-- Static copy of AppIcon (AgenthesiaUI/AppIcon.swift) with three stars lit; change them together.
+       No filter or mask touches the art itself: WebKit rasterizes those at display size, so they pixelate when zoomed. -->
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9CC9FF"/><stop offset="1" stop-color="#3563D8"/></linearGradient>
     <linearGradient id="moon" x1="0" y1="24" x2="0" y2="84" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFF7DA"/><stop offset="1" stop-color="#FFD161"/></linearGradient>
     <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dy="2" stdDeviation="2" flood-opacity=".2"/></filter>
-    <mask id="bite"><rect width="100" height="100" fill="#fff"/><circle cx="66" cy="37" r="22" fill="#000"/></mask>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dy="2"/></filter>
     <clipPath id="tile"><rect width="100" height="100" rx="22.5"/></clipPath>
   </defs>
   <g clip-path="url(#tile)">
     <rect width="100" height="100" fill="url(#sky)"/>
-    <g filter="url(#lift)">
-      <circle cx="46" cy="54" r="30" fill="url(#moon)" mask="url(#bite)"/>
+    <use href="#art" filter="url(#lift)" opacity=".2"/>
+    <g id="art">
+      <path d="M48.193 24.08A30 30 0 1 0 75.882 56.656A22 22 0 0 1 48.193 24.08Z" fill="url(#moon)"/>
       <circle cx="29" cy="65" r="3.3" fill="#FB923C" opacity=".5"/>
       <g fill="none" stroke="#7A4B00" stroke-linecap="round">
         <path d="M27 54q5.5 5 11 0" stroke-width="3.4"/>

@@ -33,7 +33,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
-| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle. | all of the above except `Rendering` |
+| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)). | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
@@ -379,7 +379,7 @@ The initial `v1` migration creates four tables:
 | Table | Stored data |
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
-| `agent_install` | Local UUID, name, executable, argument array and creation time. Manual commands only; versioned installation metadata lives in AgentRuntime. Linking saved sessions to installations belongs to #36. |
+| `agent_install` | Local UUID, name, executable, argument array and creation time. Migration `v4-agent-install-installation` adds the optional AgentRuntime installation ID: one row per installed version, `NULL` for a manual command ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)). Versioned installation metadata lives in AgentRuntime. |
 | `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision and `v3-session-base-branch` the optional branch the session started from. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
@@ -619,7 +619,9 @@ Persistence's manual command records; windows and history adopt installations in
 Operations stage beneath the owned root and publish by an exclusive, same-volume rename after validation.
 Cancellation or failure removes that operation's staging files and preserves existing versions. Updates
 are explicit installs of another version; an existing version is never overwritten. A root advisory lock
-serializes operations across installer actors and app instances; overlapping operations report busy.
+serializes the synchronous steps of operations (listing, lease validation, publication, removal) across
+installer actors and app instances, and overlapping steps report busy. It is never held across a download,
+an npm run or a shell capture, so installing one agent does not block launches (ADR-0036).
 Every launch must acquire and retain a shared version lease for the entire authentication/session
 lifetime, including terminal sign-in. Release it only after all owned processes exit; copying its
 `AgentCommand` does not retain the lease. Removal requires an exclusive lease and validated ownership.
@@ -642,8 +644,12 @@ the disabled-script policy. Some script-dependent packages fail only when launch
 readiness probe must report that failure without enabling scripts. Cancellation of npm/probes terminates
 the captured process group before cleanup.
 
-Local discovery, Check Again, installation recovery, browser UI and lease ownership in windows/history
-belong to #36. Runtime validation and explicit shell refresh are implemented. The shell/probe
+`AgentCatalog` (AgenthesiaCore) backs Settings → Agents and the launch form: the registry snapshot,
+installed versions newest first, the Node.js check with Check Again, and install, update, cancel and
+removal through the installer. `LiveSession` acquires an installed version's lease before creating a
+worktree, runs chat and terminal sign-in with the leased command, and releases the lease once the agent's
+processes have exited and the session has ended or failed. Local discovery, the initialize probe and
+pre-session sign-in remain in #36. Runtime validation and explicit shell refresh are implemented. The shell/probe
 `posix_spawn` implementation addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).

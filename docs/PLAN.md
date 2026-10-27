@@ -201,6 +201,22 @@ and issue scope are recorded; no M6 implementation is claimed complete.
 Documentation validation: `just lint`, full `just test` (695 Swift tests and 15 script tests),
 `git diff --check` and local Markdown link checks pass.
 
+#33 implemented (2026-10-27): `AgentRegistry` parses stable registry metadata and selects the exact
+macOS platform binary before npm, retaining uvx and unknown kinds for unsupported explanations.
+The client has an atomic body/ETag cache, conditional requests, bounded HTTPS fetching, explicit stale
+cache warnings, cancellation and concurrent-request sharing. The owner selected stale cache with a
+warning on refresh failure. No installer, runtime discovery or browser UI is included; #34 is next.
+Tests use registry fixtures and URLProtocol rather than live agent processes. The red tests first
+failed for missing models/client; an added redirect-port regression failed before the origin check
+was corrected. A reproduced cancellation/network-failure race now gives cancellation precedence;
+deliberately disabling binary selection made its regression fail, and the mutation was restored.
+`just lint`, full `just test` before the cancellation follow-up, all 20 registry tests afterwards,
+and full `just coverage` pass (715 Swift tests; AgentRuntime 92.6%, all module gates pass). The
+`just test` recipe also passed its 15 script tests. Local documentation links and `git diff --check`
+pass. Coverage skipped five corrupt raw profiles through the existing merge policy. Native-app UI,
+VoiceOver, system prompts, live registry HTTP requests and real-agent sessions
+were not exercised for this metadata-only change.
+
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 
 The CI runner is not frozen during these failures; its main actor is saturated. In the failed run on

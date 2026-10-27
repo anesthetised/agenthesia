@@ -119,8 +119,9 @@ automation.
 
 CI pins Xcode 26.6 and runs package coverage and the app build in parallel with separate incremental
 build caches. The aggregate `Lint, test, build` status requires both jobs to pass; cache hits still run
-all checks. Coverage builds once, then runs non-hosted tests and hosted UI/Rendering tests in separate
-sequential invocations before merging their profiles (#133). Badge publication runs only after both
+all checks. Coverage builds once, then runs the remaining core tests, AgentRuntime tests and hosted
+UI/Rendering tests in three sequential invocations before merging their profiles (#133). Each group
+retains parallel tests; no test or coverage threshold is omitted. Badge publication runs only after both
 jobs succeed on main.
 
 ### Coverage test isolation (#133, 2026-10-27)
@@ -336,6 +337,36 @@ Local `just lint` and full `just test` pass (758 Swift tests and 18 script tests
 including both readiness cases. This follows the CI bundle structure on the local toolchain; it does
 not reproduce the runner's exact scheduling load. CI confirmation awaits the follow-up push.
 Production code and coverage thresholds are unchanged; the app build already passed on the failing run.
+
+### Runtime process-test isolation and observation races (#133, PR #140)
+
+[Run 40551715264](https://github.com/anesthetised/agenthesia/actions/runs/40551715264), on `e372241`,
+passed the repaired capture cancellation test, lint and the app build. Its non-hosted group took 81.5 s
+and reported seven issues in five existing process tests. Two observed a descendant only after natural
+leader-exit cleanup had killed it; the stderr test also assumed its drain could not already be finished.
+The other failures involved graceful-exit expectations and a ten-second bound under concurrent load.
+These results do not establish a production termination defect, and no signal/grace policy is changed.
+
+Delaying observation by four seconds reproduced the descendant-group and already-finished-drain
+failures locally. Both integration fixtures now wait for an explicit release before the leader exits,
+so their process-group assertions run while the leader is still alive. A separate stderr-reader test
+keeps the writer open and checks the drain's own deadline without natural process cleanup or EOF.
+`StderrCapture` is internal for this focused test; its implementation and public APIs are unchanged.
+
+Coverage now separates AgentRuntime from Core as well as hosted views, extending the existing process
+isolation. It builds once and runs three sequential groups: 451 remaining core tests, 123 runtime tests
+and 185 hosted tests. A complement selector includes future targets automatically. Every group retains
+its existing 120-second process timeout and parallel tests; any failure fails the run, all groups still
+execute, and separate profile prefixes preserve merged coverage. Tests cover the partition, near-matching
+target names, unique profiles and failure propagation from each group. A deliberate duplicated-runtime
+selector failed those tests before restoration. This adds one test-driver invocation; no CI speedup is claimed.
+
+Local `just lint`, 18 script tests and all 759 Swift tests pass. The three selectors were exercised
+sequentially with instrumented `just test --build-system native`, preserving CI's combined-bundle layout,
+and then through full `just coverage`: every module gate passes (AgentRuntime 91.9%). `just app` passes.
+The delayed-observation regressions first failed before the fixture changes. CI confirmation awaits
+the follow-up push; the broader scheduling/wait audit and consecutive CI verification in #133 remain
+open. No benchmark or native-app UI check was run.
 
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 

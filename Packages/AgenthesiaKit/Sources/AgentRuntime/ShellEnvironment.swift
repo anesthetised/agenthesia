@@ -1,7 +1,7 @@
 import Darwin
 public import Foundation
 
-/// Resolves the user's interactive login-shell environment once for agent launches.
+/// Resolves the user's interactive login-shell environment for agent launches, cached until explicitly refreshed.
 public actor ShellEnvironment {
     public struct Resolution: Sendable {
         public let environment: [String: String]
@@ -11,12 +11,11 @@ public actor ShellEnvironment {
 
     public static let shared = ShellEnvironment()
 
-    private let shell: String?
-    private let inherited: [String: String]
-    private let timeout: Duration
-    private let outputLimit: Int
+    private let capture: @Sendable () async -> Resolution
     private var resolution: Resolution?
-    private var inFlight: Task<Resolution, Never>?
+    private var inFlight: (id: UUID, refresh: Bool, task: Task<Resolution, Never>)?
+    // Internal observation lets concurrency tests hold a capture until every waiter has joined.
+    private(set) var waiterCount = 0
 
     public init(
         shell: String? = nil,
@@ -24,30 +23,38 @@ public actor ShellEnvironment {
         timeout: Duration = .seconds(5),
         outputLimit: Int = 1_048_576
     ) {
-        self.shell = shell
-        self.inherited = environment
-        self.timeout = timeout
-        self.outputLimit = outputLimit
+        capture = {
+            await Self.capture(shell: shell, inherited: environment, timeout: timeout, outputLimit: outputLimit)
+        }
     }
 
-    public func resolve() async -> Resolution {
-        if let resolution { return resolution }
-        let task: Task<Resolution, Never>
-        if let inFlight {
-            task = inFlight
+    init(capture: @escaping @Sendable () async -> Resolution) {
+        self.capture = capture
+    }
+
+    public func resolve() async -> Resolution { await resolve(refresh: false) }
+
+    /// Captures a new environment, sharing concurrent refreshes. Existing launch snapshots stay unchanged.
+    public func refresh() async -> Resolution { await resolve(refresh: true) }
+
+    private func resolve(refresh: Bool) async -> Resolution {
+        if !refresh, let resolution { return resolution }
+        let flight: (id: UUID, refresh: Bool, task: Task<Resolution, Never>)
+        if let inFlight, !refresh || inFlight.refresh {
+            flight = inFlight
         } else {
-            let shell = shell
-            let inherited = inherited
-            let timeout = timeout
-            let outputLimit = outputLimit
-            task = Task.detached {
-                await Self.capture(shell: shell, inherited: inherited, timeout: timeout, outputLimit: outputLimit)
-            }
-            inFlight = task
+            resolution = nil
+            let capture = capture
+            flight = (UUID(), refresh, Task.detached { await capture() })
+            inFlight = flight
         }
-        let result = await task.value
-        resolution = result
-        inFlight = nil
+        waiterCount += 1
+        defer { waiterCount -= 1 }
+        let result = await flight.task.value
+        if inFlight?.id == flight.id {
+            resolution = result
+            inFlight = nil
+        }
         return result
     }
 
@@ -74,21 +81,12 @@ public actor ShellEnvironment {
         let end = "__AGENTHESIA_ENV_END_\(marker)__"
         let script = "printf '\\n\(start)\\n'; /usr/bin/env -0; printf '\\n\(end)\\n'"
         let launchEnvironment = essentials(inherited, shell: shell, home: userHome, user: userName)
-        let outcome = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(
-                    returning: ShellOutputCollector.run(
-                        shell: shell,
-                        script: script,
-                        environment: launchEnvironment,
-                        start: start,
-                        end: end,
-                        timeout: timeout,
-                        limit: max(1, outputLimit)
-                    )
-                )
-            }
-        }
+        let outcome = await CommandOutput.capture(
+            AgentCommand(executable: shell, arguments: ["-l", "-i", "-c", script], environment: launchEnvironment),
+            timeout: timeout,
+            limit: max(1, outputLimit),
+            complete: { parse($0, start: start, end: end) != nil }
+        )
         if case .success(let bytes, let status) = outcome, status == 0,
             let environment = parse(bytes, start: start, end: end)
         {
@@ -169,181 +167,5 @@ public actor ShellEnvironment {
             result[key] = value
         }
         return result.isEmpty ? nil : result
-    }
-}
-
-private enum ShellOutput: Sendable {
-    case success(Data, Int32)
-    case timedOut
-    case tooMuchOutput
-    case launchFailed
-}
-
-/// The blocking capture stays off Swift's cooperative executor.
-private enum ShellOutputCollector {
-    static func run(
-        shell: String,
-        script: String,
-        environment: [String: String],
-        start: String,
-        end: String,
-        timeout: Duration,
-        limit: Int
-    ) -> ShellOutput {
-        var stdout = [Int32](repeating: -1, count: 2)
-        var stderr = [Int32](repeating: -1, count: 2)
-        guard pipe(&stdout) == 0 else { return .launchFailed }
-        defer { for fd in stdout where fd >= 0 { Darwin.close(fd) } }
-        guard pipe(&stderr) == 0 else { return .launchFailed }
-        defer { for fd in stderr where fd >= 0 { Darwin.close(fd) } }
-        guard moveAboveStdio(&stdout[0]), moveAboveStdio(&stdout[1]),
-            moveAboveStdio(&stderr[0]), moveAboveStdio(&stderr[1])
-        else { return .launchFailed }
-        guard makeNonblocking(stdout[0]), makeNonblocking(stderr[0]) else { return .launchFailed }
-
-        var actions: posix_spawn_file_actions_t?
-        guard posix_spawn_file_actions_init(&actions) == 0 else { return .launchFailed }
-        defer { posix_spawn_file_actions_destroy(&actions) }
-        guard posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0) == 0,
-            posix_spawn_file_actions_adddup2(&actions, stdout[1], STDOUT_FILENO) == 0,
-            posix_spawn_file_actions_adddup2(&actions, stderr[1], STDERR_FILENO) == 0,
-            posix_spawn_file_actions_addclose(&actions, stdout[0]) == 0,
-            posix_spawn_file_actions_addclose(&actions, stderr[0]) == 0,
-            posix_spawn_file_actions_addclose(&actions, stdout[1]) == 0,
-            posix_spawn_file_actions_addclose(&actions, stderr[1]) == 0
-        else { return .launchFailed }
-
-        guard
-            let pid = try? spawnInNewSession(
-                path: shell,
-                arguments: [shell, "-l", "-i", "-c", script],
-                environment: environment,
-                actions: &actions
-            )
-        else { return .launchFailed }
-        Darwin.close(stdout[1])
-        Darwin.close(stderr[1])
-        stdout[1] = -1
-        stderr[1] = -1
-
-        let outcome = capture(
-            pid: pid,
-            stdout: stdout[0],
-            stderr: stderr[0],
-            start: start,
-            end: end,
-            timeout: timeout,
-            limit: limit
-        )
-        return outcome
-    }
-
-    private static func capture(
-        pid: pid_t,
-        stdout: Int32,
-        stderr: Int32,
-        start: String,
-        end: String,
-        timeout: Duration,
-        limit: Int
-    ) -> ShellOutput {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        var bytes = Data()
-        var status: Int32 = 0
-        var reaped = false
-        var stdoutEnded = false
-        var stderrEnded = false
-        var outcome: ShellOutput = .timedOut
-        while true {
-            reap(pid, status: &status, reaped: &reaped)
-            if reaped {
-                if ShellEnvironment.parse(bytes, start: start, end: end) != nil || stdoutEnded {
-                    outcome = .success(bytes, status)
-                    break
-                }
-            }
-            if clock.now >= deadline { break }
-            var descriptors = [
-                pollfd(fd: stdoutEnded ? -1 : stdout, events: Int16(POLLIN), revents: 0),
-                pollfd(fd: stderrEnded ? -1 : stderr, events: Int16(POLLIN), revents: 0),
-            ]
-            let ready = descriptors.withUnsafeMutableBufferPointer { poll($0.baseAddress, nfds_t($0.count), 20) }
-            if ready < 0 && errno != EINTR { break }
-            if descriptors[0].revents != 0 {
-                var chunk = [UInt8](repeating: 0, count: 65_536)
-                let count = Darwin.read(stdout, &chunk, chunk.count)
-                if count == 0 {
-                    stdoutEnded = true
-                } else if count > 0 {
-                    if count > limit - bytes.count {
-                        outcome = .tooMuchOutput
-                        break
-                    }
-                    bytes.append(contentsOf: chunk.prefix(count))
-                } else if errno != EAGAIN && errno != EINTR {
-                    stdoutEnded = true
-                }
-            }
-            if descriptors[1].revents != 0 {
-                var discarded = [UInt8](repeating: 0, count: 65_536)
-                let count = Darwin.read(stderr, &discarded, discarded.count)
-                if count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR) { stderrEnded = true }
-            }
-        }
-        cleanUpGroup(pid, status: &status, reaped: &reaped)
-        return outcome
-    }
-
-    private static func reap(_ pid: pid_t, status: inout Int32, reaped: inout Bool) {
-        guard !reaped else { return }
-        var result: pid_t
-        repeat { result = waitpid(pid, &status, WNOHANG) } while result < 0 && errno == EINTR
-        if result == pid { reaped = true }
-        if result < 0 && errno == ECHILD {
-            status = -1
-            reaped = true
-        }
-    }
-
-    private static func cleanUpGroup(_ pid: pid_t, status: inout Int32, reaped: inout Bool) {
-        // POSIX_SPAWN_SETSID makes pid the session and process-group leader.
-        if kill(-pid, 0) == 0 || errno == EPERM { kill(-pid, SIGTERM) }
-        let deadline = ContinuousClock.now.advanced(by: .milliseconds(200))
-        while ContinuousClock.now < deadline {
-            reap(pid, status: &status, reaped: &reaped)
-            if kill(-pid, 0) != 0 && errno == ESRCH { break }
-            usleep(10_000)
-        }
-        if kill(-pid, 0) == 0 || errno == EPERM { kill(-pid, SIGKILL) }
-        let reapDeadline = ContinuousClock.now.advanced(by: .milliseconds(100))
-        while !reaped && ContinuousClock.now < reapDeadline {
-            reap(pid, status: &status, reaped: &reaped)
-            if !reaped { usleep(10_000) }
-        }
-        if !reaped {
-            // Keep the capture deadline bounded; the utility queue owns the final reap.
-            DispatchQueue.global(qos: .utility).async {
-                var finalStatus: Int32 = 0
-                var result: pid_t
-                repeat { result = waitpid(pid, &finalStatus, 0) } while result < 0 && errno == EINTR
-            }
-        }
-    }
-
-    private static func moveAboveStdio(_ fd: inout Int32) -> Bool {
-        guard fd >= STDERR_FILENO + 1 else {
-            let moved = fcntl(fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1)
-            guard moved >= 0 else { return false }
-            Darwin.close(fd)
-            fd = moved
-            return true
-        }
-        return true
-    }
-
-    private static func makeNonblocking(_ fd: Int32) -> Bool {
-        let flags = fcntl(fd, F_GETFL)
-        return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0
     }
 }

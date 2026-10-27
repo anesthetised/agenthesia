@@ -23,8 +23,9 @@ from collections import defaultdict
 # Executables that tests launch as child processes; their profiles land next to the test runner's.
 EXECUTABLES = ["acp-cli", "MockAgent"]
 
-# Keep hosted views away from Core's main-actor tests even when SwiftPM builds one combined test bundle.
-# The same regex and its complement select every test exactly once, including future non-hosted targets.
+# Keep process lifecycle tests and hosted views away from Core's main-actor load in a combined bundle.
+# The remaining group is the complement, so future targets are included automatically.
+RUNTIME_TESTS = r"^AgentRuntimeTests[./]"
 HOSTED_TESTS = r"^(AgenthesiaUITests|RenderingTests)[./]"
 
 # Test support and debug lab scopes: reported, but not part of the product total.
@@ -87,12 +88,16 @@ def test(package: str) -> int:
         return build.returncode
     command = ["swift", "test", "--skip-build", "--package-path", package, *flags]
     result = 0
-    for name, selector in [("core", "--skip"), ("hosted", "--filter")]:
+    for name, selector, pattern in [
+        ("core", "--skip", f"{RUNTIME_TESTS}|{HOSTED_TESTS}"),
+        ("runtime", "--filter", RUNTIME_TESTS),
+        ("hosted", "--filter", HOSTED_TESTS),
+    ]:
         print(f"Running {name} tests (120-second process timeout)...", flush=True)
         # Group prefixes prevent profile replacement even if a PID is reused between invocations.
         group_env = dict(env, LLVM_PROFILE_FILE=os.path.join(directory, f"{name}-%p.profraw"))
         started = time.monotonic()
-        status = run_test_process([*command, selector, HOSTED_TESTS], group_env)
+        status = run_test_process([*command, selector, pattern], group_env)
         print(f"{name} tests finished in {time.monotonic() - started:.1f}s (status {status}).", flush=True)
         result = result or status
     return result

@@ -57,7 +57,8 @@ let package = Package(
     targets: [
         .target(name: "JSONRPC", swiftSettings: swiftSettings),
         .target(name: "ACP", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
-        .target(name: "AgentRuntime", dependencies: ["ACP"], swiftSettings: swiftSettings),
+        .systemLibrary(name: "CLibArchive"),
+        .target(name: "AgentRuntime", dependencies: ["ACP", "CLibArchive"], swiftSettings: swiftSettings),
         .target(name: "Workspace", swiftSettings: swiftSettings),
         .target(
             name: "Persistence",

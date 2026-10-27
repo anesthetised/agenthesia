@@ -191,7 +191,8 @@ import Testing
         #expect(await terminal.terminate(gracePeriod: .milliseconds(200)) == .signaled(SIGKILL))
     }
 
-    @Test func terminatesDescendantsAndBoundsTheOutputWaitAfterTheLeaderExits() async throws {
+    @Test(arguments: [0, 4])
+    func terminatesDescendantsAndBoundsTheOutputWaitAfterTheLeaderExits(observationDelay: Int) async throws {
         let pidFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-terminal-\(UUID().uuidString).pid"
         )
@@ -205,6 +206,7 @@ import Testing
                 /bin/sleep 0.01
                 attempt=$((attempt + 1))
             done
+            read release
             echo leader
             """
         let terminal = try TerminalProcess(launching: AgentCommand(executable: "/bin/sh", arguments: ["-c", script]))
@@ -214,8 +216,13 @@ import Testing
             throw error
         }
         defer { kill(child, SIGKILL) }
+        do { try await Task.sleep(for: .seconds(observationDelay)) } catch {
+            _ = await terminal.terminate(gracePeriod: .milliseconds(50))
+            throw error
+        }
         #expect(getpgid(child) == terminal.processIdentifier)
-        // The descendant keeps the pseudo-terminal open for good, so an unbounded output wait hangs until the time limit.
+        terminal.write(Data("release\n".utf8))
+        // The descendant retains the pseudo-terminal after the leader exits.
         #expect(await terminal.waitForExit() == .exited(0))
         #expect(text(terminal.output).contains("leader"))
         #expect(await terminal.terminate(gracePeriod: .milliseconds(50)) == .exited(0))

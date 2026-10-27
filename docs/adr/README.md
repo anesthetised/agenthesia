@@ -39,5 +39,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
+| [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

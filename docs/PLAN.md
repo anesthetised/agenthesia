@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-25)
+## State (2026-10-27)
 
 - Live sessions run end-to-end ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -119,8 +119,9 @@ automation.
 
 CI pins Xcode 26.6 and runs package coverage and the app build in parallel with separate incremental
 build caches. The aggregate `Lint, test, build` status requires both jobs to pass; cache hits still run
-all checks. Coverage builds once, then runs non-hosted tests and hosted UI/Rendering tests in separate
-sequential invocations before merging their profiles (#133). Badge publication runs only after both
+all checks. Coverage builds once, then runs the remaining core tests, AgentRuntime tests and hosted
+UI/Rendering tests in three sequential invocations before merging their profiles (#133). Each group
+retains parallel tests; no test or coverage threshold is omitted. Badge publication runs only after both
 jobs succeed on main.
 
 ### Coverage test isolation (#133, 2026-10-27)
@@ -159,7 +160,7 @@ PR #137's [first run](https://github.com/anesthetised/agenthesia/actions/runs/40
 lint before exercising the split: Xcode 26.6's `NeverUseForceTry` rule rejected two JSON fixture
 encodings that the local Xcode 27 formatter had accepted. The fixture now records encoding errors as
 test issues instead of using force try. The lint rule remains enabled. `just lint` and full `just test` pass for this follow-up (735 Swift tests
-and 18 script tests); CI confirmation remains pending.
+and 18 script tests). PR #137 subsequently passed its required checks and merged into main.
 
 ### CI Markdown attribute crash (#126, 2026-10-25)
 
@@ -211,12 +212,12 @@ Use user-provided Node/npm, isolated binary/npm installations and local ACP comm
 download or update runtimes; defer `uvx` installation and standalone adapter packaging. ADR-0034
 supersedes only the managed Node and installation decisions of ADR-0004; its historical text stays intact.
 
-Implementation order (#33 merged in #136; #34–#36 remain open):
+Implementation order (#33 merged in #136; #34 merged in #137; #35–#36 remain open):
 
 1. **#33 — Registry client with ETag cache. Sol, High (`agent:light`). Merged.** Parse and cache registry
    metadata, conditional requests and platform distribution selection; retain unsupported entries
    for an explanation instead of silently hiding them.
-2. **#34 — User runtime discovery and prerequisite checks. Astra, High (`agent:strong`).** Replace the
+2. **#34 — User runtime discovery and prerequisite checks. Astra, High (`agent:strong`). Merged.** Replace the
    old managed-Node scope with Node/npm checks and fresh login-shell capture for Check Again. Keep
    installation and launch on a consistent runtime, detect removed/incompatible runtimes, and keep
    running sessions unaffected. This can be developed independently of #33.
@@ -257,14 +258,14 @@ pass. Coverage skipped five corrupt raw profiles through the existing merge poli
 VoiceOver, system prompts, live registry HTTP requests and real-agent sessions
 were not exercised for this metadata-only change.
 
-#34 implemented locally (2026-10-27): `ShellEnvironment.refresh()` shares concurrent captures and
+#34 merged in #137 (2026-10-27): `ShellEnvironment.refresh()` shares concurrent captures and
 protects the cache from stale completion; running sessions retain their environment snapshot.
 `NodeRuntime` discovers executable Node/npm, resolves the actual Node behind shims and a standard npm
 CLI, checks both npm's own Node requirement and supplied package engine ranges with npm's semver, and
 prepares commands using explicit tool paths. A persisted toolchain stores paths and versions only.
 Revalidation refuses removed or changed tools and gives actionable diagnostics. The bounded shell
 collector now also serves runtime probes; it still cleans up the process group. No runtime is installed
-or changed. #35 must supply exact-package requirements and store the descriptor; #36 owns Check Again
+or changed. #35 supplies exact-package requirements and stores the descriptor; #36 owns Check Again
 and recovery UI. Unresolvable npm wrappers are reported, not launched opportunistically.
 
 Fixture tests cover shared refreshes and both stale completion orders,
@@ -283,6 +284,89 @@ rejected because it cannot be pinned as a single PATH entry. `just lint`, full `
 the fixes, and final full `just coverage` pass (735 Swift tests, AgentRuntime 92.9%, all module gates).
 The test recipe also passed its 15 script tests. Coverage excluded three corrupt raw profiles through the
 existing merge policy. Documentation links and `git diff --check` pass.
+
+#35 implemented in [PR #140](https://github.com/anesthetised/agenthesia/pull/140) (2026-10-27), under the owner-approved
+[ADR-0035](adr/0035-installer-storage-and-script-policy.md): `AgentInstaller` keeps versioned metadata and
+payloads in AgentRuntime. Binary installs verify declared SHA-256 checksums and use system libarchive
+with built-in filters only; extraction rejects links, special files, escaping paths and excessive expansion.
+npm installs exact packages with isolated configuration/cache and lifecycle scripts disabled, retains
+the manifest/lockfile, and launches the installed entrypoint through the saved, revalidated Node.
+Updates retain old versions. Owned staging directories are cleaned on cancellation/failure; publication
+is an exclusive rename. Shared launch leases prevent removal across cooperating installer instances.
+The caller must retain a lease through sign-in/chat and release it after all owned processes exit.
+Windows, history, readiness checks and recovery messages remain #36; no Persistence migration is needed.
+
+Tests cover archive formats and hostile entries, HTTPS limits/redirects, checksums, failure/cancellation,
+version retention, ownership, executable containment, runtime changes, npm flags and lease conflicts.
+A local HTTP registry served a temporary fixture to real npm: installation and direct Node launch worked,
+postinstall did not execute, user npm state was untouched, and the retained lockfile includes integrity.
+This caught npm's sensitivity to `/var` versus the physical `/private/var` prefix: staging now uses
+POSIX `realpath`. Other regressions caught Foundation directory URL normalization, a substituted payload
+symlink, and process capture cancellation. The system libarchive's zstd registration requested an external
+helper, so that filter is deliberately unsupported. Explicit lease unlock avoids retaining a lock through
+a descriptor briefly inherited by a concurrent fork before exec.
+
+Validation: `just lint`, full `just test` (758 Swift tests and 18 script tests), final `just coverage`
+(all module gates; AgentRuntime 91.6%) and `just app` pass. A deliberately inverted SHA-256 comparison
+failed the checksum/update regression before restoration; the truncated-archive test also checks a valid
+header with an incomplete payload in a fresh destination. The coverage merge excluded 7 corrupt raw
+profiles through the existing policy. Local documentation links and `git diff --check` pass.
+No real agent, native-app UI, VoiceOver, system prompt or benchmark was exercised for this API-only slice.
+Use Astra, High for #36's shared session/authentication lifecycle integration; Sol, High suits subsequent
+isolated UI polish.
+
+### Installer cancellation test readiness (#35, PR #140)
+
+[Run 40548357958](https://github.com/anesthetised/agenthesia/actions/runs/40548357958), on `12dd3df`,
+passed lint and the app build. Its only failure among 573 non-hosted tests was
+`cancellationStopsTheProcessGroupBeforeTheCaptureDeadline`: the three-second `waitForChildPID` deadline
+expired before the PID was available, before the test requested cancellation. The log does not establish
+whether the delay occurred in task scheduling, the utility queue or process startup. A fixture delaying
+startup by four seconds reproduced the same timeout locally against the old test.
+
+The test now races child readiness against capture completion in a structured task group. An early
+capture exit reports its actual outcome; the capture's existing 30-second deadline and the suite's
+one-minute limit bound the test. Group cancellation joins cleanup before removing temporary files.
+Once ready, both immediate and delayed fixtures still require a cancelled result, return within ten
+seconds of cancellation, and an inactive child. Temporarily disabling cancellation polling made both
+cases fail the ten-second assertion; production code was restored. Other callers retain the PID helper's
+existing default deadline. This addresses this test's startup assumption, not the broader #133 audit.
+
+Local `just lint` and full `just test` pass (758 Swift tests and 18 script tests). Instrumented
+`just test --build-system native` with CI's non-hosted selector passes 573 tests in one combined bundle,
+including both readiness cases. This follows the CI bundle structure on the local toolchain; it does
+not reproduce the runner's exact scheduling load. CI confirmation awaits the follow-up push.
+Production code and coverage thresholds are unchanged; the app build already passed on the failing run.
+
+### Runtime process-test isolation and observation races (#133, PR #140)
+
+[Run 40551715264](https://github.com/anesthetised/agenthesia/actions/runs/40551715264), on `e372241`,
+passed the repaired capture cancellation test, lint and the app build. Its non-hosted group took 81.5 s
+and reported seven issues in five existing process tests. Two observed a descendant only after natural
+leader-exit cleanup had killed it; the stderr test also assumed its drain could not already be finished.
+The other failures involved graceful-exit expectations and a ten-second bound under concurrent load.
+These results do not establish a production termination defect, and no signal/grace policy is changed.
+
+Delaying observation by four seconds reproduced the descendant-group and already-finished-drain
+failures locally. Both integration fixtures now wait for an explicit release before the leader exits,
+so their process-group assertions run while the leader is still alive. A separate stderr-reader test
+keeps the writer open and checks the drain's own deadline without natural process cleanup or EOF.
+`StderrCapture` is internal for this focused test; its implementation and public APIs are unchanged.
+
+Coverage now separates AgentRuntime from Core as well as hosted views, extending the existing process
+isolation. It builds once and runs three sequential groups: 451 remaining core tests, 123 runtime tests
+and 185 hosted tests. A complement selector includes future targets automatically. Every group retains
+its existing 120-second process timeout and parallel tests; any failure fails the run, all groups still
+execute, and separate profile prefixes preserve merged coverage. Tests cover the partition, near-matching
+target names, unique profiles and failure propagation from each group. A deliberate duplicated-runtime
+selector failed those tests before restoration. This adds one test-driver invocation; no CI speedup is claimed.
+
+Local `just lint`, 18 script tests and all 759 Swift tests pass. The three selectors were exercised
+sequentially with instrumented `just test --build-system native`, preserving CI's combined-bundle layout,
+and then through full `just coverage`: every module gate passes (AgentRuntime 91.9%). `just app` passes.
+The delayed-observation regressions first failed before the fixture changes. CI confirmation awaits
+the follow-up push; the broader scheduling/wait audit and consecutive CI verification in #133 remain
+open. No benchmark or native-app UI check was run.
 
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 

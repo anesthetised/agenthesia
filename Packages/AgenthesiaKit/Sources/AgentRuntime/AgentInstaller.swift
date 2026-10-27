@@ -63,16 +63,16 @@ public actor AgentInstaller {
     /// Updates are explicit installations of another version; an existing version is never overwritten.
     public func install(_ agent: AgentRegistry.Agent) async throws -> AgentInstallation {
         try Task.checkCancellation()
-        let operation = try beginOperation()
-        defer { operation.release() }
         let target = try location(agentID: agent.id, version: agent.version)
-        guard !FileManager.default.fileExists(atPath: target.path) else {
-            throw AgentInstallation.Failure.alreadyInstalled
-        }
         let id = UUID()
         let stage = root.appending(path: ".staging-\(id.uuidString)")
-        guard mkdir(stage.path(percentEncoded: false), 0o700) == 0 else {
-            throw AgentInstallation.Failure.unownedPath
+        try exclusively {
+            guard !FileManager.default.fileExists(atPath: target.path) else {
+                throw AgentInstallation.Failure.alreadyInstalled
+            }
+            guard mkdir(stage.path(percentEncoded: false), 0o700) == 0 else {
+                throw AgentInstallation.Failure.unownedPath
+            }
         }
         do {
             try Data(id.uuidString.utf8).write(to: stage.appending(path: ".owner"), options: .withoutOverwriting)
@@ -134,16 +134,18 @@ public actor AgentInstaller {
             let lease = try InstallationLock(stage.appending(path: ".lease"), create: true, failure: .unownedPath)
             lease.release()
             try Task.checkCancellation()
-            try FileManager.default.createDirectory(
-                at: target.deletingLastPathComponent(),
-                withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700]
-            )
-            try InstallationFiles.directory(target.deletingLastPathComponent(), under: root)
-            // A same-volume rename is the publication point. Nothing visible points at a partial install.
-            guard renameatx_np(AT_FDCWD, stage.path, AT_FDCWD, target.path, UInt32(RENAME_EXCL)) == 0 else {
-                if errno == EEXIST { throw AgentInstallation.Failure.alreadyInstalled }
-                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            try exclusively {
+                try FileManager.default.createDirectory(
+                    at: target.deletingLastPathComponent(),
+                    withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
+                )
+                try InstallationFiles.directory(target.deletingLastPathComponent(), under: root)
+                // A same-volume rename is the publication point. Nothing visible points at a partial install.
+                guard renameatx_np(AT_FDCWD, stage.path, AT_FDCWD, target.path, UInt32(RENAME_EXCL)) == 0 else {
+                    if errno == EEXIST { throw AgentInstallation.Failure.alreadyInstalled }
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
             }
             return installation
         } catch {
@@ -154,8 +156,10 @@ public actor AgentInstaller {
     }
 
     public func installations() throws -> [AgentInstallation] {
-        let operation = try beginOperation()
-        defer { operation.release() }
+        try exclusively(listInstallations)
+    }
+
+    private func listInstallations() throws -> [AgentInstallation] {
         var result: [AgentInstallation] = []
         for agent in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
         where !agent.lastPathComponent.hasPrefix(".") {
@@ -173,18 +177,28 @@ public actor AgentInstaller {
 
     public func acquire(_ installation: AgentInstallation, directory: URL) async throws -> Lease {
         try Task.checkCancellation()
-        let operation = try beginOperation()
-        defer { operation.release() }
-        let version = try checked(installation)
-        let lock = try InstallationLock(version.appending(path: ".lease"), shared: true, failure: .installationInUse)
+        // The lease, not the operation lock, keeps this version in place while the runtime is prepared.
+        let (lock, executable) = try exclusively {
+            let version = try checked(installation)
+            let lock = try InstallationLock(
+                version.appending(path: ".lease"),
+                shared: true,
+                failure: .installationInUse
+            )
+            do {
+                let executable = try InstallationFiles.executable(
+                    installation.executable,
+                    in: version.appending(path: "payload"),
+                    javascript: installation.toolchain != nil
+                )
+                return (lock, executable)
+            } catch {
+                lock.release()
+                throw error
+            }
+        }
         var transferred = false
         defer { if !transferred { lock.release() } }
-        let payload = version.appending(path: "payload")
-        let executable = try InstallationFiles.executable(
-            installation.executable,
-            in: payload,
-            javascript: installation.toolchain != nil
-        )
         var command: AgentCommand
         let diagnostic: String?
         switch installation.source {
@@ -211,12 +225,22 @@ public actor AgentInstaller {
 
     public func remove(_ installation: AgentInstallation) throws {
         try Task.checkCancellation()
+        try exclusively {
+            let version = try checked(installation)
+            let lease = try InstallationLock(version.appending(path: ".lease"), failure: .installationInUse)
+            defer { lease.release() }
+            try removeOwned(version, id: installation.id)
+            // rmdir removes the agent's directory only once no version is left in it.
+            rmdir(version.deletingLastPathComponent().path(percentEncoded: false))
+        }
+    }
+
+    /// Holds the operation lock for synchronous steps only: downloads, npm runs and shell captures must not
+    /// make parallel launches or another installation fail with `operationInProgress`.
+    private func exclusively<T>(_ body: () throws -> T) throws -> T {
         let operation = try beginOperation()
         defer { operation.release() }
-        let version = try checked(installation)
-        let lease = try InstallationLock(version.appending(path: ".lease"), failure: .installationInUse)
-        defer { lease.release() }
-        try removeOwned(version, id: installation.id)
+        return try body()
     }
 
     private func beginOperation() throws -> InstallationLock {

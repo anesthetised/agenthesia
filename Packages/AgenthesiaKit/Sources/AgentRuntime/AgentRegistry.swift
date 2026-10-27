@@ -83,7 +83,7 @@ public enum AgentRegistry {
         }
     }
 
-    public struct Agent: Decodable, Sendable {
+    public struct Agent: Decodable, Identifiable, Sendable {
         public let id: String
         public let name: String
         public let version: String

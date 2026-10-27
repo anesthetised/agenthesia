@@ -45,6 +45,9 @@ before implementation.
   discard (#124), review (#125) and squash merge (#127).
 - Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is merged in #128.
 - `ScenarioAgent` tolerates a saturated main actor in CI (#129); the saturation itself remains.
+- M6: the registry client (#33), Node/npm checks (#34) and installers (#35) are merged; #36 is split into
+  three slices under [ADR-0036](adr/0036-agent-settings-and-installed-sessions.md), and slice 1 (Settings →
+  Agents, the agent picker and session leases) is implemented on `feat/agent-browser`.
 
 ## Previous batch: session interactions (merged)
 
@@ -212,7 +215,7 @@ Use user-provided Node/npm, isolated binary/npm installations and local ACP comm
 download or update runtimes; defer `uvx` installation and standalone adapter packaging. ADR-0034
 supersedes only the managed Node and installation decisions of ADR-0004; its historical text stays intact.
 
-Implementation order (#33 merged in #136; #34 merged in #137; #35–#36 remain open):
+Implementation order (#33 merged in #136; #34 merged in #137; #35 merged in #140; #36 remains open):
 
 1. **#33 — Registry client with ETag cache. Sol, High (`agent:light`). Merged.** Parse and cache registry
    metadata, conditional requests and platform distribution selection; retain unsupported entries
@@ -221,7 +224,7 @@ Implementation order (#33 merged in #136; #34 merged in #137; #35–#36 remain o
    old managed-Node scope with Node/npm checks and fresh login-shell capture for Check Again. Keep
    installation and launch on a consistent runtime, detect removed/incompatible runtimes, and keep
    running sessions unaffected. This can be developed independently of #33.
-3. **#35 — Binary and npm installers. Astra, High (`agent:strong`).** After #33 and #34: private
+3. **#35 — Binary and npm installers. Astra, High (`agent:strong`). Merged.** After #33 and #34: private
    versioned installs, exact packages with retained lockfiles, binary verification, cancellation and
    failure cleanup, explicit updates with retained working versions, and removal only of owned files
    that are not in use. Authentication and chat use the same installation and runtime.
@@ -229,7 +232,10 @@ Implementation order (#33 merged in #136; #34 merged in #137; #35–#36 remain o
    discover known local ACP commands without spawning them, retain manual setup, show prerequisites
    and Check Again, validate selected commands through bounded ACP initialization, and expose install,
    update and removal. A discovered ordinary CLI may still need an adapter and a compatibility check.
-   Pre-session sign-in remains part of this issue as recorded by ADR-0033.
+   Pre-session sign-in remains part of this issue as recorded by ADR-0033. The owner split it into three
+   pull requests ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)): 1) Settings → Agents,
+   the agent picker and session leases; 2) local discovery from a built-in command table and the
+   initialize probe; 3) pre-session sign-in.
 
 Each implementation has its own branch and tests. Do not equate a successful initialize handshake
 with successful sign-in. Verify first-run prerequisite recovery, discovery, updates and failures in the
@@ -314,6 +320,44 @@ profiles through the existing policy. Local documentation links and `git diff --
 No real agent, native-app UI, VoiceOver, system prompt or benchmark was exercised for this API-only slice.
 Use Astra, High for #36's shared session/authentication lifecycle integration; Sol, High suits subsequent
 isolated UI polish.
+
+#36 slice 1 implemented on `feat/agent-browser` (2026-10-27), under the owner-approved ADR-0036: Settings
+gains an Agents tab (installed versions with Update and Remove, the Node.js/npm check with Check Again,
+the ACP Registry with search, distribution, source and license confirmed before installation). The launch
+form picks the newest installed version of an agent or a custom command. Migration
+`v4-agent-install-installation` links one `agent_install` row to each installed version, so saved sessions
+keep their version; Continue of a removed version names the agent and points to Settings. `LiveSession`
+leases the version before creating a worktree, runs chat and terminal sign-in with the leased command and
+releases the lease after its processes exit.
+
+Pitfall found and fixed: #35's installer held its exclusive operation lock across the download, the npm
+run and the shell capture of `acquire`, so starting a session while another agent installed, or two
+parallel starts with one installed agent, failed with "Another installation or removal is in progress".
+The lock now covers synchronous steps only. Both cases had red regressions before the fix. Disabling the
+lease release made all three installed-session tests fail before restoration (a first mutation that only
+skipped `release()` survived because dropping the lease object also unlocks it).
+
+Validation: `just lint`, full `just test` (772 Swift tests and 18 script tests), `just coverage` (all
+module gates; AgentRuntime 93.4%, AgenthesiaCore 97.7%; six corrupt raw profiles excluded by the
+existing merge policy) and `just app` pass. Views were reviewed with `swiftui-pro`; `confirmationDialog(_:item:)`
+was not adopted because it needs Xcode 27 and CI builds with 26.6. Tests use local registry stubs and
+archive fixtures with MockAgent.
+
+Built-app check (2026-10-27, Debug build of this branch, scripted with `osascript`/System Events and
+`screencapture` because computer use was unavailable in the session): the live registry loaded, and search
+narrowed it to OpenCode. The install confirmation named the source repository, the MIT license, the archive
+URL and checksum verification. Cancelling during the download left no staging directory and no error.
+A full install of OpenCode 2.2.0 (100 MB zip, SHA-256 verified) published the version in about 2.5
+minutes. Check Again showed Checking… and then Node.js 26.12.1/npm 11.20.0 again. The launch form listed
+OpenCode 2.2.0, hid the custom command fields, and started a session in a test repository whose agent ran
+from the private payload. Removal was refused while the session ran. After End Session, Continue relaunched
+the same version. After removing it, Continue showed the "no longer installed" message. The check found an
+empty agent directory left after removing the last version; removal now deletes it (red regression first).
+Not exercised: a real update (the registry offers one version per agent; covered by `AgentCatalogTests`),
+npm installs from the browser, a prompt to the real agent, VoiceOver and system prompts. Form buttons in
+the launch form and Agents tab expose no accessibility titles to System Events; the same is true of the
+existing Choose… and Start Session buttons, so this needs a separate VoiceOver pass rather than a fix here.
+Leftovers only the owner can remove: one test session, "OpenCode · agh-agents-check", in history.
 
 ### Installer cancellation test readiness (#35, PR #140)
 

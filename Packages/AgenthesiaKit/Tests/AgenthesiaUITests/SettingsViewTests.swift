@@ -18,7 +18,7 @@ import Testing
     @Test func hostedSettingsKeepTheStoredChoice() throws {
         let defaults = try #require(UserDefaults(suiteName: "SettingsViewTests-\(UUID())"))
         defaults.set("com.example.Gone", forKey: EditorHandoff.defaultsKey)
-        let host = NSHostingView(rootView: SettingsView().defaultAppStorage(defaults))
+        let host = NSHostingView(rootView: GeneralSettings().defaultAppStorage(defaults))
         host.layoutSubtreeIfNeeded()
         #expect(host.fittingSize.width == 440)
         #expect(host.fittingSize.height > 0)

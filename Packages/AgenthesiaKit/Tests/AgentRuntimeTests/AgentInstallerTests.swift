@@ -37,13 +37,45 @@ import Testing
         let next = try agent(version: "2.0.0")
         let task = Task { try await updating.install(next) }
         await gate.waitUntilPaused()
-        await #expect(throws: AgentInstallation.Failure.operationInProgress) { try await store.install(next) }
+        // A download in progress does not block listing, launching or installing the same version elsewhere.
+        #expect(try await store.installations() == [first])
+        let lease = try await store.acquire(first, directory: fixture.root)
+        lease.release()
+        let installed = try await store.install(next)
         task.cancel()
         await gate.resume()
         await #expect(throws: CancellationError.self) { try await task.value }
-        #expect(try await store.installations() == [first])
+        #expect(try await store.installations() == [first, installed])
         let names = try FileManager.default.contentsOfDirectory(atPath: fixture.root.appending(path: "Agents").path)
         #expect(!names.contains(where: { $0.hasPrefix(".staging-") }))
+    }
+
+    @Test func parallelLaunchesShareTheInstallationWhileTheShellResolves() async throws {
+        let fixture = try ArchiveFixture()
+        defer { fixture.remove() }
+        let installation = try await installer(fixture).install(agent())
+        let gate = InstallationDownloadGate()
+        let resolving = AgentInstaller(
+            root: fixture.root.appending(path: "Agents"),
+            environment: ShellEnvironment(capture: {
+                await gate.pause()
+                return .init(environment: ["PATH": "/usr/bin:/bin"], diagnostic: nil)
+            }),
+            download: { _, _ in }
+        )
+        let first = Task { try await resolving.acquire(installation, directory: fixture.root) }
+        await gate.waitUntilPaused()
+        let second = Task { try await resolving.acquire(installation, directory: fixture.root) }
+        // The second launch waits for the same shell capture instead of failing on the operation lock.
+        for _ in 0..<100 { await Task.yield() }
+        await gate.resume()
+        let leases = try await [first.value, second.value]
+        #expect(leases.map(\.installation) == [installation, installation])
+        await #expect(throws: AgentInstallation.Failure.installationInUse) {
+            try await installer(fixture).remove(installation)
+        }
+        leases.forEach { $0.release() }
+        try await installer(fixture).remove(installation)
     }
 
     @Test func unmarkedRootsCannotBeAdopted() async throws {

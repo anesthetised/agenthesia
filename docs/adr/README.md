@@ -40,5 +40,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 | [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |
+| [0036](0036-agent-settings-and-installed-sessions.md) | Agent settings and sessions of installed agents | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

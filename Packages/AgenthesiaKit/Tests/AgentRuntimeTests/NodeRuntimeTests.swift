@@ -219,7 +219,7 @@ import Testing
     }
 }
 
-private struct RuntimeFixture: Sendable {
+struct RuntimeFixture: Sendable {
     let root: URL
     var node: URL { root.appending(path: "bin/node") }
     var npm: URL { root.appending(path: "lib/npm/bin/npm-cli.js") }

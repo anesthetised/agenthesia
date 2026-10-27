@@ -16,7 +16,7 @@ public struct ProjectRecord: Identifiable, Equatable, Sendable {
     }
 }
 
-/// A manually configured agent command. Registry installation metadata comes with the installers.
+/// A manually configured agent command. AgentRuntime owns versioned registry installation metadata.
 public struct AgentInstallRecord: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String

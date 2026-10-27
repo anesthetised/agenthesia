@@ -29,7 +29,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache, user-provided Node/npm checks; planned installers (binary, npm) and local agent discovery ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)). | `ACP` |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache, user-provided Node/npm checks and private versioned binary/npm installations ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md), [ADR-0035](adr/0035-installer-storage-and-script-policy.md)); local agent discovery follows in #36. | `ACP`, system `CLibArchive` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
@@ -379,7 +379,7 @@ The initial `v1` migration creates four tables:
 | Table | Stored data |
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
-| `agent_install` | Local UUID, name, executable, argument array and creation time. Agents are configured manually; registry installation metadata belongs to the installer milestone. |
+| `agent_install` | Local UUID, name, executable, argument array and creation time. Manual commands only; versioned installation metadata lives in AgentRuntime. Linking saved sessions to installations belongs to #36. |
 | `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision and `v3-session-base-branch` the optional branch the session started from. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
@@ -530,7 +530,7 @@ its PATH symlink or beside the resolved Node; an opaque wrapper with neither rep
 unsupported prerequisite. It validates npm's package identity and Node engine range, runs `--version`
 with the selected Node, and checks supplied package `engines.node` / `engines.npm` ranges using that
 npm installation's own [semver dependency](https://github.com/npm/node-semver). No package is downloaded
-or added to the app. The installer (#35) must obtain these requirements from the exact package metadata;
+or added to the app. The installer obtains these requirements from the exact package metadata;
 the ACP catalog alone does not supply them.
 
 A Codable `Toolchain` records canonical Node/npm paths and versions, without environment values.
@@ -594,7 +594,7 @@ character of a running command is withheld. Cursor movement is not interpreted.
 kinds, and selects the exact macOS architecture's binary before npm. Python-only agents have an
 explicit unsupported result. Unknown fields are ignored; invalid known metadata, duplicate IDs and
 unsupported schema majors reject the response. Package references are metadata, not shell commands;
-the installer must still pin an unversioned package to the entry's version.
+the installer pins an unversioned package to the entry's version.
 
 `AgentRegistry.Client` refreshes the official HTTPS index with a 1 MiB response limit and bounded
 request/resource timeouts. Concurrent refreshes share one request per client; cancelling a waiter does
@@ -609,10 +609,41 @@ redirects only within the registry's HTTPS origin. It does not download icons, i
 and is not wired into the app yet (#36).
 
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
-Registry installation and local agent discovery are still planned. [ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)
-replaces managed Node with checked user-provided Node/npm, private versioned installs and explicit
-environment refresh. Runtime validation and shell refresh are implemented; the Check Again UI and
-installation recovery flow belong to #36. The shell/probe
+`AgentInstaller` owns `Application Support/Agenthesia/Agents/<agent-id>/<version>` under
+[ADR-0035](adr/0035-installer-storage-and-script-policy.md). Each version contains a payload, an ownership
+marker, a lease file and `installation.json` with format version 1, a unique installation ID, registry
+identity, command, declared environment, source, timestamp and (for npm) the checked toolchain and engine
+requirements. It never persists the captured login-shell environment. This store is separate from
+Persistence's manual command records; windows and history adopt installations in #36.
+
+Operations stage beneath the owned root and publish by an exclusive, same-volume rename after validation.
+Cancellation or failure removes that operation's staging files and preserves existing versions. Updates
+are explicit installs of another version; an existing version is never overwritten. A root advisory lock
+serializes operations across installer actors and app instances; overlapping operations report busy.
+Every launch must acquire and retain a shared version lease for the entire authentication/session
+lifetime, including terminal sign-in. Release it only after all owned processes exit; copying its
+`AgentCommand` does not retain the lease. Removal requires an exclusive lease and validated ownership.
+These are cooperating-client locks, not a sandbox against another process running as the owner.
+
+Binary downloads use credential-free HTTPS, including CDN redirects, with a 256 MiB limit and bounded
+timeouts. Declared SHA-256 checksums are verified before extraction. `CLibArchive` links the macOS system
+library; a small header declares the stable ABI because the SDK omits libarchive headers. The reader
+accepts tar/zip and built-in none/gzip/bzip2/xz filters; it never enables an external decompressor.
+It copies at most 10,000 entries and 1 GiB of regular file data into a fresh private directory, rejects
+links, special/encrypted files and escaping paths, and preserves only whether a file is executable.
+The selected command must be a regular executable inside the payload.
+
+npm installs an exact package version into a private prefix with lifecycle scripts, audit and funding
+requests disabled. Configuration and cache are isolated from the user's npm files. Package metadata,
+engines, the JavaScript entrypoint and the generated lockfile are validated; the manifest and lockfile
+remain beside `node_modules`. Launch uses the pinned Node executable and installed script directly,
+without npx or network resolution, after revalidating the saved runtime. Missing entrypoints explain
+the disabled-script policy. Some script-dependent packages fail only when launched: #36's bounded ACP
+readiness probe must report that failure without enabling scripts. Cancellation of npm/probes terminates
+the captured process group before cleanup.
+
+Local discovery, Check Again, installation recovery, browser UI and lease ownership in windows/history
+belong to #36. Runtime validation and explicit shell refresh are implemented. The shell/probe
 `posix_spawn` implementation addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).

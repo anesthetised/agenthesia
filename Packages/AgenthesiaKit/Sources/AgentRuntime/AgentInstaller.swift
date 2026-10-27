@@ -230,6 +230,8 @@ public actor AgentInstaller {
             let lease = try InstallationLock(version.appending(path: ".lease"), failure: .installationInUse)
             defer { lease.release() }
             try removeOwned(version, id: installation.id)
+            // rmdir removes the agent's directory only once no version is left in it.
+            rmdir(version.deletingLastPathComponent().path(percentEncoded: false))
         }
     }
 

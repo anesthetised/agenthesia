@@ -123,6 +123,8 @@ import Testing
         #expect(try await self.installer(fixture).installations() == [installation])
         try await installer.remove(installation)
         #expect(try await installer.installations().isEmpty)
+        // Removing the last version leaves no empty agent directory behind.
+        #expect(!FileManager.default.fileExists(atPath: fixture.root.appending(path: "Agents/fixture").path))
     }
 
     @Test func checksumFailureAndFailedUpdatesPreserveWorkingVersions() async throws {

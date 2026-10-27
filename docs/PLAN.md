@@ -341,9 +341,23 @@ Validation: `just lint`, full `just test` (772 Swift tests and 18 script tests),
 module gates; AgentRuntime 93.4%, AgenthesiaCore 97.7%; six corrupt raw profiles excluded by the
 existing merge policy) and `just app` pass. Views were reviewed with `swiftui-pro`; `confirmationDialog(_:item:)`
 was not adopted because it needs Xcode 27 and CI builds with 26.6. Tests use local registry stubs and
-archive fixtures with MockAgent; no live registry request, real agent, native-app UI, VoiceOver or system
-prompt has been exercised yet. The built-app check of install, update, removal, Check Again and
-starting/continuing an installed agent is pending.
+archive fixtures with MockAgent.
+
+Built-app check (2026-10-27, Debug build of this branch, scripted with `osascript`/System Events and
+`screencapture` because computer use was unavailable in the session): the live registry loaded, and search
+narrowed it to OpenCode. The install confirmation named the source repository, the MIT license, the archive
+URL and checksum verification. Cancelling during the download left no staging directory and no error.
+A full install of OpenCode 2.2.0 (100 MB zip, SHA-256 verified) published the version in about 2.5
+minutes. Check Again showed Checking… and then Node.js 26.12.1/npm 11.20.0 again. The launch form listed
+OpenCode 2.2.0, hid the custom command fields, and started a session in a test repository whose agent ran
+from the private payload. Removal was refused while the session ran. After End Session, Continue relaunched
+the same version. After removing it, Continue showed the "no longer installed" message. The check found an
+empty agent directory left after removing the last version; removal now deletes it (red regression first).
+Not exercised: a real update (the registry offers one version per agent; covered by `AgentCatalogTests`),
+npm installs from the browser, a prompt to the real agent, VoiceOver and system prompts. Form buttons in
+the launch form and Agents tab expose no accessibility titles to System Events; the same is true of the
+existing Choose… and Start Session buttons, so this needs a separate VoiceOver pass rather than a fix here.
+Leftovers only the owner can remove: one test session, "OpenCode · agh-agents-check", in history.
 
 ### Installer cancellation test readiness (#35, PR #140)
 

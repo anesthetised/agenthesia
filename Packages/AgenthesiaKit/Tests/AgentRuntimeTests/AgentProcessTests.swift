@@ -1,9 +1,10 @@
 import ACP
 import ACPTesting
-import AgentRuntime
 import Foundation
 import JSONRPC
 import Testing
+
+@testable import AgentRuntime
 
 @Suite(.timeLimit(.minutes(1))) struct AgentProcessTests {
     @Test func talksOverStdinAndStdout() async throws {
@@ -290,7 +291,8 @@ import Testing
         _ = await process.terminate(gracePeriod: .milliseconds(50))
     }
 
-    @Test func stderrDrainIsBoundedAfterLeaderExitWhenDescendantKeepsPipeOpen() async throws {
+    @Test(arguments: [0, 4])
+    func stderrDrainIsBoundedAfterLeaderExitWhenDescendantKeepsPipeOpen(observationDelay: Int) async throws {
         let pidFile = FileManager.default.temporaryDirectory.appending(
             path: "agenthesia-stderr-descendant-\(UUID().uuidString).pid"
         )
@@ -302,6 +304,7 @@ import Testing
                 /bin/sleep 0.01
                 attempt=$((attempt + 1))
             done
+            read release
             echo leader >&2
             """
         let process = try AgentProcess(
@@ -316,15 +319,32 @@ import Testing
             throw error
         }
         defer { kill(child, SIGKILL) }
-        #expect(await process.waitForExit() == .exited(0))
+        do { try await Task.sleep(for: .seconds(observationDelay)) } catch {
+            _ = await process.terminate(gracePeriod: .milliseconds(50))
+            throw error
+        }
+        // Keep the leader alive until the group assertion; natural-exit cleanup may run before we resume.
         #expect(getpgid(child) == process.processIdentifier)
-        let start = ContinuousClock.now
+        do { try await process.transport.send(Data("release".utf8)) } catch {
+            _ = await process.terminate(gracePeriod: .milliseconds(50))
+            throw error
+        }
+        #expect(await process.waitForExit() == .exited(0))
         await process.waitForStderr()
-        #expect(ContinuousClock.now - start >= .milliseconds(400))
-        // The descendant holds stderr open for 30 s.
-        #expect(ContinuousClock.now - start < .seconds(10))
         #expect((await process.stderrLog).contains("leader"))
         _ = await process.terminate(gracePeriod: .milliseconds(50))
+        #expect(try await waitUntilInactive(child))
+    }
+
+    @Test func stderrDrainIsBoundedWhileTheWriterStaysOpen() async {
+        let pipe = Pipe()
+        let capture = StderrCapture(handle: pipe.fileHandleForReading)
+        defer { try? pipe.fileHandleForWriting.close() }
+        let start = ContinuousClock.now
+        // No process-group cleanup or EOF can complete this reader: its own deadline must finish it.
+        await capture.waitForDrain()
+        #expect(ContinuousClock.now - start >= .milliseconds(400))
+        #expect(ContinuousClock.now - start < .seconds(10))
     }
 
     @Test func stderrDrainCalledWhileRunningPreservesLaterOutput() async throws {

@@ -174,7 +174,7 @@ public actor AgentProcess {
 }
 
 /// Bounded stderr framing, retention and EOF notification for the pipe callback.
-private final class StderrCapture: Sendable {
+final class StderrCapture: Sendable {
     private static let byteLimit = 64 * 1024
     private static let lineLimit = 16 * 1024
     private static let omitted = "[earlier stderr omitted]\n"

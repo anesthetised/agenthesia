@@ -1,3 +1,4 @@
+public import AgentRuntime
 public import Foundation
 public import Persistence
 
@@ -8,10 +9,15 @@ public actor SessionLibrary {
             .appending(path: "Agenthesia/history.sqlite")
     )
     private let databaseURL: URL
+    /// Installed agent versions that sessions launch through leases (ADR-0036).
+    public nonisolated let installer: AgentInstaller
     private var opening: Task<PersistenceStore, any Error>?
     private var installing: Task<Void, Never>?
 
-    public init(databaseURL: URL) { self.databaseURL = databaseURL }
+    public init(databaseURL: URL, installer: AgentInstaller = .shared) {
+        self.databaseURL = databaseURL
+        self.installer = installer
+    }
 
     public func store() async throws -> PersistenceStore {
         if let opening { return try await opening.value }
@@ -82,12 +88,26 @@ public actor SessionLibrary {
 
     private func insert(_ agent: AgentInstallRecord) async throws -> AgentInstallRecord {
         let store = try await store()
+        // An installed version has one row; a manual command is identified by its executable and arguments.
         if let existing = try await store.agentInstalls().first(where: {
-            $0.executable == agent.executable && $0.arguments == agent.arguments
+            if let id = agent.installationID { return $0.installationID == id }
+            return $0.installationID == nil && $0.executable == agent.executable && $0.arguments == agent.arguments
         }) {
             return existing
         }
         try await store.createAgentInstall(agent)
         return agent
+    }
+}
+
+extension AgentInstallRecord {
+    /// The history row of an installed version; it launches through the installation's lease.
+    public init(installation: AgentInstallation) {
+        self.init(
+            name: installation.name,
+            executable: installation.executable,
+            arguments: installation.arguments,
+            installationID: installation.id
+        )
     }
 }

@@ -77,7 +77,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await reopened.events(in: session.id).first?.event.payload == payload)
         #expect(
             try await database.read { try Schema.migrator.appliedMigrations($0) } == [
-                "v1", "v2-session-base-revision", "v3-session-base-branch",
+                "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
             ]
         )
     }
@@ -135,6 +135,32 @@ final class PersistenceStoreTests: Sendable {
         let record = try #require(await PersistenceStore(database: legacy).session(id: session))
         #expect(record.baseRevision == revision)
         #expect(record.baseBranch == nil)
+    }
+
+    @Test func installedVersionsKeepTheirInstallationAndLegacyRowsStayManual() async throws {
+        let legacy = try DatabaseQueue()
+        try Schema.migrator.migrate(legacy, upTo: "v3-session-base-branch")
+        let manual = UUID()
+        try await legacy.write { db in
+            try db.execute(
+                sql: "INSERT INTO agent_install VALUES (?, 'Agent', 'agent', CAST('[\"--acp\"]' AS BLOB), 0)",
+                arguments: [manual.uuidString]
+            )
+        }
+        let store = try PersistenceStore(database: legacy)
+        let installed = AgentInstallRecord(
+            name: "Fixture 2.0.0",
+            executable: "bin/agent",
+            arguments: ["--acp"],
+            installationID: UUID(),
+            createdAt: date
+        )
+        try await store.createAgentInstall(installed)
+        let records = try await store.agentInstalls()
+        #expect(records.map(\.id) == [manual, installed.id])
+        #expect(records.first?.installationID == nil)
+        #expect(records.first?.arguments == ["--acp"])
+        #expect(records.last == installed)
     }
 
     @Test(arguments: [Date(timeIntervalSinceReferenceDate: 800_000_000.0.nextUp), Date()])
@@ -323,7 +349,8 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await store.events(in: session.id) == original)
         #expect(
             try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
-                "v1", "v2-session-base-revision", "v3-session-base-branch", "future-version",
+                "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
+                "future-version",
             ]
         )
     }

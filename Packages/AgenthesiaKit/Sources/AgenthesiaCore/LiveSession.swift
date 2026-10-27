@@ -31,7 +31,10 @@ public final class LiveSession {
     @ObservationIgnored private var process: AgentProcess?
     @ObservationIgnored private var connection: ACP.V1.AgentConnectionAdapter?
     @ObservationIgnored private var agent: AgentInstallRecord?
-    @ObservationIgnored private var agentEnvironment: [String: String] = [:]
+    /// The agent's command and environment, without a working directory; chat and sign-in both run it.
+    @ObservationIgnored private var agentCommand: AgentCommand?
+    /// Keeps an installed version in place until the agent's processes have exited (ADR-0036).
+    @ObservationIgnored private var lease: AgentInstaller.Lease?
     @ObservationIgnored private var signInCancelled = false
     @ObservationIgnored private(set) var startup: Task<Void, Never>?
     @ObservationIgnored private var closing: Task<Void, Never>?
@@ -132,13 +135,22 @@ public final class LiveSession {
             }
             self.agent = agent
             // Resolve and check the command first, so a mistyped executable does not leave a worktree behind.
-            let resolution = await environment()
-            diagnostic = resolution.diagnostic
-            agentEnvironment = resolution.values
-            guard !isClosed else { return }
-            guard Self.isExecutable(agent.executable, path: resolution.values["PATH"]) else {
-                throw LaunchError(message: "Cannot find an executable named “\(agent.executable)”.")
+            if let installationID = agent.installationID {
+                try await acquire(installationID, name: agent.name)
+            } else {
+                let resolution = await environment()
+                diagnostic = resolution.diagnostic
+                agentCommand = AgentCommand(
+                    executable: agent.executable,
+                    arguments: agent.arguments,
+                    environment: resolution.values
+                )
+                guard !isClosed else { return }
+                guard Self.isExecutable(agent.executable, path: resolution.values["PATH"]) else {
+                    throw LaunchError(message: "Cannot find an executable named “\(agent.executable)”.")
+                }
             }
+            guard !isClosed else { return }
             let controller: SessionController
             switch launch {
             case .new(let directory, _, let worktreesRoot, let additionalDirectories):
@@ -174,16 +186,30 @@ public final class LiveSession {
         }
     }
 
+    /// Leases the installed version, which also checks its files and its saved Node runtime.
+    private func acquire(_ installationID: UUID, name: String) async throws {
+        let installer = library.installer
+        guard let installation = try await installer.installations().first(where: { $0.id == installationID }) else {
+            throw LaunchError(
+                message:
+                    "The version of \(name) this session used is no longer installed. Install it again in Settings → Agents, or start a new session."
+            )
+        }
+        let lease = try await installer.acquire(
+            installation,
+            directory: FileManager.default.homeDirectoryForCurrentUser
+        )
+        guard !isClosed else { lease.release(); return }
+        self.lease = lease
+        diagnostic = lease.shellDiagnostic
+        agentCommand = lease.command
+    }
+
     /// Launches the agent and starts or reopens the session. When the agent asks for sign-in, the session
     /// waits for it with the agent still running; `afterSignIn` says that an attempt has just ended.
     private func connect(afterSignIn: Bool = false) async throws {
-        guard let controller, let agent else { return }
-        let command = AgentCommand(
-            executable: agent.executable,
-            arguments: agent.arguments,
-            environment: agentEnvironment,
-            currentDirectory: URL(filePath: controller.session.workingDirectory)
-        )
+        guard let controller, var command = agentCommand else { return }
+        command.currentDirectory = URL(filePath: controller.session.workingDirectory)
         let process = try await Task.detached { try AgentProcess(launching: command) }.value
         self.process = process
         guard !isClosed else { await cleanup(); return }
@@ -305,17 +331,13 @@ public final class LiveSession {
     }
 
     private func signIn(on method: ACP.TerminalAuthMethod) async throws {
-        guard let agent, let controller else { return }
+        guard var command = agentCommand, let controller else { return }
         await shutDownAgent()
         guard !isClosed else { return }
-        var environment = agentEnvironment.merging(method.env ?? [:]) { $1 }
-        environment["TERM"] = "xterm-256color"
-        let command = AgentCommand(
-            executable: agent.executable,
-            arguments: agent.arguments + (method.args ?? []),
-            environment: environment,
-            currentDirectory: URL(filePath: controller.session.workingDirectory)
-        )
+        command.arguments += method.args ?? []
+        command.environment = (command.environment ?? [:]).merging(method.env ?? [:]) { $1 }
+        command.environment?["TERM"] = "xterm-256color"
+        command.currentDirectory = URL(filePath: controller.session.workingDirectory)
         let process: TerminalProcess
         do {
             process = try await Task.detached { try TerminalProcess(launching: command) }.value
@@ -358,7 +380,7 @@ public final class LiveSession {
         let connection = connection
         self.connection = nil
         await connection?.close()
-        await cleanup()
+        await cleanup(releasingLease: false)
         process = nil
     }
 
@@ -473,13 +495,19 @@ public final class LiveSession {
         }
     }
 
-    private func cleanup() async {
-        guard let process else { return }
-        _ = await process.terminate()
-        await process.waitForStderr()
-        stderrLog = await process.stderrLog
-        logTask?.cancel()
-        logTask = nil
+    /// Stops the agent. The lease goes too unless the agent is about to be launched again for sign-in.
+    private func cleanup(releasingLease: Bool = true) async {
+        if let process {
+            _ = await process.terminate()
+            await process.waitForStderr()
+            stderrLog = await process.stderrLog
+            logTask?.cancel()
+            logTask = nil
+        }
+        // Close terminates a terminal sign-in, which also runs the leased command, before this.
+        guard releasingLease else { return }
+        lease?.release()
+        lease = nil
     }
 
     private func observeFailure() {

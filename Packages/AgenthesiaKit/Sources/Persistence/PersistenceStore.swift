@@ -58,9 +58,12 @@ public final class PersistenceStore: Sendable {
         let arguments = try JSONEncoder().encode(agent.arguments)
         try await database.write { db in
             try db.execute(
-                sql: "INSERT INTO agent_install (id, name, executable, arguments, createdAt) VALUES (?, ?, ?, ?, ?)",
+                sql: """
+                    INSERT INTO agent_install (id, name, executable, arguments, installationID, createdAt)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
                 arguments: [
-                    agent.id.uuidString, agent.name, agent.executable, arguments,
+                    agent.id.uuidString, agent.name, agent.executable, arguments, agent.installationID?.uuidString,
                     agent.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
@@ -75,6 +78,7 @@ public final class PersistenceStore: Sendable {
                     name: row.decode(forColumn: "name"),
                     executable: row.decode(forColumn: "executable"),
                     arguments: JSONDecoder().decode([String].self, from: row.decode(forColumn: "arguments")),
+                    installationID: row.decode(forColumn: "installationID"),
                     createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
                 )
             }

@@ -16,12 +16,15 @@ public struct ProjectRecord: Identifiable, Equatable, Sendable {
     }
 }
 
-/// A manually configured agent command. AgentRuntime owns versioned registry installation metadata.
+/// The agent a session runs: a manual command, or one installed version whose metadata AgentRuntime owns
+/// (ADR-0036). An installed version launches through its installation, not `executable`.
 public struct AgentInstallRecord: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
     public let executable: String
     public let arguments: [String]
+    /// The AgentRuntime installation of this exact version; `nil` for a manual command.
+    public let installationID: UUID?
     public let createdAt: Date
 
     public init(
@@ -29,12 +32,14 @@ public struct AgentInstallRecord: Identifiable, Equatable, Sendable {
         name: String,
         executable: String,
         arguments: [String] = [],
+        installationID: UUID? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
         self.name = name
         self.executable = executable
         self.arguments = arguments
+        self.installationID = installationID
         self.createdAt = createdAt
     }
 }

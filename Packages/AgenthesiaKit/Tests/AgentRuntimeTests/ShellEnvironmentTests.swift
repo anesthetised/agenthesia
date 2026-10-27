@@ -1,7 +1,8 @@
-import AgentRuntime
 import Darwin
 import Foundation
 import Testing
+
+@testable import AgentRuntime
 
 @Suite(.timeLimit(.minutes(1))) struct ShellEnvironmentTests {
     @Test func parsesMarkedNulEnvironmentAndCachesConcurrentRequests() async throws {
@@ -222,6 +223,67 @@ import Testing
         #expect(kill(pid, 0) == -1 && errno == ESRCH)
     }
 
+    @Test func refreshReplacesCacheAndSharesConcurrentCaptures() async {
+        let capture = EnvironmentCapture()
+        let resolver = ShellEnvironment(capture: { await capture.next() })
+        let initial = Task { await resolver.resolve() }
+        await capture.waitForCalls(1)
+        await capture.finish(0, value: "old")
+        let old = await initial.value
+        #expect(old.environment["VALUE"] == "old")
+
+        let fresh = Task { await resolver.refresh() }
+        await capture.waitForCalls(2)
+        let others = Task {
+            await withTaskGroup(of: ShellEnvironment.Resolution.self) { group in
+                for _ in 0..<8 { group.addTask { await resolver.refresh() } }
+                // Hold the capture open until every caller has joined it.
+                while await resolver.waiterCount < 9 { await Task.yield() }
+                await capture.finish(1, value: "new")
+                var results: [ShellEnvironment.Resolution] = []
+                for await value in group { results.append(value) }
+                return results
+            }
+        }
+        #expect(await fresh.value.environment["VALUE"] == "new")
+        #expect(await others.value.allSatisfy { $0.environment["VALUE"] == "new" })
+        #expect(await resolver.resolve().environment["VALUE"] == "new")
+        #expect(old.environment["VALUE"] == "old")
+        #expect(await capture.count == 2)
+    }
+
+    @Test func olderCaptureCannotOverwriteRefreshOrClearItsFlight() async {
+        let capture = EnvironmentCapture()
+        let resolver = ShellEnvironment(capture: { await capture.next() })
+        let old = Task { await resolver.resolve() }
+        await capture.waitForCalls(1)
+        let fresh = Task { await resolver.refresh() }
+        await capture.waitForCalls(2)
+        await capture.finish(0, value: "old")
+        _ = await old.value
+        let joined = Task { await resolver.resolve() }
+        while await resolver.waiterCount < 2 { await Task.yield() }
+        await capture.finish(1, value: "new")
+        #expect(await fresh.value.environment["VALUE"] == "new")
+        #expect(await joined.value.environment["VALUE"] == "new")
+        #expect(await resolver.resolve().environment["VALUE"] == "new")
+        #expect(await capture.count == 2)
+    }
+
+    @Test func lateOldCaptureCannotReplaceCompletedRefresh() async {
+        let capture = EnvironmentCapture()
+        let resolver = ShellEnvironment(capture: { await capture.next() })
+        let old = Task { await resolver.resolve() }
+        await capture.waitForCalls(1)
+        let fresh = Task { await resolver.refresh() }
+        await capture.waitForCalls(2)
+        await capture.finish(1, value: "new")
+        _ = await fresh.value
+        await capture.finish(0, value: "old")
+        _ = await old.value
+        #expect(await resolver.resolve().environment["VALUE"] == "new")
+    }
+
     private func shell(_ body: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appending(path: "agenthesia-shell-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -229,5 +291,22 @@ import Testing
         try ("#!/bin/sh\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path())
         return file
+    }
+}
+
+private actor EnvironmentCapture {
+    private var calls: [CheckedContinuation<ShellEnvironment.Resolution, Never>] = []
+    var count: Int { calls.count }
+
+    func next() async -> ShellEnvironment.Resolution {
+        await withCheckedContinuation { calls.append($0) }
+    }
+
+    func waitForCalls(_ count: Int) async {
+        while calls.count < count { await Task.yield() }
+    }
+
+    func finish(_ index: Int, value: String) {
+        calls[index].resume(returning: .init(environment: ["VALUE": value], diagnostic: nil))
     }
 }

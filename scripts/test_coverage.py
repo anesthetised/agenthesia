@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -52,6 +53,61 @@ class CoverageTestProcessTests(unittest.TestCase):
             self.assertIn("sample unavailable", errors.getvalue())
             with self.assertRaises(ProcessLookupError):
                 os.kill(int(pid_file.read_text()), 0)
+
+
+class CoverageTestSchedulingTests(unittest.TestCase):
+    def invoke(self, statuses=(0, 0), build_status=0):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(coverage, "codecov_dir", return_value=directory), \
+                 patch.object(coverage.subprocess, "run", return_value=subprocess.CompletedProcess([], build_status)) as build, \
+                 patch.object(coverage, "run_test_process", side_effect=statuses) as run, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                status = coverage.test("fixture-package")
+            return status, build.call_args_list, run.call_args_list
+
+    def test_separates_hosted_tests_from_their_complement_without_losing_coverage(self):
+        status, builds, runs = self.invoke()
+        self.assertEqual(status, 0)
+        self.assertEqual(len(builds), 1)
+        self.assertIn("--build-tests", builds[0].args[0])
+        self.assertEqual(len(runs), 2)
+        selections = []
+        profiles = []
+        for call in runs:
+            command, env = call.args
+            self.assertIn("--skip-build", command)
+            self.assertIn("-profile-generate", command)
+            self.assertIn("-profile-coverage-mapping", command)
+            option = "--filter" if "--filter" in command else "--skip"
+            pattern = re.compile(command[command.index(option) + 1])
+            selections.append((option, pattern))
+            profiles.append(env["LLVM_PROFILE_FILE"])
+        self.assertNotEqual(profiles[0], profiles[1])
+        self.assertEqual(os.path.dirname(profiles[0]), os.path.dirname(profiles[1]))
+        self.assertTrue(all("%p" in path and path.endswith(".profraw") for path in profiles))
+        for test in [
+            "AgenthesiaUITests.ComposerTests/input()", "RenderingTests.SourceViewTests/layout()",
+            "AgenthesiaUITests/ComposerTests/input()", "RenderingTests/SourceViewTests/layout()",
+            "AgenthesiaCoreTests.SessionControllerTests/send()", "AgentRuntimeTests.AgentProcessTests/launch()",
+            "FutureTests.NewTests/example()", "RenderingTestsExtra.ExampleTests/run()",
+        ]:
+            with self.subTest(test=test):
+                selected = [bool(pattern.search(test)) == (option == "--filter") for option, pattern in selections]
+                self.assertEqual(sum(selected), 1)
+                hosted = test.startswith(("AgenthesiaUITests.", "AgenthesiaUITests/", "RenderingTests.", "RenderingTests/"))
+                self.assertEqual(selected, [not hosted, hosted])
+
+    def test_failure_in_either_group_fails_the_run_and_still_checks_both(self):
+        for statuses, expected in [((17, 0), 17), ((0, 19), 19), ((124, 19), 124)]:
+            with self.subTest(statuses=statuses):
+                actual, _, runs = self.invoke(statuses)
+                self.assertEqual(actual, expected)
+                self.assertEqual(len(runs), 2)
+
+    def test_failed_build_never_runs_test_groups(self):
+        status, _, runs = self.invoke(statuses=(), build_status=23)
+        self.assertEqual(status, 23)
+        self.assertEqual(runs, [])
 
 
 class CoverageReportTests(unittest.TestCase):

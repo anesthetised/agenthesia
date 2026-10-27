@@ -9,7 +9,7 @@ import Testing
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
         let checks = NodeChecks(results: [.failure(NodeRuntime.Failure.missingNode), .success(fixture.toolchain)])
-        let catalog = fixture.catalog(registry: [fixture.binary("1.0.0")], checks: checks)
+        let catalog = try fixture.catalog(registry: [fixture.binary("1.0.0")], checks: checks)
         await catalog.refresh()
         #expect(catalog.registry?.catalog.agents.map(\.id) == ["fixture"])
         #expect(catalog.registryMessage == nil)
@@ -17,7 +17,7 @@ import Testing
         #expect(catalog.node == .unknown)
         #expect(await checks.calls.isEmpty)
 
-        let npm = fixture.catalog(registry: [fixture.binary("1.0.0"), fixture.npm()], checks: checks)
+        let npm = try fixture.catalog(registry: [fixture.binary("1.0.0"), fixture.npm()], checks: checks)
         await npm.refresh()
         #expect(npm.needsNode)
         #expect(npm.node == .unavailable(NodeRuntime.Failure.missingNode.localizedDescription))
@@ -31,7 +31,7 @@ import Testing
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
         let first = try fixture.agent(fixture.binary("1.0.0"))
-        let catalog = fixture.catalog(registry: [fixture.binary("1.0.0")])
+        let catalog = try fixture.catalog(registry: [fixture.binary("1.0.0")])
         await catalog.refresh()
         #expect(!catalog.hasUpdate(first))
         await catalog.install(first)
@@ -51,7 +51,7 @@ import Testing
     @Test func removalFailsWhileASessionHoldsTheVersion() async throws {
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
-        let catalog = fixture.catalog(registry: [])
+        let catalog = try fixture.catalog(registry: [])
         await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
         let installation = try #require(catalog.installations.first)
         let lease = try await fixture.installer.acquire(installation, directory: fixture.root)
@@ -68,7 +68,7 @@ import Testing
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
         let gate = DownloadGate()
-        let catalog = fixture.catalog(
+        let catalog = try fixture.catalog(
             registry: [],
             download: { _, _ in
                 await gate.pause()
@@ -161,8 +161,8 @@ private struct CatalogFixture {
         registry agents: [[String: Any]],
         checks: NodeChecks = NodeChecks(results: []),
         download: (@Sendable (URL, URL) async throws -> Void)? = nil
-    ) -> AgentCatalog {
-        let data = try! JSONSerialization.data(withJSONObject: ["version": "1.0.0", "agents": agents])
+    ) throws -> AgentCatalog {
+        let data = try JSONSerialization.data(withJSONObject: ["version": "1.0.0", "agents": agents])
         let client = AgentRegistry.Client(cacheDirectory: root.appending(path: "cache-\(UUID())")) { _ in
             .init(status: 200, data: data)
         }

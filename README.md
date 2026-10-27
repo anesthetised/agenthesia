@@ -29,7 +29,8 @@ and accept the result.
 
 ## Highlights (planned for 1.0)
 
-- **Any agent, one interface.** One-click install from the ACP Registry; agents are interchangeable.
+- **Any agent, one interface.** Install from the ACP Registry or connect an installed ACP command;
+  npm agents use your Node/npm, with prerequisite checks before installation.
 - **Parallel sessions.** Run several agents side by side, each in its own process.
 - **Isolated by default.** Every session in a git repository gets its own worktree; review the diff,
   then squash-merge or discard.

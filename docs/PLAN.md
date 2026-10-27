@@ -159,9 +159,47 @@ and system-prompt checks were not performed for this CI-only change.
 
 ## Next steps
 
-The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI rendering crash, strong tier) and M6 (Registry), whose
-installers need an ADR first. Small independent chores such as #73 (CI with Xcode 27) fit the light
-tier. The sections after this one record how M8, M7 and M4 were built and verified.
+The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI
+rendering crash, strong tier) and M6 (Registry), whose installation scope is accepted in
+[ADR-0034](adr/0034-agent-installs-with-user-runtimes.md). Small independent chores such as #73
+(CI with Xcode 27) fit the light tier. The sections after this one record how M8, M7 and M4 were built
+and verified.
+
+### M6: Registry and local agents (2026-10-27)
+
+Use user-provided Node/npm, isolated binary/npm installations and local ACP command discovery. Do not
+download or update runtimes; defer `uvx` installation and standalone adapter packaging. ADR-0034
+supersedes only the managed Node and installation decisions of ADR-0004; its historical text stays intact.
+
+Implementation order (all issues remain open):
+
+1. **#33 — Registry client with ETag cache. Sol, High (`agent:light`).** Parse and cache registry
+   metadata, conditional requests and platform distribution selection; retain unsupported entries
+   for an explanation instead of silently hiding them.
+2. **#34 — User runtime discovery and prerequisite checks. Astra, High (`agent:strong`).** Replace the
+   old managed-Node scope with Node/npm checks and fresh login-shell capture for Check Again. Keep
+   installation and launch on a consistent runtime, detect removed/incompatible runtimes, and keep
+   running sessions unaffected. This can be developed independently of #33.
+3. **#35 — Binary and npm installers. Astra, High (`agent:strong`).** After #33 and #34: private
+   versioned installs, exact packages with retained lockfiles, binary verification, cancellation and
+   failure cleanup, explicit updates with retained working versions, and removal only of owned files
+   that are not in use. Authentication and chat use the same installation and runtime.
+4. **#36 — Agent browser, local discovery and updates. Astra, High (`agent:strong`).** After #35:
+   discover known local ACP commands without spawning them, retain manual setup, show prerequisites
+   and Check Again, validate selected commands through bounded ACP initialization, and expose install,
+   update and removal. A discovered ordinary CLI may still need an adapter and a compatibility check.
+   Pre-session sign-in remains part of this issue as recorded by ADR-0033.
+
+Each implementation has its own branch and tests. Do not equate a successful initialize handshake
+with successful sign-in. Verify first-run prerequisite recovery, discovery, updates and failures in the
+built app with temporary fixtures/MockAgent; check VoiceOver and system prompts separately and record
+what was actually exercised. No real-agent prompt or benchmark is needed for this documentation change.
+
+ADR preparation checked upstream source and release metadata only; standalone adapter builds, real
+agent sessions, native-app UI, VoiceOver and system prompts have not been tested for M6. The decision
+and issue scope are recorded; no M6 implementation is claimed complete.
+Documentation validation: `just lint`, full `just test` (695 Swift tests and 15 script tests),
+`git diff --check` and local Markdown link checks pass.
 
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 

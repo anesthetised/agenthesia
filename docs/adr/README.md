@@ -8,7 +8,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0001](0001-acp-client-not-harness.md) | ACP client, not an agent harness | Accepted |
 | [0002](0002-tech-stack-and-layout.md) | Tech stack and project layout | Accepted |
 | [0003](0003-own-acp-implementation.md) | Own ACP implementation | Accepted |
-| [0004](0004-agent-runtime.md) | Agent runtime | Accepted |
+| [0004](0004-agent-runtime.md) | Agent runtime | Accepted; managed Node and installation decisions superseded by [0034](0034-agent-installs-with-user-runtimes.md) |
 | [0005](0005-event-log.md) | Event log as the source of truth | Accepted |
 | [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted; merge and discard detailed by [0032](0032-worktree-merge-and-discard.md) |
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
@@ -38,5 +38,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
 | [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
+| [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

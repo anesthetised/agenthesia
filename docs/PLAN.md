@@ -284,7 +284,7 @@ the fixes, and final full `just coverage` pass (735 Swift tests, AgentRuntime 92
 The test recipe also passed its 15 script tests. Coverage excluded three corrupt raw profiles through the
 existing merge policy. Documentation links and `git diff --check` pass.
 
-#35 implemented locally on `feat/agent-installers` (2026-10-27), under the owner-approved
+#35 implemented in [PR #140](https://github.com/anesthetised/agenthesia/pull/140) (2026-10-27), under the owner-approved
 [ADR-0035](adr/0035-installer-storage-and-script-policy.md): `AgentInstaller` keeps versioned metadata and
 payloads in AgentRuntime. Binary installs verify declared SHA-256 checksums and use system libarchive
 with built-in filters only; extraction rejects links, special files, escaping paths and excessive expansion.
@@ -313,6 +313,29 @@ profiles through the existing policy. Local documentation links and `git diff --
 No real agent, native-app UI, VoiceOver, system prompt or benchmark was exercised for this API-only slice.
 Use Astra, High for #36's shared session/authentication lifecycle integration; Sol, High suits subsequent
 isolated UI polish.
+
+### Installer cancellation test readiness (#35, PR #140)
+
+[Run 40548357958](https://github.com/anesthetised/agenthesia/actions/runs/40548357958), on `12dd3df`,
+passed lint and the app build. Its only failure among 573 non-hosted tests was
+`cancellationStopsTheProcessGroupBeforeTheCaptureDeadline`: the three-second `waitForChildPID` deadline
+expired before the PID was available, before the test requested cancellation. The log does not establish
+whether the delay occurred in task scheduling, the utility queue or process startup. A fixture delaying
+startup by four seconds reproduced the same timeout locally against the old test.
+
+The test now races child readiness against capture completion in a structured task group. An early
+capture exit reports its actual outcome; the capture's existing 30-second deadline and the suite's
+one-minute limit bound the test. Group cancellation joins cleanup before removing temporary files.
+Once ready, both immediate and delayed fixtures still require a cancelled result, return within ten
+seconds of cancellation, and an inactive child. Temporarily disabling cancellation polling made both
+cases fail the ten-second assertion; production code was restored. Other callers retain the PID helper's
+existing default deadline. This addresses this test's startup assumption, not the broader #133 audit.
+
+Local `just lint` and full `just test` pass (758 Swift tests and 18 script tests). Instrumented
+`just test --build-system native` with CI's non-hosted selector passes 573 tests in one combined bundle,
+including both readiness cases. This follows the CI bundle structure on the local toolchain; it does
+not reproduce the runner's exact scheduling load. CI confirmation awaits the follow-up push.
+Production code and coverage thresholds are unchanged; the app build already passed on the failing run.
 
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 

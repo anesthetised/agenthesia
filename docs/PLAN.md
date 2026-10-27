@@ -171,9 +171,9 @@ Use user-provided Node/npm, isolated binary/npm installations and local ACP comm
 download or update runtimes; defer `uvx` installation and standalone adapter packaging. ADR-0034
 supersedes only the managed Node and installation decisions of ADR-0004; its historical text stays intact.
 
-Implementation order (all issues remain open):
+Implementation order (#33 merged in #136; #34–#36 remain open):
 
-1. **#33 — Registry client with ETag cache. Sol, High (`agent:light`).** Parse and cache registry
+1. **#33 — Registry client with ETag cache. Sol, High (`agent:light`). Merged.** Parse and cache registry
    metadata, conditional requests and platform distribution selection; retain unsupported entries
    for an explanation instead of silently hiding them.
 2. **#34 — User runtime discovery and prerequisite checks. Astra, High (`agent:strong`).** Replace the
@@ -197,7 +197,7 @@ what was actually exercised. No real-agent prompt or benchmark is needed for thi
 
 ADR preparation checked upstream source and release metadata only; standalone adapter builds, real
 agent sessions, native-app UI, VoiceOver and system prompts have not been tested for M6. The decision
-and issue scope are recorded; no M6 implementation is claimed complete.
+and issue scope were recorded before implementation; implementation results follow below.
 Documentation validation: `just lint`, full `just test` (695 Swift tests and 15 script tests),
 `git diff --check` and local Markdown link checks pass.
 
@@ -216,6 +216,33 @@ and full `just coverage` pass (715 Swift tests; AgentRuntime 92.6%, all module g
 pass. Coverage skipped five corrupt raw profiles through the existing merge policy. Native-app UI,
 VoiceOver, system prompts, live registry HTTP requests and real-agent sessions
 were not exercised for this metadata-only change.
+
+#34 implemented locally (2026-10-27): `ShellEnvironment.refresh()` shares concurrent captures and
+protects the cache from stale completion; running sessions retain their environment snapshot.
+`NodeRuntime` discovers executable Node/npm, resolves the actual Node behind shims and a standard npm
+CLI, checks both npm's own Node requirement and supplied package engine ranges with npm's semver, and
+prepares commands using explicit tool paths. A persisted toolchain stores paths and versions only.
+Revalidation refuses removed or changed tools and gives actionable diagnostics. The bounded shell
+collector now also serves runtime probes; it still cleans up the process group. No runtime is installed
+or changed. #35 must supply exact-package requirements and store the descriptor; #36 owns Check Again
+and recovery UI. Unresolvable npm wrappers are reported, not launched opportunistically.
+
+Fixture tests cover shared refreshes and both stale completion orders,
+prerequisite failures, recovery, version-manager shims, removed/changed tools, cancellation and paths
+with spaces. The optional installed-Node/npm integration runs when both tools are available, without
+installing anything: it exercises real semver ranges and launches a temporary JavaScript entrypoint
+whose working directory contains misleading node/npm commands. It ran locally and caught a percent-
+encoded filesystem path bug before the fix. No real agent, native-app UI, VoiceOver, system prompt or
+benchmark was exercised. Local integration used Node 26.12.1 and npm 11.20.0, with a temporary npm
+fixture reusing the installed semver dependency to verify prerelease handling. Missing package engine
+ranges impose no extra constraint; an explicitly declared `*` retains npm's prerelease semantics.
+A cancellation-during-shell-capture regression reproduced a missing-tool error taking precedence over
+cancellation; both discovery and saved-toolchain preparation now give cancellation precedence. A
+runtime-version mutation failed its regression before restoration. A colon in the Node directory is
+rejected because it cannot be pinned as a single PATH entry. `just lint`, full `just test` before the cancellation/prerelease follow-ups, targeted regressions after
+the fixes, and final full `just coverage` pass (735 Swift tests, AgentRuntime 92.9%, all module gates).
+The test recipe also passed its 15 script tests. Coverage excluded three corrupt raw profiles through the
+existing merge policy. Documentation links and `git diff --check` pass.
 
 ### Flaky `SessionControllerTests` in CI (#129, 2026-10-25)
 

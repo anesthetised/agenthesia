@@ -29,7 +29,7 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache; planned installers (binary, npm), user-runtime checks and local agent discovery ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)). | `ACP` |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache, user-provided Node/npm checks; planned installers (binary, npm) and local agent discovery ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)). | `ACP` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
@@ -509,8 +509,10 @@ cycle and waits for the active turn and pending writes.
 
 ## Runtime implementation
 
-`ShellEnvironment` resolves the login-shell environment once per resolver instance. Concurrent callers
-share the same resolution, and the application uses the shared instance. The resolver runs the shell
+`ShellEnvironment` caches the login-shell environment per resolver instance; the application uses the
+shared instance. `refresh()` captures it again for Check Again. Concurrent refreshes share a capture,
+while a refresh supersedes an older ordinary capture. Flight identities prevent the older result from
+overwriting the fresh cache or clearing its flight. Previously returned snapshots remain unchanged. The resolver runs the shell
 with `-l -i -c` in a new session using `posix_spawn`, so interactive shells cannot stop while trying to
 acquire the CLI's controlling terminal. It extracts NUL-separated environment entries between unique
 markers and bounds both the captured output (1 MiB) and the wait (5 seconds, plus bounded process
@@ -519,6 +521,35 @@ environment values. The CLI passes the resulting environment explicitly to the a
 and reuses it for terminal authentication; constructing `AgentProcess` does not implicitly run a shell.
 A complete, valid snapshot and successful shell exit suffice even when a descendant retains stdout;
 the resolver still cleans up the remaining process group.
+
+`NodeRuntime` discovers executable Node/npm from absolute entries in that environment's PATH. It probes
+Node in the user's home directory and resolves the actual executable using
+[`process.execPath`](https://nodejs.org/api/process.html#processexecpath), bypassing a version-manager
+shim for subsequent operations. npm must resolve to the standard `bin/npm-cli.js` entry, either through
+its PATH symlink or beside the resolved Node; an opaque wrapper with neither reports an actionable
+unsupported prerequisite. It validates npm's package identity and Node engine range, runs `--version`
+with the selected Node, and checks supplied package `engines.node` / `engines.npm` ranges using that
+npm installation's own [semver dependency](https://github.com/npm/node-semver). No package is downloaded
+or added to the app. The installer (#35) must obtain these requirements from the exact package metadata;
+the ACP catalog alone does not supply them.
+
+A Codable `Toolchain` records canonical Node/npm paths and versions, without environment values.
+`prepare` rechecks these saved tools before each later operation and reports removed, changed or
+incompatible installations instead of switching silently. `Prepared` supplies commands for npm and
+JavaScript agent entrypoints, invoking the canonical Node directly and placing its directory first in
+PATH for child commands. It retains a value snapshot of the environment and the shell fallback
+diagnostic. Empty/relative PATH entries, NODE_OPTIONS and NODE_PATH are excluded from these managed npm
+commands so a project directory cannot introduce a different runtime or a relative preload hook.
+Manual agent commands keep their existing environment behavior. Arbitrary scripts can still explicitly
+launch another interpreter; this is runtime selection, not containment.
+
+`CommandOutput`, extracted from the shell collector, runs bounded prerequisite probes off the Swift
+executor with stdin closed, stdout capped at 64 KiB and stderr drained without retaining potentially
+sensitive output. Each probe has a 5-second deadline and process-group cleanup; cancellation is checked
+before and after the bounded probe. Missing/broken tools, timeouts, invalid metadata/ranges, incompatible
+versions and changed saved paths/versions have typed, actionable diagnostics. Runtime checks do not
+install, upgrade or remove anything. The API is ready for #35/#36; the current manual-session flow and
+running sessions are unchanged.
 
 `AgentProcess` retains Foundation's `Process` and verifies process-group isolation before using group
 signals. Shutdown is shared by concurrent callers: SIGTERM targets the group, followed by SIGKILL
@@ -580,9 +611,9 @@ and is not wired into the app yet (#36).
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 Registry installation and local agent discovery are still planned. [ADR-0034](adr/0034-agent-installs-with-user-runtimes.md)
 replaces managed Node with checked user-provided Node/npm, private versioned installs and explicit
-environment refresh. The current shell resolver still caches its result for its lifetime; Check Again
-and runtime recovery belong to M6. The shell-only
-`posix_spawn` adoption addresses a terminal interaction found while reviewing
+environment refresh. Runtime validation and shell refresh are implemented; the Check Again UI and
+installation recovery flow belong to #36. The shell/probe
+`posix_spawn` implementation addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).
 

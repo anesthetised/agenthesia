@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Synchronization
 
 /// Bounded process capture. Failures discard output; exit status is the raw waitpid status.
 enum CommandOutput: Equatable, Sendable {
@@ -7,6 +8,7 @@ enum CommandOutput: Equatable, Sendable {
     case timedOut
     case tooMuchOutput
     case launchFailed
+    case cancelled
 
     static func capture(
         _ command: AgentCommand,
@@ -21,17 +23,23 @@ enum CommandOutput: Equatable, Sendable {
         guard command.executable.hasPrefix("/"), !values.contains(where: { $0.contains("\0") }),
             !(command.environment ?? [:]).keys.contains(where: { $0.isEmpty || $0.contains("=") })
         else { return .launchFailed }
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(
-                    returning: CommandOutputCollector.run(
-                        command: command,
-                        complete: complete,
-                        timeout: timeout,
-                        limit: max(1, limit)
+        let cancelled = Mutex(false)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async {
+                    continuation.resume(
+                        returning: CommandOutputCollector.run(
+                            command: command,
+                            complete: complete,
+                            timeout: timeout,
+                            limit: max(1, limit),
+                            cancelled: { cancelled.withLock { $0 } }
+                        )
                     )
-                )
+                }
             }
+        } onCancel: {
+            cancelled.withLock { $0 = true }
         }
     }
 }
@@ -42,8 +50,10 @@ private enum CommandOutputCollector {
         command: AgentCommand,
         complete: @Sendable (Data) -> Bool,
         timeout: Duration,
-        limit: Int
+        limit: Int,
+        cancelled: @Sendable () -> Bool
     ) -> CommandOutput {
+        guard !cancelled() else { return .cancelled }
         var stdout = [Int32](repeating: -1, count: 2)
         var stderr = [Int32](repeating: -1, count: 2)
         guard pipe(&stdout) == 0 else { return .launchFailed }
@@ -91,7 +101,8 @@ private enum CommandOutputCollector {
             stderr: stderr[0],
             complete: complete,
             timeout: timeout,
-            limit: limit
+            limit: limit,
+            cancelled: cancelled
         )
         return outcome
     }
@@ -102,7 +113,8 @@ private enum CommandOutputCollector {
         stderr: Int32,
         complete: @Sendable (Data) -> Bool,
         timeout: Duration,
-        limit: Int
+        limit: Int,
+        cancelled: @Sendable () -> Bool
     ) -> CommandOutput {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
@@ -113,6 +125,10 @@ private enum CommandOutputCollector {
         var stderrEnded = false
         var outcome: CommandOutput = .timedOut
         while true {
+            if cancelled() {
+                outcome = .cancelled
+                break
+            }
             reap(pid, status: &status, reaped: &reaped)
             if reaped {
                 if complete(bytes) || stdoutEnded {
@@ -149,7 +165,7 @@ private enum CommandOutputCollector {
             }
         }
         cleanUpGroup(pid, status: &status, reaped: &reaped)
-        return outcome
+        return cancelled() ? .cancelled : outcome
     }
 
     private static func reap(_ pid: pid_t, status: inout Int32, reaped: inout Bool) {

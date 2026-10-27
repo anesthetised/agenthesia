@@ -98,6 +98,7 @@ public actor ShellEnvironment {
         let reason: String
         switch outcome {
         case .timedOut: reason = "Login shell timed out"
+        case .cancelled: reason = "Login shell capture was cancelled"
         case .tooMuchOutput: reason = "Login shell output exceeded the limit"
         case .launchFailed: reason = "Login shell could not start"
         case .success: reason = "Login shell did not return a valid environment"

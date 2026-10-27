@@ -214,6 +214,7 @@ public struct NodeRuntime: Sendable {
         let result = await run(command)
         try Task.checkCancellation()
         switch result {
+        case .cancelled: throw CancellationError()
         case .success(let data, 0): return data
         case .timedOut: throw Failure.timedOut(tool)
         case .tooMuchOutput: throw Failure.invalidOutput(tool)

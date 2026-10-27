@@ -287,19 +287,24 @@ private struct RuntimeFixture: Sendable {
         npmStatus: Int32 = 0
     ) -> @Sendable (AgentCommand) async -> CommandOutput {
         { command in
-            if command.arguments.first == "--eval" {
-                if command.arguments[1].contains("const semver") {
-                    var object: [String: Any] = [
-                        "version": "10.9.2", "nodeRequirement": ">=18", "toolchainCompatible": toolchainCompatible,
-                        "nodeCompatible": nodeCompatible, "npmCompatible": npmCompatible,
-                    ]
-                    if let invalidRequirement { object["invalidRequirement"] = invalidRequirement }
-                    return .success(try! JSONSerialization.data(withJSONObject: object), 0)
+            do {
+                if command.arguments.first == "--eval" {
+                    if command.arguments[1].contains("const semver") {
+                        var object: [String: Any] = [
+                            "version": "10.9.2", "nodeRequirement": ">=18", "toolchainCompatible": toolchainCompatible,
+                            "nodeCompatible": nodeCompatible, "npmCompatible": npmCompatible,
+                        ]
+                        if let invalidRequirement { object["invalidRequirement"] = invalidRequirement }
+                        return .success(try JSONSerialization.data(withJSONObject: object), 0)
+                    }
+                    let object = ["executable": node.path(percentEncoded: false), "version": nodeVersion]
+                    return .success(try JSONEncoder().encode(object), 0)
                 }
-                let object = ["executable": node.path(percentEncoded: false), "version": nodeVersion]
-                return .success(try! JSONEncoder().encode(object), 0)
+                return .success(Data(npmOutput.utf8), npmStatus)
+            } catch {
+                Issue.record(error)
+                return .launchFailed
             }
-            return .success(Data(npmOutput.utf8), npmStatus)
         }
     }
 

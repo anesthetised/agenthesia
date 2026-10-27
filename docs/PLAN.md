@@ -155,6 +155,12 @@ The main-actor profiling, audit of machine-dependent waits and consecutive green
 open. The failing GitHub run cannot validate unpublished changes. No benchmark or native-app UI check
 was run for this test-runner change.
 
+PR #137's [first run](https://github.com/anesthetised/agenthesia/actions/runs/40518505904) stopped at
+lint before exercising the split: Xcode 26.6's `NeverUseForceTry` rule rejected two JSON fixture
+encodings that the local Xcode 27 formatter had accepted. The fixture now records encoding errors as
+test issues instead of using force try. The lint rule remains enabled. `just lint` and full `just test` pass for this follow-up (735 Swift tests
+and 18 script tests); CI confirmation remains pending.
+
 ### CI Markdown attribute crash (#126, 2026-10-25)
 
 The [original failed run](https://github.com/anesthetised/agenthesia/actions/runs/40134242723/attempts/1)

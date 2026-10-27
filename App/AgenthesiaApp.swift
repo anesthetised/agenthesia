@@ -7,7 +7,7 @@ struct AgenthesiaApp: App {
 
     var body: some Scene {
         WindowGroup(for: WindowTarget.self) { $target in
-            RootView(sessions: lifecycle.sessions, target: $target)
+            RootView(sessions: lifecycle.sessions, catalog: .shared, target: $target)
         } defaultValue: {
             .launch
         }
@@ -20,7 +20,7 @@ struct AgenthesiaApp: App {
         #endif
 
         Settings {
-            SettingsView()
+            SettingsView(catalog: .shared)
         }
 
         #if DEBUG

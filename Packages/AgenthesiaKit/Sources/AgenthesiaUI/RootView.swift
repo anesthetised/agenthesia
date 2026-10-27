@@ -1,5 +1,7 @@
+import AgentRuntime
 public import AgenthesiaCore
 import AppKit
+import Persistence
 public import SwiftUI
 
 public struct RootView: View {
@@ -16,16 +18,29 @@ public struct RootView: View {
     @State private var directory = ""
     @State private var executable = ""
     @State private var arguments = ""
+    /// An installed agent version, or `nil` for a custom command.
+    @State private var installationID: UUID?
+    /// Installed agents offered by the launch form; without it, only a custom command (ADR-0036).
+    private let catalog: AgentCatalog?
     @State private var showingLog = false
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
-    public init(sessions: SessionManager, target: Binding<WindowTarget> = .constant(.launch)) {
-        self.init(model: SessionWindowModel(sessions: sessions), target: target)
+    public init(
+        sessions: SessionManager,
+        catalog: AgentCatalog? = nil,
+        target: Binding<WindowTarget> = .constant(.launch)
+    ) {
+        self.init(model: SessionWindowModel(sessions: sessions), catalog: catalog, target: target)
     }
 
-    init(model: SessionWindowModel, target: Binding<WindowTarget> = .constant(.launch)) {
+    init(
+        model: SessionWindowModel,
+        catalog: AgentCatalog? = nil,
+        target: Binding<WindowTarget> = .constant(.launch)
+    ) {
         _model = State(initialValue: model)
+        self.catalog = catalog
         _target = target
     }
 
@@ -277,25 +292,62 @@ public struct RootView: View {
                         if panel.runModal() == .OK { directory = panel.url?.path ?? "" }
                     }
                 }
-                TextField("Agent executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
-                TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
+                if let catalog {
+                    HStack {
+                        Picker("Agent", selection: $installationID) {
+                            ForEach(catalog.latest) { installed in
+                                Text("\(installed.name) \(installed.version)").tag(UUID?.some(installed.id))
+                            }
+                            if !catalog.latest.isEmpty { Divider() }
+                            Text("Custom Command").tag(UUID?.none)
+                        }
+                        SettingsLink { Text("Manage Agents…") }
+                    }
+                }
+                if installation == nil {
+                    TextField("Agent executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
+                    TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
+                }
                 Text(
-                    "One argument per line. Use an installed, authenticated ACP agent. Git projects get a fresh worktree from HEAD; uncommitted and untracked files are not copied. Other directories are used directly."
+                    "\(installation == nil ? "One argument per line. Use an installed, authenticated ACP agent. " : "")Git projects get a fresh worktree from HEAD; uncommitted and untracked files are not copied. Other directories are used directly."
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 Button("Start Session") {
                     model.showingSetup = false
-                    let command = Self.launchCommand(executable: executable, arguments: arguments)
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
-                    model.start(
-                        directory: URL(filePath: path),
-                        executable: command.executable,
-                        arguments: command.arguments
-                    )
+                    if let installation {
+                        model.start(
+                            directory: URL(filePath: path),
+                            agent: AgentInstallRecord(installation: installation)
+                        )
+                    } else {
+                        let command = Self.launchCommand(executable: executable, arguments: arguments)
+                        model.start(
+                            directory: URL(filePath: path),
+                            executable: command.executable,
+                            arguments: command.arguments
+                        )
+                    }
                 }.buttonStyle(.borderedProminent)
-                    .disabled(directory.isEmpty || executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        directory.isEmpty
+                            || installation == nil && executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
             }
         }.formStyle(.grouped)
+            .task(selectInstalledAgent)
+    }
+
+    /// Offers the first installed agent unless a custom command was already entered.
+    private func selectInstalledAgent() async {
+        guard let catalog else { return }
+        await catalog.reloadInstallations()
+        if installationID == nil, executable.isEmpty { installationID = catalog.latest.first?.id }
+    }
+
+    /// The selected installed version, while it is still installed.
+    private var installation: AgentInstallation? {
+        installationID.flatMap { id in catalog?.latest.first { $0.id == id } }
     }
 
     private func composer(_ session: SessionController) -> some View {

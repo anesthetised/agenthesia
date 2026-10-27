@@ -153,7 +153,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgenthesiaUITests",
-            dependencies: ["AgenthesiaUI", "MockAgent"],
+            dependencies: ["AgenthesiaUI", "AgenthesiaCore", "AgentRuntime", "MockAgent"],
             swiftSettings: swiftSettings
         ),
     ]

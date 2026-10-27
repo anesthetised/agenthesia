@@ -1,7 +1,7 @@
 public import Foundation
 
 /// A validated, private installation. Paths are relative to its immutable version directory.
-public struct AgentInstallation: Codable, Equatable, Sendable {
+public struct AgentInstallation: Codable, Equatable, Identifiable, Sendable {
     public enum Source: Codable, Equatable, Sendable {
         case binary(archive: URL, sha256: String?)
         case npm(

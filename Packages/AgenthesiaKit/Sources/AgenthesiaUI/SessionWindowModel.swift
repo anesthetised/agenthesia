@@ -373,17 +373,18 @@ import SwiftUI
         }
     }
     func start(directory: URL, executable: String, arguments: [String]) {
-        guard canStart else { return }
-        show(
-            sessions.start(
-                directory: directory,
-                agent: AgentInstallRecord(
-                    name: URL(filePath: executable).lastPathComponent,
-                    executable: executable,
-                    arguments: arguments
-                )
+        start(
+            directory: directory,
+            agent: AgentInstallRecord(
+                name: URL(filePath: executable).lastPathComponent,
+                executable: executable,
+                arguments: arguments
             )
         )
+    }
+    func start(directory: URL, agent: AgentInstallRecord) {
+        guard canStart else { return }
+        show(sessions.start(directory: directory, agent: agent))
     }
     /// Continues the displayed session, or shows the owner that already has it live (ADR-0017, ADR-0026).
     func continueRestored() {

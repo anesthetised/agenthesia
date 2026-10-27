@@ -119,7 +119,41 @@ automation.
 
 CI pins Xcode 26.6 and runs package coverage and the app build in parallel with separate incremental
 build caches. The aggregate `Lint, test, build` status requires both jobs to pass; cache hits still run
-all checks. Badge publication runs only after both succeed on main.
+all checks. Coverage builds once, then runs non-hosted tests and hosted UI/Rendering tests in separate
+sequential invocations before merging their profiles (#133). Badge publication runs only after both
+jobs succeed on main.
+
+### Coverage test isolation (#133, 2026-10-27)
+
+[Main run 40511015178](https://github.com/anesthetised/agenthesia/actions/runs/40511015178), on `5365bb0`,
+failed only the 60-second limits of `toolCallsUpdateInPlaceAndReplayIdentically`,
+`continueFailuresKeepTheHistory` and `mergeCommitsTheSessionEndsItAndRecordsTheOutcome` (63.5–64.0 s).
+The combined 715-test run took 85.7 s; many unrelated successful tests also took 50–60 s. App build and
+lint passed. This is consistent with #133's cross-target main-actor contention, not a Registry failure.
+Local Xcode 27 runs separate test-target processes by default, so its green run did not reproduce the
+CI runner's combined bundle.
+
+The owner chose to separate hosted `AgenthesiaUITests`/`RenderingTests` from their complement rather
+than serialize every test. `coverage.py` builds once, then runs the two groups sequentially using the
+same regex for `--skip` and `--filter`. Tests within each group retain parallelism. Each invocation
+keeps its 120-second process timeout; test time limits and coverage thresholds are unchanged. Both
+groups run even if the first fails, and either failure fails the command. Group-specific profile names
+prevent replacement on PID reuse; reporting still merges every profile and enforces all module gates.
+
+Regression tests first failed against the single invocation. A deliberate selector mutation duplicated
+the hosted group and omitted other tests; the partition test failed before the mutation was restored.
+Local `just test-scripts` passes 18 tests, `just test` passes 735 Swift tests, and split `just coverage`
+passes 550 non-hosted plus 185 hosted tests and every coverage gate (AgentRuntime 92.9%). The two
+instrumented invocations took 43.7 s and 22.6 s locally, including runner overhead; these are validation
+run times, not a benchmark or a CI speedup claim. Three corrupt raw profiles were excluded through the
+existing merge policy. The same selectors were also verified with instrumented `just test
+--build-system native`, which retains the combined test bundle: 550 non-hosted tests passed in 15.1 s,
+including all three original failures, and 185 hosted tests passed in 16.4 s. These are bundle-reported
+times excluding build/driver overhead. `just lint` and `git diff --check` pass.
+
+The main-actor profiling, audit of machine-dependent waits and consecutive green CI runs in #133 remain
+open. The failing GitHub run cannot validate unpublished changes. No benchmark or native-app UI check
+was run for this test-runner change.
 
 ### CI Markdown attribute crash (#126, 2026-10-25)
 

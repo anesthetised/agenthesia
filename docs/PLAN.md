@@ -48,8 +48,8 @@ before implementation.
 - M6: the registry client (#33), Node/npm checks (#34) and installers (#35) are merged; #36 is split into
   three slices under [ADR-0036](adr/0036-agent-settings-and-installed-sessions.md). Slice 1 (Settings →
   Agents, the agent picker and session leases) is merged in #141; slice 2 (local agents and the initialize
-  probe, [ADR-0037](adr/0037-local-agents.md)) is implemented on `feat/agent-discovery`; slice 3
-  (pre-session sign-in) is next.
+  probe, [ADR-0037](adr/0037-local-agents.md)) is merged in #142; slice 3
+  (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
 
 ## Previous batch: session interactions (merged)
 
@@ -362,7 +362,7 @@ the launch form and Agents tab expose no accessibility titles to System Events; 
 existing Choose… and Start Session buttons, so this needs a separate VoiceOver pass rather than a fix here.
 Leftovers only the owner can remove: one test session, "OpenCode · agh-agents-check", in history.
 
-#36 slice 2 implemented on `feat/agent-discovery` (2026-10-28), under the owner-approved ADR-0037: Settings →
+#36 slice 2 merged in [PR #142](https://github.com/anesthetised/agenthesia/pull/142) (2026-10-28), under the owner-approved ADR-0037: Settings →
 Agents gains On This Mac. A built-in table of 18 known ACP commands and two ordinary CLIs (`claude`,
 `codex`) is looked up on the login shell's `PATH` without running anything; found commands show their path
 and ACP arguments and are added explicitly, Add Custom… adds any command, and the list lives in
@@ -399,6 +399,59 @@ it is Moonshot's Kimi Code, not the registry's Kimi CLI, and its reaction to `ac
 started with a local agent (it uses the existing manual-command path; skipped to keep history clean),
 Install from a suggestion, Look Again, VoiceOver and system prompts. The first scripted run raised a macOS
 prompt for T3 Code to control the computer, which the owner resolved.
+
+#36 slice 3 is implemented locally on `feat/agent-pre-session-sign-in` (2026-10-29), under the owner-approved
+[ADR-0038](adr/0038-pre-session-sign-in.md). Settings → Agents offers Sign In… for the newest installed
+version and for added local agents. A separate `AgentSignIn` initializes in an empty temporary directory,
+offers the advertised agent/terminal methods, and never creates a session, worktree or history row.
+Installed versions stay leased through process cleanup. Terminal success reconnects and initializes;
+completion is reported after cleanup without a persistent account-status badge. Session-time sign-in
+remains necessary when an agent does not retain credentials across connections.
+
+Core tests cover request/capability boundaries, success and errors, empty/unknown methods, timeout,
+terminal results and reinitialization, cancellation during authentication, acquisition and process
+launch, and an agent exiting while methods are displayed. The idle-exit regression failed before an
+exit observer was added. Deliberately inverting the terminal exit-code condition failed all three result
+cases; the original condition was restored. Catalog tests check version pinning across an update,
+lease release, the login-shell environment, and stale dismissal. Hosted native-window tests check
+Settings closure and quitting with a sign-in but no session. `just lint`, `just test` (801 Swift tests
+and 18 script tests), `just coverage` and `just app` pass. All coverage gates pass, including
+AgenthesiaCore at 97.7% and AgentRuntime at 93.6% on the final run; one corrupt subprocess profile was
+excluded by the existing coverage reporter.
+
+Native-app checks on 2026-10-29 used Accessibility scripting (computer-use tools were unavailable), a
+separate bundle identifier and an isolated Foundation home, verified against the process environment
+and open history database. With MockAgent, agent-method and terminal-method sign-in completed and
+stopped their processes; terminal failure retained output, Retry fetched methods again, and Cancel
+closed the sheet and stopped the terminal. Session, event and project tables remained empty. Screenshots
+are under `.build/verification/pre-session-sign-in/`. A focus guard rejected input while the test app
+was not frontmost. Native Quit exposed an AppKit gate before the delegate: modal sign-in sheets blocked
+termination. Hosted-window regressions failed for both sheet types before explicitly allowing modal
+termination. After the fix, Quit worked with the method list open and with a running terminal;
+terminal Quit was repeated using the app menu after Cancel, closing Settings and reopening it. Each
+quit stopped both processes and removed the sign-in directory. The final lint, tests, coverage and app
+build passed. The test app, its defaults and isolated data were removed; screenshots and check logs
+remain in the ignored verification directory.
+VoiceOver, real-agent credentials, installed-agent UI, system prompts and window restoration were not
+checked; installation leases and native Settings closure were covered by automated tests.
+
+### Pre-session sign-in CI readiness (#36, PR #143)
+
+[Run 40772123350](https://github.com/anesthetised/agenthesia/actions/runs/40772123350), on `b477afe`,
+passed lint, the app build, runtime tests and hosted tests. Two of the 482 core tests failed while
+polling sign-in fixture readiness: the missing-executable and pending-launch tests reached the shared
+ten-second deadline before their preparation tasks entered the test gate. Other main-actor tests took
+30–40 seconds in the same run. Delaying preparation by eleven seconds reproduced the missing-executable
+failure locally after ten seconds, before the executable was attempted.
+
+The gate now signals entry through continuations, following the existing test-gate pattern. The
+pending-launch test captures the actual process and launch directory instead of waiting for shell
+marker files; it still checks that close stops the process and removes the directory. Both affected
+tests passed with the eleven-second preparation delay, which was then removed. Remaining polling
+failures report the caller's source location. The one-minute suite limit, CI process timeout and
+production timeouts are unchanged. `just lint`, `just test` (801 Swift tests and 18 script tests) and
+`just coverage` pass. All module gates pass, including AgenthesiaCore at 97.6% and AgentRuntime at 93.6%;
+the reporter excluded one corrupt subprocess profile.
 
 ### Installer cancellation test readiness (#35, PR #140)
 

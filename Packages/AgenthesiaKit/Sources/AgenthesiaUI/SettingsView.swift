@@ -15,6 +15,7 @@ public struct SettingsView: View {
                 AgentsSettings(catalog: catalog).frame(width: 600, height: 560)
             }
         }
+        .background { AgentSettingsWindowLifetime(catalog: catalog) }
     }
 
     /// The table's editors that are installed, in table order.

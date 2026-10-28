@@ -83,6 +83,8 @@ an account status: a future session may still require authentication on its own 
 dismissing the sheet awaits its cleanup; a stale dismissal cannot clear a newer flow. The application
 delegate also waits for this owner before quitting, even if no session exists, and the catalog refuses
 new sign-ins once quitting begins. Both sign-in surfaces share the method rows and terminal view.
+Sign-in sheets allow modal application termination so AppKit reaches that cleanup delegate instead of
+blocking Quit before consulting it.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under

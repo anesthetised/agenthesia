@@ -45,6 +45,7 @@ struct AgentSignInSheet: View {
             }
         }
         .interactiveDismissDisabled()
+        .background { SignInSheetTermination() }
         .task { await flow.prepare() }
     }
 

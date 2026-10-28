@@ -400,7 +400,7 @@ started with a local agent (it uses the existing manual-command path; skipped to
 Install from a suggestion, Look Again, VoiceOver and system prompts. The first scripted run raised a macOS
 prompt for T3 Code to control the computer, which the owner resolved.
 
-#36 slice 3 is in progress on `feat/agent-pre-session-sign-in` (2026-10-28), under the owner-approved
+#36 slice 3 is implemented locally on `feat/agent-pre-session-sign-in` (2026-10-29), under the owner-approved
 [ADR-0038](adr/0038-pre-session-sign-in.md). Settings → Agents offers Sign In… for the newest installed
 version and for added local agents. A separate `AgentSignIn` initializes in an empty temporary directory,
 offers the advertised agent/terminal methods, and never creates a session, worktree or history row.
@@ -416,8 +416,24 @@ cases; the original condition was restored. Catalog tests check version pinning 
 lease release, the login-shell environment, and stale dismissal. Hosted native-window tests check
 Settings closure and quitting with a sign-in but no session. `just lint`, `just test` (801 Swift tests
 and 18 script tests), `just coverage` and `just app` pass. All coverage gates pass, including
-AgenthesiaCore at 97.8% and AgentRuntime at 93.7%; four corrupt subprocess profiles were excluded by
-the existing coverage reporter. Native-app results will be recorded before this slice is completed.
+AgenthesiaCore at 97.7% and AgentRuntime at 93.6% on the final run; one corrupt subprocess profile was
+excluded by the existing coverage reporter.
+
+Native-app checks on 2026-10-29 used Accessibility scripting (computer-use tools were unavailable), a
+separate bundle identifier and an isolated Foundation home, verified against the process environment
+and open history database. With MockAgent, agent-method and terminal-method sign-in completed and
+stopped their processes; terminal failure retained output, Retry fetched methods again, and Cancel
+closed the sheet and stopped the terminal. Session, event and project tables remained empty. Screenshots
+are under `.build/verification/pre-session-sign-in/`. A focus guard rejected input while the test app
+was not frontmost. Native Quit exposed an AppKit gate before the delegate: modal sign-in sheets blocked
+termination. Hosted-window regressions failed for both sheet types before explicitly allowing modal
+termination. After the fix, Quit worked with the method list open and with a running terminal;
+terminal Quit was repeated using the app menu after Cancel, closing Settings and reopening it. Each
+quit stopped both processes and removed the sign-in directory. The final lint, tests, coverage and app
+build passed. The test app, its defaults and isolated data were removed; screenshots and check logs
+remain in the ignored verification directory.
+VoiceOver, real-agent credentials, installed-agent UI, system prompts and window restoration were not
+checked; installation leases and native Settings closure were covered by automated tests.
 
 ### Installer cancellation test readiness (#35, PR #140)
 

@@ -26,5 +26,6 @@ struct SignInTerminalSheet: View {
         }
         // Escape belongs to the program in the terminal.
         .interactiveDismissDisabled()
+        .background { SignInSheetTermination() }
     }
 }

@@ -54,7 +54,10 @@ import Testing
         let flow = try fixture.flow()
         await flow.prepare()
         let host = NSHostingView(rootView: AgentSignInSheet(flow: flow, onDone: {}))
+        let window = NSWindow()
+        window.contentView = host
         host.layoutSubtreeIfNeeded()
+        #expect(!window.preventsApplicationTerminationWhenModal)
         #expect(host.fittingSize.width <= 520)
         #expect(host.fittingSize.height > 100)
         await flow.signIn(with: "mock-login")
@@ -91,6 +94,12 @@ import Testing
         await flow.prepare()
         let signingIn = Task { await flow.signIn(with: "mock-terminal") }
         try await eventually { flow.terminal != nil }
+        let terminal = try #require(flow.terminal)
+        let window = NSWindow()
+        let host = NSHostingView(rootView: SignInTerminalSheet(terminal: terminal, onDone: {}))
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        #expect(!window.preventsApplicationTerminationWhenModal)
         let delegate = SessionApplicationDelegate()
         delegate.catalog = fixture.catalog
         delegate.sessions = SessionManager(

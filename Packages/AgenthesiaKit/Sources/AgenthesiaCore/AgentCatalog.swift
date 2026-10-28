@@ -57,6 +57,9 @@ public final class AgentCatalog {
     public private(set) var found: [LocalAgentDiscovery.Found] = []
     /// The latest initialize probe of each command checked.
     public private(set) var checks: [LocalAgent.Command: Check] = [:]
+    /// The one sign-in presented in Settings, retained until its processes have stopped (ADR-0038).
+    public private(set) var signIn: AgentSignIn?
+    private var isQuitting = false
 
     @ObservationIgnored private let client: AgentRegistry.Client
     @ObservationIgnored private let installer: AgentInstaller
@@ -110,6 +113,48 @@ public final class AgentCatalog {
         var seen = Set<String>()
         return installations.filter { seen.insert($0.agentID).inserted }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Pins the selected version; an update cannot change the command during sign-in.
+    @discardableResult public func beginSignIn(_ installation: AgentInstallation) -> AgentSignIn? {
+        guard signIn == nil, !isQuitting, installations.contains(where: { $0.id == installation.id }) else {
+            return nil
+        }
+        let installer = installer
+        let flow = AgentSignIn(name: "\(installation.name) \(installation.version)") { directory in
+            let lease = try await installer.acquire(installation, directory: directory)
+            return (lease.command, lease)
+        }
+        signIn = flow
+        return flow
+    }
+
+    @discardableResult public func beginSignIn(_ agent: LocalAgent) -> AgentSignIn? {
+        guard signIn == nil, !isQuitting, localAgents.contains(agent) else { return nil }
+        let environment = environment
+        let flow = AgentSignIn(name: agent.name) { directory in
+            let command = AgentCommand(
+                executable: agent.command.executable,
+                arguments: agent.command.arguments,
+                environment: await environment(false),
+                currentDirectory: directory
+            )
+            return (command, nil)
+        }
+        signIn = flow
+        return flow
+    }
+
+    /// A late dismissal of an older sheet must not dismiss its successor.
+    public func closeSignIn(_ flow: AgentSignIn) async {
+        await flow.close()
+        if signIn === flow { signIn = nil }
+    }
+
+    /// Prevents a new flow while application termination waits for other session work.
+    public func closeSignInForQuit() async {
+        isQuitting = true
+        if let signIn { await closeSignIn(signIn) }
     }
 
     /// Installed versions of an agent, newest installation first.

@@ -79,6 +79,10 @@ stops its processes before reporting completion. A failed terminal retains its o
 dismissed. Retry fetches a fresh method list. Cancellation waits even for a pending acquisition or
 launch, then removes the temporary directory and releases the lease. Completion is not persisted as
 an account status: a future session may still require authentication on its own connection.
+`AgentCatalog` retains one active sign-in for the Settings sheet. Closing the native Settings window or
+dismissing the sheet awaits its cleanup; a stale dismissal cannot clear a newer flow. The application
+delegate also waits for this owner before quitting, even if no session exists, and the catalog refuses
+new sign-ins once quitting begins. Both sign-in surfaces share the method rows and terminal view.
 
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under

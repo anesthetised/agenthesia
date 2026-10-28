@@ -32,6 +32,10 @@ struct AgentsSettings: View {
         .formStyle(.grouped)
         .task { await catalog.refresh() }
         .sheet(isPresented: $addingCustom) { CustomAgentForm(catalog: catalog) }
+        .sheet(item: signInPresentation) { flow in
+            AgentSignInSheet(flow: flow) { closeSignIn(flow) }
+                .onDisappear { closeSignIn(flow) }
+        }
         .confirmationDialog(
             confirming.map { "Install \($0.name) \($0.version)?" } ?? "",
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
@@ -43,10 +47,23 @@ struct AgentsSettings: View {
         }
     }
 
+    /// The catalog keeps ownership until asynchronous process cleanup has finished.
+    private var signInPresentation: Binding<AgentSignIn?> {
+        Binding(
+            get: { catalog.signIn },
+            set: { if $0 == nil, let flow = catalog.signIn { closeSignIn(flow) } }
+        )
+    }
+
+    private func closeSignIn(_ flow: AgentSignIn) { Task { await catalog.closeSignIn(flow) } }
+
     private var localSection: some View {
         Section {
             ForEach(catalog.localAgents) { agent in
                 LocalAgentRow(catalog: catalog, name: agent.name, command: agent.command) {
+                    Button("Sign In…") { catalog.beginSignIn(agent) }
+                        .disabled(catalog.signIn != nil)
+                        .accessibilityLabel("Sign in to \(agent.name)")
                     Button("Remove") { catalog.remove(agent) }
                 }
             }
@@ -232,6 +249,9 @@ private struct InstalledAgentRow: View {
                 if let operation = catalog.operations[newest.agentID] {
                     OperationProgress(catalog: catalog, agentID: newest.agentID, operation: operation)
                 } else {
+                    Button("Sign In…") { catalog.beginSignIn(newest) }
+                        .disabled(catalog.signIn != nil)
+                        .accessibilityLabel("Sign in to \(newest.name) \(newest.version)")
                     if let available {
                         Button("Update to \(available.version)…") { update(available) }
                     }

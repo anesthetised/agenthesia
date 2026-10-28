@@ -425,6 +425,7 @@ import SwiftUI
 /// terminating.
 public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     public internal(set) var sessions = SessionManager()
+    var catalog = AgentCatalog.shared
     private var terminating = false
     private var attention: SessionAttention?
     var confirmQuit: (Int) -> Bool = { count in
@@ -451,12 +452,15 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // A merge in saved history has no owner but must finish before the app quits.
-        guard !sessions.owners.isEmpty || !sessions.mergingIDs.isEmpty else { return .terminateNow }
+        guard !sessions.owners.isEmpty || !sessions.mergingIDs.isEmpty || catalog.signIn != nil else {
+            return .terminateNow
+        }
         if !terminating {
             let activeCount = sessions.owners.count { [.working, .needsInput].contains($0.activity) }
             guard activeCount == 0 || confirmQuit(activeCount) else { return .terminateCancel }
             terminating = true
             Task {
+                await catalog.closeSignInForQuit()
                 await sessions.closeAll()
                 terminationReply(sender)
             }

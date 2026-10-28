@@ -25,32 +25,7 @@ struct SignInPanel: View {
             if let message = signIn.message {
                 Label(message, systemImage: "exclamationmark.triangle").textSelection(.enabled)
             }
-            let rows = SignInMethodRow.rows(signIn.methods)
-            if rows.isEmpty {
-                Text(
-                    "The agent offers no way to sign in from here. Sign in to it in a terminal, then start a new session."
-                )
-                .foregroundStyle(.secondary)
-            }
-            ForEach(rows) { row in
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.name)
-                        if let detail = row.detail {
-                            Text(detail).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if signIn.pending == row.id {
-                        ProgressView().controlSize(.small).accessibilityLabel("Signing in")
-                        Button("Cancel", action: onCancel)
-                    } else {
-                        Button(row.opensTerminal ? "Sign In…" : "Sign In") { onSignIn(row.id) }
-                            .disabled(signIn.pending != nil || !row.isSupported)
-                            .accessibilityLabel("Sign in with \(row.name)")
-                    }
-                }
-            }
+            SignInMethods(methods: signIn.methods, pending: signIn.pending, onSignIn: onSignIn, onCancel: onCancel)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)

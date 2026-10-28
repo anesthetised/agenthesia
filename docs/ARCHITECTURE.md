@@ -70,6 +70,16 @@ closing the session also stops the terminal and waits for it. The window replace
 `SignInPanel` and shows the terminal in a sheet hosting SwiftTerm's `TerminalView`, which feeds the
 command's output stream and sends typing and size changes back.
 
+Settings sign-in follows [ADR-0038](adr/0038-pre-session-sign-in.md). `AgentSignIn` owns a separate
+process in an empty temporary directory, initializes with terminal authentication enabled, and runs
+the selected agent or terminal method without creating a session or worktree. The installed version's
+lease is held through all processes and cleanup. Initialization has a 20-second timeout; interactive
+sign-in remains cancellable. Terminal success reconnects and initializes, then every successful flow
+stops its processes before reporting completion. A failed terminal retains its output in memory until
+dismissed. Retry fetches a fresh method list. Cancellation waits even for a pending acquisition or
+launch, then removes the temporary directory and releases the lease. Completion is not persisted as
+an account status: a future session may still require authentication on its own connection.
+
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
 `~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.

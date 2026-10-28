@@ -48,8 +48,8 @@ before implementation.
 - M6: the registry client (#33), Node/npm checks (#34) and installers (#35) are merged; #36 is split into
   three slices under [ADR-0036](adr/0036-agent-settings-and-installed-sessions.md). Slice 1 (Settings →
   Agents, the agent picker and session leases) is merged in #141; slice 2 (local agents and the initialize
-  probe, [ADR-0037](adr/0037-local-agents.md)) is implemented on `feat/agent-discovery`; slice 3
-  (pre-session sign-in) is next.
+  probe, [ADR-0037](adr/0037-local-agents.md)) is merged in #142; slice 3
+  (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
 
 ## Previous batch: session interactions (merged)
 
@@ -362,7 +362,7 @@ the launch form and Agents tab expose no accessibility titles to System Events; 
 existing Choose… and Start Session buttons, so this needs a separate VoiceOver pass rather than a fix here.
 Leftovers only the owner can remove: one test session, "OpenCode · agh-agents-check", in history.
 
-#36 slice 2 implemented on `feat/agent-discovery` (2026-10-28), under the owner-approved ADR-0037: Settings →
+#36 slice 2 merged in [PR #142](https://github.com/anesthetised/agenthesia/pull/142) (2026-10-28), under the owner-approved ADR-0037: Settings →
 Agents gains On This Mac. A built-in table of 18 known ACP commands and two ordinary CLIs (`claude`,
 `codex`) is looked up on the login shell's `PATH` without running anything; found commands show their path
 and ACP arguments and are added explicitly, Add Custom… adds any command, and the list lives in

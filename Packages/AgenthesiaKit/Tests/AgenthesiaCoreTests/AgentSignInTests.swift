@@ -229,21 +229,25 @@ import Testing
             name: "Test",
             launch: { command in
                 let process = try await Task.detached { try AgentProcess(launching: command) }.value
-                await gate.wait()
+                await gate.wait(directory: command.currentDirectory, process: process)
                 return process
             },
             prepare: { _ in (fixture.command(), nil) }
         )
         let preparing = Task { await flow.prepare() }
-        _ = try await waitFor { gate.entered ? true : nil }
-        _ = try await waitFor { FileManager.default.fileExists(atPath: fixture.workingDirectory.path) ? true : nil }
+        await gate.waitUntilEntered()
+        let process = try #require(gate.process)
+        let directory = try #require(gate.directory)
+        #expect(await process.isRunning)
         let closing = Task { await flow.close() }
         _ = try await waitFor { flow.state == .closing ? true : nil }
         gate.release()
         await closing.value
         await preparing.value
         #expect(flow.state == .closed)
-        try fixture.assertClean()
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
+        #expect(await process.isRunning == false)
+        #expect(kill(process.processIdentifier, 0) == -1 && errno == ESRCH)
     }
 
     @Test func closeWaitsForALeaseBeingAcquiredAndReleasesIt() async throws {
@@ -257,7 +261,7 @@ import Testing
             return (lease.command, lease)
         }
         let preparing = Task { await flow.prepare() }
-        _ = try await waitFor { gate.entered ? true : nil }
+        await gate.waitUntilEntered()
         await #expect(throws: AgentInstallation.Failure.installationInUse) {
             try await fixture.installer.remove(installation)
         }
@@ -324,7 +328,7 @@ import Testing
             return (AgentCommand(executable: "/nonexistent/agent"), nil)
         }
         let preparing = Task { await flow.prepare() }
-        _ = try await waitFor { gate.entered ? true : nil }
+        await gate.waitUntilEntered()
         let directory = try #require(gate.directory)
         gate.release()
         await preparing.value
@@ -357,27 +361,40 @@ import Testing
         await flow.close()
     }
 
-    private func waitFor<T>(_ value: () -> T?) async throws -> T {
+    private func waitFor<T>(
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ value: () -> T?
+    ) async throws -> T {
         let deadline = ContinuousClock.now + .seconds(10)
         while ContinuousClock.now < deadline {
             if let value = value() { return value }
             try await Task.sleep(for: .milliseconds(10))
         }
-        return try #require(value())
+        return try #require(value(), sourceLocation: sourceLocation)
     }
 }
 
 @MainActor private final class SignInGate {
-    var entered = false
+    private var entered = false
+    private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
     var directory: URL?
+    var process: AgentProcess?
     private var continuation: CheckedContinuation<Void, Never>?
 
-    func wait(directory: URL? = nil) async {
+    func wait(directory: URL? = nil, process: AgentProcess? = nil) async {
         self.directory = directory
+        self.process = process
         await withCheckedContinuation { continuation in
             self.continuation = continuation
             entered = true
+            for waiter in enteredWaiters { waiter.resume() }
+            enteredWaiters.removeAll()
         }
+    }
+
+    func waitUntilEntered() async {
+        if entered { return }
+        await withCheckedContinuation { enteredWaiters.append($0) }
     }
 
     func release() { continuation?.resume(); continuation = nil }

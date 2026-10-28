@@ -435,6 +435,24 @@ remain in the ignored verification directory.
 VoiceOver, real-agent credentials, installed-agent UI, system prompts and window restoration were not
 checked; installation leases and native Settings closure were covered by automated tests.
 
+### Pre-session sign-in CI readiness (#36, PR #143)
+
+[Run 40772123350](https://github.com/anesthetised/agenthesia/actions/runs/40772123350), on `b477afe`,
+passed lint, the app build, runtime tests and hosted tests. Two of the 482 core tests failed while
+polling sign-in fixture readiness: the missing-executable and pending-launch tests reached the shared
+ten-second deadline before their preparation tasks entered the test gate. Other main-actor tests took
+30–40 seconds in the same run. Delaying preparation by eleven seconds reproduced the missing-executable
+failure locally after ten seconds, before the executable was attempted.
+
+The gate now signals entry through continuations, following the existing test-gate pattern. The
+pending-launch test captures the actual process and launch directory instead of waiting for shell
+marker files; it still checks that close stops the process and removes the directory. Both affected
+tests passed with the eleven-second preparation delay, which was then removed. Remaining polling
+failures report the caller's source location. The one-minute suite limit, CI process timeout and
+production timeouts are unchanged. `just lint`, `just test` (801 Swift tests and 18 script tests) and
+`just coverage` pass. All module gates pass, including AgenthesiaCore at 97.6% and AgentRuntime at 93.6%;
+the reporter excluded one corrupt subprocess profile.
+
 ### Installer cancellation test readiness (#35, PR #140)
 
 [Run 40548357958](https://github.com/anesthetised/agenthesia/actions/runs/40548357958), on `12dd3df`,

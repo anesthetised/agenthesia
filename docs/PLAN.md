@@ -46,8 +46,10 @@ before implementation.
 - Agent sign-in (#32, [ADR-0033](adr/0033-agent-sign-in.md)) is merged in #128.
 - `ScenarioAgent` tolerates a saturated main actor in CI (#129); the saturation itself remains.
 - M6: the registry client (#33), Node/npm checks (#34) and installers (#35) are merged; #36 is split into
-  three slices under [ADR-0036](adr/0036-agent-settings-and-installed-sessions.md), and slice 1 (Settings →
-  Agents, the agent picker and session leases) is implemented on `feat/agent-browser`.
+  three slices under [ADR-0036](adr/0036-agent-settings-and-installed-sessions.md). Slice 1 (Settings →
+  Agents, the agent picker and session leases) is merged in #141; slice 2 (local agents and the initialize
+  probe, [ADR-0037](adr/0037-local-agents.md)) is implemented on `feat/agent-discovery`; slice 3
+  (pre-session sign-in) is next.
 
 ## Previous batch: session interactions (merged)
 
@@ -321,7 +323,8 @@ No real agent, native-app UI, VoiceOver, system prompt or benchmark was exercise
 Use Astra, High for #36's shared session/authentication lifecycle integration; Sol, High suits subsequent
 isolated UI polish.
 
-#36 slice 1 implemented on `feat/agent-browser` (2026-10-27), under the owner-approved ADR-0036: Settings
+#36 slice 1 merged in [PR #141](https://github.com/anesthetised/agenthesia/pull/141) (2026-10-27), under the
+owner-approved ADR-0036: Settings
 gains an Agents tab (installed versions with Update and Remove, the Node.js/npm check with Check Again,
 the ACP Registry with search, distribution, source and license confirmed before installation). The launch
 form picks the newest installed version of an agent or a custom command. Migration
@@ -358,6 +361,44 @@ npm installs from the browser, a prompt to the real agent, VoiceOver and system 
 the launch form and Agents tab expose no accessibility titles to System Events; the same is true of the
 existing Choose… and Start Session buttons, so this needs a separate VoiceOver pass rather than a fix here.
 Leftovers only the owner can remove: one test session, "OpenCode · agh-agents-check", in history.
+
+#36 slice 2 implemented on `feat/agent-discovery` (2026-10-28), under the owner-approved ADR-0037: Settings →
+Agents gains On This Mac. A built-in table of 18 known ACP commands and two ordinary CLIs (`claude`,
+`codex`) is looked up on the login shell's `PATH` without running anything; found commands show their path
+and ACP arguments and are added explicitly, Add Custom… adds any command, and the list lives in
+`UserDefaults`. Local agents follow the installed versions in the launch form's picker. Check runs
+`AgentProbe`: the command starts in an empty temporary directory with the login shell's environment, gets
+ACP `initialize` under a 20-second timeout, and its process group is terminated; the result names the agent,
+the protocol version and the number of sign-in methods, or why the command failed (it could not start, did
+not answer, exited with its last stderr line, spoke another protocol version, or answered with an error).
+`claude` and `codex` are shown with the registry adapter they need and an Install button.
+
+Tests cover discovery (relative `PATH` entries, plain files, directories, first match, links not resolved),
+the probe against MockAgent and shell fixtures (timeout with termination, early exit with stderr,
+unsupported protocol, error response, missing executable) and the catalog (adding, de-duplication,
+persistence across instances, removal, suggestions, per-command check results). Replacing the probe's
+process termination with a constant status made the timeout and exit-status tests fail before restoration.
+Validation: `just lint`, full `just coverage` (784 Swift tests; all module gates; AgentRuntime 93.5%,
+AgenthesiaCore 97.4%). After the picker fix, `just lint`, full `just test` (784 Swift tests and 18 script
+tests), and `just app` passed again. Views were reviewed with `swiftui-pro`.
+
+Built-app check (2026-10-28, Debug build with the bundle identifier
+`io.github.anesthetised.Agenthesia.localagentstest` so the list did not touch the owner's defaults, scripted
+with System Events clicks at measured coordinates because walking the Agents tab's accessibility tree with
+the full registry list took minutes): On This Mac listed `kimi` and `opencode` with Check and Add, and
+Claude Code and Codex CLI with Install Claude Agent… and Install Codex…. Check on
+`/opt/homebrew/bin/opencode acp` showed "Speaks ACP v1 · OpenCode 2.2.0 · 1 sign-in method", left no
+`opencode acp` process and no probe directory. Add moved OpenCode to the top with Remove and wrote the
+defaults key; Add Custom… with
+MockAgent's path added "Mock Agent", whose Check showed Echo Agent 1.0.0. The picker listed both, and
+choosing OpenCode hid the custom command fields. Removing both emptied the defaults list, and OpenCode
+returned to Add with its check result kept. The check found that removing the agent selected in an open
+launch form left the picker blank (also possible for an installed version since slice 1); the picker now
+falls back to Custom Command, confirmed in a rebuilt app. Not exercised: Check on `kimi` (on this machine
+it is Moonshot's Kimi Code, not the registry's Kimi CLI, and its reaction to `acp` is unknown), a session
+started with a local agent (it uses the existing manual-command path; skipped to keep history clean),
+Install from a suggestion, Look Again, VoiceOver and system prompts. The first scripted run raised a macOS
+prompt for T3 Code to control the computer, which the owner resolved.
 
 ### Installer cancellation test readiness (#35, PR #140)
 

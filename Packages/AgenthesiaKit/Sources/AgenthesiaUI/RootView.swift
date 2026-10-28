@@ -19,7 +19,7 @@ public struct RootView: View {
     @State private var executable = ""
     @State private var arguments = ""
     /// An installed agent version, or `nil` for a custom command.
-    @State private var installationID: UUID?
+    @State private var agentID: UUID?
     /// Installed agents offered by the launch form; without it, only a custom command (ADR-0036).
     private let catalog: AgentCatalog?
     @State private var showingLog = false
@@ -294,32 +294,36 @@ public struct RootView: View {
                 }
                 if let catalog {
                     HStack {
-                        Picker("Agent", selection: $installationID) {
+                        Picker("Agent", selection: $agentID) {
                             ForEach(catalog.latest) { installed in
                                 Text("\(installed.name) \(installed.version)").tag(UUID?.some(installed.id))
                             }
-                            if !catalog.latest.isEmpty { Divider() }
+                            ForEach(catalog.localAgents) { local in
+                                Text(local.name).tag(UUID?.some(local.id))
+                            }
+                            if !catalog.latest.isEmpty || !catalog.localAgents.isEmpty { Divider() }
                             Text("Custom Command").tag(UUID?.none)
                         }
                         SettingsLink { Text("Manage Agents…") }
                     }
+                    // A removed agent falls back to the custom command instead of leaving the picker blank.
+                    .onChange(of: catalog.latest.map(\.id) + catalog.localAgents.map(\.id)) { _, available in
+                        if let agentID, !available.contains(agentID) { self.agentID = nil }
+                    }
                 }
-                if installation == nil {
+                if selectedAgent == nil {
                     TextField("Agent executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
                     TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
                 }
                 Text(
-                    "\(installation == nil ? "One argument per line. Use an installed, authenticated ACP agent. " : "")Git projects get a fresh worktree from HEAD; uncommitted and untracked files are not copied. Other directories are used directly."
+                    "\(selectedAgent == nil ? "One argument per line. Use an installed, authenticated ACP agent. " : "")Git projects get a fresh worktree from HEAD; uncommitted and untracked files are not copied. Other directories are used directly."
                 )
                 .font(.caption).foregroundStyle(.secondary)
                 Button("Start Session") {
                     model.showingSetup = false
                     let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
-                    if let installation {
-                        model.start(
-                            directory: URL(filePath: path),
-                            agent: AgentInstallRecord(installation: installation)
-                        )
+                    if let selectedAgent {
+                        model.start(directory: URL(filePath: path), agent: selectedAgent)
                     } else {
                         let command = Self.launchCommand(executable: executable, arguments: arguments)
                         model.start(
@@ -331,23 +335,30 @@ public struct RootView: View {
                 }.buttonStyle(.borderedProminent)
                     .disabled(
                         directory.isEmpty
-                            || installation == nil && executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || selectedAgent == nil
+                                && executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
             }
         }.formStyle(.grouped)
-            .task(selectInstalledAgent)
+            .task(selectAgent)
     }
 
-    /// Offers the first installed agent unless a custom command was already entered.
-    private func selectInstalledAgent() async {
+    /// Offers the first installed or local agent unless a custom command was already entered.
+    private func selectAgent() async {
         guard let catalog else { return }
         await catalog.reloadInstallations()
-        if installationID == nil, executable.isEmpty { installationID = catalog.latest.first?.id }
+        if agentID == nil, executable.isEmpty { agentID = catalog.latest.first?.id ?? catalog.localAgents.first?.id }
     }
 
-    /// The selected installed version, while it is still installed.
-    private var installation: AgentInstallation? {
-        installationID.flatMap { id in catalog?.latest.first { $0.id == id } }
+    /// The selected installed version or local agent, while it is still installed or listed.
+    private var selectedAgent: AgentInstallRecord? {
+        guard let agentID, let catalog else { return nil }
+        if let installation = catalog.latest.first(where: { $0.id == agentID }) {
+            return AgentInstallRecord(installation: installation)
+        }
+        return catalog.localAgents.first { $0.id == agentID }.map {
+            AgentInstallRecord(name: $0.name, executable: $0.command.executable, arguments: $0.command.arguments)
+        }
     }
 
     private func composer(_ session: SessionController) -> some View {

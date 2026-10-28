@@ -1,3 +1,4 @@
+import ACP
 import AppKit
 import Foundation
 import SwiftUI
@@ -42,9 +43,56 @@ import Testing
         #expect(AgentsSettings.distribution(of: foreign) == "No distribution for this Mac")
     }
 
-    @Test func hostedAgentsTabShowsTheRegistryAndNodeStatus() async throws {
+    @Test func commandLinesQuoteWordsAShellWouldSplit() {
+        #expect(
+            AgentsSettings.commandLine(.init(executable: "/opt/homebrew/bin/opencode", arguments: ["acp"]))
+                == "/opt/homebrew/bin/opencode acp"
+        )
+        #expect(
+            AgentsSettings.commandLine(
+                .init(executable: "/Users/me/My Agents/agent", arguments: ["it's", "", "$HOME"])
+            )
+                == #"'/Users/me/My Agents/agent' 'it'\''s' '' '$HOME'"#
+        )
+    }
+
+    @Test func checkSummaryNamesTheAgentProtocolAndSignInMethods() throws {
+        let method = try JSONDecoder().decode(ACP.AuthMethod.self, from: Data(#"{"id":"login","name":"Log In"}"#.utf8))
+        #expect(
+            AgentsSettings.summary(
+                of: .init(protocolVersion: 1, info: .init(name: "opencode", title: "OpenCode", version: "2.2.0"))
+            ) == "Speaks ACP v1 · OpenCode 2.2.0 · no sign-in methods"
+        )
+        #expect(
+            AgentsSettings.summary(of: .init(protocolVersion: 1, authMethods: [method]))
+                == "Speaks ACP v1 · 1 sign-in method"
+        )
+        #expect(
+            AgentsSettings.summary(
+                of: .init(protocolVersion: 1, info: .init(name: "x", version: "1"), authMethods: [method, method])
+            )
+                == "Speaks ACP v1 · x 1 · 2 sign-in methods"
+        )
+    }
+
+    @Test func hostedAgentsTabShowsTheRegistryNodeStatusAndLocalAgents() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "agh-agents-settings-\(UUID())")
-        defer { try? FileManager.default.removeItem(at: root) }
+        let suite = "agh-agents-settings-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let bin = root.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        for name in ["opencode", "goose", "claude"] {
+            try Data("#!/bin/sh\n".utf8).write(to: bin.appending(path: name))
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: bin.appending(path: name).path(percentEncoded: false)
+            )
+        }
+        let path = bin.path(percentEncoded: false)
         let data = try JSONSerialization.data(withJSONObject: [
             "version": "1.0.0",
             "agents": [
@@ -54,10 +102,17 @@ import Testing
         let catalog = AgentCatalog(
             registry: AgentRegistry.Client(cacheDirectory: root) { _ in .init(status: 200, data: data) },
             installer: AgentInstaller(root: root.appending(path: "Agents"), download: { _, _ in }),
+            defaults: defaults,
+            environment: { _ in ["PATH": path] },
+            probe: { _ in throw AgentProbe.Failure.timedOut(seconds: 20) },
             checkNode: { _ in throw NodeRuntime.Failure.missingNode }
         )
         await catalog.refresh()
         #expect(catalog.needsNode)
+        catalog.add(try #require(catalog.addable.first))
+        await catalog.check(try #require(catalog.localAgents.first).command)
+        #expect(catalog.addable.map(\.entry.executable) == ["opencode"])
+        #expect(catalog.suggestions.map(\.entry.executable) == ["claude"])
         let host = NSHostingView(rootView: AgentsSettings(catalog: catalog).frame(width: 600, height: 560))
         host.layoutSubtreeIfNeeded()
         #expect(host.fittingSize.width == 600)

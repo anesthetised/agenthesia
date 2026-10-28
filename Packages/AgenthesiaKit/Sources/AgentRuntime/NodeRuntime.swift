@@ -239,7 +239,7 @@ public struct NodeRuntime: Sendable {
         return result
     }
 
-    private static func find(_ name: String, in environment: [String: String]) -> String? {
+    static func find(_ name: String, in environment: [String: String]) -> String? {
         (environment["PATH"] ?? "").split(separator: ":").map {
             URL(filePath: String($0)).appending(path: name).path(percentEncoded: false)
         }.first(where: isExecutable)

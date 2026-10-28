@@ -29,11 +29,11 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `JSONRPC` | JSON-RPC 2.0 over newline-delimited streams. `Connection` actor: request/response correlation, in-order dispatch of incoming requests and notifications, `$/cancel_request`, `-32601` for unknown methods. `Router` for typed handlers; file-handle and in-memory transports. Knows nothing about ACP. | — |
 | `ACP` | Hand-written `Codable` wire types: shared types in `ACP`, v1-only envelopes and capabilities in `ACP.V1`. Typed v1 client and delegate for agent→client requests. The version-agnostic `AgentConnection` protocol and the v1 adapter that implements it. | `JSONRPC` |
 | `ACPTesting` | Test support: scenario engine (`ScenarioAgent`), reactive `EchoAgent`, JSON subset matching. Used by tests and `MockAgent` only. | `ACP` |
-| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache, user-provided Node/npm checks and private versioned binary/npm installations ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md), [ADR-0035](adr/0035-installer-storage-and-script-policy.md)); local agent discovery follows in #36. | `ACP`, system `CLibArchive` |
+| `AgentRuntime` | Login-shell environment resolution, agent process lifecycle, PTY processes for terminal commands and sign-in ([ADR-0015](adr/0015-agent-terminals.md), [ADR-0033](adr/0033-agent-sign-in.md)), ACP Registry metadata and ETag cache, user-provided Node/npm checks and private versioned binary/npm installations ([ADR-0034](adr/0034-agent-installs-with-user-runtimes.md), [ADR-0035](adr/0035-installer-storage-and-script-policy.md)), and the table of known local ACP commands found on `PATH` without running them ([ADR-0037](adr/0037-local-agents.md)). | `ACP`, system `CLibArchive` |
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
-| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)). | all of the above except `Rendering` |
+| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)), local agents and the ACP initialize probe ([ADR-0037](adr/0037-local-agents.md)). | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
@@ -648,8 +648,14 @@ the captured process group before cleanup.
 installed versions newest first, the Node.js check with Check Again, and install, update, cancel and
 removal through the installer. `LiveSession` acquires an installed version's lease before creating a
 worktree, runs chat and terminal sign-in with the leased command, and releases the lease once the agent's
-processes have exited and the session has ended or failed. Local discovery, the initialize probe and
-pre-session sign-in remain in #36. Runtime validation and explicit shell refresh are implemented. The shell/probe
+processes have exited and the session has ended or failed. The catalog also keeps local agents
+(ADR-0037): `LocalAgentDiscovery` looks up a built-in table of known ACP commands, and ordinary `claude` and
+`codex` CLIs that need a registry adapter, on the login shell's `PATH` without running them. The user adds
+found or custom commands; the list is a Codable array in `UserDefaults`, and a session with a local agent
+records a manual `agent_install` row as before. `AgentProbe` launches a command in an empty temporary
+directory, sends ACP `initialize` under a timeout, then closes the connection and terminates the process
+group; it creates no session and does not prove sign-in. Pre-session sign-in remains in #36. Runtime
+validation and explicit shell refresh are implemented. The shell/probe
 `posix_spawn` implementation addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).

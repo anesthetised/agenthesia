@@ -1,12 +1,15 @@
+import ACP
 import AgentRuntime
 import AgenthesiaCore
 import SwiftUI
 
-/// Settings → Agents: installed versions, Node.js prerequisites and the ACP Registry (ADR-0036).
+/// Settings → Agents: installed versions, local agents, Node.js prerequisites and the ACP Registry
+/// (ADR-0036, ADR-0037).
 struct AgentsSettings: View {
     let catalog: AgentCatalog
     @State private var query = ""
     @State private var confirming: AgentRegistry.Agent?
+    @State private var addingCustom = false
 
     var body: some View {
         Form {
@@ -20,6 +23,7 @@ struct AgentsSettings: View {
                     }
                 }
             }
+            localSection
             if catalog.needsNode {
                 nodeSection
             }
@@ -27,6 +31,7 @@ struct AgentsSettings: View {
         }
         .formStyle(.grouped)
         .task { await catalog.refresh() }
+        .sheet(isPresented: $addingCustom) { CustomAgentForm(catalog: catalog) }
         .confirmationDialog(
             confirming.map { "Install \($0.name) \($0.version)?" } ?? "",
             isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
@@ -35,6 +40,43 @@ struct AgentsSettings: View {
             Button("Install") { Task { await catalog.install(agent) } }
         } message: { agent in
             Text(Self.installMessage(for: agent))
+        }
+    }
+
+    private var localSection: some View {
+        Section {
+            ForEach(catalog.localAgents) { agent in
+                LocalAgentRow(catalog: catalog, name: agent.name, command: agent.command) {
+                    Button("Remove") { catalog.remove(agent) }
+                }
+            }
+            ForEach(catalog.addable) { found in
+                LocalAgentRow(catalog: catalog, name: found.entry.name, command: found.command) {
+                    Button("Add") { catalog.add(found) }
+                }
+            }
+            ForEach(catalog.suggestions) { cli in
+                AdapterSuggestionRow(catalog: catalog, cli: cli) { confirming = $0 }
+            }
+            if catalog.localAgents.isEmpty, catalog.found.isEmpty {
+                Text("No known ACP agent was found on your PATH.").foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack {
+                Text("On This Mac")
+                Spacer()
+                Button("Look Again", systemImage: "arrow.clockwise") { Task { await catalog.discover(refresh: true) } }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Look again with a fresh login-shell PATH")
+                Button("Add Custom…") { addingCustom = true }
+                    .buttonStyle(.borderless)
+            }
+        } footer: {
+            Text(
+                "Agenthesia looks for known ACP agents on your login shell's PATH without running them. Check starts a command briefly in an empty folder to ask whether it speaks ACP; it does not sign in."
+            )
+            .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -132,6 +174,28 @@ struct AgentsSettings: View {
             break
         }
         return lines.joined(separator: "\n\n")
+    }
+
+    /// The command as a shell would show it, quoting words with spaces or quotes.
+    static func commandLine(_ command: LocalAgent.Command) -> String {
+        ([command.executable] + command.arguments).map { word in
+            word.isEmpty || word.contains(where: { $0.isWhitespace || "'\"\\$`".contains($0) })
+                ? "'" + word.replacing("'", with: "'\\''") + "'" : word
+        }.joined(separator: " ")
+    }
+
+    /// What a passed initialize probe learned. It says nothing about whether the user is signed in.
+    static func summary(of profile: ACP.AgentProfile) -> String {
+        var parts = ["Speaks ACP v\(profile.protocolVersion)"]
+        if let info = profile.info {
+            parts.append("\(info.title ?? info.name) \(info.version)")
+        }
+        switch profile.authMethods.count {
+        case 0: parts.append("no sign-in methods")
+        case 1: parts.append("1 sign-in method")
+        case let count: parts.append("\(count) sign-in methods")
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// How the registry distributes the agent for this Mac, or why it cannot be installed.
@@ -248,5 +312,132 @@ private struct OperationProgress: View {
                 Text("Removing…").foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// A local agent or a found command: its command line, Check and the last result.
+private struct LocalAgentRow<Actions: View>: View {
+    let catalog: AgentCatalog
+    let name: String
+    let command: LocalAgent.Command
+    @ViewBuilder let actions: Actions
+
+    private var check: AgentCatalog.Check? { catalog.checks[command] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                    Text(AgentsSettings.commandLine(command))
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                Spacer()
+                if check == .checking {
+                    ProgressView().controlSize(.small)
+                }
+                Button("Check") { Task { await catalog.check(command) } }
+                    .disabled(check == .checking)
+                actions
+            }
+            switch check {
+            case .passed(let profile):
+                Label(AgentsSettings.summary(of: profile), systemImage: "checkmark.circle.fill")
+                    .font(.caption).foregroundStyle(.green)
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.red)
+            case .checking, nil:
+                EmptyView()
+            }
+        }
+    }
+}
+
+/// An ordinary CLI that needs a registry adapter to speak ACP.
+private struct AdapterSuggestionRow: View {
+    let catalog: AgentCatalog
+    let cli: LocalAgentDiscovery.Found
+    let install: (AgentRegistry.Agent) -> Void
+
+    private var adapter: AgentRegistry.Agent? {
+        catalog.registry?.catalog.agents.first { $0.id == cli.entry.adapterID }
+    }
+    private var adapterName: String {
+        adapter?.name ?? LocalAgentDiscovery.known.first { $0.registryID == cli.entry.adapterID }?.name ?? "ACP"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(cli.entry.name)
+                    Text(cli.path)
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                Spacer()
+                if let adapter, catalog.operations[adapter.id] == nil {
+                    Button("Install \(adapter.name)…") { install(adapter) }
+                }
+            }
+            Text(
+                "\(cli.entry.name) does not speak ACP by itself; it needs the \(adapterName) adapter from the ACP Registry."
+            )
+            .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Adds any command as a local agent.
+private struct CustomAgentForm: View {
+    let catalog: AgentCatalog
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var executable = ""
+    @State private var arguments = ""
+
+    private var isComplete: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
+            && !executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    TextField("Name", text: $name)
+                    TextField("Executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
+                    TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
+                } header: {
+                    Text("Add Custom Agent")
+                } footer: {
+                    Text("One argument per line. The command must speak ACP over standard input and output.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Add", action: add)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!isComplete)
+            }
+            .padding()
+        }
+        .frame(width: 460)
+    }
+
+    private func add() {
+        let command = RootView.launchCommand(executable: executable, arguments: arguments)
+        catalog.addCustom(
+            name: name.trimmingCharacters(in: .whitespaces),
+            executable: command.executable,
+            arguments: command.arguments
+        )
+        dismiss()
     }
 }

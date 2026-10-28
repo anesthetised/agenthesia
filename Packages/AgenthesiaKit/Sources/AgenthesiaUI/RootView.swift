@@ -306,6 +306,10 @@ public struct RootView: View {
                         }
                         SettingsLink { Text("Manage Agents…") }
                     }
+                    // A removed agent falls back to the custom command instead of leaving the picker blank.
+                    .onChange(of: catalog.latest.map(\.id) + catalog.localAgents.map(\.id)) { _, available in
+                        if let agentID, !available.contains(agentID) { self.agentID = nil }
+                    }
                 }
                 if selectedAgent == nil {
                     TextField("Agent executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))

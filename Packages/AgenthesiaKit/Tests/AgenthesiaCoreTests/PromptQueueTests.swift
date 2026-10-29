@@ -322,6 +322,29 @@ private actor QueueGate {
         await continued.close()
     }
 
+    @Test func turnStartTimeIsSetWhileATurnRunsAndClearedWhenItEnds() async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(session.turnStartedAt == nil)
+        let before = Date.now
+        try await session.submit([.init(text: "first")])
+        await connection.waitForPrompts(1)
+        let started = try #require(session.turnStartedAt)
+        #expect(started >= before && started <= .now)
+        // A queued prompt does not restart the clock of the running turn.
+        try await session.submit([.init(text: "second")])
+        #expect(session.turnStartedAt == started)
+        await connection.finish(.endTurn)
+        await connection.waitForPrompts(2)
+        #expect(try #require(session.turnStartedAt) >= started)
+        let stop = Task { try await session.stop() }
+        await connection.finish(.cancelled)
+        try await stop.value
+        while session.status == .running || session.status == .stopping { await Task.yield() }
+        #expect(session.status == .idle && session.turnStartedAt == nil)
+        await session.close()
+    }
+
     @Test func promptErrorKeepsAttachmentsAndAllowsExplicitSendAndResume() async throws {
         let (session, connection, store, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }

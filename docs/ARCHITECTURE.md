@@ -142,6 +142,9 @@ rows, caches attributed text, and handles updates to earlier rows as well as app
 `SessionFrameDriver` publishes committed transcript snapshots from the display link. Saved transcripts
 use the same table in read-only mode. The demo remains available as a test fixture; the original
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
+While a turn runs, `SessionController.turnStartedAt` (in memory; set on entering `running`, kept while
+`stopping`, cleared otherwise) drives a "Working for 1m 12s" line (`WorkingTimeLine`,
+`WorkingDuration.format`) between the transcript and the composer, ticking once a second.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
 lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a

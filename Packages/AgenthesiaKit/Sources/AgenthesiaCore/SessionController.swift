@@ -48,7 +48,17 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public private(set) var queuePaused = false
     /// Turns that ended on their own, not by Stop; the sidebar compares it with what the user has seen.
     public private(set) var completedTurns = 0
-    public private(set) var status: Status = .ready
+    public private(set) var status: Status = .ready {
+        didSet {
+            switch status {
+            case .running: if turnStartedAt == nil { turnStartedAt = .now }
+            case .stopping: break
+            default: turnStartedAt = nil
+            }
+        }
+    }
+    /// When the running turn began; kept while stopping, nil otherwise. Not persisted.
+    public private(set) var turnStartedAt: Date?
     public private(set) var transcript = TranscriptState()
     /// Observed separately so window chrome does not re-render on every published transcript frame.
     public private(set) var title: String?

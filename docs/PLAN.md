@@ -230,6 +230,24 @@ Pitfalls known so far:
 - The research run could not drive the launch form through accessibility, so it created no test session;
   tool cards were reviewed from the code. #160 checks the finished design with `MockAgent`.
 
+Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `just test` and `just app`:
+
+- #149 (#162): `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines
+  against the session base; no UI yet (#150).
+- #154 (#163): `SessionController.turnStartedAt` and the `Working for …` line above the composer.
+- #153 (#164): session notices are centered captions; failed prompts show `PromptFailure.summary` with a
+  Details disclosure.
+- #145 (#165): sessions start untitled and are named by the agent or the first prompt; the window shows the
+  project as its subtitle.
+- #146 (#166): the sidebar is grouped into Needs You, Working and Settled; rows carry their project.
+- #156 (#167): the composer is a floating card with a round Send/Stop button and pill config menus.
+- #151: the transcript column is centered (`TranscriptColumn`) and Copy shows on hover. Rendering Lab S1:App and
+  S2:App were run with the owner's approval ([results](benchmarks/2026-10-29/transcript-column/README.md)):
+  scrolling is unchanged within noise, streaming shows a few more single-frame hitches.
+
+None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
+VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
+
 Wave 1 status (2026-10-29):
 
 - #149 implemented: `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines

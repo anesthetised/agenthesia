@@ -8,7 +8,7 @@ Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and doc
 owner's approval. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
-## State (2026-10-27)
+## State (2026-10-29)
 
 - Live sessions run end-to-end ([ADR-0014](adr/0014-window-bound-live-sessions.md)): tool call
   cards, permission requests, scoped filesystem, agent-reported command output
@@ -50,6 +50,8 @@ before implementation.
   Agents, the agent picker and session leases) is merged in #141; slice 2 (local agents and the initialize
   probe, [ADR-0037](adr/0037-local-agents.md)) is merged in #142; slice 3
   (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
+- M15 (UI/UX redesign, #144) is planned under [ADR-0039](adr/0039-t3-style-window-layout.md) and
+  [ADR-0040](adr/0040-composer-first-session-start.md); see the M15 section below.
 
 ## Previous batch: session interactions (merged)
 
@@ -202,6 +204,31 @@ through its existing merge policy. Review found and addressed the asynchronous r
 the wait recipe also resolves correctly with `just --dry-run wait-for-test-crash-reports`. Uploading a real
 report on macOS 26 remains unverified until CI runs the change and a crash recurs. Native-app, VoiceOver
 and system-prompt checks were not performed for this CI-only change.
+
+## M15: UI/UX redesign (2026-10-29)
+
+Tracking issue #144. The owner compared the running app with T3 Code and approved a status sidebar, a
+T3-style transcript, a composer-first session start and a right inspector:
+[ADR-0039](adr/0039-t3-style-window-layout.md) and [ADR-0040](adr/0040-composer-first-session-start.md).
+The issues are small enough for the light tier except #155 and #158.
+
+| Wave | Issues | Notes |
+|------|--------|-------|
+| 1 | #145 titles, #146 sidebar model, #149 line counts, #151 transcript column, #153 notices and errors, #154 working time, #156 composer card | Independent |
+| 2 | #147 sidebar rows, #148 search, #150 inspector, #152 bubbles, #157 Continue card | After their wave 1 dependency |
+| 3 | #155 tool folding (strong), #158 composer-first start (strong) | #155 after #151 and #152; #158 after #156 |
+| 4 | #159 New Session in Project, #160 verification and screenshots | Last |
+
+Pitfalls known so far:
+
+- `RootView.swift` (#147, #150, #156, #157, #158) and `TranscriptTable.swift` (#151, #152, #155) are shared;
+  merge in table order and rebase.
+- Transcript changes are performance-sensitive: #151 and #155 rerun Rendering Lab scenarios after the
+  owner agrees on the workload.
+- ACP config options and slash commands exist only after `session/new`, so the draft of #158 cannot offer
+  model or mode; ADR-0040 accepts that.
+- The research run could not drive the launch form through accessibility, so it created no test session;
+  tool cards were reviewed from the code. #160 checks the finished design with `MockAgent`.
 
 ## Next steps
 

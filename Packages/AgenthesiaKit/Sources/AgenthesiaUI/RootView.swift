@@ -64,7 +64,6 @@ public struct RootView: View {
             .toolbar {
                 Button("New Session", systemImage: "plus") { model.showingSetup = true }
                     .disabled(!model.canStart)
-                Button("Refresh History", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
             }
         } detail: {
             VStack(spacing: 0) {

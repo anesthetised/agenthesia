@@ -5,27 +5,23 @@ import SwiftUI
 /// Displays only durable, agent-confirmed values, including adapter-normalized legacy modes.
 struct SessionConfigControls: View {
     let session: SessionController
-    @State private var errorMessage: String?
+    /// Called with the failure of a change, and with nil when the next change starts.
+    var onError: (String?) -> Void = { _ in }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ScrollView(.horizontal) {
-                HStack {
-                    ForEach(session.transcript.configOptions, id: \.id) { option in
-                        control(option)
-                            .help(option.description ?? option.name)
-                    }
-                    if session.isChangingConfig {
-                        ProgressView().controlSize(.small).accessibilityLabel("Changing session settings")
-                    }
+        ScrollView(.horizontal) {
+            HStack(spacing: 2) {
+                ForEach(session.transcript.configOptions, id: \.id) { option in
+                    control(option)
                 }
-                .disabled(session.status != .idle || session.isChangingConfig)
+                if session.isChangingConfig {
+                    ProgressView().controlSize(.small).accessibilityLabel("Changing session settings")
+                }
             }
-            .fixedSize(horizontal: false, vertical: true)
-            if let errorMessage {
-                Text(errorMessage).font(.caption).foregroundStyle(.red).textSelection(.enabled)
-            }
+            .disabled(session.status != .idle || session.isChangingConfig)
         }
+        .scrollIndicators(.never)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder private func control(_ option: ACP.ConfigOption) -> some View {
@@ -43,13 +39,17 @@ struct SessionConfigControls: View {
                     }
                 }
             } label: {
-                Text("\(option.name): \(choices.allOptions.first { $0.value == current }?.name ?? current)")
+                Text(choices.allOptions.first { $0.value == current }?.name ?? current)
             }
-            .fixedSize()
+            .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
+            .accessibilityLabel(
+                "\(option.name): \(choices.allOptions.first { $0.value == current }?.name ?? current)"
+            )
+            .help(option.description.map { "\(option.name): \($0)" } ?? option.name)
         case .boolean(let current):
             // A transactional binding intentionally keeps the confirmed value until the async write commits.
             Toggle(option.name, isOn: Binding(get: { current }, set: { change(option.id, to: .boolean($0)) }))
-                .toggleStyle(.checkbox).fixedSize()
+                .toggleStyle(.checkbox).fixedSize().help(option.description ?? option.name)
         case .unknown:
             EmptyView()
         }
@@ -75,10 +75,10 @@ struct SessionConfigControls: View {
     }
 
     private func change(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) {
-        errorMessage = nil
+        onError(nil)
         Task {
             do { try await session.setConfigOption(id, to: value) } catch {
-                if session.status != .closed { errorMessage = String(describing: error) }
+                if session.status != .closed { onError(String(describing: error)) }
             }
         }
     }

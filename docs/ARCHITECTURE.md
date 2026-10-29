@@ -151,6 +151,16 @@ hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.is
 its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history
 benefits and stored events do not change) and a Details disclosure with the full stored text.
 
+The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md)) in the transcript column
+(`TranscriptColumn`: at most 720 pt, 16 pt side and 12 pt bottom margins, `.bar` material with a hairline border).
+Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the session's
+config controls as borderless pill menus that show the value only (the option name is in the tooltip and the
+accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
+Queue, Save, or Stop for an empty draft while a turn runs or stops). There is no status line for editable sessions:
+the transcript shows that a turn runs, a pending permission card lists its ⌥⌘ shortcuts, and the queue header says
+that the queue is paused. A read-only, ended or failed session keeps a status text and Continue in the card.
+Composer errors show as a red caption above the card.
+
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
 lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
 turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as

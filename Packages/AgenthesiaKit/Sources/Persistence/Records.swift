@@ -51,7 +51,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let agentInstallID: UUID
     public let agentSessionID: String?
     public let protocolVersion: Int
-    public let title: String?
+    public var title: String?
     public let workingDirectory: String
     /// Initial Git HEAD for new sessions. Legacy and non-Git sessions have no known base.
     public let baseRevision: String?

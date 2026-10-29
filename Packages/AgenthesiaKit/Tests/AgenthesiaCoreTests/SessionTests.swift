@@ -267,6 +267,61 @@ private actor Gate {
         await controller.close()
     }
 
+    @Test func theFirstPromptNamesAnUntitledSessionOnce() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        #expect(controller.session.title == nil)
+        try await controller.send([.init(text: "\n  Fix the build\nand then the tests")])
+        #expect(controller.session.title == "Fix the build")
+        #expect(try await fixture.store.session(id: controller.session.id)?.title == "Fix the build")
+        try await controller.send([.init(text: "Something else entirely")])
+        #expect(controller.session.title == "Fix the build")
+        let restored = try await SessionController.restore(id: controller.session.id, store: fixture.store)
+        #expect(restored.session.title == "Fix the build")
+        await controller.close()
+    }
+
+    @Test func theAgentsTitleWinsOverThePromptAndIsStored() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let id = try #require(controller.session.agentSessionID)
+        try await controller.send([.init(text: "Fix the build")])
+        #expect(controller.session.title == "Fix the build")
+        await controller.sessionUpdate(
+            .sessionInfo(.init(title: "Repair CI")),
+            in: id,
+            rawNotification: try rawUpdate(.sessionInfo(.init(title: "Repair CI")), session: id)
+        )
+        #expect(controller.session.title == "Repair CI")
+        #expect(try await fixture.store.session(id: controller.session.id)?.title == "Repair CI")
+        try await controller.send([.init(text: "Next question")])
+        #expect(controller.session.title == "Repair CI")
+        await controller.close()
+
+        // A title that arrives before any prompt is kept; whitespace-only titles are ignored.
+        let earlyFixture = try Fixture()
+        let early = try await earlyFixture.live()
+        let earlyID = try #require(early.session.agentSessionID)
+        for title in ["Early title", "  "] {
+            await early.sessionUpdate(
+                .sessionInfo(.init(title: title)),
+                in: earlyID,
+                rawNotification: try rawUpdate(.sessionInfo(.init(title: title)), session: earlyID)
+            )
+        }
+        try await early.send([.init(text: "A prompt")])
+        #expect(early.session.title == "Early title")
+        await early.close()
+    }
+
+    @Test func attachmentOnlyPromptsLeaveTheSessionUntitled() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        try await controller.send([.resourceLink(.init(uri: "file:///tmp/a", name: "a"))])
+        #expect(controller.session.title == nil)
+        await controller.close()
+    }
+
     @Test func recordsBytesExactlyAndPublishesOnlyAtFrameBoundary() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()

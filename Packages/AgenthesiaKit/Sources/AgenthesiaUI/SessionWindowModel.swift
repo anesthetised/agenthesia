@@ -170,7 +170,7 @@ import SwiftUI
         var mergedInto: String?
         var id: UUID { session.id }
 
-        var title: String { "Discard the worktree of “\(session.title ?? "Session")”?" }
+        var title: String { "Discard the worktree of “\(session.title ?? "New Session")”?" }
         var message: String {
             if let mergedInto {
                 return

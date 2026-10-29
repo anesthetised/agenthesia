@@ -263,7 +263,9 @@ import Testing
         #expect(owner.activity == .idle && !owner.hasUnseenResult)
         #expect(controller.queuePaused && controller.transcript.items.last?.notice != nil)
         await owner.send("again")
-        #expect(owner.controller === controller && controller.session == record)
+        #expect(owner.controller === controller && controller.session.id == record.id)
+        // The first prompt named the session; the later one did not rename it.
+        #expect(controller.session.title == "fail")
         #expect(controller.transcript.items.last?.message?.text == "Echo: again")
         await owner.close()
     }

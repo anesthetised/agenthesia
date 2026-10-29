@@ -330,7 +330,10 @@ roots are captured once and cannot broaden after symlink substitution.
 Git changed paths combine `git diff base HEAD` ([ADR-0024](adr/0024-changed-files-session-base.md)),
 staged, unstaged and nonignored untracked changes. Legacy
 sessions without a base explicitly show working changes only; non-Git folders explain that change
-tracking requires Git. Renames include both paths. Browsing stops when the displayed session changes or
+tracking requires Git. Renames include both paths. `SessionFiles.changeStats` (`SessionWorkspace.changeStats`,
+`git diff --numstat` against the same base plus the lines of untracked text files) counts added and removed
+lines of the net change, refreshed with the paths; binary files have no counts and stay out of the totals,
+and a path restored to its base has no entry. Browsing stops when the displayed session changes or
 its window closes, rather than when the agent process ends; Continue keeps the same session's files
 across its startup.
 

@@ -154,15 +154,16 @@ import Testing
         let agent = try mock()
         model.start(directory: directory, executable: agent.executable, arguments: [])
         let owner = try #require(model.owner)
-        #expect(model.sidebar.starting.count == 1)
+        #expect(model.sidebar.sections.map(\.kind) == [.working])
+        #expect(model.sidebar.rows.first?.project == nil)
         await owner.startup?.value
         await model.refresh()
         #expect(model.projects.count == 1)
-        #expect(model.sidebar.starting.isEmpty)
-        #expect(model.sidebar.groups.map(\.rows.count) == [1])
+        #expect(model.sidebar.sections.map(\.kind) == [.working])
+        #expect(model.sidebar.rows.first?.project?.id == model.projects.first?.id)
         await sessions.end(owner)
         await model.refresh()
-        guard case .saved(let record) = model.sidebar.groups.first?.rows.first else {
+        guard case .saved(let record)? = model.sidebar.rows.first?.source else {
             Issue.record("Expected the ended session to be saved")
             return
         }
@@ -320,6 +321,32 @@ import Testing
         model.sidebarSelection = AnyHashable(records[0].id)
         #expect(model.sidebarSelection == nil)
         #expect(model.navigationTarget() == nil)
+        await sessions.closeAll()
+    }
+
+    @Test func navigationVisitsNeedsYouBeforeWorkingWhateverTheStartOrder() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-sections-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        let working = sessions.start(directory: directory, agent: agent)
+        await working.startup?.value
+        let workingID = try #require(working.sessionID)
+        let failed = sessions.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "Missing", executable: "/missing")
+        )
+        await failed.startup?.value
+        await model.refresh()
+        #expect(model.sidebar.sections.map(\.kind) == [.needsYou, .working])
+        #expect(model.navigationTarget()?.id == AnyHashable(failed.id))
+        #expect(model.navigationTarget(backward: true)?.id == AnyHashable(workingID))
+        model.show(failed)
+        #expect(model.navigationTarget()?.id == AnyHashable(workingID))
+        // Failed sessions are in Needs You, but only a session that waits for input is skipped to.
+        #expect(model.navigationTarget(needsInput: true) == nil)
         await sessions.closeAll()
     }
 

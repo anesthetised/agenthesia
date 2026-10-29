@@ -250,6 +250,7 @@ in the background. The sidebar (`SessionSidebar` in Core, `SessionSidebarList` i
 sessions whose activity is needs input, failed or done, in start order), *Working* (the other live sessions,
 including owners that have no project yet, in start order) and *Settled* (saved sessions that are not live,
 newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
+A row (`SessionRow`) shows a project badge (`ProjectBadge.initials`; the tint is a 64-bit FNV-1a hash of the name, since `hashValue` changes per launch), the title, the project with ` · Merged` or ` · Discarded`, the status symbol and `RelativeTime.short` of the session's start (`createdAt`). The Settled section is collapsed by default, shows its count and keeps its state in `@SceneStorage`, but stays open while one of its rows is selected. History refreshes on its own, so the toolbar has no Refresh button.
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed

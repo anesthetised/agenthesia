@@ -244,6 +244,10 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
 - #151: the transcript column is centered (`TranscriptColumn`) and Copy shows on hover. Rendering Lab S1:App and
   S2:App were run with the owner's approval ([results](benchmarks/2026-10-29/transcript-column/README.md)):
   scrolling is unchanged within noise, streaming shows a few more single-frame hitches.
+- #147: sidebar rows show a project badge (`ProjectBadge` initials, FNV-1a tint), the project and any Merged/Discarded
+  outcome on a second line, the status symbol and a `RelativeTime.short` age (`now`, `5m`, `3h`, `2d`, `3w`, then
+  `12 Oct`). Settled is collapsed by default with its count in the header (`@SceneStorage`; it stays open while one
+  of its rows is selected); Refresh History is gone. Covered by unit and hosted-view tests only.
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

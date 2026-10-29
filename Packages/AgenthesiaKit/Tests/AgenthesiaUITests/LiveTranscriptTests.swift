@@ -720,6 +720,55 @@ private final class RecordedTranscript {
 }
 
 extension LiveTranscriptTests {
+    @Test func failedPromptsShowTheAgentsMessageWithTheStoredTextBehindDetails() async throws {
+        let recorded = try await RecordedTranscript()
+        let turn = UUID()
+        try await recorded.append(SessionEvent.prompt(id: turn, content: [.init(text: "go")]).storedEvent())
+        let stored = String(describing: RPCError(code: -32603, message: "Model \"x\" overloaded", data: .string("d")))
+        try await recorded.append(SessionEvent.failed(id: turn, message: stored).storedEvent())
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        source.revision += 1
+        let failure = source.message(at: 1)
+        #expect(failure.markdown == "Model \"x\" overloaded" && !failure.isNotice)
+        #expect(failure.tool?.expandable == true && failure.tool?.expanded == false)
+        #expect(failure.tool?.detailsDisclosure == true && failure.tool?.tone == .failure)
+        source.toggleExpansion(at: 1)
+        let expanded = source.message(at: 1)
+        #expect(expanded.markdown.hasPrefix("Model \"x\" overloaded\n\n```\nRPCError(code: -32603"))
+        #expect(expanded.markdown.hasSuffix(stored + "\n```") && expanded.tool?.expanded == true)
+
+        // Text that is not an RPC error has nothing more to disclose.
+        try await recorded.append(SessionEvent.prompt(id: turn, content: [.init(text: "again")]).storedEvent())
+        try await recorded.append(SessionEvent.failed(id: turn, message: "The connection closed").storedEvent())
+        source.state = recorded.state
+        let plain = source.message(at: 3)
+        #expect(plain.markdown == "The connection closed" && plain.tool?.expandable == false)
+    }
+
+    @Test func sessionNoticesAreCaptionsWithoutRoleLabelOrCopy() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(SessionEvent.prompt(id: UUID(), content: [.init(text: "hi")]).storedEvent())
+        try await recorded.append(SessionEvent.interrupted(id: UUID()).storedEvent())
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        source.revision += 1
+        #expect(!source.message(at: 0).isNotice)
+        #expect(source.message(at: 1).isNotice && source.message(at: 1).markdown == "Interrupted")
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(labels(in: row) == ["Interrupted"])
+        #expect(views(NSButton.self, in: row).isEmpty)
+        #expect(views(NSBox.self, in: row).count == 2)
+        let message = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        #expect(labels(in: message).contains("You") && !views(NSButton.self, in: message).isEmpty)
+    }
+}
+
+extension LiveTranscriptTests {
     @Test func historicalFormsHaveNoActiveControlsAndShowCancelledOutcome() async throws {
         let recorded = try await RecordedTranscript()
         let request = ACP.ElicitationRequest(

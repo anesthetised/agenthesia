@@ -284,6 +284,10 @@ private final class TranscriptMessageRow: NSTableCellView {
         links = message.links
         tool = message.tool
         input = message.input
+        if message.isNotice {
+            showNotice(message)
+            return
+        }
         let content: NSView
         if streaming {
             let cell = TextKitCell()
@@ -323,6 +327,35 @@ private final class TranscriptMessageRow: NSTableCellView {
             stack.addArrangedSubview(form)
             form.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
+    }
+
+    /// A session notice is a quiet caption between two hairlines; it has no role label and no Copy.
+    private func showNotice(_ message: TranscriptMessage) {
+        let caption = NSTextField(wrappingLabelWithString: message.markdown)
+        caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        caption.textColor = .secondaryLabelColor
+        caption.alignment = .center
+        caption.isSelectable = true
+        caption.setContentHuggingPriority(.required, for: .horizontal)
+        let lines = [NSBox(), NSBox()]
+        for line in lines {
+            line.boxType = .separator
+            line.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
+        let stack = NSStackView(views: [lines[0], caption, lines[1]])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        self.stack = stack
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
+        ])
     }
 
     /// Keep the text field and its field editor attached when only native metadata changes.
@@ -394,7 +427,10 @@ private final class TranscriptMessageRow: NSTableCellView {
             disclosure.bezelStyle = .disclosure
             disclosure.setButtonType(.pushOnPushOff)
             disclosure.state = tool.expanded ? .on : .off
-            disclosure.setAccessibilityLabel(tool.expanded ? "Show less" : "Show all")
+            disclosure.setAccessibilityLabel(
+                tool.detailsDisclosure
+                    ? (tool.expanded ? "Hide details" : "Details") : (tool.expanded ? "Show less" : "Show all")
+            )
             views.append(disclosure)
         }
         let icon = NSImageView(

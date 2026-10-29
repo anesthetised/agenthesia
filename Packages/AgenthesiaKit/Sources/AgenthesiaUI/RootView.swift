@@ -78,6 +78,7 @@ public struct RootView: View {
                                 openFile($0.path, line: $0.line, for: $1)
                             }
                             .id(session.session.id)
+                            if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
                             Divider()
                             if let signIn = model.signIn {
                                 SignInPanel(

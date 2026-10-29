@@ -15,6 +15,7 @@ public struct RootView: View {
     @State private var editingQueueID: UUID?
     @State private var savedDraft: (text: String, attachments: [URL])?
     @State private var submitting = false
+    @State private var configError: String?
     @State private var directory = ""
     @State private var executable = ""
     @State private var arguments = ""
@@ -79,8 +80,8 @@ public struct RootView: View {
                             }
                             .id(session.session.id)
                             if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
-                            Divider()
                             if let signIn = model.signIn {
+                                Divider()
                                 SignInPanel(
                                     agentName: model.owner?.agentName ?? "the agent",
                                     signIn: signIn,
@@ -109,7 +110,11 @@ public struct RootView: View {
                 if model.restored == nil, let diagnostic = model.owner?.diagnostic {
                     Text(diagnostic).font(.caption).foregroundStyle(.secondary).padding(8)
                 }
-                if let error = model.errorMessage ?? (model.restored == nil ? model.owner?.errorMessage : nil) {
+                // Composer errors show above the composer card while it is displayed.
+                let composerShown = model.displayed != nil && model.signIn == nil
+                if let error = (composerShown ? nil : model.errorMessage)
+                    ?? (model.restored == nil ? model.owner?.errorMessage : nil)
+                {
                     Text(error).textSelection(.enabled).foregroundStyle(.red).padding().frame(
                         maxWidth: .infinity,
                         alignment: .leading
@@ -364,85 +369,107 @@ public struct RootView: View {
 
     private func composer(_ session: SessionController) -> some View {
         let editable = [.idle, .running, .stopping].contains(session.status) && !session.isMerging
-        return VStack(alignment: .leading, spacing: 8) {
-            if !session.queuedPrompts.isEmpty {
-                PromptQueue(
-                    session: session,
-                    editable: editable && !submitting,
-                    onEdit: editQueuedPrompt,
-                    onError: { model.errorMessage = $0.localizedDescription }
-                )
+        return VStack(alignment: .leading, spacing: 6) {
+            if let error = model.errorMessage ?? configError {
+                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
             }
-            if editingQueueID != nil {
-                HStack {
-                    Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Cancel Edit", action: finishEditing)
+            VStack(alignment: .leading, spacing: 8) {
+                if !session.queuedPrompts.isEmpty {
+                    PromptQueue(
+                        session: session,
+                        editable: editable && !submitting,
+                        onEdit: editQueuedPrompt,
+                        onError: { model.errorMessage = $0.localizedDescription }
+                    )
                 }
+                if editingQueueID != nil {
+                    HStack {
+                        Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Cancel Edit", action: finishEditing)
+                    }
+                }
+                ComposerInput(
+                    text: $prompt,
+                    attachments: $attachments,
+                    commands: session.transcript.commands,
+                    isEnabled: editable && !submitting,
+                    onSubmit: submit,
+                    attachmentsEditable: editingQueueID == nil,
+                    onRecall: recallQueuedPrompt,
+                    onStop: { Task { await model.owner?.stop() } }
+                )
+                composerControls(session, editable: editable)
             }
-            ComposerInput(
-                text: $prompt,
-                attachments: $attachments,
-                commands: session.transcript.commands,
-                isEnabled: editable && !submitting,
-                onSubmit: submit,
-                attachmentsEditable: editingQueueID == nil,
-                onRecall: recallQueuedPrompt,
-                onStop: { Task { await model.owner?.stop() } }
-            )
-            SessionConfigControls(session: session).id(session.session.id)
-            HStack {
+            .padding(12)
+            .background(.bar, in: .rect(cornerRadius: 16))
+            .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
+            .background { permissionShortcuts(session) }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard editable, editingQueueID == nil, !submitting else { return false }
+                ComposerInput.add(urls, to: &attachments)
+                return true
+            }
+        }
+        .frame(maxWidth: TranscriptColumn.maxWidth)
+        .padding(.horizontal, 16).padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The card's bottom row: attach and the session's settings, then the round Send/Stop button.
+    @ViewBuilder private func composerControls(_ session: SessionController, editable: Bool) -> some View {
+        HStack(spacing: 8) {
+            if editable {
                 Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
                     .keyboardShortcut("a", modifiers: [.command, .shift]).disabled(!editable)
                     .help("Attach files or folders (⇧⌘A)").disabled(editingQueueID != nil || submitting)
-                Text(Self.statusText(session))
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if [.readOnly, .failed, .closed].contains(session.status) {
-                    if model.outcome(of: session.session.id) == nil {
-                        Button("Continue", systemImage: "play.fill") { model.continueRestored() }
-                            .disabled(!model.canContinue)
-                            .help("Reconnect to the agent.")
-                    }
-                } else if session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty {
-                    Button("Stop", systemImage: "stop.fill") { Task { await model.owner?.stop() } }
-                        .disabled(session.status == .stopping && session.queuePaused)
-                }
-                if editable {
-                    Button(
-                        editingQueueID != nil
-                            ? "Save"
-                            : session.status == .idle && session.queuedPrompts.isEmpty
-                                ? "Send" : "Queue",
-                        systemImage: "arrow.up",
-                        action: send
+                SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
+                Spacer(minLength: 0)
+                let action = ComposerPrimaryAction(
+                    turnActive: session.status == .running || session.status == .stopping
+                        || !session.pendingInputs.isEmpty,
+                    hasDraft: hasDraft,
+                    editingQueued: editingQueueID != nil,
+                    idleWithEmptyQueue: session.status == .idle && session.queuedPrompts.isEmpty
+                )
+                Menu("Send options", systemImage: "chevron.down") {
+                    Button(hasDraft ? "Send Draft Now" : "Send Queue Now") { submit(.now) }.keyboardShortcut(
+                        .return,
+                        modifiers: .command
                     )
-                    .disabled(!hasDraft || submitting || session.isChangingConfig)
-                    Menu("Send options", systemImage: "chevron.down") {
-                        Button(hasDraft ? "Send Draft Now" : "Send Queue Now") { submit(.now) }.keyboardShortcut(
-                            .return,
-                            modifiers: .command
-                        )
+                    .disabled(
+                        (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                            || session.isChangingConfig
+                    )
+                    Button("Send Whole Queue Now") { submit(.allNow) }
+                        .keyboardShortcut(.return, modifiers: [.command, .shift])
                         .disabled(
                             (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
                                 || session.isChangingConfig
                         )
-                        Button("Send Whole Queue Now") { submit(.allNow) }
-                            .keyboardShortcut(.return, modifiers: [.command, .shift])
-                            .disabled(
-                                (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
-                                    || session.isChangingConfig
-                            )
-                    }.labelStyle(.iconOnly)
+                }.labelStyle(.iconOnly).menuStyle(.borderlessButton).fixedSize()
+                Button(action.title, systemImage: action.symbol) {
+                    if action == .stop { Task { await model.owner?.stop() } } else { send() }
+                }
+                .labelStyle(.iconOnly).buttonStyle(.borderedProminent).buttonBorderShape(.circle)
+                .help(action.help)
+                .disabled(
+                    action == .stop
+                        ? session.status == .stopping && session.queuePaused
+                        : !hasDraft || submitting || session.isChangingConfig
+                )
+            } else {
+                Text(Self.statusText(session)).font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if [.readOnly, .failed, .closed].contains(session.status),
+                    model.outcome(of: session.session.id) == nil
+                {
+                    Button("Continue", systemImage: "play.fill") { model.continueRestored() }
+                        .disabled(!model.canContinue)
+                        .help("Reconnect to the agent.")
                 }
             }
-        }
-        .padding(16).background(.bar).background { permissionShortcuts(session) }
-        .dropDestination(for: URL.self) { urls, _ in
-            guard editable, editingQueueID == nil, !submitting else { return false }
-            ComposerInput.add(urls, to: &attachments)
-            return true
         }
     }
 
@@ -476,13 +503,6 @@ public struct RootView: View {
         if session.status == .readOnly { return "Saved history · read-only" }
         if session.status == .failed { return "Connection failed · Continue to reconnect" }
         if session.status == .closed { return "Session ended" }
-        if let request = session.pendingPermissions.first {
-            let count = min(request.options.count, 9)
-            let keys = count > 1 ? "⌥⌘1–⌥⌘\(count)" : count == 1 ? "⌥⌘1" : "no options offered"
-            return "Waiting for permission · \(keys)"
-        }
-        if !session.pendingInputs.isEmpty { return "Waiting for input" }
-        if session.queuePaused && !session.queuedPrompts.isEmpty { return "Queue paused · ⇧⌘R resumes" }
         return String(describing: session.status).capitalized
     }
 

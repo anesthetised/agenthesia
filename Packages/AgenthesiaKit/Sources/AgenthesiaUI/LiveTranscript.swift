@@ -341,7 +341,13 @@ final class LiveTranscriptSource: TranscriptSource {
         case nil:
             switch phase {
             case .choosing(let shortcuts):
-                (header.status, header.tone) = ("Waiting for your answer", .running)
+                var waiting = "Waiting for your answer"
+                if shortcuts {
+                    // ⌥⌘1… answer the oldest request (RootView.permissionShortcuts).
+                    let count = min(permission.options.count, 9)
+                    if count > 0 { waiting += " · " + (count > 1 ? "⌥⌘1–⌥⌘\(count)" : "⌥⌘1") }
+                }
+                (header.status, header.tone) = (waiting, .running)
                 header.actions = permission.options.map(\.name)
                 header.shortcuts = shortcuts
                 var prompt = "The agent asks for permission to run this tool."

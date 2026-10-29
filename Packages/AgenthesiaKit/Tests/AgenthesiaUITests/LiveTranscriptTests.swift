@@ -158,6 +158,17 @@ import Testing
         #expect(card(.cancelled).markdown.hasSuffix("Request cancelled; no option was returned to the agent."))
         #expect(card(.unknown(["outcome": "later"])).markdown.hasSuffix("Unrecognized permission outcome."))
         #expect(card(nil).header.status == "No answer")
+        // The oldest pending request shows the shortcuts that answer it; later ones do not.
+        #expect(
+            card(nil, phase: .choosing(shortcuts: true)).header.status
+                == "Waiting for your answer · ⌥⌘1–⌥⌘\(min(options.count, 9))"
+        )
+        #expect(card(nil, phase: .choosing(shortcuts: false)).header.status == "Waiting for your answer")
+        #expect(
+            card(nil, options: [options[0]], phase: .choosing(shortcuts: true)).header.status
+                == "Waiting for your answer · ⌥⌘1"
+        )
+        #expect(card(nil, options: [], phase: .choosing(shortcuts: true)).header.status == "Waiting for your answer")
         #expect(card(nil).header.actions.isEmpty)
         #expect(card(nil, phase: .recording).header.status == "Recording answer")
         #expect(card(nil, phase: .recording).header.actions.isEmpty)

@@ -23,4 +23,14 @@ import Testing
             #expect(TranscriptColumn.minX(inRowOfWidth: width) >= 0)
         }
     }
+
+    @Test func bubblesHugShortTextAndStopAtEightyPercentOfTheColumn() {
+        #expect(TranscriptColumn.bubbleMaxWidth(inColumnOfWidth: 720) == 576)
+        // Text and 14 pt padding on both sides.
+        #expect(TranscriptColumn.bubbleWidth(forTextWidth: 100, inColumnOfWidth: 720) == 128)
+        #expect(TranscriptColumn.bubbleWidth(forTextWidth: 548, inColumnOfWidth: 720) == 576)
+        #expect(TranscriptColumn.bubbleWidth(forTextWidth: 5000, inColumnOfWidth: 720) == 576)
+        #expect(TranscriptColumn.bubbleWidth(forTextWidth: 5000, inColumnOfWidth: 452) == 361.6)
+        #expect(TranscriptColumn.bubbleWidth(forTextWidth: -3, inColumnOfWidth: 0) == 0)
+    }
 }

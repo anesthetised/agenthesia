@@ -969,10 +969,25 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 throw error
             }
             for event in stored { try self.reduced.apply(event) }
+            await self.adoptTitle()
             if self.status == .failed || self.status == .closed { self.publishTranscript() }
         }
         tail = task
         return task
+    }
+
+    /// The agent's title wins; an untitled session is named after its first accepted prompt, once. The title is
+    /// stored so the sidebar needs no replay, and a failed write leaves it in memory only.
+    private func adoptTitle() async {
+        let agentTitle = reduced.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proposed =
+            agentTitle.flatMap { $0.isEmpty ? nil : $0 }
+            ?? (session.title == nil
+                ? reduced.items.lazy.compactMap(\.message).first { $0.role == .user }
+                    .flatMap { SessionTitle.fromPrompt($0.text) } : nil)
+        guard let proposed, proposed != session.title else { return }
+        session.title = proposed
+        try? await store.updateTitle(proposed, of: session.id)
     }
 
     private func record(_ events: [NewEvent]) async throws {

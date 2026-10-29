@@ -37,7 +37,7 @@ public struct AttentionNotice: Equatable, Sendable, Identifiable {
             let controller = owner.controller
             // The name the sidebar shows, so a banner says which session asks.
             let title =
-                owner.controller?.session.title ?? owner.resuming?.title ?? controller?.title ?? "Agent session"
+                owner.controller?.session.title ?? owner.resuming?.title ?? controller?.title ?? "New Session"
             var notices = (controller?.pendingPermissions ?? []).map { request in
                 AttentionNotice(
                     id: "permission.\(request.id)",

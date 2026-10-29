@@ -28,7 +28,7 @@ struct SessionSidebarList: View {
     }
 
     private func liveRow(_ owner: LiveSession) -> some View {
-        let title = owner.controller?.session.title ?? owner.resuming?.title ?? "Starting session"
+        let title = owner.controller?.session.title ?? owner.resuming?.title ?? "New Session"
         return HStack {
             Text(title).lineLimit(1)
             Spacer()
@@ -45,7 +45,7 @@ struct SessionSidebarList: View {
 
     private func savedRow(_ record: SessionRecord) -> some View {
         VStack(alignment: .leading) {
-            Text(record.title ?? "Session").lineLimit(1)
+            Text(record.title ?? "New Session").lineLimit(1)
             Group {
                 if let outcome = model.outcomes[record.id] {
                     Text("\(record.createdAt, style: .date) · \(outcome.label)")

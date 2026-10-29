@@ -82,6 +82,19 @@ final class PersistenceStoreTests: Sendable {
         )
     }
 
+    @Test func updatesOnlyTheTitleOfOneSession() async throws {
+        let (project, agent, first) = try await seed()
+        let second = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/other")
+        try await store.createSession(second)
+        try await store.updateTitle("Renamed ✓", of: second.id)
+        var expected = second
+        expected.title = "Renamed ✓"
+        #expect(try await store.session(id: second.id) == expected)
+        #expect(try await store.session(id: first.id) == first)
+        // An unknown session is not an error and creates nothing.
+        try await store.updateTitle("Ghost", of: UUID())
+    }
+
     @Test func upgradesLegacySessionsWithoutGuessingTheirBaseOrChangingEvents() async throws {
         let legacy = try DatabaseQueue()
         try Schema.migrator.migrate(legacy, upTo: "v1")

@@ -513,6 +513,13 @@ The event format is version 1:
   an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
   after the raw notification. Replay therefore reproduces live state without discarding original data.
 
+A new session is created without a title. After each durable append `SessionController` stores one
+([ADR-0039](adr/0039-t3-style-window-layout.md)): the agent's `session_info_update` title when there is one, otherwise,
+for a session that has none, `SessionTitle.fromPrompt` of the first user message (the first non-blank line, at most
+80 characters). `PersistenceStore.updateTitle` writes it to the `session` row so the sidebar needs no replay; later
+prompts never retitle, and sessions created before keep their stored titles. Places that need a string show
+"New Session" for an untitled session; the window title is the session title and its subtitle the project name.
+
 `TranscriptState.apply` is the pure reduction of those stored events. Rows use their first contributing
 sequence as a stable identity. It combines contiguous content chunks, respects explicit message IDs,
 preserves non-text content, patches tool calls (absent fields stay unchanged, including when updates

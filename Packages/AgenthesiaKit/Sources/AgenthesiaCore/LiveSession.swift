@@ -408,7 +408,6 @@ public final class LiveSession {
                 id: id,
                 projectID: project.id,
                 agentInstallID: install.id,
-                title: "\(install.name) · \(project.name)",
                 workingDirectory: workspace.workingDirectory.path,
                 baseRevision: workspace.baseRevision,
                 baseBranch: workspace.baseBranch

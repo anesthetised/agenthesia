@@ -512,7 +512,7 @@ import Testing
         #expect(model.canDiscard && !model.canContinue)
         await model.requestDiscard(record)
         let pending = try #require(model.pendingDiscard)
-        #expect(pending.title == "Discard the worktree of “\(record.title ?? "")”?")
+        #expect(pending.title == "Discard the worktree of “\(record.title ?? "New Session")”?")
         #expect(
             pending.message
                 == "0 uncommitted files and 0 commits on agenthesia/\(record.id.uuidString.lowercased()) will be deleted. This cannot be undone."

@@ -103,6 +103,16 @@ public final class PersistenceStore: Sendable {
         }
     }
 
+    /// A session's title may be set after creation: from the agent or from the first prompt.
+    public func updateTitle(_ title: String, of sessionID: UUID) async throws {
+        try await database.write { db in
+            try db.execute(
+                sql: "UPDATE session SET title = ? WHERE id = ?",
+                arguments: [title, sessionID.uuidString]
+            )
+        }
+    }
+
     public func session(id: UUID) async throws -> SessionRecord? {
         try await database.read { db in
             try Row.fetchOne(db, sql: "SELECT * FROM session WHERE id = ?", arguments: [id.uuidString])

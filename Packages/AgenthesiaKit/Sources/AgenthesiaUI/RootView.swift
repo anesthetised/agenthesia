@@ -136,6 +136,7 @@ public struct RootView: View {
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
+            .navigationSubtitle(model.projects.first { $0.id == model.displayed?.session.projectID }?.name ?? "")
             .toolbar {
                 Button("Quick Open", systemImage: "doc.text.magnifyingglass") {
                     fileQuery = ""

@@ -5,7 +5,7 @@ import Testing
 
 struct RelativeTimeTests {
     private let now = Date(timeIntervalSince1970: 1_760_000_000)  // 2025-10-09 08:53:20 UTC
-    private let utc = TimeZone(identifier: "UTC")!
+    private let utc = TimeZone.gmt
     private let gb = Locale(identifier: "en_GB")
 
     private func short(_ seconds: Double) -> String {

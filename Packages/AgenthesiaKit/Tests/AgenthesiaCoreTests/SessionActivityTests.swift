@@ -83,13 +83,29 @@ import Testing
         await manager.closeAll()
     }
 
-    @Test func sidebarGroupsByProjectNewestFirstWithLiveRowsAhead() async throws {
+    @Test func sidebarSectionsFollowActivityAndKeepStartOrder() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let old = ProjectRecord(name: "Old", rootPath: "/old")
-        let recent = ProjectRecord(name: "Recent", rootPath: "/recent")
-        let empty = ProjectRecord(name: "Empty", rootPath: "/empty")
-        func record(_ project: ProjectRecord, age: TimeInterval) -> SessionRecord {
+        let starting = manager.start(directory: directory, agent: agent)
+        // A starting owner has no project and no session identity yet, and counts as working.
+        let early = SessionSidebar(projects: [], history: [], owners: [starting])
+        #expect(early.sections.map(\.kind) == [.working])
+        #expect(early.rows.first?.project == nil && early.rows.first?.id == AnyHashable(starting.id))
+        await starting.startup?.value
+        let finished = manager.start(directory: directory, agent: agent)
+        let failed = manager.start(directory: directory, agent: agent)
+        let idle = manager.start(directory: directory, agent: agent)
+        for owner in [finished, failed, idle] { await owner.startup?.value }
+        await finished.send("hello")
+        await failed.send("exit")
+        while failed.controller?.status != .closed { await Task.yield() }
+        #expect(
+            [starting.activity, finished.activity, failed.activity, idle.activity] == [.idle, .done, .failed, .idle]
+        )
+
+        let project = try #require(try await manager.library.projects().first)
+        let other = ProjectRecord(name: "Other", rootPath: "/other")
+        func saved(_ project: ProjectRecord, age: TimeInterval) -> SessionRecord {
             SessionRecord(
                 projectID: project.id,
                 agentInstallID: UUID(),
@@ -97,51 +113,38 @@ import Testing
                 createdAt: Date(timeIntervalSinceNow: -age)
             )
         }
-        let (oldest, older, newer) = (record(old, age: 300), record(recent, age: 200), record(recent, age: 100))
-        let owner = manager.start(directory: directory, agent: agent)
-        let pending = SessionSidebar(projects: [old, recent, empty], history: [oldest, older, newer], owners: [owner])
-        #expect(pending.starting.count == 1 && pending.starting[0] === owner)
-        #expect(pending.groups.map(\.project.name) == ["Recent", "Old"])
-        await owner.startup?.value
-        let live = try #require(owner.controller?.session)
-        let project = try #require(try await manager.library.projects().first)
+        let (oldest, middle, newest) = (saved(project, age: 300), saved(other, age: 200), saved(project, age: 100))
+        let unknown = saved(ProjectRecord(name: "Gone", rootPath: "/gone"), age: 400)
+        let live = try [starting, finished, failed, idle].map { try #require($0.sessionID) }
+        let liveRecords = try [starting, finished, failed, idle].map { try #require($0.controller?.session) }
         let sidebar = SessionSidebar(
-            projects: [old, recent, empty, project],
-            history: [oldest, older, newer, live],
-            owners: [owner]
+            projects: [project, other],
+            history: [oldest, middle, newest, unknown] + liveRecords,
+            owners: [starting, finished, failed, idle]
         )
-        #expect(sidebar.starting.isEmpty)
-        #expect(sidebar.groups.map(\.project.name) == [project.name, "Recent", "Old"])
-        let rows = sidebar.groups[0].rows
-        #expect(rows.map(\.id) == [live.id])
-        guard case .live(let shown, _) = rows[0] else {
-            Issue.record("Expected a live row")
+
+        #expect(sidebar.sections.map(\.kind) == [.needsYou, .working, .settled])
+        #expect(sidebar.sections[0].rows.map(\.id) == [AnyHashable(live[1]), AnyHashable(live[2])])
+        #expect(sidebar.sections[1].rows.map(\.id) == [AnyHashable(live[0]), AnyHashable(live[3])])
+        // Saved sessions that are live are not repeated; the rest are newest first.
+        #expect(sidebar.sections[2].rows.map(\.id) == [newest, middle, oldest, unknown].map { AnyHashable($0.id) })
+        #expect(sidebar.rows.count == 8)
+        #expect(sidebar.sections[0].rows.allSatisfy { $0.project == project })
+        #expect(sidebar.sections[2].rows.map(\.project?.name) == [project.name, "Other", project.name, nil])
+        guard case .live(let owner) = sidebar.sections[0].rows[0].source,
+            case .saved(let record) = sidebar.rows[4].source
+        else {
+            Issue.record("Expected live rows first and saved rows last")
             return
         }
-        #expect(shown === owner)
-        let recentRows = sidebar.groups[1].rows
-        #expect(recentRows.map(\.id) == [newer.id, older.id])
+        #expect(owner === finished && record.id == newest.id)
         await manager.closeAll()
     }
 
-    @Test func liveRowsKeepStartOrderBeforeSavedOnes() async throws {
-        let (directory, manager, agent) = try fixture()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let first = manager.start(directory: directory, agent: agent)
-        let second = manager.start(directory: directory, agent: agent)
-        await first.startup?.value
-        await second.startup?.value
-        let (a, b) = try (#require(first.controller?.session), #require(second.controller?.session))
-        let projects = try await manager.library.projects()
-        let saved = SessionRecord(
-            projectID: a.projectID,
-            agentInstallID: a.agentInstallID,
-            workingDirectory: a.workingDirectory,
-            createdAt: .now.addingTimeInterval(60)
-        )
-        let sidebar = SessionSidebar(projects: projects, history: [a, b, saved], owners: [first, second])
-        #expect(sidebar.groups.count == 1)
-        #expect(sidebar.groups[0].rows.map(\.id) == [a.id, b.id, saved.id])
-        await manager.closeAll()
+    @Test func emptySectionsAreOmitted() async throws {
+        let none = SessionSidebar(projects: [], history: [], owners: [])
+        #expect(none.sections.isEmpty && none.rows.isEmpty)
+        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
+        #expect(SessionSidebar(projects: [], history: [record], owners: []).sections.map(\.kind) == [.settled])
     }
 }

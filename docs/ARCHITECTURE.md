@@ -230,9 +230,11 @@ turn without an outcome, `permissionResolved(.cancelled)` for requests without a
 “Continued” divider. Any failure leaves the log unchanged and the history readable.
 
 The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
-in the background. The sidebar (`SessionSidebar` in Core, `SessionSidebarList` in the UI) has one section
-per project, ordered by its newest session; live sessions come first in start order with a status icon,
-then saved sessions newest first, and owners that have no project yet are listed under Starting.
+in the background. The sidebar (`SessionSidebar` in Core, `SessionSidebarList` in the UI,
+[ADR-0039](adr/0039-t3-style-window-layout.md)) is grouped by status, in this order: *Needs You* (live
+sessions whose activity is needs input, failed or done, in start order), *Working* (the other live sessions,
+including owners that have no project yet, in start order) and *Settled* (saved sessions that are not live,
+newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed
@@ -241,8 +243,7 @@ closes an owner and removes it, after which its session is listed as saved histo
 startup, process or controller failed stays listed with its error until it is ended or continued.
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
-⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Starting, then each project's
-live and saved rows); from the launch form they select the last/first row. Next Session Needing Input
+⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Needs You, Working, Settled); from the launch form they select the last/first row. Next Session Needing Input
 uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,

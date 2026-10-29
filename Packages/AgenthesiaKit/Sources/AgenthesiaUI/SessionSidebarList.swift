@@ -2,7 +2,7 @@ import AgenthesiaCore
 import Persistence
 import SwiftUI
 
-/// Projects → sessions with live statuses (ADR-0026).
+/// Sessions by status: Needs You, Working, Settled (ADR-0039).
 struct SessionSidebarList: View {
     let model: SessionWindowModel
     @Environment(\.openWindow) private var openWindow
@@ -10,16 +10,11 @@ struct SessionSidebarList: View {
     private var sidebar: SessionSidebar { model.sidebar }
 
     var body: some View {
-        if !sidebar.starting.isEmpty {
-            Section("Starting") {
-                ForEach(sidebar.starting) { owner in liveRow(owner) }
-            }
-        }
-        ForEach(sidebar.groups) { group in
-            Section(group.project.name) {
-                ForEach(group.rows) { row in
-                    switch row {
-                    case .live(let owner, _): liveRow(owner)
+        ForEach(sidebar.sections) { section in
+            Section(section.kind.rawValue) {
+                ForEach(section.rows) { row in
+                    switch row.source {
+                    case .live(let owner): liveRow(owner)
                     case .saved(let record): savedRow(record)
                     }
                 }

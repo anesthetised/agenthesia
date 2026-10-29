@@ -213,18 +213,15 @@ import SwiftUI
         }
     }
 
-    /// Wraps in exactly the order shown by SessionSidebarList, including Starting and saved history.
+    /// Wraps in exactly the order shown by SessionSidebarList: Needs You, Working, then saved history.
     func navigationTarget(backward: Bool = false, needsInput: Bool = false) -> NavigationTarget? {
         guard !closed else { return nil }
-        let sidebar = sidebar
-        let rows =
-            sidebar.starting.map(NavigationTarget.live)
-            + sidebar.groups.flatMap(\.rows).map { row in
-                switch row {
-                case .live(let owner, _): NavigationTarget.live(owner)
-                case .saved(let record): NavigationTarget.saved(record)
-                }
+        let rows = sidebar.rows.map { row in
+            switch row.source {
+            case .live(let owner): NavigationTarget.live(owner)
+            case .saved(let record): NavigationTarget.saved(record)
             }
+        }
         guard !rows.isEmpty else { return nil }
         let selected = sidebarSelection
         let index = rows.firstIndex { $0.id == selected }

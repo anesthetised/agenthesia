@@ -104,6 +104,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var message: Message?
         public var toolCall: ACP.ToolCall?
         public var notice: String?
+        /// `notice` is the stored description of a failed prompt, not a session notice.
+        public var isFailure = false
         /// When a saved session was continued; shown as a divider.
         public var reopenedAt: Date?
         public var permission: Permission?
@@ -241,7 +243,7 @@ public struct TranscriptState: Equatable, Sendable {
             guard id == activeTurn else { return }
             activeTurn = nil
             stopRequested = false
-            items.append(Item(id: sequence, notice: message))
+            items.append(Item(id: sequence, notice: message, isFailure: true))
         case .inputRequested(let id, let request):
             inputIndices[id] = items.count
             items.append(Item(id: sequence, input: .init(requestID: id, request: request)))

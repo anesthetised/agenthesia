@@ -15,6 +15,8 @@ struct TranscriptMessage {
     var links: Int?
     var tool: ToolCardHeader?
     var input: InputCard?
+    /// A session notice: a centered caption between hairlines, without role label or Copy.
+    var isNotice = false
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
@@ -31,6 +33,8 @@ struct ToolCardHeader: Equatable {
     var actions: [String] = []
     /// Whether ⌥⌘1… choose `actions`; only the oldest pending request has shortcuts.
     var shortcuts = false
+    /// The disclosure reads Details instead of Show all.
+    var detailsDisclosure = false
 }
 
 protocol TranscriptSource: AnyObject {
@@ -146,10 +150,32 @@ final class LiveTranscriptSource: TranscriptSource {
             message.tool = card.header
             return message
         }
+        if item.isFailure, let stored = item.notice {
+            let summary = PromptFailure.summary(stored)
+            let hasDetails = summary != stored
+            let isExpanded = hasDetails && expanded.contains(item.id)
+            var message = render(
+                id: item.id,
+                role: "Error",
+                markdown: isExpanded ? summary + "\n\n```\n" + stored + "\n```" : summary
+            )
+            message.tool = ToolCardHeader(
+                symbol: "exclamationmark.triangle",
+                kind: "Prompt failed",
+                status: "",
+                tone: .failure,
+                expandable: hasDetails,
+                expanded: isExpanded,
+                detailsDisclosure: true
+            )
+            return message
+        }
         let (role, markdown) = Self.content(item)
         // Streaming rows keep their text until they finish; user prompts never link.
         let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(at: row)
-        return render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
+        var message = render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
+        message.isNotice = item.message == nil
+        return message
     }
 
     func toggleExpansion(at row: Int) {

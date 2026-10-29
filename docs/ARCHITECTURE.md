@@ -146,6 +146,11 @@ While a turn runs, `SessionController.turnStartedAt` (in memory; set on entering
 `stopping`, cleared otherwise) drives a "Working for 1m 12s" line (`WorkingTimeLine`,
 `WorkingDuration.format`) between the transcript and the composer, ticking once a second.
 
+Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
+hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of
+its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history
+benefits and stored events do not change) and a Details disclosure with the full stored text.
+
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
 lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
 turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as

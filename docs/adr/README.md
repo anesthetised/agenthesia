@@ -30,7 +30,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted; base pin settled by [0032](0032-worktree-merge-and-discard.md) |
 | [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Accepted |
-| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted |
+| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted; sidebar superseded by [0039](0039-t3-style-window-layout.md); launch form superseded by [0040](0040-composer-first-session-start.md) |
 | [0027](0027-recoverable-prompt-errors.md) | Keep sessions alive after prompt error responses | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0028](0028-empty-draft-sends-queue.md) | Send the queue when Command-Return has no draft | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
@@ -43,5 +43,7 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0036](0036-agent-settings-and-installed-sessions.md) | Agent settings and sessions of installed agents | Accepted |
 | [0037](0037-local-agents.md) | Local agents | Accepted |
 | [0038](0038-pre-session-sign-in.md) | Sign in before a session | Accepted |
+| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted |
+| [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

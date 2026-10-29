@@ -50,7 +50,7 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut("]", modifiers: [.command, .option])
                 .disabled(model?.navigationTarget() == nil)
             Button("Next Session Needing Input") { Task { [model] in await model?.navigate(needsInput: true) } }
-                .keyboardShortcut("i", modifiers: [.command, .option])
+                .keyboardShortcut("]", modifiers: [.command, .option, .shift])
                 .disabled(model?.navigationTarget(needsInput: true) == nil)
         }
     }

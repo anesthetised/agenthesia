@@ -24,6 +24,8 @@ public struct RootView: View {
     /// Installed agents offered by the launch form; without it, only a custom command (ADR-0036).
     private let catalog: AgentCatalog?
     @State private var showingLog = false
+    /// Remembered per window (ADR-0039).
+    @SceneStorage("showingInspector") private var showingInspector = true
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
@@ -50,14 +52,6 @@ public struct RootView: View {
         NavigationSplitView {
             List(selection: $model.sidebarSelection) {
                 SessionSidebarList(model: model)
-                if !model.showingSetup, filesMatchSession {
-                    SessionChangedFiles(
-                        files: model.files,
-                        onOpen: { openFile($0, for: $1) },
-                        onReview: model.openReview
-                    )
-                    .selectionDisabled(true)
-                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { SettledFooter(model: model) }
             .navigationTitle("Agenthesia")
@@ -120,16 +114,6 @@ public struct RootView: View {
                         alignment: .leading
                     )
                 }
-                if let path = model.displayed.map({ URL(filePath: $0.session.workingDirectory) })
-                    ?? model.owner?.workingDirectory
-                {
-                    HStack {
-                        Text(path.path).lineLimit(1).truncationMode(.middle).help(path.path)
-                        Button("Show in Finder") {
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
-                        }
-                    }.font(.caption).foregroundStyle(.secondary).padding(8)
-                }
                 if showingLog, model.restored == nil, let owner = model.owner {
                     Divider()
                     ScrollView {
@@ -140,6 +124,16 @@ public struct RootView: View {
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+            // The launch form has no session to inspect; leaving it keeps the chosen visibility.
+            .inspector(
+                isPresented: Binding(
+                    get: { inspectorShown },
+                    set: { if !model.showingSetup { showingInspector = $0 } }
+                )
+            ) {
+                SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
+                    .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
+            }
             .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
             .navigationSubtitle(model.projects.first { $0.id == model.displayed?.session.projectID }?.name ?? "")
             .toolbar {
@@ -150,8 +144,13 @@ public struct RootView: View {
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(model.showingSetup || !filesMatchSession)
+                Button(showingInspector ? "Hide Inspector" : "Show Inspector", systemImage: "sidebar.right") {
+                    showingInspector.toggle()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(model.showingSetup)
+                .help("Show or hide the inspector (⌥⌘I)")
                 if model.restored == nil, let owner = model.owner {
-                    Button("Agent Log", systemImage: "terminal") { showingLog.toggle() }
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
                         Task { await model.endSession() }
                     }.disabled(!model.canEnd)
@@ -241,6 +240,8 @@ public struct RootView: View {
         let discarding: Set<UUID>
         let merging: Set<UUID>
     }
+
+    private var inspectorShown: Bool { showingInspector && !model.showingSetup }
 
     private var viewingUnseenResult: Bool {
         appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true

@@ -37,7 +37,7 @@ import Testing
         await model.showHistory(first)
         let host = NSHostingView(rootView: RootView(model: model))
         let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
@@ -75,7 +75,7 @@ import Testing
         let model = SessionWindowModel(sessions: sessions)
         let host = NSHostingView(rootView: RootView(model: model))
         let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
@@ -152,12 +152,14 @@ import Testing
 @MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct WindowRestorationTests {
     private final class Box { var value: WindowTarget; init(_ value: WindowTarget) { self.value = value } }
 
+    /// Wide enough for the sidebar, the transcript and the inspector: a narrower window than the content's minimum
+    /// makes AppKit repeat constraint passes until it throws.
     private func host(_ model: SessionWindowModel, _ box: Box) -> (NSHostingView<RootView>, NSWindow) {
         _ = NSApplication.shared
         let binding = Binding(get: { box.value }, set: { box.value = $0 })
         let host = NSHostingView(rootView: RootView(model: model, target: binding))
         let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
             styleMask: [.titled],
             backing: .buffered,
             defer: false

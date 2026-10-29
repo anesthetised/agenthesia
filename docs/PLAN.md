@@ -230,6 +230,11 @@ Pitfalls known so far:
 - The research run could not drive the launch form through accessibility, so it created no test session;
   tool cards were reviewed from the code. #160 checks the finished design with `MockAgent`.
 
+Wave 1 status (2026-10-29):
+
+- #149 implemented: `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines
+  against the session base; covered by temporary-repository tests, no UI yet (#150).
+
 ## Next steps
 
 The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI

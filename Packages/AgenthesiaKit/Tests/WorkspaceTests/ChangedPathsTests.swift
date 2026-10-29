@@ -190,7 +190,7 @@ import Testing
     }
 }
 
-private struct ChangedPathsFixture: Sendable {
+struct ChangedPathsFixture: Sendable {
     let directory: URL
 
     init() async throws {

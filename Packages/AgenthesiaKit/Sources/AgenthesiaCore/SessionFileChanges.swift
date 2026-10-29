@@ -1,5 +1,5 @@
 public import Foundation
-import Workspace
+public import Workspace
 
 /// Session file observation remains available for saved history and after the agent process exits.
 @MainActor public final class SessionFileChanges {
@@ -21,6 +21,10 @@ import Workspace
 
     public static func paths(in directory: URL, baseRevision: String?) async throws -> [String] {
         try await SessionWorkspace.changedPaths(in: directory, baseRevision: baseRevision)
+    }
+
+    public static func stats(in directory: URL, baseRevision: String?) async throws -> ChangeStats {
+        try await SessionWorkspace.changeStats(in: directory, baseRevision: baseRevision)
     }
 
     public static func isGitRepository(in directory: URL) async throws -> Bool {

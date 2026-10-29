@@ -1,7 +1,7 @@
 public import Foundation
 import Observation
 public import Persistence
-import Workspace
+public import Workspace
 
 /// Current files of the displayed session, independent of its agent connection and event log.
 @MainActor @Observable
@@ -11,6 +11,8 @@ public final class SessionFiles {
     public private(set) var isGitRepository = false
     public private(set) var matches: [String] = []
     public private(set) var changedPaths: [String] = []
+    /// Line counts of the net change, refreshed together with `changedPaths`.
+    public private(set) var changeStats = ChangeStats()
     /// Paths of the latest published index, which transcript inline code can link to (ADR-0025).
     public private(set) var indexedPaths: Set<String> = []
     /// Changes whenever `indexedPaths` is published, so views compare it instead of the paths.
@@ -133,6 +135,7 @@ public final class SessionFiles {
         if git != isGitRepository {
             isGitRepository = git
             changedPaths = []
+            changeStats = ChangeStats()
             changesError = nil
             watcher?.close(); watcher = nil
         }
@@ -159,15 +162,19 @@ public final class SessionFiles {
         isLoadingIndex = false
         guard git else { return }
         do {
-            let paths = try await SessionFileChanges.paths(in: root, baseRevision: baseRevision)
+            async let pathsRequest = SessionFileChanges.paths(in: root, baseRevision: baseRevision)
+            async let statsRequest = SessionFileChanges.stats(in: root, baseRevision: baseRevision)
+            let (paths, stats) = try await (pathsRequest, statsRequest)
             let stillOriginalRoot = await Self.rootIsUnchanged(root)
             guard isCurrent(token) else { return }
             guard stillOriginalRoot else { throw SessionFileDocument.Failure.outsideScope }
             changedPaths = paths
+            changeStats = stats
             changesError = nil
         } catch {
             guard isCurrent(token) else { return }
             changedPaths = []
+            changeStats = ChangeStats()
             changesError = error.localizedDescription
         }
     }
@@ -191,7 +198,7 @@ public final class SessionFiles {
         isSearching = false
         index = nil; matches = []; isLoadingIndex = false
         if !indexedPaths.isEmpty { indexedPaths = []; indexRevision += 1 }
-        if changes { changedPaths = []; changesError = indexError }
+        if changes { changedPaths = []; changeStats = ChangeStats(); changesError = indexError }
     }
 
     private func isCurrent(_ token: UUID) -> Bool { generation == token && !Task.isCancelled }
@@ -276,7 +283,7 @@ public final class SessionFiles {
         search?.cancel(); search = nil
         closeDocument()
         root = nil; baseRevision = nil; isGitRepository = false
-        matches = []; changedPaths = []; index = nil; query = ""
+        matches = []; changedPaths = []; changeStats = ChangeStats(); index = nil; query = ""
         if !indexedPaths.isEmpty { indexedPaths = []; indexRevision += 1 }
         lastScan = nil; indexError = nil; changesError = nil; watchError = nil; isLoadingIndex = false;
         isSearching = false;

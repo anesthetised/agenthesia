@@ -143,6 +143,7 @@ import Workspace
         #expect(files.isGitRepository)
         #expect(files.baseRevision == nil)
         #expect(files.changedPaths == ["note.md"])
+        #expect(files.changeStats.files == ["note.md": .init(added: 1, removed: 1)])
         files.setQuery("nm")
         #expect(files.matches.isEmpty)
         #expect(files.isSearching)
@@ -157,7 +158,9 @@ import Workspace
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(files.changedPaths == ["second.txt"])
+        #expect(files.changeStats.files == ["second.txt": .init(added: 1, removed: 0)])
         files.close()
+        #expect(files.changeStats == ChangeStats())
     }
 
     private func git(_ arguments: [String], in directory: URL) async throws {

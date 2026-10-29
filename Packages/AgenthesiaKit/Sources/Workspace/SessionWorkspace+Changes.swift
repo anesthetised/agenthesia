@@ -34,9 +34,7 @@ extension SessionWorkspace {
                             ["ls-files", "--others", "--exclude-standard", "-z", "--", "."],
                         ]
                         if let baseRevision {
-                            guard [40, 64].contains(baseRevision.utf8.count),
-                                baseRevision.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
-                            else { throw WorkspaceError(message: "The session's initial Git revision is invalid.") }
+                            try validateRevision(baseRevision)
                             commands.insert(diff + [baseRevision, "HEAD", "--", "."], at: 0)
                         }
                         var paths = Set<String>()
@@ -103,6 +101,12 @@ extension SessionWorkspace {
             throw WorkspaceError(message: "Change tracking requires a working checkout, not a bare repository.")
         }
         return nil
+    }
+
+    static func validateRevision(_ revision: String) throws {
+        guard [40, 64].contains(revision.utf8.count),
+            revision.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
+        else { throw WorkspaceError(message: "The session's initial Git revision is invalid.") }
     }
 
     private static func gitPath(_ arguments: [String], in directory: URL) throws -> String {

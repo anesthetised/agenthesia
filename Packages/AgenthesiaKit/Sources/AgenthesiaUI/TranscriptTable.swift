@@ -109,14 +109,28 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                 continue
             }
             if visible.input != message.input {
-                visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
+                visible.show(
+                    message,
+                    streaming: !finished,
+                    width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                    controller: self
+                )
             } else if visible.tool != message.tool, visible.markdown == message.markdown {
                 visible.showHeader(message, controller: self)
             } else if visible.tool != message.tool {
                 // The header and body changed; rebuild the row's content in place.
-                visible.show(message, streaming: !finished, width: table.tableColumns[0].width - 48, controller: self)
+                visible.show(
+                    message,
+                    streaming: !finished,
+                    width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                    controller: self
+                )
             } else if finished, !keepsSelection {
-                visible.showFinished(message, width: table.tableColumns[0].width - 48, controller: self)
+                visible.showFinished(
+                    message,
+                    width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                    controller: self
+                )
             } else if let cell = visible.streamingCell {
                 if let update = message.update, visible.markdown == message.previousMarkdown {
                     cell.textView.apply(update)
@@ -135,7 +149,12 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             } else {
                 // `reloadData(forRowIndexes:)` leaves AppKit width constraints pointing at the replaced cell,
                 // which throws on the next table resize.
-                visible.show(message, streaming: true, width: table.tableColumns[0].width - 48, controller: self)
+                visible.show(
+                    message,
+                    streaming: true,
+                    width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                    controller: self
+                )
             }
             visible.markdown = message.markdown
             visible.links = message.links
@@ -190,7 +209,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         rowView.show(
             session.message(at: row),
             streaming: session.isStreaming(at: row),
-            width: tableView.tableColumns[0].width - 48,
+            width: TranscriptColumn.width(inRowOfWidth: tableView.tableColumns[0].width),
             controller: self
         )
         return rowView
@@ -269,11 +288,41 @@ private final class TranscriptMessageRow: NSTableCellView {
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
     var actions: NSView?
+    /// Shown only while the pointer is over the row; Copy stays available as an accessibility action.
+    private var copyButton: NSButton?
+    private(set) var hovering = false
 
     init(markdown: String) {
         self.markdown = markdown
         super.init(frame: .zero)
         identifier = Self.id
+        setAccessibilityCustomActions([
+            NSAccessibilityCustomAction(name: "Copy") { [weak self] in
+                self?.copyMessage(nil)
+                return true
+            }
+        ])
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                owner: self
+            )
+        )
+    }
+
+    override func mouseEntered(with event: NSEvent) { setHovering(true) }
+    override func mouseExited(with event: NSEvent) { setHovering(false) }
+
+    func setHovering(_ hovering: Bool) {
+        self.hovering = hovering
+        copyButton?.alphaValue = hovering ? 1 : 0
+        copyButton?.setAccessibilityElement(hovering)
     }
 
     /// Replaces the row's header and body.
@@ -313,20 +362,32 @@ private final class TranscriptMessageRow: NSTableCellView {
         self.contentWidth = contentWidth
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-            header.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            contentWidth,
-        ])
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+                header.widthAnchor.constraint(equalTo: stack.widthAnchor),
+                contentWidth,
+            ]
+        )
         showActions(message, controller: controller)
         if let input = message.input {
             let form = NSHostingView(rootView: InputForm(card: input))
             stack.addArrangedSubview(form)
             form.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
+    }
+
+    /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins.
+    private func columnConstraints(for view: NSView) -> [NSLayoutConstraint] {
+        let fill = view.widthAnchor.constraint(equalTo: widthAnchor, constant: -2 * TranscriptColumn.minMargin)
+        fill.priority = .defaultHigh
+        return [
+            view.centerXAnchor.constraint(equalTo: centerXAnchor),
+            view.widthAnchor.constraint(lessThanOrEqualToConstant: TranscriptColumn.maxWidth),
+            view.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: TranscriptColumn.minMargin),
+            fill,
+        ]
     }
 
     /// A session notice is a quiet caption between two hairlines; it has no role label and no Copy.
@@ -349,13 +410,13 @@ private final class TranscriptMessageRow: NSTableCellView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         self.stack = stack
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
-        ])
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+                lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
+            ]
+        )
     }
 
     /// Keep the text field and its field editor attached when only native metadata changes.
@@ -404,6 +465,10 @@ private final class TranscriptMessageRow: NSTableCellView {
         let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
         copy.bezelStyle = .inline
         copy.toolTip = "Copy message as Markdown"
+        copy.alphaValue = hovering ? 1 : 0
+        // Assistive technology uses the row's Copy action while the button is not shown.
+        copy.setAccessibilityElement(hovering)
+        copyButton = copy
         let header = NSStackView(
             views: Self.toolHeader(message.tool, role: role, controller: controller) + [NSView(), copy]
         )

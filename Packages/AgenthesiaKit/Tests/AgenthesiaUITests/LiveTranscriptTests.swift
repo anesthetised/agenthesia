@@ -663,16 +663,16 @@ import Testing
         #expect(source.message(at: 1).markdown == "See `a.swift:3`, `/w/new.swift` and `missing.swift`.")
     }
 
-    private func host(_ controller: TranscriptTableController) -> NSWindow {
+    private func host(_ controller: TranscriptTableController, width: CGFloat = 600) -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 600),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
         controller.scroll.frame = window.contentLayoutRect
-        controller.table.frame.size.width = 600
+        controller.table.frame.size.width = width
         window.contentView = controller.scroll
         window.contentView?.layoutSubtreeIfNeeded()
         return window
@@ -776,6 +776,56 @@ extension LiveTranscriptTests {
         #expect(views(NSBox.self, in: row).count == 2)
         let message = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
         #expect(labels(in: message).contains("You") && !views(NSButton.self, in: message).isEmpty)
+    }
+}
+
+extension LiveTranscriptTests {
+    @Test(arguments: [1200.0, 600.0])
+    func rowsLayOutInACenteredColumnAndCopyAppearsOnHover(width: Double) async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(SessionEvent.prompt(id: UUID(), content: [.init(text: "hello")]).storedEvent())
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        source.revision += 1
+        let controller = TranscriptTableController()
+        let window = host(controller, width: width)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        row.layoutSubtreeIfNeeded()
+        // The row is as wide as the table lets it be; the column follows its width, not the window's.
+        let stack = try #require(row.subviews.compactMap { $0 as? NSStackView }.first)
+        let column = TranscriptColumn.width(inRowOfWidth: row.frame.width)
+        #expect(
+            abs(stack.frame.width - column) < 1
+                && abs(stack.frame.minX - TranscriptColumn.minX(inRowOfWidth: row.frame.width)) < 1
+        )
+        #expect(column <= TranscriptColumn.maxWidth && stack.frame.minX >= TranscriptColumn.minMargin - 1)
+
+        let copy = try #require(views(NSButton.self, in: row).first { $0.title == "Copy" })
+        #expect(copy.alphaValue == 0 && !copy.isAccessibilityElement())
+        #expect(row.accessibilityCustomActions()?.map(\.name) == ["Copy"])
+        let enter = try #require(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: window.windowNumber,
+                context: nil,
+                eventNumber: 0,
+                trackingNumber: 0,
+                userData: nil
+            )
+        )
+        row.mouseEntered(with: enter)
+        #expect(copy.alphaValue == 1 && copy.isAccessibilityElement())
+        row.mouseExited(with: enter)
+        #expect(copy.alphaValue == 0)
+        // The custom action copies the row's Markdown.
+        let action = try #require(row.accessibilityCustomActions()?.first)
+        #expect(action.handler?() == true)
+        #expect(NSPasteboard.general.string(forType: .string) == "hello")
     }
 }
 

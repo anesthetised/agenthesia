@@ -146,6 +146,11 @@ While a turn runs, `SessionController.turnStartedAt` (in memory; set on entering
 `stopping`, cleared otherwise) drives a "Working for 1m 12s" line (`WorkingTimeLine`,
 `WorkingDuration.format`) between the transcript and the composer, ticking once a second.
 
+Transcript rows lay out in the `TranscriptColumn` that the composer card shares: centered, at most 720 pt wide,
+with at least 24 pt on each side (`TranscriptColumn.width(inRowOfWidth:)` also gives the text wrap width). A row's
+Copy button is shown only while the pointer is over the row (`NSTrackingArea`, `.activeInKeyWindow`,
+`.inVisibleRect`); the row also offers Copy as an accessibility custom action.
+
 Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
 hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of
 its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history

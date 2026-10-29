@@ -249,6 +249,12 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   `12 Oct`). Settled is collapsed by default with its count in the header (`@SceneStorage`; it stays open while one
   of its rows is selected); Refresh History is gone. Covered by unit and hosted-view tests only.
 
+- #144 (Refs): Settled is pinned to the bottom of the sidebar as a footer (`SettledFooter`) instead of a section of the
+  list ([ADR-0039](adr/0039-t3-style-window-layout.md), Amendment 2026-10-30): always-visible `Settled · N` header,
+  growing upward to at most 45 % of the sidebar when expanded, hidden without saved sessions. Hosted-view tests
+  measure the lists' geometry; the header's accessibility label is unit-tested only (the hosted accessibility tree
+  is empty), and the footer was not seen in the running app.
+
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 

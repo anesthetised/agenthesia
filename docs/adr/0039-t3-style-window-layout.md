@@ -101,3 +101,13 @@ plain list cell or bar.
 - Workspace gains line counts for changed files.
 - Previous screenshots and documentation of the sidebar and composer become outdated and are updated by
   the issues that change them.
+
+## Amendment (2026-10-30)
+
+The owner chose to pin *Settled* to the bottom of the window, as T3 Code does, instead of letting it flow
+after *Working* inside one list. *Needs You* and *Working* stay in the scrolling list on top. *Settled* is
+a footer of the sidebar: a header row (`Settled · N`, a disclosure chevron) that is always visible while
+there are saved sessions and hidden otherwise. Collapsed by default, it shows only the header; expanded, it
+grows upward with a list of its own, at most 45 % of the sidebar's height. It still opens while one of its
+rows is selected, and Previous and Next Session keep the order Needs You, Working, Settled. The search
+field of #148 will sit above the list.

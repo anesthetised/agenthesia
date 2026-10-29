@@ -59,6 +59,7 @@ public struct RootView: View {
                     .selectionDisabled(true)
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { SettledFooter(model: model) }
             .navigationTitle("Agenthesia")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
             .toolbar {

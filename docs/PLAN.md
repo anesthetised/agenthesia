@@ -280,6 +280,14 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   issue text: Previous/Next Session follow the filter rather than ignoring it. Covered by unit tests, a navigation
   test and a hosted-view test; the field itself and ⌥⌘F were not seen in the running app.
 
+Wave 2:
+
+- #152: user messages are right-aligned bubbles (`BubbleCell`, `quaternarySystemFill`, radius 14, padding 10 × 14, at
+  most 80 % of the column, `TranscriptColumn.bubbleWidth`); `not sent` and `sent together` are a caption under the
+  bubble. Agent rows lost their role label; thoughts keep `Thinking` and are dimmed. Covered by hosted-view tests
+  (bubble width at three table widths, row height, resize, caption refresh); not seen in the running app and
+  Rendering Lab S1:App and S2:App not rerun yet, both pending the owner's approval (#160 checks the design).
+
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 

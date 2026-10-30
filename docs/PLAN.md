@@ -266,6 +266,12 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   instead of an `HSplitView` (ADR-0039, amendment 2). Hosted-view tests run `RootView` at 740, 1000 and
   1400 pt through every inspector and file-pane combination and through resizes; hidden-pane behavior in the real
   window is for #160.
+- #157: `ContinueCard` replaces the composer card for saved, ended, failed, starting and merging sessions and those
+  with a merge or discard outcome: a symbol and the state (`Saved session`, `Session ended`, `Connection failed`,
+  `Merged · read-only`, `Discarded · read-only`, `Merging…`) and a prominent Continue button when
+  `model.outcome(of:) == nil` and `canContinue`. The composer's status text and `RootView.statusText` are gone.
+  Covered by unit tests of `ContinueCard.State` and hosted-view tests (the card in isolation and a saved session in
+  `RootView`); not seen in the running app (#160).
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

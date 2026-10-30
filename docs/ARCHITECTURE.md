@@ -163,7 +163,10 @@ config controls as borderless pill menus that show the value only (the option na
 accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
 Queue, Save, or Stop for an empty draft while a turn runs or stops). There is no status line for editable sessions:
 the transcript shows that a turn runs, a pending permission card lists its ⌥⌘ shortcuts, and the queue header says
-that the queue is paused. A read-only, ended or failed session keeps a status text and Continue in the card.
+that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
+shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
+merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
+button. The composer has no status text.
 Composer errors show as a red caption above the card.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six

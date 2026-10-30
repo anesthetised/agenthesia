@@ -95,9 +95,7 @@ import Testing
             Issue.record("The merge was not recorded.")
             return
         }
-        #expect(
-            RootView.statusText(try #require(model.restored)) == "Merged into main as \(commit.prefix(7)). Read-only."
-        )
+        #expect(model.outcome(of: try #require(model.restored).session.id) == .merged(commit: commit, into: "main"))
         #expect(!model.canMerge && !model.canDiscard && !model.canContinue && model.filesSession == nil)
         #expect(try String(contentsOf: fixture.repo.appending(path: "greeting"), encoding: .utf8) == "hello")
     }

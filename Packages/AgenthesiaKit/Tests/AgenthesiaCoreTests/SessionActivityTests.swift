@@ -147,4 +147,62 @@ import Testing
         let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
         #expect(SessionSidebar(projects: [], history: [record], owners: []).sections.map(\.kind) == [.settled])
     }
+
+    @Test func queryFiltersRowsByTitleAndProject() {
+        let cafe = ProjectRecord(name: "Café", rootPath: "/cafe")
+        let other = ProjectRecord(name: "Other", rootPath: "/other")
+        func saved(_ project: ProjectRecord, title: String?) -> SessionRecord {
+            SessionRecord(
+                projectID: project.id,
+                agentInstallID: UUID(),
+                title: title,
+                workingDirectory: project.rootPath
+            )
+        }
+        let (fix, plain, untitled) = (
+            saved(other, title: "Fix the Login"), saved(cafe, title: "Docs"), saved(other, title: nil)
+        )
+        func titles(_ query: String) -> [String] {
+            SessionSidebar(projects: [cafe, other], history: [fix, plain, untitled], owners: [], query: query)
+                .rows.map(\.title).sorted()
+        }
+        #expect(titles("") == ["Docs", "Fix the Login", "New Session"])
+        #expect(titles("  ") == titles(""))
+        // Case and diacritics do not matter, and the project name counts.
+        #expect(titles("LOGIN") == ["Fix the Login"])
+        #expect(titles("cafe") == ["Docs"])
+        #expect(titles("other") == ["Fix the Login", "New Session"])
+        #expect(titles(" login ") == ["Fix the Login"])
+        // An untitled session is found by the title it shows.
+        #expect(titles("new sess") == ["New Session"])
+        #expect(titles("nothing").isEmpty)
+    }
+
+    @Test func queryHidesEmptySectionsAndKeepsOrder() async throws {
+        let project = ProjectRecord(name: "Project", rootPath: "/p")
+        func saved(_ title: String, age: TimeInterval) -> SessionRecord {
+            SessionRecord(
+                projectID: project.id,
+                agentInstallID: UUID(),
+                title: title,
+                workingDirectory: project.rootPath,
+                createdAt: Date(timeIntervalSinceNow: -age)
+            )
+        }
+        let (older, newer) = (saved("Alpha one", age: 200), saved("Alpha two", age: 100))
+        let history = [older, saved("Beta", age: 150), newer]
+        let found = SessionSidebar(projects: [project], history: history, owners: [], query: "alpha")
+        #expect(found.sections.map(\.kind) == [.settled])
+        #expect(found.rows.map(\.id) == [AnyHashable(newer.id), AnyHashable(older.id)])
+        #expect(SessionSidebar(projects: [project], history: history, owners: [], query: "zzz").sections.isEmpty)
+
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let starting = manager.start(directory: directory, agent: agent)
+        // A starting session has no title or project yet; it shows as "New Session".
+        let live = SessionSidebar(projects: [project], history: [], owners: [starting], query: "new")
+        #expect(live.sections.map(\.kind) == [.working])
+        #expect(SessionSidebar(projects: [], history: [], owners: [starting], query: "beta").rows.isEmpty)
+        await manager.closeAll()
+    }
 }

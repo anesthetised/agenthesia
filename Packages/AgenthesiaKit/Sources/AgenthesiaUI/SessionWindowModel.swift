@@ -83,7 +83,13 @@ import SwiftUI
     var savedSessions: [SessionRecord] {
         history.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
     }
-    var sidebar: SessionSidebar { SessionSidebar(projects: projects, history: history, owners: sessions.owners) }
+    /// The sidebar's search text; navigation and the sections only see the rows it matches.
+    var sidebarQuery = ""
+    /// Counts the requests (⌥⌘F) to focus the sidebar's search field.
+    var searchFocusRequests = 0
+    var sidebar: SessionSidebar {
+        SessionSidebar(projects: projects, history: history, owners: sessions.owners, query: sidebarQuery)
+    }
 
     var sidebarSelection: AnyHashable? {
         get {

@@ -25,8 +25,9 @@ struct SettledFooter: View {
     var body: some View {
         if let section = model.sidebar.sections.first(where: { $0.kind == .settled }) {
             // Open while one of its rows is selected, so keyboard navigation and restored windows never
-            // select a hidden row.
-            let expanded = settledExpanded || section.rows.contains { $0.id == model.sidebarSelection }
+            // select a hidden row, and while a search shows its matches.
+            let expanded =
+                settledExpanded || model.sidebar.isFiltered || section.rows.contains { $0.id == model.sidebarSelection }
             VStack(spacing: 0) {
                 Divider()
                 Button {

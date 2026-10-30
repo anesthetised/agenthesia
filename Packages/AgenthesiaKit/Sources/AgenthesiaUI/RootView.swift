@@ -26,8 +26,6 @@ public struct RootView: View {
     @State private var showingLog = false
     /// The window's remembered inspector visibility; `SessionWindowModel.showingInspector` is the working copy.
     @SceneStorage("showingInspector") private var storedInspector = true
-    /// The detail column's width before any layout: everything fits.
-    @State private var detailWidth = CGFloat.infinity
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
@@ -69,51 +67,7 @@ public struct RootView: View {
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let session = model.displayed {
-                    let panes = DetailPanes(
-                        width: detailWidth,
-                        filePane: filesMatchSession && model.files.selectedPath != nil,
-                        inspector: model.showingInspector
-                    )
-                    HSplitView {
-                        VStack(spacing: 0) {
-                            LiveTranscript(session: session, pathIndex: pathIndex(for: session)) {
-                                openFile($0.path, line: $0.line, for: $1)
-                            }
-                            .id(session.session.id)
-                            if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
-                            if let signIn = model.signIn {
-                                Divider()
-                                SignInPanel(
-                                    agentName: model.owner?.agentName ?? "the agent",
-                                    signIn: signIn,
-                                    continuing: session.session.agentSessionID != nil,
-                                    onSignIn: model.signIn(with:),
-                                    onCancel: model.cancelSignIn
-                                )
-                            } else {
-                                composer(session)
-                            }
-                        }.frame(minWidth: DetailPanes.transcriptMinWidth, maxWidth: .infinity, maxHeight: .infinity)
-                        if panes.showsFilePane {
-                            SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
-                                .frame(
-                                    minWidth: DetailPanes.filePaneMinWidth,
-                                    idealWidth: 420,
-                                    maxWidth: .infinity,
-                                    maxHeight: .infinity
-                                )
-                        }
-                        // A pane of the split view: the native `.inspector` crashed AppKit beside it (ADR-0039).
-                        if panes.showsInspector {
-                            SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
-                                .frame(
-                                    minWidth: DetailPanes.inspectorMinWidth,
-                                    idealWidth: 260,
-                                    maxWidth: 360,
-                                    maxHeight: .infinity
-                                )
-                        }
-                    }
+                    GeometryReader { geometry in panes(session, width: geometry.size.width) }
                 } else {
                     ContentUnavailableView(
                         model.owner?.isStarting == true ? "Starting session…" : "Start a session",
@@ -144,11 +98,6 @@ public struct RootView: View {
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.width
-            } action: {
-                detailWidth = $0
-            }
             .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
             .navigationSubtitle(model.projects.first { $0.id == model.displayed?.session.projectID }?.name ?? "")
             .toolbar {
@@ -291,6 +240,61 @@ public struct RootView: View {
             roots: [root.path(percentEncoded: false), session.session.workingDirectory],
             revision: model.files.indexRevision
         )
+    }
+
+    /// The transcript, the file pane and the inspector side by side. Widths are computed from the column's width
+    /// (`DetailPanes`) instead of an `HSplitView`, whose split view kept stale divider positions when a pane
+    /// appeared or the window shrank (ADR-0039, amendment 2026-10-30).
+    private func panes(_ session: SessionController, width: CGFloat) -> some View {
+        let panes = DetailPanes(
+            width: width,
+            filePane: filesMatchSession && model.files.selectedPath != nil,
+            inspector: model.showingInspector
+        )
+        let widths = panes.widths(filePane: model.filePaneWidth, inspector: model.inspectorWidth)
+        return HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                LiveTranscript(session: session, pathIndex: pathIndex(for: session)) {
+                    openFile($0.path, line: $0.line, for: $1)
+                }
+                .id(session.session.id)
+                if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
+                if let signIn = model.signIn {
+                    Divider()
+                    SignInPanel(
+                        agentName: model.owner?.agentName ?? "the agent",
+                        signIn: signIn,
+                        continuing: session.session.agentSessionID != nil,
+                        onSignIn: model.signIn(with:),
+                        onCancel: model.cancelSignIn
+                    )
+                } else {
+                    composer(session)
+                }
+            }.frame(width: widths.transcript)
+            if panes.showsFilePane {
+                SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
+                    .frame(width: widths.filePane)
+                    .overlay(alignment: .leading) {
+                        PaneDivider(width: widths.filePane) {
+                            model.filePaneWidth = max($0, DetailPanes.filePaneMinWidth)
+                        }
+                    }
+            }
+            if panes.showsInspector {
+                SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
+                    .frame(width: widths.inspector)
+                    .overlay(alignment: .leading) {
+                        PaneDivider(width: widths.inspector) {
+                            model.inspectorWidth = min(
+                                max($0, DetailPanes.inspectorMinWidth),
+                                DetailPanes.inspectorMaxWidth
+                            )
+                        }
+                    }
+            }
+        }
+        .frame(width: width)
     }
 
     private func openFile(_ path: String, line: Int? = nil, for id: UUID?) {

@@ -94,6 +94,14 @@ in the window." The file pane already opened and closed reliably as a pane of th
 uses the same mechanism. Visibility, the toolbar button, ⌥⌘I, the per-window memory, the 220–360 pt width and the
 sections are unchanged.
 
+Amendment 2, same day: a re-check of the running app found no crashes but three layout faults of that
+`HSplitView`: its split view did not shrink the transcript when a pane appeared (the inspector overflowed the
+right edge), kept the old divider sizes when the window shrank (the file pane overflowed) and stopped 19–40 pt short
+of the window's edge at 740 pt. The detail column therefore lays its panes out itself: explicit widths from
+`DetailPanes` (a pure function of the measured column width and the widths the user chose), with a drag handle
+(`PaneDivider`) on the leading edge of the file pane and of the inspector. The transcript gives way first, then
+the file pane shrinks to its minimum, then the inspector; the widths always add up to the column.
+
 Rule for narrow windows: the transcript always keeps at least 240 pt. The file pane the user opened needs another
 240 pt and the inspector 220 pt on top of the panes shown, so the inspector gives way first, then the file pane.
 At the 740 pt window minimum the inspector is therefore hidden while a file is open. A hidden pane keeps its state

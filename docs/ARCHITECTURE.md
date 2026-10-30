@@ -396,15 +396,20 @@ the transcript's session is still displayed. `SessionFiles.selectedLine` carries
 `SourceView.showLine` selects it and scrolls by the laid-out fragment (TextKit 2 estimates heights), and
 follows the layout correction when highlighting finishes. Markdown opened with a line shows Source.
 
-The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md)) is the
-rightmost pane of the `HSplitView` that holds the transcript and the file pane, 220–360 pt wide (ideal 260),
-toggled by a toolbar button and ⌥⌘I. `SessionWindowModel.showingInspector` is the working state and a
-`@SceneStorage` value remembers it per window (default shown); the inspector exists only beside a displayed
-session, so the launch form has none. `DetailPanes` decides which panes fit from the detail column's width
-(`onGeometryChange`): the transcript (at least 240 pt) always stays, the file pane the user opened (at least
-240 pt) needs 480 pt, and the inspector needs 220 pt on top of what is shown, so it is the first to give way and
-at the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state and returns when the window
-widens. The native `.inspector` is not used: it crashed AppKit beside the `HSplitView` (ADR-0039, amendment). It reads the window's `SessionWindowModel` and has four sections: *Workspace* (working directory, Show in
+The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md)) is the rightmost
+pane of the detail column, after the transcript and the file pane, toggled by a toolbar button and ⌥⌘I.
+`SessionWindowModel.showingInspector` is the working state and a `@SceneStorage` value remembers it per window
+(default shown); the inspector exists only beside a displayed session, so the launch form has none. Neither the
+native `.inspector` nor `HSplitView` is used: the first crashed AppKit beside the split view, and the split view
+kept stale divider positions when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures
+the column with a `GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes`.
+Visibility: the transcript (at least 240 pt) always stays, the file pane the user opened (at least 240 pt) needs
+480 pt, and the inspector (220–360 pt) needs 220 pt on top of what is shown, so it is the first to give way and at
+the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state and returns when the window
+widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
+dragged them to (`PaneDivider` on each pane's leading edge, also adjustable with VoiceOver; stored in
+`SessionWindowModel`); when the column is too narrow the transcript gives way first, then the file pane shrinks
+to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's `SessionWindowModel` and has four sections: *Workspace* (working directory, Show in
 Finder, Open in Editor through `EditorHandoff` with an empty path), *Branch* (`agenthesia/<session id>` and the
 base branch, only for sessions in an Agenthesia worktree), *Changes* (`+added −removed · N files` from
 `SessionFiles.changeStats`, the changed-file list with per-file counts, Refresh Files, Review Changes…,

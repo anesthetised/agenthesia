@@ -46,9 +46,10 @@ import Testing
         window.contentView = host
         window.orderFront(nil)
         defer { model.close(); window.close() }
-        for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
-        // The seeded history has sidebar rows and an empty transcript.
-        let table = try #require(descendant(in: host))
+        // The footer list takes a second pass to measure its height cap.
+        for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        // The seeded history is the Settled footer's list of two rows; the top list holds the changed files.
+        let table = try #require(descendant(in: host) { $0.numberOfRows == 2 })
         try #require(table.selectedRow >= 0)
         let firstRow = table.selectedRow
         await model.showHistory(second)
@@ -60,7 +61,8 @@ import Testing
         #expect(model.displayed?.session.id == first.id)
         model.showingSetup = true
         for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
-        #expect(table.selectedRowIndexes.isEmpty)
+        // Nothing is selected any more, so the Settled footer closes and its list leaves the window.
+        #expect(table.window == nil)
     }
 
     @Test func continueAfterProcessExitUsesHistoryRefreshedAfterStartup() async throws {
@@ -130,9 +132,10 @@ import Testing
         await sessions.closeAll()
     }
 
-    private func descendant(in view: NSView) -> NSTableView? {
-        if let table = view as? NSTableView, table.numberOfRows > 0 { return table }
-        return view.subviews.lazy.compactMap { descendant(in: $0) }.first
+    private func descendant(in view: NSView, where matches: (NSTableView) -> Bool) -> NSTableView? {
+        if let table = view as? NSTableView, matches(table) { return table }
+        for subview in view.subviews { if let found = descendant(in: subview, where: matches) { return found } }
+        return nil
     }
 }
 

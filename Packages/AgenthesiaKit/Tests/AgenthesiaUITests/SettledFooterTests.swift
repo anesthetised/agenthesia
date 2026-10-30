@@ -45,8 +45,9 @@ import Testing
         try #require(tables.count == 2)
         let list = try #require(tables.last?.enclosingScrollView)
         let cap = fixture.host.bounds.height * SettledFooter.maxShare
-        // The list's frame also covers its own padding, which differs between macOS versions.
-        #expect(abs(list.frame.height - cap) < 12)
+        // The share is of the sidebar below the search field, which is shorter than the window by a version-dependent
+        // amount, so the list is a little under the cap and still well above a third of the window.
+        #expect(list.frame.height < cap + 12 && list.frame.height > fixture.host.bounds.height * 0.35)
     }
 
     @Test func fewSettledSessionsShrinkTheFooterToTheirRows() async throws {
@@ -60,6 +61,26 @@ import Testing
         // The estimate holds: the list is about as tall as its rows, so it hardly scrolls and has no empty space.
         #expect(list.frame.height < fixture.host.bounds.height * SettledFooter.maxShare)
         #expect(abs(list.frame.height - table.frame.height) < 12)
+    }
+
+    @Test func searchOpensTheFooterOnItsMatchesAndEmptyResultsHideIt() async throws {
+        let fixture = try await Fixture(sessions: 12)
+        defer { fixture.close() }
+        await fixture.settle()
+        #expect(fixture.sidebarTables().count == 1)
+        // "Session 1" matches 1, 10 and 11; nothing is selected, yet the footer lists them.
+        fixture.model.sidebarQuery = "session 1"
+        await fixture.settle()
+        let tables = fixture.sidebarTables()
+        try #require(tables.count == 2)
+        #expect(tables.last?.numberOfRows == 3)
+        fixture.model.sidebarQuery = "nothing"
+        await fixture.settle()
+        #expect(fixture.sidebarTables().count == 1)
+        #expect(fixture.bottomInset() < 20)
+        fixture.model.sidebarQuery = ""
+        await fixture.settle()
+        #expect(fixture.sidebarTables().count == 1)
     }
 
     @Test func footerClosesAgainWhenTheSettledSelectionIsCleared() async throws {

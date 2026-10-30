@@ -324,6 +324,50 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func navigationOnlyVisitsRowsTheSearchShows() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-search-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let store = try await sessions.library.store()
+        let agent = try mock()
+        try await store.createAgentInstall(agent)
+        let project = ProjectRecord(name: "Project", rootPath: directory.path)
+        try await store.createProject(project)
+        var records: [SessionRecord] = []
+        for (index, title) in ["Alpha", "Beta", "Alpha again"].enumerated() {
+            let record = SessionRecord(
+                projectID: project.id,
+                agentInstallID: agent.id,
+                agentSessionID: "saved",
+                title: title,
+                workingDirectory: project.rootPath,
+                createdAt: Date(timeIntervalSince1970: Double(index))
+            )
+            try await store.createSession(record)
+            records.append(record)
+        }
+        await model.refresh()
+        // Newest first: "Alpha again", "Beta", "Alpha".
+        model.sidebarQuery = "alpha"
+        #expect(model.navigationTarget()?.id == AnyHashable(records[2].id))
+        await model.navigate()
+        await model.navigate()
+        #expect(model.displayed?.session.id == records[0].id)
+        await model.navigate()
+        #expect(model.displayed?.session.id == records[2].id)
+        // The selected row may be hidden by a new query; navigation then starts from the edge of the visible rows.
+        model.sidebarQuery = "beta"
+        await model.navigate()
+        #expect(model.displayed?.session.id == records[1].id)
+        model.sidebarQuery = "nothing"
+        #expect(model.navigationTarget() == nil && model.navigationTarget(backward: true) == nil)
+        model.sidebarQuery = ""
+        #expect(model.navigationTarget() != nil)
+        model.close()
+        await sessions.closeAll()
+    }
+
     @Test func navigationVisitsNeedsYouBeforeWorkingWhateverTheStartOrder() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-sections-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

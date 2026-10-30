@@ -50,16 +50,13 @@ public struct RootView: View {
     public var body: some View {
         @Bindable var model = model
         NavigationSplitView {
-            List(selection: $model.sidebarSelection) {
-                SessionSidebarList(model: model)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) { SettledFooter(model: model) }
-            .navigationTitle("Agenthesia")
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
-            .toolbar {
-                Button("New Session", systemImage: "plus") { model.showingSetup = true }
-                    .disabled(!model.canStart)
-            }
+            SessionSidebarColumn(model: model)
+                .navigationTitle("Agenthesia")
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+                .toolbar {
+                    Button("New Session", systemImage: "plus") { model.showingSetup = true }
+                        .disabled(!model.canStart)
+                }
         } detail: {
             VStack(spacing: 0) {
                 if model.showingSetup && model.canStart {

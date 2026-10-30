@@ -291,6 +291,23 @@ Wave 2:
   interleaved rerun of S2:App (five runs per side) shows scrolling slightly smoother: p95 30.5 against 36.0 ms,
   p99 32.8 against 44.4 ms, about 3% fewer missed frames. The hitch count rises only because more frames are
   delivered; at this scroll speed nearly every frame misses the 120 Hz budget on both sides.
+- #158: the launch form is replaced by the draft (`SessionDraftView`, ADR-0040): Project, Agent and Checkout above
+  the composer text; Send starts the session and `LiveSession.initialPrompt` is submitted at the first idle state,
+  after sign-in when needed; a failed or cancelled start returns the draft with its error and removes the owner. The
+  last agent is kept in `UserDefaults` (`lastAgent`); the default project is the one of the newest session, derived
+  from history. A detached `HEAD` shows its short commit ("New worktree from 1a2b3c4"). Tested: Core tests with
+  MockAgent for submission with an attachment, sign-in then submission, a failed start and a start cancelled while
+  waiting for the login shell; catalog choices, names and the remembered agent across a reopened catalog;
+  `ProjectRecord.recent`; `worktreeBase` on a branch, an unborn branch and a detached `HEAD`; window-model tests for
+  the defaults, an empty draft, Send, a failed start and Cancel Startup at sign-in; one hosted `RootView` test that
+  a failed start shows the draft again. Checked in the running app by script (separate bundle identifier, isolated
+  home, MockAgent, window-only screenshots): the draft in light and dark, the Project and Agent menus, Choose
+  Folder…, an empty Send, Send with MockAgent, a missing executable, `--auth` then cancel at sign-in, and the
+  defaults after relaunch. That check found three problems, now fixed: failed starts replaced the remembered agent
+  (it is now remembered once the initial prompt is submitted), a stale error stayed after picking another agent, and
+  the Custom Command sheet cut off long paths. It also found #176: a start cancelled at sign-in leaves its worktree
+  and branch, as the launch form did. Not checked: VoiceOver, Manage Agents…, a detached `HEAD` and a non-Git project
+  in the app, attachments in the draft, the dark Send flow, and the Custom Command sheet after its fix (#160).
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

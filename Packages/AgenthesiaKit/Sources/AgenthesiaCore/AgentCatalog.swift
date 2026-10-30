@@ -2,9 +2,10 @@ public import ACP
 public import AgentRuntime
 public import Foundation
 import Observation
+public import Persistence
 
-/// Registry agents, installed versions and local agents, shown in Settings → Agents and offered by the launch
-/// form (ADR-0036, ADR-0037). Installation, updates and removal go through `AgentInstaller`; nothing runs
+/// Registry agents, installed versions and local agents, shown in Settings → Agents and offered by the draft's
+/// Agent chip (ADR-0036, ADR-0037, ADR-0040). Installation, updates and removal go through `AgentInstaller`; nothing runs
 /// automatically.
 @MainActor @Observable
 public final class AgentCatalog {
@@ -35,8 +36,17 @@ public final class AgentCatalog {
         case failed(String)
     }
 
+    /// An agent the draft offers (ADR-0040): an installed agent's newest version, a local agent or a custom command.
+    public enum Choice: Codable, Hashable, Sendable {
+        case installed(agentID: String)
+        case local(UUID)
+        case custom(LocalAgent.Command)
+    }
+
     /// Where the list of local agents is kept.
     public static let localAgentsKey = "localAgents"
+    /// Where the agent of the last session started from the draft is kept.
+    public static let lastChoiceKey = "lastAgent"
 
     public private(set) var registry: AgentRegistry.Snapshot?
     /// Why the registry could not be loaded, or a warning about the catalog shown.
@@ -59,6 +69,8 @@ public final class AgentCatalog {
     public private(set) var checks: [LocalAgent.Command: Check] = [:]
     /// The one sign-in presented in Settings, retained until its processes have stopped (ADR-0038).
     public private(set) var signIn: AgentSignIn?
+    /// The agent the last session was started with from the draft; a default, not a setting (ADR-0040).
+    public private(set) var lastChoice: Choice?
     private var isQuitting = false
 
     @ObservationIgnored private let client: AgentRegistry.Client
@@ -106,13 +118,63 @@ public final class AgentCatalog {
                 try? JSONDecoder().decode([LocalAgent].self, from: $0)
             }
             ?? []
+        lastChoice = defaults.data(forKey: Self.lastChoiceKey).flatMap {
+            try? JSONDecoder().decode(Choice.self, from: $0)
+        }
     }
 
-    /// The newest installed version of each agent, by name: what the launch form offers.
+    /// The newest installed version of each agent, by name: what the draft offers.
     public var latest: [AgentInstallation] {
         var seen = Set<String>()
         return installations.filter { seen.insert($0.agentID).inserted }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// What the Agent chip lists: installed agents (newest version each), then local agents.
+    public var choices: [Choice] {
+        latest.map { .installed(agentID: $0.agentID) } + localAgents.map { .local($0.id) }
+    }
+
+    /// The last agent while it is still offered, else the first in the list.
+    public var defaultChoice: Choice? {
+        if let lastChoice, record(for: lastChoice) != nil { return lastChoice }
+        return choices.first
+    }
+
+    /// The history row a session with this agent records; nil once the agent is no longer installed or listed.
+    public func record(for choice: Choice) -> AgentInstallRecord? {
+        switch choice {
+        case .installed(let agentID):
+            latest.first { $0.agentID == agentID }.map(AgentInstallRecord.init(installation:))
+        case .local(let id):
+            localAgents.first { $0.id == id }.map {
+                AgentInstallRecord(name: $0.name, executable: $0.command.executable, arguments: $0.command.arguments)
+            }
+        case .custom(let command): Self.record(custom: command)
+        }
+    }
+
+    /// A custom command is named after its executable.
+    public static func record(custom command: LocalAgent.Command) -> AgentInstallRecord {
+        AgentInstallRecord(
+            name: URL(filePath: command.executable).lastPathComponent,
+            executable: command.executable,
+            arguments: command.arguments
+        )
+    }
+
+    /// The name the Agent chip shows: an installed agent with its version.
+    public func name(of choice: Choice) -> String? {
+        if case .installed(let agentID) = choice, let installed = latest.first(where: { $0.agentID == agentID }) {
+            return "\(installed.name) \(installed.version)"
+        }
+        return record(for: choice)?.name
+    }
+
+    /// Remembers the agent a session was started with across launches.
+    public func remember(_ choice: Choice) {
+        lastChoice = choice
+        defaults.set(try? JSONEncoder().encode(choice), forKey: Self.lastChoiceKey)
     }
 
     /// Pins the selected version; an update cannot change the command during sign-in.
@@ -211,7 +273,7 @@ public final class AgentCatalog {
         if node == .unknown, needsNode { await checkRuntime(refresh: false) }
     }
 
-    /// Reads the installed versions again, e.g. when the launch form appears.
+    /// Reads the installed versions again, e.g. when the draft appears.
     public func reloadInstallations() async {
         do {
             installations = try await installer.installations().sorted { $0.installedAt > $1.installedAt }

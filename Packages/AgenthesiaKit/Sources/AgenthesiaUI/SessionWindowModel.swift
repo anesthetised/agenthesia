@@ -7,7 +7,15 @@ import SwiftUI
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
+    /// Whether the window shows the draft (ADR-0040) instead of a session.
     var showingSetup = true
+    /// The draft's first message; it moves to the session on Send and comes back if startup fails or is cancelled.
+    var draft = PromptDraft()
+    /// The project and agent picked in the draft; nil uses the defaults.
+    var draftDirectory: URL?
+    var draftAgent: AgentCatalog.Choice?
+    /// Why the last session started from the draft did not start.
+    var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
     var showingInspector = true
     /// The widths the user last chose for the file pane and the inspector; `DetailPanes` fits them to the window.
@@ -55,7 +63,13 @@ import SwiftUI
         review = SessionReview(session: session, root: root)
     }
 
-    init(sessions: SessionManager) { self.sessions = sessions }
+    /// Installed and local agents for the draft; without it, only a custom command (ADR-0036).
+    let catalog: AgentCatalog?
+
+    init(sessions: SessionManager, catalog: AgentCatalog? = nil) {
+        self.sessions = sessions
+        self.catalog = catalog
+    }
     var library: SessionLibrary { sessions.library }
     var displayed: SessionController? { restored ?? owner?.controller }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
@@ -383,16 +397,62 @@ import SwiftUI
     func start(directory: URL, executable: String, arguments: [String]) {
         start(
             directory: directory,
-            agent: AgentInstallRecord(
-                name: URL(filePath: executable).lastPathComponent,
-                executable: executable,
-                arguments: arguments
-            )
+            agent: AgentCatalog.record(custom: .init(executable: executable, arguments: arguments))
         )
     }
-    func start(directory: URL, agent: AgentInstallRecord) {
+    func start(directory: URL, agent: AgentInstallRecord, initialPrompt: PromptDraft? = nil) {
         guard canStart else { return }
-        show(sessions.start(directory: directory, agent: agent))
+        show(sessions.start(directory: directory, agent: agent, initialPrompt: initialPrompt))
+    }
+
+    /// Known projects, most recently used first; the first is the draft's default (ADR-0040).
+    var recentProjects: [ProjectRecord] { ProjectRecord.recent(projects, history: history) }
+    /// The draft's project: the one picked, else the project of the newest session.
+    var selectedDirectory: URL? {
+        draftDirectory ?? recentProjects.first.map { URL(filePath: $0.rootPath, directoryHint: .isDirectory) }
+    }
+    /// The draft's agent: the one picked while it is still offered, else the catalog's default.
+    var selectedAgent: AgentCatalog.Choice? {
+        if let draftAgent, record(for: draftAgent) != nil { return draftAgent }
+        return catalog?.defaultChoice
+    }
+    func record(for choice: AgentCatalog.Choice) -> AgentInstallRecord? {
+        if case .custom(let command) = choice { return AgentCatalog.record(custom: command) }
+        return catalog?.record(for: choice)
+    }
+    var canStartDraft: Bool {
+        canStart && showingSetup && !draft.isEmpty && selectedDirectory != nil
+            && selectedAgent.flatMap(record(for:)) != nil
+    }
+
+    /// Send in the draft: starts the session with the draft as its initial prompt. An empty draft starts nothing.
+    func startDraft() {
+        guard canStartDraft, let directory = selectedDirectory, let choice = selectedAgent,
+            let agent = record(for: choice)
+        else { return }
+        catalog?.remember(choice)
+        draftError = nil
+        start(directory: directory, agent: agent, initialPrompt: draft)
+        draft = PromptDraft()
+    }
+
+    /// The displayed owner was started from the draft and failed or was cancelled before its prompt was submitted.
+    var abandonedStart: LiveSession? {
+        guard !closed, !showingSetup, restored == nil, let owner, owner.initialPrompt != nil, !owner.isLive else {
+            return nil
+        }
+        return owner
+    }
+
+    /// Returns the draft unchanged, with the error, and ends the owner: the session was not started (ADR-0040).
+    func returnToDraft() async {
+        guard let owner = abandonedStart, let prompt = owner.initialPrompt else { return }
+        draft = prompt
+        draftError = owner.errorMessage
+        self.owner = nil
+        showLive()
+        showingSetup = true
+        await sessions.end(owner)
     }
     /// Continues the displayed session, or shows the owner that already has it live (ADR-0017, ADR-0026).
     func continueRestored() {

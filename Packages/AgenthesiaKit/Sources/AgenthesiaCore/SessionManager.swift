@@ -28,12 +28,13 @@ public final class SessionManager {
         self.worktreesRoot = worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
     }
 
-    /// Adds an owner that starts in the background.
+    /// Adds an owner that starts in the background and then submits `initialPrompt` (ADR-0040).
     public func start(
         directory: URL,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
-        additionalDirectories: [URL] = []
+        additionalDirectories: [URL] = [],
+        initialPrompt: PromptDraft? = nil
     ) -> LiveSession {
         add(
             .new(
@@ -41,7 +42,8 @@ public final class SessionManager {
                 agent: agent,
                 worktreesRoot: worktreesRoot ?? self.worktreesRoot,
                 additionalDirectories: additionalDirectories
-            )
+            ),
+            initialPrompt: initialPrompt
         )
     }
 
@@ -297,11 +299,15 @@ public final class SessionManager {
         return (worktree, outcome)
     }
 
-    private func add(_ launch: LiveSession.Launch, after previous: [LiveSession] = []) -> LiveSession {
+    private func add(
+        _ launch: LiveSession.Launch,
+        after previous: [LiveSession] = [],
+        initialPrompt: PromptDraft? = nil
+    ) -> LiveSession {
         let owner = LiveSession(library: library)
         if let environment { owner.environment = environment }
         owners.append(owner)
-        owner.begin(launch, after: previous)
+        owner.begin(launch, after: previous, initialPrompt: initialPrompt)
         return owner
     }
 }

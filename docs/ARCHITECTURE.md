@@ -96,6 +96,24 @@ the agent. The branch checked out in the selected checkout at that moment is ret
 unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup until the session is merged or discarded.
 
+New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
+launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: "What should the agent
+do?" over the composer card, whose chips pick the project, the agent and name the checkout. The draft's state lives
+in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The Project chip lists
+`ProjectRecord.recent` (by each project's newest session) and Choose Folder…; with nothing picked, the project of
+the newest session is used. The Agent chip lists `AgentCatalog.choices` (the newest installed version of each
+agent, then local agents), Custom Command… (`CustomCommandSheet`, parsed by `RootView.launchCommand`) and Manage
+Agents…; with nothing picked it uses `AgentCatalog.defaultChoice`, the agent remembered by `remember` under the
+`lastAgent` defaults key while it is still offered, else the first choice. The Checkout label is `DraftCheckout`:
+`SessionWorkspace.worktreeBase` names the checked-out branch, or the short commit of a detached `HEAD`; outside
+Git it is "Project folder". Send with a nonempty `PromptDraft` calls `SessionManager.start(…, initialPrompt:)`,
+remembers the agent and clears the draft. `LiveSession.initialPrompt` holds it in memory (not in the queue,
+which belongs to a session record) until the session is idle for the first time: `connected`, after `session/new`
+or after sign-in, submits it with intent `whenReady` like a typed prompt, and a failed submission fails startup.
+If startup fails or is cancelled (Cancel Startup, End Session at sign-in), the owner is no longer live and still
+holds its prompt; `SessionWindowModel.abandonedStart` reports it, and `RootView` calls `returnToDraft`, which puts
+the prompt back into the draft with the owner's error and ends the owner, so the sidebar does not list it.
+
 Discard (ADR-0032) goes through `SessionManager.discard`. It refuses while the session is starting or
 being continued, coalesces concurrent calls and makes Continue unavailable while it runs. It ends the
 session's owners, then `SessionWorkspace.remove` runs `git worktree remove --force` (or `git worktree prune`
@@ -267,10 +285,11 @@ means `SessionController.completedTurns` (turns that ended on their own, not by 
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
-startup, process or controller failed stays listed with its error until it is ended or continued.
+startup, process or controller failed stays listed with its error until it is ended or continued, except a
+new session whose startup failed before its first prompt was submitted, which returns to the draft (ADR-0040).
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
-⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the launch form they select the last/first row. Next Session Needing Input
+⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
 uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
@@ -319,7 +338,7 @@ recording agent updates until the prompt response arrives, then permits file req
 Roots are the actual session working directory (the worktree directory for Git projects), plus explicit
 `additionalDirectories`. The launch API accepts additional directories and passes the same list to
 `session/new`; an agent that does not advertise support fails startup rather than silently receiving
-different roots. The current launch form supplies only the working directory. Additional roots are
+different roots. The draft supplies only the working directory. Additional roots are
 launch parameters, not restored permissions; reopening history enables no provider. A continued session
 does not store or restore additional roots, so its only root is its working directory.
 
@@ -410,7 +429,7 @@ follows the layout correction when highlighting finishes. Markdown opened with a
 The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md)) is the rightmost
 pane of the detail column, after the transcript and the file pane, toggled by a toolbar button and ⌥⌘I.
 `SessionWindowModel.showingInspector` is the working state and a `@SceneStorage` value remembers it per window
-(default shown); the inspector exists only beside a displayed session, so the launch form has none. Neither the
+(default shown); the inspector exists only beside a displayed session, so the draft has none. Neither the
 native `.inspector` nor `HSplitView` is used: the first crashed AppKit beside the split view, and the split view
 kept stale divider positions when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures
 the column with a `GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes`.
@@ -726,7 +745,7 @@ the disabled-script policy. Some script-dependent packages fail only when launch
 readiness probe must report that failure without enabling scripts. Cancellation of npm/probes terminates
 the captured process group before cleanup.
 
-`AgentCatalog` (AgenthesiaCore) backs Settings → Agents and the launch form: the registry snapshot,
+`AgentCatalog` (AgenthesiaCore) backs Settings → Agents and the draft's Agent chip: the registry snapshot,
 installed versions newest first, the Node.js check with Check Again, and install, update, cancel and
 removal through the installer. `LiveSession` acquires an installed version's lease before creating a
 worktree, runs chat and terminal sign-in with the leased command, and releases the lease once the agent's

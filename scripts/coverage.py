@@ -88,16 +88,17 @@ def test(package: str) -> int:
         return build.returncode
     command = ["swift", "test", "--skip-build", "--package-path", package, *flags]
     result = 0
-    for name, selector, pattern in [
-        ("core", "--skip", f"{RUNTIME_TESTS}|{HOSTED_TESTS}"),
-        ("runtime", "--filter", RUNTIME_TESTS),
-        ("hosted", "--filter", HOSTED_TESTS),
+    # Hosted views run about twice as long on CI as on a developer machine; their timeout still catches a deadlock.
+    for name, selector, pattern, timeout in [
+        ("core", "--skip", f"{RUNTIME_TESTS}|{HOSTED_TESTS}", 120),
+        ("runtime", "--filter", RUNTIME_TESTS, 120),
+        ("hosted", "--filter", HOSTED_TESTS, 240),
     ]:
-        print(f"Running {name} tests (120-second process timeout)...", flush=True)
+        print(f"Running {name} tests ({timeout}-second process timeout)...", flush=True)
         # Group prefixes prevent profile replacement even if a PID is reused between invocations.
         group_env = dict(env, LLVM_PROFILE_FILE=os.path.join(directory, f"{name}-%p.profraw"))
         started = time.monotonic()
-        status = run_test_process([*command, selector, pattern], group_env)
+        status = run_test_process([*command, selector, pattern], group_env, timeout)
         print(f"{name} tests finished in {time.monotonic() - started:.1f}s (status {status}).", flush=True)
         result = result or status
     return result

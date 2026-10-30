@@ -27,7 +27,6 @@ struct SettledFooter: View {
             // Open while one of its rows is selected, so keyboard navigation and restored windows never
             // select a hidden row.
             let expanded = settledExpanded || section.rows.contains { $0.id == model.sidebarSelection }
-            @Bindable var model = model
             VStack(spacing: 0) {
                 Divider()
                 Button {
@@ -46,8 +45,10 @@ struct SettledFooter: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Self.accessibilityLabel(count: section.rows.count, expanded: expanded))
                 if expanded {
-                    List(selection: $model.sidebarSelection) { SessionSidebarRows(model: model, section: section) }
-                        .frame(height: Self.listHeight(rows: section.rows.count, cap: cap))
+                    List(selection: Bindable(model).sidebarSelection) {
+                        SessionSidebarRows(model: model, section: section)
+                    }
+                    .frame(height: Self.listHeight(rows: section.rows.count, cap: cap))
                 }
             }
             .background(.bar)

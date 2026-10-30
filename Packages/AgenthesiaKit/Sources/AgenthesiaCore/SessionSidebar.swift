@@ -22,6 +22,18 @@ public import Persistence
         /// The session's identity once it has one; a starting owner is identified by itself.
         public let id: AnyHashable
 
+        /// What the sidebar shows as the session's title.
+        @MainActor public var title: String {
+            switch source {
+            case .live(let owner): (owner.controller?.session ?? owner.resuming)?.title ?? "New Session"
+            case .saved(let record): record.title ?? "New Session"
+            }
+        }
+
+        @MainActor func matches(_ query: String) -> Bool {
+            title.localizedStandardContains(query) || project?.name.localizedStandardContains(query) == true
+        }
+
         @MainActor init(source: Source, project: ProjectRecord?) {
             self.source = source
             self.project = project
@@ -42,13 +54,25 @@ public import Persistence
     /// Needs You, Working and Settled in that order; empty sections are omitted.
     public let sections: [Section]
 
+    /// Whether a query was applied, so empty `sections` mean "no matches" rather than "no sessions".
+    public let isFiltered: Bool
+
     /// All rows in the order the sidebar shows them.
     public var rows: [Row] { sections.flatMap(\.rows) }
 
     /// - Needs You: live sessions that wait for a permission or input, failed, or finished unseen, in start order.
     /// - Working: the other live sessions, including starting ones, in start order.
     /// - Settled: saved sessions that are not live, newest first.
-    public init(projects: [ProjectRecord], history: [SessionRecord], owners: [LiveSession]) {
+    /// A non-blank `query` keeps the rows whose title or project name contains it, ignoring case and diacritics.
+    public init(
+        projects: [ProjectRecord],
+        history: [SessionRecord],
+        owners: [LiveSession],
+        query: String = ""
+    ) {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = !query.isEmpty
+        isFiltered = filtered
         let projects = Dictionary(projects.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let live = owners.map { owner in
             (
@@ -69,6 +93,7 @@ public import Persistence
                     .map { Row(source: .saved($0), project: projects[$0.projectID]) }
             ),
         ]
-        sections = kinds.filter { !$0.1.isEmpty }.map { Section(kind: $0.0, rows: $0.1) }
+        sections = kinds.map { ($0.0, $0.1.filter { !filtered || $0.matches(query) }) }
+            .filter { !$0.1.isEmpty }.map { Section(kind: $0.0, rows: $0.1) }
     }
 }

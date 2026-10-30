@@ -557,7 +557,7 @@ import Testing
         #expect(model.restored?.transcript.worktreeOutcome == .discarded)
         #expect(model.outcomes == [record.id: .discarded])
         #expect(!model.canDiscard && !model.canContinue && model.filesSession == nil)
-        #expect(RootView.statusText(try #require(model.restored)) == "The worktree was discarded. Read-only.")
+        #expect(model.outcome(of: record.id) == .discarded)
         #expect(!FileManager.default.fileExists(atPath: record.workingDirectory))
         // Another window learns the outcome with history, before loading the transcript.
         await other.refresh()

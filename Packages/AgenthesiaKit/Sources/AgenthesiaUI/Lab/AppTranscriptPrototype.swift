@@ -57,7 +57,14 @@
         func didStream(_ update: StreamingMarkdown.Update) {}
         func message(at row: Int) -> TranscriptMessage {
             guard let tool = tools[row] else {
-                return rendering.render(id: Int64(row), role: items[row].0, markdown: items[row].1)
+                var message = rendering.render(id: Int64(row), role: items[row].0, markdown: items[row].1)
+                message.kind =
+                    switch items[row].0 {
+                    case "You": .user
+                    case "Agent": .agent
+                    default: .card
+                    }
+                return message
             }
             let card = LiveTranscriptSource.toolCard(tool, expanded: false)
             var message = rendering.render(id: Int64(row), role: "Tool", markdown: card.markdown)

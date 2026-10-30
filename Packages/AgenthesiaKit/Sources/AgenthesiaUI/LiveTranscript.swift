@@ -17,6 +17,12 @@ struct TranscriptMessage {
     var input: InputCard?
     /// A session notice: a centered caption between hairlines, without role label or Copy.
     var isNotice = false
+    var kind = Kind.card
+    /// Right-aligned under a user bubble: `not sent` or `sent together`.
+    var caption: String?
+
+    /// How a row presents its role: users get a bubble, agent text no label, thoughts a `Thinking` caption.
+    enum Kind: Equatable { case card, user, agent, thought }
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
@@ -175,6 +181,15 @@ final class LiveTranscriptSource: TranscriptSource {
         let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(at: row)
         var message = render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
         message.isNotice = item.message == nil
+        if let source = item.message {
+            switch source.role {
+            case .user:
+                message.kind = .user
+                message.caption = source.notSent ? "not sent" : source.sentTogether ? "sent together" : nil
+            case .assistant: message.kind = .agent
+            case .thought: message.kind = .thought
+            }
+        }
         return message
     }
 
@@ -260,7 +275,7 @@ final class LiveTranscriptSource: TranscriptSource {
         if let message = item.message {
             let role: String =
                 switch message.role {
-                case .user: message.notSent ? "You · not sent" : message.sentTogether ? "You · sent together" : "You";
+                case .user: "You";
                 case .assistant: "Agent";
                 case .thought: "Thinking"
                 }

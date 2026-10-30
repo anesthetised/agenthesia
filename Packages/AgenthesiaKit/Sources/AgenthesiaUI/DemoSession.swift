@@ -106,7 +106,9 @@ final class DemoSession: TranscriptSource {
                     .font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .foregroundColor: NSColor.labelColor,
                 ]
             ) : renderer.render(markdown)
-        messages.append(Message(role: role, markdown: markdown, text: text))
+        messages.append(
+            Message(role: role, markdown: markdown, text: text, kind: role == "You" ? .user : .agent)
+        )
         lastUpdate = nil
         revision += 1
     }

@@ -267,6 +267,17 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   1400 pt through every inspector and file-pane combination and through resizes; hidden-pane behavior in the real
   window is for #160.
 
+Wave 2:
+
+- #152: user messages are right-aligned bubbles (`BubbleCell`, `quaternarySystemFill`, radius 14, padding 10 × 14, at
+  most 80 % of the column, `TranscriptColumn.bubbleWidth`); `not sent` and `sent together` are a caption under the
+  bubble. Agent rows lost their role label; thoughts keep `Thinking` and are dimmed. Covered by hosted-view tests
+  (bubble width at three table widths, row height, resize, caption refresh); not seen in the running app (#160
+  checks the design). Rendering Lab S1:App and S2:App were run with the owner's approval
+  ([results](benchmarks/2026-10-30/user-bubbles/README.md)): streaming is unchanged, but on a loaded machine
+  scrolling shows more hitches (735–909 against 589–707) with lower p95/p99 frame times in two of three runs, so a
+  quiet repeat of S2:App is still open.
+
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 

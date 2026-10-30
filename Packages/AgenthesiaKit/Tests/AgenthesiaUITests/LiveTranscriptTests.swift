@@ -775,7 +775,7 @@ extension LiveTranscriptTests {
         #expect(views(NSButton.self, in: row).isEmpty)
         #expect(views(NSBox.self, in: row).count == 2)
         let message = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
-        #expect(labels(in: message).contains("You") && !views(NSButton.self, in: message).isEmpty)
+        #expect(!labels(in: message).contains("You") && !views(NSButton.self, in: message).isEmpty)
     }
 }
 
@@ -826,6 +826,143 @@ extension LiveTranscriptTests {
         let action = try #require(row.accessibilityCustomActions()?.first)
         #expect(action.handler?() == true)
         #expect(NSPasteboard.general.string(forType: .string) == "hello")
+    }
+}
+
+extension LiveTranscriptTests {
+    /// Records a user prompt as the session does, optionally marked as sent together with others or not sent.
+    @discardableResult
+    private func prompt(
+        _ text: String,
+        in recorded: RecordedTranscript,
+        together: Bool = false,
+        notSent: Bool = false
+    ) async throws -> QueuedPrompt {
+        let queued = QueuedPrompt(content: [.init(text: text)])
+        let turn = UUID()
+        try await recorded.append(
+            SessionEvent.promptMessage(prompt: queued, turnID: turn, startsTurn: true, sentTogether: together)
+                .storedEvent()
+        )
+        if notSent {
+            try await recorded.append(SessionEvent.promptsNotSent(turnID: turn, prompts: [queued]).storedEvent())
+        }
+        return queued
+    }
+
+    private func source(of recorded: RecordedTranscript) -> LiveTranscriptSource {
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        source.revision += 1
+        return source
+    }
+
+    @Test func rowsKnowTheirKindAndTheUserCaption() async throws {
+        let recorded = try await RecordedTranscript()
+        try await prompt("a", in: recorded)
+        try await prompt("b", in: recorded, notSent: true)
+        try await prompt("c", in: recorded, together: true)
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "d"))))
+        try await recorded.apply(.agentThoughtChunk(.init(content: .init(text: "e"))))
+        try await recorded.apply(.toolCall(.init(toolCallId: "t", title: "Read", status: .completed)))
+        try await recorded.append(SessionEvent.interrupted(id: UUID()).storedEvent())
+        let source = source(of: recorded)
+        let kinds = (0..<source.messageCount).map { source.message(at: $0).kind }
+        #expect(kinds == [.user, .user, .user, .agent, .thought, .card, .card])
+        #expect((0..<4).map { source.message(at: $0).caption } == [nil, "not sent", "sent together", nil])
+        // The role stays in the model, so that Copy and accessibility keep naming it.
+        #expect(source.message(at: 0).role == "You" && source.message(at: 1).role == "You")
+        #expect(source.message(at: 3).role == "Agent" && source.message(at: 4).role == "Thinking")
+    }
+
+    @Test func agentRowsHaveNoRoleLabelAndThoughtsKeepAQuietOne() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Answer"))))
+        try await recorded.apply(.agentThoughtChunk(.init(content: .init(text: "Idea"))))
+        let source = source(of: recorded)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let agent = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let thought = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(labels(in: agent) == ["Answer"] && views(BubbleCell.self, in: agent).isEmpty)
+        #expect(labels(in: thought) == ["Thinking", "Idea"])
+        // Copy is still there for both, hidden until hover.
+        #expect(!views(NSButton.self, in: agent).isEmpty && !views(NSButton.self, in: thought).isEmpty)
+        #expect(source.message(at: 0).markdown == "Answer" && source.message(at: 1).markdown == "Idea")
+    }
+
+    @Test(arguments: [1200.0, 600.0, 300.0])
+    func userRowsAreBubblesAtTheTrailingEdgeOfTheColumn(width: Double) async throws {
+        let recorded = try await RecordedTranscript()
+        let long = Array(repeating: "A long prompt that has to wrap inside the bubble.", count: 12).joined(
+            separator: " "
+        )
+        try await prompt("Hi", in: recorded)
+        try await prompt(long, in: recorded, notSent: true)
+        let controller = TranscriptTableController()
+        let window = host(controller, width: width)
+        defer { window.close() }
+        let source = source(of: recorded)
+        controller.update(source)
+        let short = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let wrapped = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        for row in [short, wrapped] { row.layoutSubtreeIfNeeded() }
+        let column = TranscriptColumn.width(inRowOfWidth: short.frame.width)
+        let columnMaxX = TranscriptColumn.minX(inRowOfWidth: short.frame.width) + column
+
+        let small = try #require(bubble(in: short))
+        let big = try #require(bubble(in: wrapped))
+        #expect(labels(in: short) == ["Hi"])
+        #expect(small.frame.width < 0.5 * column && small.frame.width >= 14 * 2)
+        #expect(big.frame.width <= TranscriptColumn.bubbleMaxWidth(inColumnOfWidth: column) + 1)
+        #expect(big.frame.width > 0.6 * column)
+        for (row, bubble) in [(short, small), (wrapped, big)] {
+            let frame = bubble.convert(bubble.bounds, to: row)
+            #expect(abs(frame.maxX - columnMaxX) < 1)
+        }
+        // The text wraps inside, so the long row is taller by its lines and its caption sits under the bubble.
+        #expect(wrapped.fittingSize.height > short.fittingSize.height + 40)
+        #expect(labels(in: wrapped).last == "not sent")
+        let caption = try #require(views(NSTextField.self, in: wrapped).first { $0.stringValue == "not sent" })
+        #expect(caption.alignment == .right)
+        let captionFrame = caption.convert(caption.bounds, to: wrapped)
+        let bubbleFrame = big.convert(big.bounds, to: wrapped)
+        #expect(captionFrame.minY >= bubbleFrame.maxY - 1 || captionFrame.maxY <= bubbleFrame.minY + 1)
+    }
+
+    @Test func bubblesFollowTheTableWidthAndTheirCaptionFollowsTheMessage() async throws {
+        let recorded = try await RecordedTranscript()
+        let long = Array(repeating: "wrapping words", count: 80).joined(separator: " ")
+        let queued = try await prompt(long, in: recorded)
+        let source = source(of: recorded)
+        let controller = TranscriptTableController()
+        let window = host(controller, width: 1000)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        row.layoutSubtreeIfNeeded()
+        let wide = try #require(bubble(in: row)).frame.width
+        #expect(abs(wide - 576) < 1)
+
+        controller.table.tableColumns[0].width = 400
+        row.frame.size.width = 400
+        row.layoutSubtreeIfNeeded()
+        let narrow = try #require(bubble(in: row)).frame.width
+        #expect(abs(narrow - TranscriptColumn.bubbleMaxWidth(inColumnOfWidth: 352)) < 1)
+
+        let turn = try #require(recorded.state.items.first?.message?.turnID)
+        try await recorded.append(SessionEvent.promptsNotSent(turnID: turn, prompts: [queued]).storedEvent())
+        source.state = recorded.state
+        source.revision += 1
+        controller.update(source)
+        let updated = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: false))
+        #expect(labels(in: updated).last == "not sent")
+    }
+
+    private func bubble(in row: NSView) -> NSView? {
+        views(LinkTextField.self, in: row).first?.superview
     }
 }
 

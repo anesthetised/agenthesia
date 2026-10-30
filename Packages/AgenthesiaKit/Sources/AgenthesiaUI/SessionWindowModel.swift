@@ -8,6 +8,8 @@ import SwiftUI
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
     var showingSetup = true
+    /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
+    var showingInspector = true
     private var selectedHistoryID: UUID?
     var owner: LiveSession?
     var history: [SessionRecord] = []

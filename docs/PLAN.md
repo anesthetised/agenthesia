@@ -254,12 +254,15 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   growing upward to at most 45 % of the sidebar when expanded, hidden without saved sessions. Hosted-view tests
   measure the lists' geometry; the header's accessibility label is unit-tested only (the hosted accessibility tree
   is empty), and the footer was not seen in the running app.
-- #150: `SessionInspector` is a native inspector on the right (toolbar button and ⌥⌘I, `@SceneStorage`, hidden on
-  the launch form) with Workspace, Branch, Changes and Agent sections; `SessionChangedFiles`, the path bar and the
-  toolbar's Agent Log button are removed. ⌥⌘I was Next Session Needing Input, which moved to ⇧⌥⌘]. Hosted-view
-  tests cover the sections. A `RootView` hosted in a window narrower than its content minimum (now sidebar,
-  transcript and inspector) makes AppKit throw "more Update Constraints passes than views", so the tests host it at
-  1600 pt; #160 checks that the real window at its 740 pt minimum with the inspector shown does not do the same.
+- #150: `SessionInspector` is the rightmost pane of the detail `HSplitView` (toolbar button and ⌥⌘I,
+  `@SceneStorage`, only beside a displayed session) with Workspace, Branch, Changes and Agent sections;
+  `SessionChangedFiles`, the path bar and the toolbar's Agent Log button are removed. ⌥⌘I was Next Session
+  Needing Input, which moved to ⇧⌥⌘]. The first version used the native `.inspector`, which crashed the app
+  (`EXC_BREAKPOINT` in `-[NSWindow _postWindowNeedsUpdateConstraints]`) whenever the pane count of the
+  `HSplitView` changed or a session started; see the amendment in ADR-0039. `DetailPanes` hides the inspector,
+  then the file pane, when the detail column is too narrow. Hosted-view tests run `RootView` at 740, 1000 and
+  1400 pt through every inspector and file-pane combination and through resizes; hidden-pane behavior in the real
+  window is for #160.
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

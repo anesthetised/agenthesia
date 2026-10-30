@@ -24,8 +24,10 @@ public struct RootView: View {
     /// Installed agents offered by the launch form; without it, only a custom command (ADR-0036).
     private let catalog: AgentCatalog?
     @State private var showingLog = false
-    /// Remembered per window (ADR-0039).
-    @SceneStorage("showingInspector") private var showingInspector = true
+    /// The window's remembered inspector visibility; `SessionWindowModel.showingInspector` is the working copy.
+    @SceneStorage("showingInspector") private var storedInspector = true
+    /// The detail column's width before any layout: everything fits.
+    @State private var detailWidth = CGFloat.infinity
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
@@ -67,6 +69,11 @@ public struct RootView: View {
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let session = model.displayed {
+                    let panes = DetailPanes(
+                        width: detailWidth,
+                        filePane: filesMatchSession && model.files.selectedPath != nil,
+                        inspector: model.showingInspector
+                    )
                     HSplitView {
                         VStack(spacing: 0) {
                             LiveTranscript(session: session, pathIndex: pathIndex(for: session)) {
@@ -86,12 +93,25 @@ public struct RootView: View {
                             } else {
                                 composer(session)
                             }
-                        }.frame(minWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
-                        if filesMatchSession, model.files.selectedPath != nil {
-                            // The transcript starts under the sidebar, so at the 740 pt window minimum it
-                            // takes the sidebar's width (240 pt, more on macOS 26) plus its own minimum.
+                        }.frame(minWidth: DetailPanes.transcriptMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+                        if panes.showsFilePane {
                             SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
-                                .frame(minWidth: 240, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                                .frame(
+                                    minWidth: DetailPanes.filePaneMinWidth,
+                                    idealWidth: 420,
+                                    maxWidth: .infinity,
+                                    maxHeight: .infinity
+                                )
+                        }
+                        // A pane of the split view: the native `.inspector` crashed AppKit beside it (ADR-0039).
+                        if panes.showsInspector {
+                            SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
+                                .frame(
+                                    minWidth: DetailPanes.inspectorMinWidth,
+                                    idealWidth: 260,
+                                    maxWidth: 360,
+                                    maxHeight: .infinity
+                                )
                         }
                     }
                 } else {
@@ -124,15 +144,10 @@ public struct RootView: View {
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-            // The launch form has no session to inspect; leaving it keeps the chosen visibility.
-            .inspector(
-                isPresented: Binding(
-                    get: { inspectorShown },
-                    set: { if !model.showingSetup { showingInspector = $0 } }
-                )
-            ) {
-                SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
-                    .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                detailWidth = $0
             }
             .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
             .navigationSubtitle(model.projects.first { $0.id == model.displayed?.session.projectID }?.name ?? "")
@@ -144,11 +159,11 @@ public struct RootView: View {
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(model.showingSetup || !filesMatchSession)
-                Button(showingInspector ? "Hide Inspector" : "Show Inspector", systemImage: "sidebar.right") {
-                    showingInspector.toggle()
+                Button(model.showingInspector ? "Hide Inspector" : "Show Inspector", systemImage: "sidebar.right") {
+                    model.showingInspector.toggle()
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
-                .disabled(model.showingSetup)
+                .disabled(model.showingSetup || model.displayed == nil)
                 .help("Show or hide the inspector (⌥⌘I)")
                 if model.restored == nil, let owner = model.owner {
                     Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
@@ -181,6 +196,8 @@ public struct RootView: View {
         .handlesExternalEvents(preferring: [], allowing: ["*"])
         // A session in front of the user needs no notification (ADR-0026).
         .onChange(of: shownSessionID, initial: true) { model.sessions.setShown(shownSessionID, in: model) }
+        .onAppear { model.showingInspector = storedInspector }
+        .onChange(of: model.showingInspector) { storedInspector = model.showingInspector }
         .task {
             await model.restore(target)
             target = model.target
@@ -240,8 +257,6 @@ public struct RootView: View {
         let discarding: Set<UUID>
         let merging: Set<UUID>
     }
-
-    private var inspectorShown: Bool { showingInspector && !model.showingSetup }
 
     private var viewingUnseenResult: Bool {
         appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true

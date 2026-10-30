@@ -73,8 +73,9 @@ class CoverageTestSchedulingTests(unittest.TestCase):
         self.assertEqual(len(runs), 3)
         selections = []
         profiles = []
+        self.assertEqual([call.args[2] for call in runs], [120, 120, 240])
         for call in runs:
-            command, env = call.args
+            command, env, _ = call.args
             self.assertIn("--skip-build", command)
             self.assertIn("-profile-generate", command)
             self.assertIn("-profile-coverage-mapping", command)

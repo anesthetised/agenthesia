@@ -260,7 +260,7 @@ startup, process or controller failed stays listed with its error until it is en
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
 ⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Needs You, Working, Settled); from the launch form they select the last/first row. Next Session Needing Input
-uses ⌥⌘I, skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.
@@ -333,7 +333,7 @@ current disk changes. The CLI also benefits from the hardened `ScopedFileAccess`
 ## Session file browsing
 
 The displayed session has a window-owned `SessionFiles` model, independent of ACP admission and event
-replay ([ADR-0023](adr/0023-session-files.md)). Quick Open and the changed-file list open one file in a
+replay ([ADR-0023](adr/0023-session-files.md)). Quick Open and the changed-file list of the inspector open one file in a
 resizable pane beside the transcript. These views read current disk contents, including for saved
 sessions, and are scoped to the selected session's working directory. Markdown uses the existing native
 renderer with Preview/Source selection; other text uses `SourceView`. `SessionFileDocument` reads
@@ -362,7 +362,7 @@ and a path restored to its base has no entry. Browsing stops when the displayed 
 its window closes, rather than when the agent process ends; Continue keeps the same session's files
 across its startup.
 
-*Review Changes* (⌃⌘R in the Session menu, also in the changed-file list) opens a native sheet with a
+*Review Changes* (⌃⌘R in the Session menu, also in the inspector) opens a native sheet with a
 selectable file list and one unified diff. `SessionWorkspace.review` compares the current working tree
 with `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)),
 including staged, unstaged and nonignored untracked files. It retains rename sources and reports a
@@ -395,6 +395,26 @@ and streaming text view consume the scheme before AppKit can open it; `RootView`
 the transcript's session is still displayed. `SessionFiles.selectedLine` carries the line to the viewer:
 `SourceView.showLine` selects it and scrolls by the laid-out fragment (TextKit 2 estimates heights), and
 follows the layout correction when highlighting finishes. Markdown opened with a line shows Source.
+
+The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md)) is the rightmost
+pane of the detail column, after the transcript and the file pane, toggled by a toolbar button and ⌥⌘I.
+`SessionWindowModel.showingInspector` is the working state and a `@SceneStorage` value remembers it per window
+(default shown); the inspector exists only beside a displayed session, so the launch form has none. Neither the
+native `.inspector` nor `HSplitView` is used: the first crashed AppKit beside the split view, and the split view
+kept stale divider positions when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures
+the column with a `GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes`.
+Visibility: the transcript (at least 240 pt) always stays, the file pane the user opened (at least 240 pt) needs
+480 pt, and the inspector (220–360 pt) needs 220 pt on top of what is shown, so it is the first to give way and at
+the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state and returns when the window
+widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
+dragged them to (`PaneDivider` on each pane's leading edge, also adjustable with VoiceOver; stored in
+`SessionWindowModel`); when the column is too narrow the transcript gives way first, then the file pane shrinks
+to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's `SessionWindowModel` and has four sections: *Workspace* (working directory, Show in
+Finder, Open in Editor through `EditorHandoff` with an empty path), *Branch* (`agenthesia/<session id>` and the
+base branch, only for sessions in an Agenthesia worktree), *Changes* (`+added −removed · N files` from
+`SessionFiles.changeStats`, the changed-file list with per-file counts, Refresh Files, Review Changes…,
+Merge…, Discard Worktree…, with the enabled states of the Session menu) and *Agent* (agent name and the
+Agent Log toggle, live sessions only). The path bar under the composer and the sidebar's changed files are gone.
 
 The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
 as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file

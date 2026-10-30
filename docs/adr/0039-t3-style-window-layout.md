@@ -33,8 +33,8 @@ branch and the changes with line counts.
 
 Agenthesia adopts that layout with native controls. Departures from T3 Code are listed with their reason.
 
-**Window.** `NavigationSplitView` (sidebar | transcript and composer) plus a native `.inspector` on the
-right. The window title is the session title and the subtitle is its project (`navigationSubtitle`), the
+**Window.** `NavigationSplitView` (sidebar | transcript and composer) plus an inspector pane on the
+right (see the amendment below). The window title is the session title and the subtitle is its project (`navigationSubtitle`), the
 native form of T3 Code's `project / thread` breadcrumb (principle 3). Refresh History is removed. The path
 bar under the composer is removed; its content moves to the inspector.
 
@@ -81,6 +81,32 @@ Changes… and Merge…), and *Agent* (agent name and the Agent Log). Changed Fi
 **Visual language.** System fonts, materials, colors and SF Symbols. Custom chrome is limited to the
 composer card, the user bubble and the project badge, each of which T3 Code shows to be clearer than a
 plain list cell or bar.
+
+## Amendment (2026-10-30)
+
+The inspector is the rightmost pane of the detail column's `HSplitView`, beside the transcript and the file
+pane, not a native `.inspector`. Scripted checks of the running app found that the native `.inspector` combined
+with that `HSplitView` crashed the app: starting the first live session at 1000 pt, opening or closing the file
+pane, showing the inspector while the file pane was open, and resizing the window all ended in `EXC_BREAKPOINT`
+in `-[NSWindow _postWindowNeedsUpdateConstraints]` with "The window has been marked as needing another Update
+Constraints in Window pass, but it has already had more Update Constraints in Window passes than there are views
+in the window." The file pane already opened and closed reliably as a pane of the `HSplitView`, so the inspector
+uses the same mechanism. Visibility, the toolbar button, ⌥⌘I, the per-window memory, the 220–360 pt width and the
+sections are unchanged.
+
+Amendment 2, same day: a re-check of the running app found no crashes but three layout faults of that
+`HSplitView`: its split view did not shrink the transcript when a pane appeared (the inspector overflowed the
+right edge), kept the old divider sizes when the window shrank (the file pane overflowed) and stopped 19–40 pt short
+of the window's edge at 740 pt. The detail column therefore lays its panes out itself: explicit widths from
+`DetailPanes` (a pure function of the measured column width and the widths the user chose), with a drag handle
+(`PaneDivider`) on the leading edge of the file pane and of the inspector. The transcript gives way first, then
+the file pane shrinks to its minimum, then the inspector; the widths always add up to the column.
+
+Rule for narrow windows: the transcript always keeps at least 240 pt. The file pane the user opened needs another
+240 pt and the inspector 220 pt on top of the panes shown, so the inspector gives way first, then the file pane.
+At the 740 pt window minimum the inspector is therefore hidden while a file is open. A hidden pane keeps its state
+and returns when the window widens; it is not closed or toggled. The rule is `DetailPanes`, a pure function of
+the detail column's width.
 
 ## Alternatives
 

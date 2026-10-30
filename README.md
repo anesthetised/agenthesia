@@ -54,7 +54,7 @@ startup, so changes are not discarded.
 
 Enter or Command-Return sends a text prompt while idle; Shift-Return inserts a newline and Command-period
 stops the turn. You can draft the next message while the agent works; queueing and steering are still
-planned. The Agent Log button shows bounded stderr output. End Session, window close, and app quit
+planned. The Agent Log toggle in the inspector shows bounded stderr output. End Session, window close, and app quit
 close ACP, finish pending event writes, and terminate the agent process group.
 
 Sessions are stored in `~/Library/Application Support/Agenthesia/history.sqlite`. The sidebar opens

@@ -101,6 +101,19 @@ extension SessionWorkspace {
         }
     }
 
+    /// Removes the worktree and branch of a session that never started, only while nothing was done in them: no
+    /// uncommitted or untracked paths and no commits since `baseRevision`. Otherwise both stay, and so does the
+    /// worktree when the branch has commits. Returns whether they were removed.
+    @discardableResult public static func removeUntouched(
+        _ worktree: Worktree,
+        baseRevision: String
+    ) async throws -> Bool {
+        let lost = try await discardSummary(of: worktree, baseRevision: baseRevision)
+        guard lost.uncommittedFiles == 0, lost.commits == 0 else { return false }
+        try await remove(worktree)
+        return true
+    }
+
     /// Whether the project lists the worktree's directory among its worktrees.
     static func isRegistered(_ worktree: Worktree) throws -> Bool {
         let listed: Data = try gitOutput(["worktree", "list", "--porcelain", "-z"], in: worktree.projectDirectory)

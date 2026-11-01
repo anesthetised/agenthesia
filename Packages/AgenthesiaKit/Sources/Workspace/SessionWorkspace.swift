@@ -1,6 +1,7 @@
 public import Foundation
 
-/// A session's working directory. Worktrees are deliberately retained on close and failed startup.
+/// A session's working directory. Worktrees are retained on close and failed startup, except one whose session
+/// never got a history record (`removeUntouched`).
 public struct SessionWorkspace: Sendable {
     public let projectDirectory: URL
     public let workingDirectory: URL

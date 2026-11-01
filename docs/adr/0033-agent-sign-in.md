@@ -82,3 +82,10 @@ one-time *Trust & Enable* in Xcode. `TerminalProcess` gains input, resizing and 
 only by sign-in; ADR-0015's agent terminals still write nothing to their input. Sign-in is not recorded in
 history. An agent that needs a terminal method and exits with status 0 without signing in returns the user
 to the method list, which is the only signal the app has.
+
+## Notes
+
+Amendment (#176): ending the session from the sign-in state, or a start that fails before the agent accepts
+`session/new`, now removes the worktree and branch it created, as long as they hold no uncommitted, untracked or
+committed work and no history record exists ([ADR-0040](0040-composer-first-session-start.md) treats such a
+start as one that never happened). This replaces "a new session's worktree is kept like after any failed start".

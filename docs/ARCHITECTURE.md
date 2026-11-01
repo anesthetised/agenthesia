@@ -94,7 +94,8 @@ The new worktree's actual initial HEAD is retained as the session's `baseRevisio
 the agent. The branch checked out in the selected checkout at that moment is retained as `baseBranch`
 (ADR-0032); a detached `HEAD` records none, and such a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
 unborn repositories fail explicitly. Worktrees
-are retained after close or failed startup until the session is merged or discarded.
+are retained after close or failed startup until the session is merged or discarded, except one whose session never
+got a history record.
 
 New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
 launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: "What should the agent
@@ -113,6 +114,16 @@ or after sign-in, submits it with intent `whenReady` like a typed prompt, and a 
 If startup fails or is cancelled (Cancel Startup, End Session at sign-in), the owner is no longer live and still
 holds its prompt; `SessionWindowModel.abandonedStart` reports it, and `RootView` calls `returnToDraft`, which puts
 the prompt back into the draft with the owner's error and ends the owner, so the sidebar does not list it.
+
+A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
+exits during `initialize`) removes the worktree and branch its `LiveSession` made (#176). The record is written
+when the agent accepts `session/new`, so `LiveSession.removeUnstartedWorktree` asks the store and does nothing when a
+record exists; only a worktree created by that owner in that start is ever considered, never a saved or continued
+session's or a non-Git project's folder. `SessionWorkspace.removeUntouched` then reuses the discard code: it
+removes the worktree and branch only when `discardSummary` finds no uncommitted or untracked path and no commit
+since `baseRevision`, and otherwise leaves both on disk. Any Git or store error also leaves them, and never fails
+the flow. It runs from `fail` and at the end of `close` off the main actor, so Quit (which waits for `close`)
+finishes it. A failure inside `SessionWorkspace.prepare` itself, after `git worktree add`, is not covered.
 
 Discard (ADR-0032) goes through `SessionManager.discard`. It refuses while the session is starting or
 being continued, coalesces concurrent calls and makes Continue unavailable while it runs. It ends the

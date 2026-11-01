@@ -7,7 +7,7 @@ public import Persistence
 import Workspace
 
 /// One agent connection, owned by `SessionManager` (ADR-0026). Close on End Session or app quit;
-/// worktrees remain on disk.
+/// worktrees remain on disk, except one made for a new session that never got a history record.
 @MainActor @Observable
 public final class LiveSession {
     public private(set) var controller: SessionController?
@@ -47,6 +47,8 @@ public final class LiveSession {
     @ObservationIgnored private var logTask: Task<Void, Never>?
     /// Where attached files from the user's checkout are found in the session worktree (ADR-0018).
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
+    /// The worktree this owner created for a new session, until it is removed or found to have a record.
+    @ObservationIgnored private var created: (id: UUID, worktree: SessionWorkspace.Worktree, baseRevision: String)?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment = LiveSession.shellEnvironment
 
@@ -295,6 +297,22 @@ public final class LiveSession {
         signInTerminal = nil
         await controller?.close()
         await cleanup()
+        await removeUnstartedWorktree()
+    }
+
+    /// Removes the worktree and branch this owner created when no history record refers to them, since a start
+    /// that failed or was cancelled never happened (ADR-0040). The record is written once the agent accepts
+    /// `session/new`, so the store decides. Anything unexpected leaves the files in place; the user is only
+    /// cancelling a start.
+    private func removeUnstartedWorktree() async {
+        guard let (id, worktree, baseRevision) = created else { return }
+        created = nil
+        do {
+            guard try await library.store().session(id: id) == nil else { return }
+            if try await SessionWorkspace.removeUntouched(worktree, baseRevision: baseRevision) {
+                workingDirectory = nil
+            }
+        } catch {}
     }
 
     /// Signs in with one of the agent's methods, then starts or continues the session (ADR-0033). An agent
@@ -416,6 +434,16 @@ public final class LiveSession {
             workspace = try await SessionWorkspace.prepare(directory: directory, id: id)
         }
         workingDirectory = workspace.workingDirectory
+        if let baseRevision = workspace.baseRevision,
+            let worktree = SessionWorkspace.Worktree(
+                projectDirectory: workspace.projectDirectory,
+                workingDirectory: workspace.workingDirectory,
+                sessionID: id,
+                worktreesRoot: worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
+            )
+        {
+            created = (id, worktree, baseRevision)
+        }
         guard !isClosed else { throw CancellationError() }
         let project = try await library.project(directory: workspace.projectDirectory)
         let install = try await library.install(agent)
@@ -493,6 +521,7 @@ public final class LiveSession {
             await controller?.close()
             await cleanup()
             await exitTask?.value
+            await removeUnstartedWorktree()
         }
         closing = task
         await task.value

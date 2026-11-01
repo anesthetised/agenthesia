@@ -309,6 +309,15 @@ Wave 2:
   and branch, as the launch form did. Not checked: VoiceOver, Manage Agents…, a detached `HEAD` and a non-Git project
   in the app, attachments in the draft, the dark Send flow, and the Custom Command sheet after its fix (#160).
 
+- #176: a start that never got a history record removes its worktree and branch (`LiveSession.removeUnstartedWorktree`
+  from `fail` and `close`, `SessionWorkspace.removeUntouched`): it asks the store for the record, and keeps both when
+  the tree has uncommitted or untracked paths or the branch has commits, or on any error. Tested with real temporary
+  repositories and MockAgent: cancel at sign-in, an agent that exits after the worktree was prepared, a started session
+  that keeps its worktree after End Session, a stray file, a commit on the branch and a non-Git folder; breaking the
+  removal (and, separately, the record check) made those tests fail. Not tested: a failure after the record was written
+  (only the started-session case covers the record check), a failure inside `SessionWorkspace.prepare` after
+  `git worktree add`, quitting the app during removal, and the removal in the running app.
+
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 

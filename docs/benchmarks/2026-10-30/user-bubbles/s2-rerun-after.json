@@ -1,0 +1,287 @@
+[
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261101T163754.406278Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "aa141c0b0eb8f1a2065c8568dbc0115b50469830",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S2:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S2:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 27.3012965,
+    "samples": [
+     {
+      "open": 80.895459,
+      "scenario": "S2 10k items, App: production transcript",
+      "id": "361642C0-C83F-4074-AEBA-8862A668F082",
+      "report": {
+       "p99": 31.930291559547186,
+       "p50": 27.647958369925618,
+       "frames": 936,
+       "max": 34.19424989260733,
+       "memory": 80.93852996826172,
+       "freeMemory": 80,
+       "hitches": 936,
+       "load": 6.36181640625,
+       "excessMilliseconds": 17199.71633818932,
+       "estimatedMissed": 2048,
+       "p95": 30.257541686296463
+      },
+      "measurements": {
+       "elapsedMS": 25020.360875,
+       "allItemsAvailable": 1,
+       "viewportWidth": 868,
+       "backingScale": 2,
+       "screenMaximumFPS": 120,
+       "viewportHeight": 340,
+       "scrollPointsPerSecond": 14400,
+       "reachedStart": 0
+      }
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261101T163834.894188Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "aa141c0b0eb8f1a2065c8568dbc0115b50469830",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S2:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S2:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 27.027442875000002,
+    "samples": [
+     {
+      "scenario": "S2 10k items, App: production transcript",
+      "measurements": {
+       "elapsedMS": 25046.111,
+       "reachedStart": 0,
+       "allItemsAvailable": 1,
+       "backingScale": 2,
+       "scrollPointsPerSecond": 14400,
+       "viewportHeight": 340,
+       "screenMaximumFPS": 120,
+       "viewportWidth": 868
+      },
+      "report": {
+       "load": 5.01171875,
+       "memory": 81.21975708007812,
+       "excessMilliseconds": 17250.126330647618,
+       "max": 35.05841665901244,
+       "p95": 32.151499995961785,
+       "p50": 27.311458252370358,
+       "p99": 33.97941659204662,
+       "freeMemory": 80,
+       "estimatedMissed": 2077,
+       "frames": 933,
+       "hitches": 933
+      },
+      "open": 75.296958,
+      "id": "4823AD89-A038-4857-A661-7DCFC5EC2289"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261101T164019.962176Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "aa141c0b0eb8f1a2065c8568dbc0115b50469830",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S2:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S2:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 26.946072125,
+    "samples": [
+     {
+      "open": 74.661167,
+      "report": {
+       "p99": 32.5869582593441,
+       "p95": 30.153249856084585,
+       "max": 34.790083300322294,
+       "excessMilliseconds": 16859.275665599853,
+       "p50": 26.39500005170703,
+       "hitches": 966,
+       "load": 3.35595703125,
+       "frames": 977,
+       "estimatedMissed": 2015,
+       "freeMemory": 80,
+       "memory": 79.29792785644531
+      },
+      "measurements": {
+       "backingScale": 2,
+       "reachedStart": 0,
+       "elapsedMS": 25029.213792,
+       "scrollPointsPerSecond": 14400,
+       "viewportHeight": 340,
+       "viewportWidth": 868,
+       "screenMaximumFPS": 120,
+       "allItemsAvailable": 1
+      },
+      "scenario": "S2 10k items, App: production transcript",
+      "id": "4145961E-1FD2-46FC-A082-3E9B7D22C0C5"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261101T164055.044299Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "aa141c0b0eb8f1a2065c8568dbc0115b50469830",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S2:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S2:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 27.004817083,
+    "samples": [
+     {
+      "measurements": {
+       "screenMaximumFPS": 120,
+       "viewportWidth": 868,
+       "backingScale": 2,
+       "reachedStart": 0,
+       "viewportHeight": 340,
+       "scrollPointsPerSecond": 14400,
+       "elapsedMS": 25028.96875,
+       "allItemsAvailable": 1
+      },
+      "open": 74.93775,
+      "report": {
+       "frames": 944,
+       "max": 43.33337512798607,
+       "p95": 30.509666772559285,
+       "hitches": 944,
+       "p50": 27.025208342820406,
+       "memory": 80.79792785644531,
+       "freeMemory": 81,
+       "estimatedMissed": 2046,
+       "p99": 33.944166731089354,
+       "load": 3.21923828125,
+       "excessMilliseconds": 17134.25795547664
+      },
+      "scenario": "S2 10k items, App: production transcript",
+      "id": "A2144A44-6450-4B7F-9DCF-9497E97AB10F"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261101T164240.311126Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "aa141c0b0eb8f1a2065c8568dbc0115b50469830",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S2:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S2:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 26.956148667,
+    "samples": [
+     {
+      "scenario": "S2 10k items, App: production transcript",
+      "open": 77.625666,
+      "report": {
+       "max": 34.99012510292232,
+       "estimatedMissed": 2046,
+       "p99": 32.84775000065565,
+       "p50": 26.50224999524653,
+       "excessMilliseconds": 17036.677880911157,
+       "load": 2.697265625,
+       "freeMemory": 81,
+       "memory": 83.25105285644531,
+       "p95": 30.488874996080995,
+       "frames": 956,
+       "hitches": 956
+      },
+      "id": "A25DE74C-0D7C-4DAC-BFFC-A1069149D5B9",
+      "measurements": {
+       "backingScale": 2,
+       "screenMaximumFPS": 120,
+       "viewportWidth": 868,
+       "reachedStart": 0,
+       "viewportHeight": 340,
+       "elapsedMS": 25030.100292,
+       "allItemsAvailable": 1,
+       "scrollPointsPerSecond": 14400
+      }
+     }
+    ]
+   }
+  ]
+ }
+]

@@ -287,9 +287,10 @@ Wave 2:
   bubble. Agent rows lost their role label; thoughts keep `Thinking` and are dimmed. Covered by hosted-view tests
   (bubble width at three table widths, row height, resize, caption refresh); not seen in the running app (#160
   checks the design). Rendering Lab S1:App and S2:App were run with the owner's approval
-  ([results](benchmarks/2026-10-30/user-bubbles/README.md)): streaming is unchanged, but on a loaded machine
-  scrolling shows more hitches (735–909 against 589–707) with lower p95/p99 frame times in two of three runs, so a
-  quiet repeat of S2:App is still open.
+  ([results](benchmarks/2026-10-30/user-bubbles/README.md)): streaming is unchanged. A quiet,
+  interleaved rerun of S2:App (five runs per side) shows scrolling slightly smoother: p95 30.5 against 36.0 ms,
+  p99 32.8 against 44.4 ms, about 3% fewer missed frames. The hitch count rises only because more frames are
+  delivered; at this scroll speed nearly every frame misses the 120 Hz budget on both sides.
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

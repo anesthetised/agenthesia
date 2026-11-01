@@ -272,6 +272,13 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   `model.outcome(of:) == nil` and `canContinue`. The composer's status text and `RootView.statusText` are gone.
   Covered by unit tests of `ContinueCard.State` and hosted-view tests (the card in isolation and a saved session in
   `RootView`); not seen in the running app (#160).
+- #148: the sidebar has a native search field (`.searchable(placement: .sidebar)`, ⌥⌘F focuses it through
+  `searchFocused`, Session → Search Sessions). `SessionSidebar(query:)` keeps the rows whose title or project name
+  `localizedStandardContains` the trimmed query (case and diacritics ignored) and drops empty sections, so the list,
+  the Settled footer (forced open while a query is entered, its count shows the matches) and Previous/Next Session
+  all see the same visible rows; with no match the sidebar shows `ContentUnavailableView.search`. Deviation from the
+  issue text: Previous/Next Session follow the filter rather than ignoring it. Covered by unit tests, a navigation
+  test and a hosted-view test; the field itself and ⌥⌘F were not seen in the running app.
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

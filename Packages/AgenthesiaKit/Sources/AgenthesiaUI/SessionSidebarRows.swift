@@ -11,17 +11,17 @@ struct SessionSidebarRows: View {
     var body: some View {
         ForEach(section.rows) { row in
             switch row.source {
-            case .live(let owner): liveRow(owner, project: row.project)
-            case .saved(let record): savedRow(record, project: row.project)
+            case .live(let owner): liveRow(owner, row)
+            case .saved(let record): savedRow(record, row)
             }
         }
     }
 
-    private func liveRow(_ owner: LiveSession, project: ProjectRecord?) -> some View {
+    private func liveRow(_ owner: LiveSession, _ row: SessionSidebar.Row) -> some View {
         let session = owner.controller?.session ?? owner.resuming
         return SessionRow(
-            title: session?.title ?? "New Session",
-            project: project?.name,
+            title: row.title,
+            project: row.project?.name,
             outcome: session.flatMap { model.outcome(of: $0.id) },
             activity: owner.activity,
             started: session?.createdAt
@@ -33,10 +33,10 @@ struct SessionSidebarRows: View {
         }
     }
 
-    private func savedRow(_ record: SessionRecord, project: ProjectRecord?) -> some View {
+    private func savedRow(_ record: SessionRecord, _ row: SessionSidebar.Row) -> some View {
         SessionRow(
-            title: record.title ?? "New Session",
-            project: project?.name,
+            title: row.title,
+            project: row.project?.name,
             outcome: model.outcomes[record.id],
             activity: nil,
             started: record.createdAt

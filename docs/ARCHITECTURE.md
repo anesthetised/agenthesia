@@ -254,6 +254,7 @@ sessions whose activity is needs input, failed or done, in start order), *Workin
 including owners that have no project yet, in start order) and *Settled* (saved sessions that are not live,
 newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
 A row (`SessionRow`) shows a project badge (`ProjectBadge.initials`; the tint is a 64-bit FNV-1a hash of the name, since `hashValue` changes per launch), the title, the project with ` · Merged` or ` · Discarded`, the status symbol and `RelativeTime.short` of the session's start (`createdAt`). Needs You and Working scroll in the sidebar list (`SessionSidebarList`); Settled is a footer pinned to the bottom edge (`SettledFooter`, `safeAreaInset`), hidden when there are no saved sessions. Its header (`Settled · N`, a disclosure button labelled “Settled, N sessions, expanded/collapsed”) is always visible. The footer is collapsed by default and keeps its state in `@SceneStorage`, but stays open while one of its rows is selected; expanded, it grows upward with its own list, at most 45 % of the sidebar's height. History refreshes on its own, so the toolbar has no Refresh button.
+The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` with the sidebar placement; the text is `SessionWindowModel.sidebarQuery`, not persisted). `SessionSidebar(query:)` is the pure filter: rows whose title or project name `localizedStandardContains` the trimmed query (a starting or untitled session matches as “New Session”), empty sections omitted, `isFiltered` set. The list, `SettledFooter` (open while a query is entered, its count is the number of matches), Previous/Next Session and Next Session Needing Input all read the filtered sidebar, so navigation only visits visible rows. With no match the list shows `ContentUnavailableView.search`. ⌥⌘F (Session → Search Sessions) focuses the field through `searchFocused`.
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed
@@ -262,8 +263,8 @@ closes an owner and removes it, after which its session is listed as saved histo
 startup, process or controller failed stays listed with its error until it is ended or continued.
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
-⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in sidebar order (Needs You, Working, Settled); from the launch form they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the launch form they select the last/first row. Next Session Needing Input
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.

@@ -43,6 +43,9 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model?.canResumeQueue != true)
             Divider()
+            Button("Search Sessions") { model?.searchFocusRequests += 1 }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(model == nil)
             Button("Previous Session") { Task { [model] in await model?.navigate(backward: true) } }
                 .keyboardShortcut("[", modifiers: [.command, .option])
                 .disabled(model?.navigationTarget(backward: true) == nil)

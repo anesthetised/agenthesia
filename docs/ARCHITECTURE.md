@@ -151,6 +151,13 @@ with at least 24 pt on each side (`TranscriptColumn.width(inRowOfWidth:)` also g
 Copy button is shown only while the pointer is over the row (`NSTrackingArea`, `.activeInKeyWindow`,
 `.inVisibleRect`); the row also offers Copy as an accessibility custom action.
 
+`TranscriptMessage.kind` says how a row shows its role: a user message is a `BubbleCell` at the column's trailing edge
+(`NSColor.quaternarySystemFill`, radius 14, padding 10 × 14) that hugs its text and stops at 80 % of the column
+(`TranscriptColumn.bubbleWidth(forTextWidth:inColumnOfWidth:)`); its `caption` (`not sent`, `sent together`) is a
+right-aligned label under the bubble. Agent messages have no role label; thoughts keep a `Thinking` caption and are
+dimmed. Tool, permission and input rows keep their headers. `role` stays in the model, and Copy returns a row's
+Markdown without it.
+
 Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
 hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of
 its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history

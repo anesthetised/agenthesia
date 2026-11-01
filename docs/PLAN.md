@@ -280,6 +280,18 @@ Wave 1 landed (2026-10-29), one pull request per issue, each with `just lint`, `
   issue text: Previous/Next Session follow the filter rather than ignoring it. Covered by unit tests, a navigation
   test and a hosted-view test; the field itself and ⌥⌘F were not seen in the running app.
 
+Wave 2:
+
+- #152: user messages are right-aligned bubbles (`BubbleCell`, `quaternarySystemFill`, radius 14, padding 10 × 14, at
+  most 80 % of the column, `TranscriptColumn.bubbleWidth`); `not sent` and `sent together` are a caption under the
+  bubble. Agent rows lost their role label; thoughts keep `Thinking` and are dimmed. Covered by hosted-view tests
+  (bubble width at three table widths, row height, resize, caption refresh); not seen in the running app (#160
+  checks the design). Rendering Lab S1:App and S2:App were run with the owner's approval
+  ([results](benchmarks/2026-10-30/user-bubbles/README.md)): streaming is unchanged. A quiet,
+  interleaved rerun of S2:App (five runs per side) shows scrolling slightly smoother: p95 30.5 against 36.0 ms,
+  p99 32.8 against 44.4 ms, about 3% fewer missed frames. The hitch count rises only because more frames are
+  delivered; at this scroll speed nearly every frame misses the 120 Hz budget on both sides.
+
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 

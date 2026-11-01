@@ -104,11 +104,12 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
             if visible.markdown == message.markdown, visible.links == message.links, visible.tool == message.tool,
-                visible.input == message.input, !(finished && visible.streamingCell != nil && !keepsSelection)
+                visible.input == message.input, visible.caption == message.caption,
+                !(finished && visible.streamingCell != nil && !keepsSelection)
             {
                 continue
             }
-            if visible.input != message.input {
+            if visible.input != message.input || visible.caption != message.caption {
                 visible.show(
                     message,
                     streaming: !finished,
@@ -284,7 +285,9 @@ private final class TranscriptMessageRow: NSTableCellView {
     var links: Int?
     var tool: ToolCardHeader?
     var input: InputCard?
+    var caption: String?
     var streamingCell: TextKitCell?
+    var bubble: BubbleCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
     var actions: NSView?
@@ -316,6 +319,11 @@ private final class TranscriptMessageRow: NSTableCellView {
         )
     }
 
+    override func layout() {
+        super.layout()
+        bubble?.fit(columnWidth: TranscriptColumn.width(inRowOfWidth: bounds.width))
+    }
+
     override func mouseEntered(with event: NSEvent) { setHovering(true) }
     override func mouseExited(with event: NSEvent) { setHovering(false) }
 
@@ -329,10 +337,12 @@ private final class TranscriptMessageRow: NSTableCellView {
     func show(_ message: TranscriptMessage, streaming: Bool, width: CGFloat, controller: TranscriptTableController) {
         stack?.removeFromSuperview()
         actions = nil
+        bubble = nil
         markdown = message.markdown
         links = message.links
         tool = message.tool
         input = message.input
+        caption = message.caption
         if message.isNotice {
             showNotice(message)
             return
@@ -344,6 +354,13 @@ private final class TranscriptMessageRow: NSTableCellView {
             cell.textView.textStorage?.setAttributedString(message.text)
             cell.textView.invalidateIntrinsicContentSize()
             content = cell
+        } else if message.kind == .user {
+            let cell = BubbleCell()
+            cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
+            cell.field.attributedStringValue = message.text
+            cell.fit(columnWidth: width)
+            bubble = cell
+            content = cell
         } else {
             let cell = TextCell()
             cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
@@ -351,6 +368,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             cell.field.attributedStringValue = message.text
             content = cell
         }
+        if message.kind == .thought { content.alphaValue = Self.thoughtAlpha }
         let header = makeHeader(message, controller: controller)
         let stack = NSStackView(views: [header, content])
         stack.orientation = .vertical
@@ -370,6 +388,14 @@ private final class TranscriptMessageRow: NSTableCellView {
                 contentWidth,
             ]
         )
+        if let caption = message.caption {
+            let label = NSTextField(labelWithString: caption)
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .right
+            stack.addArrangedSubview(label)
+            label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
         showActions(message, controller: controller)
         if let input = message.input {
             let form = NSHostingView(rootView: InputForm(card: input))
@@ -377,6 +403,9 @@ private final class TranscriptMessageRow: NSTableCellView {
             form.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
     }
+
+    /// Thoughts read as secondary text; dimming keeps the code colors of their Markdown.
+    private static let thoughtAlpha: CGFloat = 0.65
 
     /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins.
     private func columnConstraints(for view: NSView) -> [NSLayoutConstraint] {
@@ -469,8 +498,12 @@ private final class TranscriptMessageRow: NSTableCellView {
         // Assistive technology uses the row's Copy action while the button is not shown.
         copy.setAccessibilityElement(hovering)
         copyButton = copy
+        // Users and the agent speak without a label; their Copy button stays at the row's trailing edge.
+        let labeled = message.kind == .card || message.kind == .thought
         let header = NSStackView(
-            views: Self.toolHeader(message.tool, role: role, controller: controller) + [NSView(), copy]
+            views: (labeled ? Self.toolHeader(message.tool, role: role, controller: controller) : []) + [
+                NSView(), copy,
+            ]
         )
         header.distribution = .fill
         return header
@@ -522,6 +555,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
         cell.field.preferredMaxLayoutWidth = max(1, width)
         cell.field.attributedStringValue = message.text
+        if message.kind == .thought { cell.alphaValue = Self.thoughtAlpha }
         contentWidth?.isActive = false
         // The body follows the header; option buttons, if any, stay after it.
         if stack.arrangedSubviews.count > 1 {
@@ -586,6 +620,77 @@ private final class TextCell: NSView {
         super.layout()
         if bounds.width > 0, field.preferredMaxLayoutWidth != bounds.width {
             field.preferredMaxLayoutWidth = bounds.width
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+/// A user message: a rounded bubble at the trailing edge that hugs its text, up to 80 % of the column.
+final class BubbleCell: NSView {
+    let field = LinkTextField(wrappingLabelWithString: "")
+    private let bubble = BubbleBackground()
+    private let width: NSLayoutConstraint
+    private var fittedColumnWidth: CGFloat = -1
+
+    init() {
+        width = bubble.widthAnchor.constraint(equalToConstant: 0)
+        super.init(frame: .zero)
+        field.isSelectable = true
+        // Keeps the text's attributes when selecting it switches the field to its field editor.
+        field.allowsEditingTextAttributes = true
+        field.translatesAutoresizingMaskIntoConstraints = false
+        bubble.translatesAutoresizingMaskIntoConstraints = false
+        bubble.addSubview(field)
+        addSubview(bubble)
+        let padding = TranscriptColumn.bubblePadding
+        NSLayoutConstraint.activate([
+            width,
+            bubble.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bubble.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            bubble.topAnchor.constraint(equalTo: topAnchor),
+            bubble.bottomAnchor.constraint(equalTo: bottomAnchor),
+            field.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: padding.width),
+            field.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -padding.width),
+            field.topAnchor.constraint(equalTo: bubble.topAnchor, constant: padding.height),
+            field.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -padding.height),
+        ])
+    }
+
+    /// Sizes the bubble to its text, wrapped at the widest the column allows.
+    func fit(columnWidth: CGFloat) {
+        guard columnWidth != fittedColumnWidth else { return }
+        fittedColumnWidth = columnWidth
+        // Unwrapped: text that is wider than the limit fills the bubble, as a CSS `fit-content` box does.
+        let natural = field.attributedStringValue.boundingRect(
+            with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+            options: .usesLineFragmentOrigin
+        ).width.rounded(.up)
+        width.constant = TranscriptColumn.bubbleWidth(forTextWidth: natural, inColumnOfWidth: columnWidth)
+        field.preferredMaxLayoutWidth = max(1, width.constant - 2 * TranscriptColumn.bubblePadding.width)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private final class BubbleBackground: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = TranscriptColumn.bubbleRadius
+    }
+
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.quaternarySystemFill.cgColor
         }
     }
 

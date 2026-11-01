@@ -22,7 +22,17 @@ import Testing
         }
     }
 
-    private func settle() async { try? await Task.sleep(for: .milliseconds(20)) }
+    /// Waits until the panes the model asks for are on screen and their frames held still for one 20 ms step, or
+    /// 400 ms at most; a fixed 400 ms per step kept the hosted tests near CI's process timeout.
+    private func settle(_ fixture: Fixture) async {
+        var previous: PaneFrames?
+        for step in 0..<20 {
+            try? await Task.sleep(for: .milliseconds(20))
+            let current = frames(fixture)
+            if step >= 2, current == previous, panesMatchTheModel(fixture, current) { return }
+            previous = current
+        }
+    }
 
     /// A MockAgent session with a file to open, shown in a window `width` points wide.
     private func fixture(width: CGFloat) async throws -> Fixture {
@@ -41,22 +51,22 @@ import Testing
         window.contentView = view
         window.orderFront(nil)
         let fixture = Fixture(inspector: inspector, model: inspector.model, view: view, window: window)
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
         return fixture
     }
 
     private func openFilePane(_ fixture: Fixture) async {
         await fixture.model.files.open(path: "notes.txt", in: fixture.inspector.record.id)
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
     }
 
     private func closeFilePane(_ fixture: Fixture) async {
         fixture.model.files.closeDocument()
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
     }
 
     /// The measurable frames of the detail column's panes, in window coordinates.
-    private struct PaneFrames {
+    private struct PaneFrames: Equatable {
         var transcript: CGRect?
         var filePane: CGRect?
         var inspector: CGRect?
@@ -79,6 +89,17 @@ import Testing
         }
         visit(fixture.view)
         return found
+    }
+
+    /// Whether the visible panes are the ones `DetailPanes` shows for the measured column width.
+    private func panesMatchTheModel(_ fixture: Fixture, _ found: PaneFrames) -> Bool {
+        guard let transcript = found.transcript else { return false }
+        let panes = DetailPanes(
+            width: fixture.window.contentLayoutRect.maxX - transcript.minX,
+            filePane: fixture.model.files.selectedPath != nil,
+            inspector: fixture.model.showingInspector
+        )
+        return (found.filePane != nil) == panes.showsFilePane && (found.inspector != nil) == panes.showsInspector
     }
 
     /// Every pane fits: the transcript, file pane and inspector keep their minimum widths, follow each other
@@ -126,22 +147,22 @@ import Testing
 
     private func setInspector(_ shown: Bool, _ fixture: Fixture) async {
         fixture.model.showingInspector = shown
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
     }
 
     private func resize(_ width: CGFloat, _ fixture: Fixture) async {
         fixture.window.setContentSize(.init(width: width, height: 700))
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
     }
 
     /// Gives the inspector its 360 pt maximum, as dragging its edge does.
     private func widenInspector(_ fixture: Fixture) async {
         fixture.model.inspectorWidth = DetailPanes.inspectorMaxWidth
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
     }
 
     /// Visits the four states of (inspector, file pane) along all eight transitions between them.
-    @Test(arguments: [740, 1000, 1400])
+    @Test(arguments: [740, 1400])
     func everyCombinationOfInspectorAndFilePaneLaysOut(width: Double) async throws {
         let fixture = try await fixture(width: CGFloat(width))
         defer { fixture.close() }
@@ -202,9 +223,9 @@ import Testing
         let fixture = try await fixture(width: CGFloat(width))
         defer { fixture.close() }
         fixture.model.showingSetup = true
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
         fixture.model.showingSetup = false
-        for _ in 0..<20 { await settle() }
+        await settle(fixture)
         expectPanesFit(fixture, "after leaving the launch form at \(width) pt")
     }
 

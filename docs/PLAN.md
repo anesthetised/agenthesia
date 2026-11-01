@@ -577,6 +577,12 @@ execute, and separate profile prefixes preserve merged coverage. Tests cover the
 target names, unique profiles and failure propagation from each group. A deliberate duplicated-runtime
 selector failed those tests before restoration. This adds one test-driver invocation; no CI speedup is claimed.
 
+Update (2026-10-30): after #171 the hosted group took 115–119 s on CI and then ran into the timeout on main.
+Nothing hung. `SessionPaneLayoutTests` waited a fixed 400 ms after every step; it now waits until the panes the
+model asks for are on screen and still (400 ms at most) and checks 740 and 1400 pt, not 1000 pt as well. That
+cut the suite from 39 s to 8.5 s locally and the hosted group from 50 s to 25 s. The hosted group's
+process timeout is now 240 s; core and runtime keep 120 s.
+
 Local `just lint`, 18 script tests and all 759 Swift tests pass. The three selectors were exercised
 sequentially with instrumented `just test --build-system native`, preserving CI's combined-bundle layout,
 and then through full `just coverage`: every module gate passes (AgentRuntime 91.9%). `just app` passes.

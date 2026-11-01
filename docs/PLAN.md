@@ -321,6 +321,40 @@ Wave 2:
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 
+#178, two intermittent CI failures (2026-11-01):
+
+- **`TerminalProcess` lost output: a product bug, fixed.** The process-exit source ran on the reader's serial queue
+  and its handler called a blocking `waitpid`. The exit event can arrive while the command is still closing the
+  terminal, and that close waits until the master has been read, but the master is read on the same queue. Both
+  waited for each other until the kernel gave up on the unread output; the command still exited with 0, so
+  `waitForExit()` returned `.exited(0)` with empty output. Every caller that reads `output` after `waitForExit()`
+  (agent terminals, sign-in) was exposed. The exit source now has its own queue. Verified by reproduction: 2,560
+  `/bin/pwd` terminals started 64 at a time with ten CPU burners running lost 6–10 outputs per run (25 of 7,680
+  in three runs) before the change and none in 7,680 after it. The new regression test
+  `keepsTheOutputOfManyConcurrentQuickCommands` failed 10 of 10 runs without the fix and passed 15 of 15 with it;
+  the issue's test passed 60 of 60 runs (four parallel streams under load) and the whole suite 18 of 18.
+  Launching 32 terminals at once also made `posix_openpt` fail about once in 3,000 launches, which is why the
+  regression test starts four at a time; that failure is reported to the caller, not silent, and is not
+  investigated further.
+- **`MarkdownRendererTests.htmlIsShownAsCode` crash: cause not proven; a mitigation is in place.** A local
+  `just coverage` run on Xcode 27 (load average about 20) produced the same crash as CI (`swiftpm-testing-helper`,
+  SIGSEGV at 0x0 in `swift_getObjectType` under `swift_dynamicCast`, `MarkdownRendererTests.swift:106`), and the
+  report shows the other threads. Nine cooperative threads were creating attributed strings and fonts at once
+  (`MarkdownRenderer`, `StreamingMarkdown`, `UnifiedDiff` tests), three of them waiting on the same UIFoundation
+  lock (`NSAttributeDictionary newWithDictionary:` / `newWithKey:object:`, `NSFont fontWithDescriptor:size:`), while
+  the main thread was creating its first `NSWindow` inside `+[NSApplication initialize]`. A null object in an
+  attribute value fits a race in that shared attribute-dictionary cache, as in #126 (`NSAttributeDictionary`
+  again). Ruled out: shared state in `Theme` or the renderer (a `Sendable` struct, fonts and colors are created
+  on each access, no caches), and the test helper. Not reproduced: 32 concurrent renderers on 32 tasks (3 runs),
+  100 fresh processes racing `NSFont`/`NSColor` creation against a first `NSWindow` (no nil), 20 runs of the
+  Rendering tests and 36 runs of the hosted group under load. The mitigation runs the Rendering suites that build
+  attributed strings (`MarkdownRendererTests`, `StreamingMarkdownTests`, `UnifiedDiffTests`, `HighlighterTests`)
+  on the main actor, so the tests no longer create them on several threads at once. 24 hosted-group runs under load
+  then showed no crash, which proves little, as the crash was rare to begin with. The renderer does run off the
+  main thread in production (`MarkdownPreview`), so a real exposure is not excluded; #126 and #178 stay open for
+  the next report. Also seen, unrelated to the crash and not changed: `SourceViewTests.highlightsALargeFile`
+  failed in 2 of 60 loaded hosted runs because its highlighting wait ran out.
+
 Wave 1 status (2026-10-29):
 
 - #149 implemented: `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines

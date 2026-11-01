@@ -83,6 +83,26 @@ import Testing
         #expect(terminal.output == TerminalOutput(bytes: Data("\u{1B}[31mred\u{1B}[0m\r\nend".utf8)))
     }
 
+    /// The exit event can arrive while the command still closes the terminal, which waits for its output to be
+    /// read; a blocked reader made the kernel discard the output (#178, about 1 in 300 commands under load).
+    @Test func keepsTheOutputOfManyConcurrentQuickCommands() async throws {
+        let lost = try await withThrowingTaskGroup(of: Int.self) { group in
+            for _ in 0..<4 {
+                group.addTask {
+                    var lost = 0
+                    for _ in 0..<200 {
+                        let terminal = try TerminalProcess(launching: AgentCommand(executable: "/bin/pwd"))
+                        _ = await terminal.waitForExit()
+                        if terminal.output.bytes.isEmpty { lost += 1 }
+                    }
+                    return lost
+                }
+            }
+            return try await group.reduce(0, +)
+        }
+        #expect(lost == 0)
+    }
+
     @Test func retainsQuickOutputWhenReaderRegistrationIsDelayed() async throws {
         let queue = DispatchQueue(label: "Agenthesia.TerminalProcessTests.delayed-reader")
         queue.suspend()

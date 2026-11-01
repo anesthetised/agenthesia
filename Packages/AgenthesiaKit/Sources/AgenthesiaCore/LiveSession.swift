@@ -23,6 +23,11 @@ public final class LiveSession {
     public private(set) var signIn: SignIn?
     /// A terminal sign-in method's command, while it runs and after it fails.
     public private(set) var signInTerminal: SignInTerminal?
+    /// The draft a new session was started with (ADR-0040), held until it is submitted at the first idle state.
+    /// It stays when startup fails or is cancelled, so the window can return it to the draft.
+    public private(set) var initialPrompt: PromptDraft?
+    /// Runs once the initial prompt was submitted, e.g. to remember the agent the session started with.
+    @ObservationIgnored public var onInitialPromptSubmitted: (() -> Void)?
     /// The configured agent's name, once its install is known.
     public var agentName: String? { agent?.name }
     /// Turns finished when the user last looked at the session in a key window (ADR-0026). In memory only.
@@ -84,7 +89,8 @@ public final class LiveSession {
         directory: URL,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
-        additionalDirectories: [URL] = []
+        additionalDirectories: [URL] = [],
+        initialPrompt: PromptDraft? = nil
     ) async {
         begin(
             .new(
@@ -92,7 +98,8 @@ public final class LiveSession {
                 agent: agent,
                 worktreesRoot: worktreesRoot,
                 additionalDirectories: additionalDirectories
-            )
+            ),
+            initialPrompt: initialPrompt
         )
         await startup?.value
     }
@@ -109,9 +116,10 @@ public final class LiveSession {
     }
 
     /// Starts launching without waiting, after the earlier owners of the same session have closed.
-    func begin(_ launch: Launch, after previous: [LiveSession] = []) {
+    func begin(_ launch: Launch, after previous: [LiveSession] = [], initialPrompt: PromptDraft? = nil) {
         guard startup == nil, controller == nil, !isClosed else { return }
         if case .saved(let session) = launch { resuming = session }
+        self.initialPrompt = initialPrompt
         isStarting = true
         startup = Task {
             for owner in previous { await owner.close() }
@@ -239,7 +247,7 @@ public final class LiveSession {
             requireSignIn(again: afterSignIn)
             return
         }
-        connected(process)
+        try await connected(process)
     }
 
     private func requireSignIn(again: Bool) {
@@ -251,7 +259,9 @@ public final class LiveSession {
         )
     }
 
-    private func connected(_ process: AgentProcess) {
+    /// The session is idle for the first time: the initial prompt goes in like a typed one. A failed submission
+    /// fails the startup, which returns the draft.
+    private func connected(_ process: AgentProcess) async throws {
         guard !isClosed else { return }
         signIn = nil
         observeFailure()
@@ -265,6 +275,13 @@ public final class LiveSession {
             await self.controller?.close()
             await self.cleanup()
         }
+        guard let initialPrompt, let controller else { return }
+        try await controller.submit(
+            Self.content(initialPrompt.text, attachments: initialPrompt.attachments, checkout: checkout)
+        )
+        self.initialPrompt = nil
+        onInitialPromptSubmitted?()
+        onInitialPromptSubmitted = nil
     }
 
     private func fail(_ error: any Error) async {
@@ -327,7 +344,7 @@ public final class LiveSession {
             requireSignIn(again: true)
             return
         }
-        connected(process)
+        try await connected(process)
     }
 
     private func signIn(on method: ACP.TerminalAuthMethod) async throws {

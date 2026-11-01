@@ -84,6 +84,17 @@ public struct SessionWorkspace: Sendable {
         )
     }
 
+    /// What `prepare` would start a worktree from: the branch checked out in `directory`, or the short commit of a
+    /// detached `HEAD`. Nil outside Git, where the session works in the directory itself.
+    public static func worktreeBase(of directory: URL) async -> String? {
+        let directory = directory.resolvingSymlinksInPath().standardizedFileURL
+        guard hasGitEntry(atOrAbove: directory) else { return nil }
+        if let branch = try? await git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory), !branch.isEmpty {
+            return branch
+        }
+        return (try? await git(["rev-parse", "--short", "HEAD"], in: directory)) ?? "HEAD"
+    }
+
     /// The main checkout and root of a linked worktree containing `directory`, or nil outside one.
     public static func linkedCheckout(of directory: URL) async -> (checkout: URL, worktree: URL)? {
         guard

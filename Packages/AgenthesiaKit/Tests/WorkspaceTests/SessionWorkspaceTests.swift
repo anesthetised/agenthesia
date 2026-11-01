@@ -46,6 +46,27 @@ import Testing
         )
     }
 
+    @Test func worktreeBaseIsTheCheckedOutBranchOrTheDetachedCommit() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-base-\(UUID())")
+        let repo = directory.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo.appending(path: "sub"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(await SessionWorkspace.worktreeBase(of: repo) == nil)
+        try await SessionWorkspace.git(["init", "-q", "-b", "feature/x"], in: repo)
+        // A repository without commits still names its branch; starting a session there fails later.
+        #expect(await SessionWorkspace.worktreeBase(of: repo.appending(path: "sub")) == "feature/x")
+        try await SessionWorkspace.git(
+            [
+                "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit",
+                "-q", "--allow-empty", "-m", "Initial",
+            ],
+            in: repo
+        )
+        let commit = try await SessionWorkspace.git(["rev-parse", "--short", "HEAD"], in: repo)
+        try await SessionWorkspace.git(["checkout", "-q", "--detach"], in: repo)
+        #expect(await SessionWorkspace.worktreeBase(of: repo) == commit)
+    }
+
     @Test func nonRepositoryUsesSelectedDirectoryAndEmptyRepositoryFails() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "worktree-test-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

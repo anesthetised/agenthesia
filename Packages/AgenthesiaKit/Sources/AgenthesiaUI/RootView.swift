@@ -16,13 +16,6 @@ public struct RootView: View {
     @State private var savedDraft: (text: String, attachments: [URL])?
     @State private var submitting = false
     @State private var configError: String?
-    @State private var directory = ""
-    @State private var executable = ""
-    @State private var arguments = ""
-    /// An installed agent version, or `nil` for a custom command.
-    @State private var agentID: UUID?
-    /// Installed agents offered by the launch form; without it, only a custom command (ADR-0036).
-    private let catalog: AgentCatalog?
     @State private var showingLog = false
     /// The window's remembered inspector visibility; `SessionWindowModel.showingInspector` is the working copy.
     @SceneStorage("showingInspector") private var storedInspector = true
@@ -34,16 +27,11 @@ public struct RootView: View {
         catalog: AgentCatalog? = nil,
         target: Binding<WindowTarget> = .constant(.launch)
     ) {
-        self.init(model: SessionWindowModel(sessions: sessions), catalog: catalog, target: target)
+        self.init(model: SessionWindowModel(sessions: sessions, catalog: catalog), target: target)
     }
 
-    init(
-        model: SessionWindowModel,
-        catalog: AgentCatalog? = nil,
-        target: Binding<WindowTarget> = .constant(.launch)
-    ) {
+    init(model: SessionWindowModel, target: Binding<WindowTarget> = .constant(.launch)) {
         _model = State(initialValue: model)
-        self.catalog = catalog
         _target = target
     }
 
@@ -60,7 +48,7 @@ public struct RootView: View {
         } detail: {
             VStack(spacing: 0) {
                 if model.showingSetup && model.canStart {
-                    setup
+                    SessionDraftView(model: model)
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let session = model.displayed {
@@ -148,6 +136,8 @@ public struct RootView: View {
             await model.restore(target)
             target = model.target
         }
+        // A session started from the draft that fails or is cancelled returns its draft (ADR-0040).
+        .task(id: model.abandonedStart?.id) { await model.returnToDraft() }
         .onChange(of: model.target) { target = model.target }
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
@@ -212,13 +202,9 @@ public struct RootView: View {
         guard let opened = WindowTarget(url: url) else { return }
         let windows = NSApp.windows.count { $0.isVisible && $0.canBecomeMain }
         Task {
-            await model.activate(opened, isBlank: isBlankLaunchForm, windowCount: windows) { openWindow(value: $0) }
+            await model.activate(opened, isBlank: model.draft.isEmpty, windowCount: windows) { openWindow(value: $0) }
             target = model.target
         }
-    }
-
-    private var isBlankLaunchForm: Bool {
-        directory.isEmpty && executable.isEmpty && arguments.isEmpty
     }
 
     private var shownSessionID: UUID? {
@@ -300,88 +286,6 @@ public struct RootView: View {
         Task {
             guard model.displayed?.session.id == id, !model.closed else { return }
             await model.files.open(path: path, line: line, in: id)
-        }
-    }
-
-    private var setup: some View {
-        Form {
-            Section("New session") {
-                HStack {
-                    TextField("Project directory", text: $directory)
-                    Button("Choose…") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseDirectories = true
-                        panel.canChooseFiles = false
-                        panel.allowsMultipleSelection = false
-                        if panel.runModal() == .OK { directory = panel.url?.path ?? "" }
-                    }
-                }
-                if let catalog {
-                    HStack {
-                        Picker("Agent", selection: $agentID) {
-                            ForEach(catalog.latest) { installed in
-                                Text("\(installed.name) \(installed.version)").tag(UUID?.some(installed.id))
-                            }
-                            ForEach(catalog.localAgents) { local in
-                                Text(local.name).tag(UUID?.some(local.id))
-                            }
-                            if !catalog.latest.isEmpty || !catalog.localAgents.isEmpty { Divider() }
-                            Text("Custom Command").tag(UUID?.none)
-                        }
-                        SettingsLink { Text("Manage Agents…") }
-                    }
-                    // A removed agent falls back to the custom command instead of leaving the picker blank.
-                    .onChange(of: catalog.latest.map(\.id) + catalog.localAgents.map(\.id)) { _, available in
-                        if let agentID, !available.contains(agentID) { self.agentID = nil }
-                    }
-                }
-                if selectedAgent == nil {
-                    TextField("Agent executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
-                    TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
-                }
-                Text(
-                    "\(selectedAgent == nil ? "One argument per line. Use an installed, authenticated ACP agent. " : "")Git projects get a fresh worktree from HEAD; uncommitted and untracked files are not copied. Other directories are used directly."
-                )
-                .font(.caption).foregroundStyle(.secondary)
-                Button("Start Session") {
-                    model.showingSetup = false
-                    let path = (directory.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
-                    if let selectedAgent {
-                        model.start(directory: URL(filePath: path), agent: selectedAgent)
-                    } else {
-                        let command = Self.launchCommand(executable: executable, arguments: arguments)
-                        model.start(
-                            directory: URL(filePath: path),
-                            executable: command.executable,
-                            arguments: command.arguments
-                        )
-                    }
-                }.buttonStyle(.borderedProminent)
-                    .disabled(
-                        directory.isEmpty
-                            || selectedAgent == nil
-                                && executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    )
-            }
-        }.formStyle(.grouped)
-            .task(selectAgent)
-    }
-
-    /// Offers the first installed or local agent unless a custom command was already entered.
-    private func selectAgent() async {
-        guard let catalog else { return }
-        await catalog.reloadInstallations()
-        if agentID == nil, executable.isEmpty { agentID = catalog.latest.first?.id ?? catalog.localAgents.first?.id }
-    }
-
-    /// The selected installed version or local agent, while it is still installed or listed.
-    private var selectedAgent: AgentInstallRecord? {
-        guard let agentID, let catalog else { return nil }
-        if let installation = catalog.latest.first(where: { $0.id == agentID }) {
-            return AgentInstallRecord(installation: installation)
-        }
-        return catalog.localAgents.first { $0.id == agentID }.map {
-            AgentInstallRecord(name: $0.name, executable: $0.command.executable, arguments: $0.command.arguments)
         }
     }
 

@@ -134,6 +134,39 @@ import Testing
         #expect(try fixture.catalog(registry: []).localAgents.map(\.name) == ["Mine"])
     }
 
+    @Test func theDraftOffersTheNewestVersionsAndRemembersTheLastAgent() async throws {
+        let fixture = try CatalogFixture()
+        defer { fixture.remove() }
+        let catalog = try fixture.catalog(registry: [])
+        #expect(catalog.choices.isEmpty && catalog.defaultChoice == nil)
+        await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
+        await catalog.install(try fixture.agent(fixture.binary("2.0.0")))
+        catalog.addCustom(name: "Mine", executable: "/opt/mine", arguments: ["--stdio"])
+        let mine = try #require(catalog.localAgents.first)
+        let fixtureAgent = AgentCatalog.Choice.installed(agentID: "fixture")
+        #expect(catalog.choices == [fixtureAgent, .local(mine.id)])
+        #expect(catalog.defaultChoice == fixtureAgent)
+        #expect(catalog.name(of: fixtureAgent) == "Fixture 2.0.0")
+        #expect(catalog.record(for: fixtureAgent)?.installationID == catalog.latest.first?.id)
+        #expect(catalog.name(of: .local(mine.id)) == "Mine")
+        #expect(catalog.record(for: .local(mine.id))?.arguments == ["--stdio"])
+        #expect(catalog.record(for: .local(UUID())) == nil)
+
+        catalog.remember(.local(mine.id))
+        let reopened = try fixture.catalog(registry: [])
+        await reopened.reloadInstallations()
+        #expect(reopened.lastChoice == .local(mine.id))
+        #expect(reopened.defaultChoice == .local(mine.id))
+        // A removed agent is no longer the default; the first in the list is.
+        reopened.remove(mine)
+        #expect(reopened.defaultChoice == fixtureAgent)
+        let custom = LocalAgent.Command(executable: "/opt/agents/custom", arguments: ["--acp"])
+        reopened.remember(.custom(custom))
+        #expect(try fixture.catalog(registry: []).defaultChoice == .custom(custom))
+        #expect(AgentCatalog.record(custom: custom).name == "custom")
+        #expect(reopened.name(of: .custom(custom)) == "custom")
+    }
+
     @Test func checksKeepTheLatestProbeResultPerCommandWithTheLoginShellPath() async throws {
         let fixture = try CatalogFixture()
         defer { fixture.remove() }

@@ -87,6 +87,41 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func newSessionInProjectOpensTheDraftWithThatProject() async throws {
+        let fixture = try Fixture()
+        let store = try await fixture.sessions.library.store()
+        let agent = AgentInstallRecord(name: "Test", executable: "unused")
+        try await store.createAgentInstall(agent)
+        var records: [SessionRecord] = []
+        for (index, name) in ["Older", "Newer"].enumerated() {
+            let project = ProjectRecord(name: name, rootPath: fixture.directory.appending(path: name).path)
+            try await store.createProject(project)
+            let record = SessionRecord(
+                projectID: project.id,
+                agentInstallID: agent.id,
+                workingDirectory: project.rootPath,
+                createdAt: Date(timeIntervalSince1970: Double(index))
+            )
+            try await store.createSession(record)
+            records.append(record)
+        }
+        let model = fixture.model
+        await model.refresh()
+        await model.showHistory(records[1])
+        #expect(!model.showingSetup)
+        model.draft.text = "keep me"
+        // The row of the older session names its project, and the newest one is the draft's default.
+        let row = try #require(
+            model.sidebar.sections.flatMap(\.rows).first { $0.id == AnyHashable(records[0].id) }
+        )
+        let project = try #require(row.project)
+        model.newSession(in: project)
+        #expect(model.showingSetup && model.sidebarSelection == nil)
+        #expect(model.selectedDirectory == URL(filePath: project.rootPath, directoryHint: .isDirectory))
+        #expect(project.name == "Older" && model.draft.text == "keep me")
+        await fixture.remove()
+    }
+
     @Test func sendStartsTheSessionWithTheDraftAndClearsIt() async throws {
         let fixture = try Fixture()
         let model = fixture.model

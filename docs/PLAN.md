@@ -317,6 +317,12 @@ Wave 2:
   removal (and, separately, the record check) made those tests fail. Not tested: a failure after the record was written
   (only the started-session case covers the record check), a failure inside `SessionWorkspace.prepare` after
   `git worktree add`, quitting the app during removal, and the removal in the running app.
+- #155: consecutive tool calls fold into a summary row (`TranscriptRow.fold`, `ToolGroupSummary`), and the table
+  inserts and removes only changed rows. Covered by unit tests of the folding and every wording, and by hosted-view
+  tests of expanding and collapsing, in-place streaming updates (row views, selected text and table selection
+  survive), Copy as Markdown, follow-bottom, a kept scroll position and resizing. Rendering Lab S7:App now folds and the
+  new S8:App toggles the group while streaming; the lab builds, but neither scenario has been run yet. The
+  running-app check, screenshots and VoiceOver are not part of this step.
 
 None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
 VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

@@ -1099,3 +1099,312 @@ extension LiveTranscriptTests {
         #expect(controller.table.rect(ofRow: 0).width <= width)
     }
 }
+
+extension LiveTranscriptTests {
+    private func tool(
+        _ id: String,
+        kind: ACP.ToolKind = .execute,
+        status: ACP.ToolCallStatus = .completed
+    )
+        -> ACP.SessionUpdate
+    {
+        .toolCall(.init(toolCallId: id, title: "Call \(id)", kind: kind, status: status))
+    }
+
+    private func publish(_ recorded: RecordedTranscript, to source: LiveTranscriptSource) {
+        source.state = recorded.state
+        source.revision += 1
+    }
+
+    private func disclosure(in controller: TranscriptTableController, row: Int) throws -> NSButton {
+        let view = try #require(controller.table.view(atColumn: 0, row: row, makeIfNecessary: true))
+        return try #require(views(NSButton.self, in: view).first { $0.bezelStyle == .disclosure })
+    }
+
+    @Test func permissionRequestsAndInputFormsEndAGroupAndOneCallStaysACard() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(tool("a"))
+        try await recorded.apply(tool("b"))
+        try await recorded.append(
+            try SessionEvent.permissionRequested(id: UUID(), toolCall: .init(toolCallId: "b"), options: [])
+                .storedEvent()
+        )
+        try await recorded.apply(tool("c"))
+        let request = ACP.ElicitationRequest(
+            message: "Name",
+            mode: .form(.init(properties: ["name": .string(.init())])),
+            scope: .session("s", toolCallId: nil)
+        )
+        try await recorded.append(SessionEvent.inputRequested(id: UUID(), request: request).storedEvent())
+        try await recorded.apply(tool("d"))
+        try await recorded.apply(tool("e"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        #expect(
+            source.rows == [.group(first: 0), .item(2), .item(3), .item(4), .group(first: 5), .item(7)]
+        )
+        #expect(source.messageCount == 6)
+        #expect(source.message(at: 0).kind == .group)
+        #expect(source.message(at: 0).tool?.kind == "Ran 2 commands")
+        #expect(source.message(at: 1).role == "Permission")
+        #expect(source.message(at: 2).tool?.kind == "Execute")
+        #expect(source.message(at: 3).input != nil)
+        #expect(source.message(at: 4).tool?.kind == "Ran 2 commands")
+        #expect(source.message(at: 5).markdown == "Done")
+        #expect(!source.isStreaming(at: 0))
+    }
+
+    @Test func aGroupExpandsToItsCardsAndCollapsesAgainKeepingTheOtherRows() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Go"))))
+        try await recorded.apply(tool("a", kind: .read))
+        try await recorded.apply(tool("b", kind: .execute, status: .failed))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        #expect(controller.table.numberOfRows == 3)
+        let answer = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
+        let groupRow = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(labels(in: groupRow).contains("Ran 1 command, read 1 file"))
+        let failure = try #require(views(NSTextField.self, in: groupRow).first { $0.stringValue == "· 1 failed" })
+        #expect(failure.textColor == .systemRed)
+        #expect(views(LinkTextField.self, in: groupRow).isEmpty)
+        controller.table.selectRowIndexes([2], byExtendingSelection: false)
+
+        let toggle = try disclosure(in: controller, row: 1)
+        #expect(toggle.state == .off)
+        controller.toggleExpansion(toggle)
+        #expect(controller.table.numberOfRows == 5)
+        #expect(source.rows == [.item(0), .group(first: 1), .item(1), .item(2), .item(3)])
+        #expect(try disclosure(in: controller, row: 1).state == .on)
+        let firstCard = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
+        #expect(labels(in: firstCard).contains("Read"))
+        let secondCard = try #require(controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true))
+        #expect(labels(in: secondCard).contains("Execute"))
+        #expect(controller.table.view(atColumn: 0, row: 4, makeIfNecessary: false) === answer)
+        #expect(controller.table.selectedRowIndexes == [4])
+
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        #expect(controller.table.numberOfRows == 3)
+        #expect(try disclosure(in: controller, row: 1).state == .off)
+        #expect(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: false) === answer)
+        #expect(controller.table.selectedRowIndexes == [2])
+
+        for width in [500.0, 700, 450] {
+            controller.toggleExpansion(try disclosure(in: controller, row: 1))
+            window.setContentSize(NSSize(width: width, height: 500))
+            controller.scroll.frame = window.contentLayoutRect
+            window.contentView?.layoutSubtreeIfNeeded()
+        }
+        #expect(controller.table.numberOfRows == 5)
+    }
+
+    @Test func aCardAndItsOwnExpansionAreKeptApartFromItsGroupsExpansion() async throws {
+        let recorded = try await RecordedTranscript()
+        let output = (1...40).map { "line \($0)" }.joined(separator: "\n")
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "a",
+                    title: "Long",
+                    kind: .read,
+                    status: .completed,
+                    content: [.content(.init(content: .init(text: output)))]
+                )
+            )
+        )
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        controller.toggleExpansion(try disclosure(in: controller, row: 0))
+        #expect(source.message(at: 0).tool?.expanded == true)
+
+        // The next call folds the card; the group starts collapsed and the card opens as it was left.
+        try await recorded.apply(tool("b"))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(controller.table.numberOfRows == 1)
+        #expect(source.message(at: 0).tool?.expanded == false)
+        controller.toggleExpansion(try disclosure(in: controller, row: 0))
+        #expect(source.message(at: 1).tool?.expanded == true)
+        #expect(source.message(at: 1).markdown.contains("line 40"))
+
+        // The group keeps its expansion as it grows, and a card's toggle leaves the group alone.
+        try await recorded.apply(tool("c"))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(controller.table.numberOfRows == 4)
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        #expect(source.message(at: 1).tool?.expanded == false)
+        #expect(source.message(at: 0).tool?.expanded == true)
+    }
+
+    @Test func streamingChangesOnlyTheRowsThatChanged() async throws {
+        let recorded = try await RecordedTranscript()
+        let turn = UUID()
+        try await recorded.append(try SessionEvent.prompt(id: turn, content: [.init(text: "tools")]).storedEvent())
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Before"))))
+        try await recorded.apply(tool("a", kind: .read))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "After"))))
+        try await recorded.apply(tool("b", kind: .read))
+        try await recorded.apply(tool("c", status: .inProgress))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Earlier paragraph.\n\nStreaming"))))
+        let source = LiveTranscriptSource()
+        source.running = true
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let rowCount = controller.table.numberOfRows
+        let group = rowCount - 2
+        let groupRow = try #require(controller.table.view(atColumn: 0, row: group, makeIfNecessary: true))
+        #expect(labels(in: groupRow).contains("Running Call c…"))
+        let header = try #require(views(NSStackView.self, in: groupRow).first)
+        let answerRow = try #require(controller.table.view(atColumn: 0, row: rowCount - 1, makeIfNecessary: true))
+        let answer = try #require(views(NSTextView.self, in: answerRow).first)
+        answer.setSelectedRange(NSRange(location: 0, length: 4))
+        let before = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+
+        // A status change and a chunk: the summary changes in its row, and the answer keeps its view and selection.
+        try await recorded.apply(.toolCallUpdate(.init(toolCallId: "c", status: .failed)))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: " on"))))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(controller.table.numberOfRows == rowCount)
+        #expect(controller.table.view(atColumn: 0, row: group, makeIfNecessary: false) === groupRow)
+        #expect(views(NSStackView.self, in: groupRow).first === header)
+        #expect(labels(in: groupRow).contains("Ran 1 command, read 1 file"))
+        #expect(labels(in: groupRow).contains("· 1 failed"))
+        #expect(controller.table.view(atColumn: 0, row: rowCount - 1, makeIfNecessary: false) === answerRow)
+        #expect(answer.string.hasSuffix("Streaming on"))
+        #expect(answer.selectedRange() == NSRange(location: 0, length: 4))
+        #expect(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: false) === before)
+    }
+
+    @Test func theNextCallFoldsACardWithoutTouchingOtherRows() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Go"))))
+        try await recorded.apply(tool("a", kind: .read))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        #expect(source.rows == [.item(0), .item(1)])
+        let prompt = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let card = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(!views(LinkTextField.self, in: card).isEmpty)
+        controller.table.selectRowIndexes([0], byExtendingSelection: false)
+
+        try await recorded.apply(tool("b", kind: .read))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(source.rows == [.item(0), .group(first: 1)])
+        #expect(controller.table.numberOfRows == 2)
+        #expect(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: false) === prompt)
+        #expect(controller.table.selectedRowIndexes == [0])
+        let group = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(group !== card)
+        #expect(labels(in: group).contains("Read 2 files"))
+    }
+
+    @Test func copyReturnsEveryToolRowOnce() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Go"))))
+        try await recorded.apply(tool("a"))
+        try await recorded.apply(tool("b"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let cards = "**Call a**\n\n**Call b**"
+        #expect(source.message(at: 1).markdown == "")
+        #expect(source.message(at: 1).copyText?() == cards)
+
+        controller.table.selectRowIndexes([1], byExtendingSelection: false)
+        #expect(controller.selectedMarkdown == cards)
+        controller.table.selectAll(nil)
+        #expect(controller.selectedMarkdown == "Go\n\n\(cards)\n\nDone")
+
+        // Expanded, the cards are rows of their own: a selection has each once, and the summary's Copy still has all.
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        controller.table.selectAll(nil)
+        #expect(controller.selectedMarkdown == "Go\n\n\(cards)\n\nDone")
+        #expect(source.message(at: 1).copyText?() == cards)
+    }
+
+    @Test func foldingFollowsTheBottomAndKeepsAScrolledBackPlace() async throws {
+        let recorded = try await RecordedTranscript()
+        let paragraphs = (1...60).map { "Paragraph \($0)." }.joined(separator: "\n\n")
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: paragraphs))))
+        try await recorded.apply(tool("a"))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        // New rows measure themselves during layout, and the table follows them on the next main queue turn.
+        func reachesEnd() async throws -> Bool {
+            let deadline = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < deadline {
+                controller.table.layoutSubtreeIfNeeded()
+                if controller.table.frame.height - controller.scroll.contentView.bounds.maxY < 2 { return true }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            return false
+        }
+        #expect(try await reachesEnd())
+        for id in ["b", "c"] {
+            try await recorded.apply(tool(id))
+            publish(recorded, to: source)
+            controller.update(source)
+            #expect(try await reachesEnd())
+        }
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        #expect(controller.table.numberOfRows == 5)
+        #expect(try await reachesEnd())
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        #expect(try await reachesEnd())
+
+        controller.scroll.contentView.scroll(to: NSPoint(x: 0, y: 40))
+        controller.scroll.reflectScrolledClipView(controller.scroll.contentView)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: controller.scroll)
+        try await recorded.apply(tool("d"))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(abs(controller.scroll.contentView.bounds.origin.y - 40) < 1)
+    }
+
+    #if DEBUG
+        @Test func theRenderingLabPrototypeFoldsAsTheLiveTranscriptDoes() throws {
+            let prototype = AppTranscriptPrototype()
+            prototype.show(LabTranscript(items: [.user("Go"), .assistant(markdown: "Fine")]))
+            prototype.appendTools(RenderingLab.toolCards())
+            prototype.didAppend()
+            let plain: [TranscriptRow] = [.item(0), .item(1), .group(first: 2), .item(7)]
+            #expect(prototype.rows == plain)
+            #expect(prototype.message(at: 2).tool?.kind.hasPrefix("Running") == true)
+            #expect(prototype.isStreaming(at: 3))
+            #expect(!prototype.isStreaming(at: 2))
+            prototype.toggleGroups()
+            prototype.append("Hello")
+            #expect(prototype.rows.count == plain.count + 5)
+            #expect(prototype.message(at: 3).tool?.kind == "Search")
+            #expect(prototype.message(at: 8).markdown == "Hello")
+        }
+    #endif
+}

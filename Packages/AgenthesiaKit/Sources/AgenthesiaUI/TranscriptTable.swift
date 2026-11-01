@@ -23,7 +23,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
     let scroll = TranscriptScrollView()
     private weak var session: (any TranscriptSource)?
     private var revision = -1
-    private var count = 0
+    private var shownRows: [TranscriptRow] = []
     private var followingBottom = true
     private var adjustingScroll = false
     private var followScheduled = false
@@ -69,8 +69,12 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
 
     var selectedMarkdown: String {
         guard let session else { return "" }
-        return table.selectedRowIndexes.compactMap { row in
-            (0..<session.messageCount).contains(row) ? session.message(at: row).markdown : nil
+        return table.selectedRowIndexes.compactMap { row -> String? in
+            guard (0..<session.messageCount).contains(row) else { return nil }
+            let message = session.message(at: row)
+            // An expanded group's cards are rows of their own, so a selection never copies them twice.
+            if message.kind == .group, message.tool?.expanded == true { return nil }
+            return message.copyText?() ?? message.markdown
         }.joined(separator: "\n\n")
     }
 
@@ -83,19 +87,20 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         let initial = self.session !== session
         let origin = scroll.contentView.bounds.origin
         self.session = session
+        let rows = session.rows
         if initial {
-            count = 0
             followingBottom = true
             table.reloadData()
-        } else if count < session.messageCount {
-            table.insertRows(at: IndexSet(integersIn: count..<session.messageCount))
+        } else if rows != shownRows {
+            applyRowChanges(rows.difference(from: shownRows))
         }
+        shownRows = rows
         // ACP can revise an earlier message or tool row, including in the same frame as an append.
         // Refresh only materialized rows; history is rendered lazily when scrolled into view.
         var changed = IndexSet()
         var available = IndexSet()
         table.enumerateAvailableRowViews { _, row in available.insert(row) }
-        for row in available where row < min(count, session.messageCount) {
+        for row in available where !initial && row < rows.count {
             guard let visible = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptMessageRow
             else {
                 continue
@@ -162,7 +167,6 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             changed.insert(row)
         }
         if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }
-        count = session.messageCount
         revision = session.revision
         table.layoutSubtreeIfNeeded()
         if followingBottom {
@@ -171,6 +175,22 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             scroll.contentView.scroll(to: origin)
             scroll.reflectScrolledClipView(scroll.contentView)
         }
+    }
+
+    /// Rows that stay keep their views, so text selected in them and their field editors survive.
+    private func applyRowChanges(_ changes: CollectionDifference<TranscriptRow>) {
+        var removed = IndexSet()
+        var inserted = IndexSet()
+        for change in changes {
+            switch change {
+            case .remove(let offset, _, _): removed.insert(offset)
+            case .insert(let offset, _, _): inserted.insert(offset)
+            }
+        }
+        table.beginUpdates()
+        table.removeRows(at: removed)
+        table.insertRows(at: inserted)
+        table.endUpdates()
     }
 
     @objc private func userWillScroll(_ notification: Notification) { followingBottom = false }
@@ -286,6 +306,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     var tool: ToolCardHeader?
     var input: InputCard?
     var caption: String?
+    var copyText: (() -> String)?
     var streamingCell: TextKitCell?
     var bubble: BubbleCell?
     var stack: NSStackView?
@@ -343,8 +364,13 @@ private final class TranscriptMessageRow: NSTableCellView {
         tool = message.tool
         input = message.input
         caption = message.caption
+        copyText = message.copyText
         if message.isNotice {
             showNotice(message)
+            return
+        }
+        if message.kind == .group {
+            showGroup(message, controller: controller)
             return
         }
         let content: NSView
@@ -448,6 +474,24 @@ private final class TranscriptMessageRow: NSTableCellView {
         )
     }
 
+    /// A folded group is only a header; its tool cards are rows of their own once it is expanded.
+    private func showGroup(_ message: TranscriptMessage, controller: TranscriptTableController) {
+        let header = makeHeader(message, controller: controller)
+        let stack = NSStackView(views: [header])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        self.stack = stack
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+                header.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            ]
+        )
+    }
+
     /// Keep the text field and its field editor attached when only native metadata changes.
     func showHeader(_ message: TranscriptMessage, controller: TranscriptTableController) {
         guard let stack, let old = stack.arrangedSubviews.first else { return }
@@ -498,8 +542,13 @@ private final class TranscriptMessageRow: NSTableCellView {
         // Assistive technology uses the row's Copy action while the button is not shown.
         copy.setAccessibilityElement(hovering)
         copyButton = copy
+        if message.kind == .group {
+            // The title of a running call can be any length.
+            role.lineBreakMode = .byTruncatingTail
+            role.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
         // Users and the agent speak without a label; their Copy button stays at the row's trailing edge.
-        let labeled = message.kind == .card || message.kind == .thought
+        let labeled = message.kind == .card || message.kind == .thought || message.kind == .group
         let header = NSStackView(
             views: (labeled ? Self.toolHeader(message.tool, role: role, controller: controller) : []) + [
                 NSView(), copy,
@@ -535,6 +584,8 @@ private final class TranscriptMessageRow: NSTableCellView {
             image: NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.kind) ?? NSImage()
         )
         icon.contentTintColor = .secondaryLabelColor
+        // The label beside it says the same.
+        icon.setAccessibilityElement(false)
         let status = NSTextField(labelWithString: tool.status)
         status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         status.textColor =
@@ -574,7 +625,7 @@ private final class TranscriptMessageRow: NSTableCellView {
 
     @objc func copyMessage(_ sender: Any?) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(markdown, forType: .string)
+        NSPasteboard.general.setString(copyText?() ?? markdown, forType: .string)
     }
 }
 

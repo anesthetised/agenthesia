@@ -12,8 +12,8 @@ import SwiftUI
     /// The draft's first message; it moves to the session on Send and comes back if startup fails or is cancelled.
     var draft = PromptDraft()
     /// The project and agent picked in the draft; nil uses the defaults.
-    var draftDirectory: URL?
-    var draftAgent: AgentCatalog.Choice?
+    var draftDirectory: URL? { didSet { draftError = nil } }
+    var draftAgent: AgentCatalog.Choice? { didSet { draftError = nil } }
     /// Why the last session started from the draft did not start.
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
@@ -400,9 +400,15 @@ import SwiftUI
             agent: AgentCatalog.record(custom: .init(executable: executable, arguments: arguments))
         )
     }
-    func start(directory: URL, agent: AgentInstallRecord, initialPrompt: PromptDraft? = nil) {
-        guard canStart else { return }
-        show(sessions.start(directory: directory, agent: agent, initialPrompt: initialPrompt))
+    @discardableResult func start(
+        directory: URL,
+        agent: AgentInstallRecord,
+        initialPrompt: PromptDraft? = nil
+    ) -> LiveSession? {
+        guard canStart else { return nil }
+        let owner = sessions.start(directory: directory, agent: agent, initialPrompt: initialPrompt)
+        show(owner)
+        return owner
     }
 
     /// Known projects, most recently used first; the first is the draft's default (ADR-0040).
@@ -430,9 +436,11 @@ import SwiftUI
         guard canStartDraft, let directory = selectedDirectory, let choice = selectedAgent,
             let agent = record(for: choice)
         else { return }
-        catalog?.remember(choice)
         draftError = nil
-        start(directory: directory, agent: agent, initialPrompt: draft)
+        // Only a session that started is remembered: a failed or cancelled start keeps the last agent (ADR-0040).
+        start(directory: directory, agent: agent, initialPrompt: draft)?.onInitialPromptSubmitted = { [catalog] in
+            catalog?.remember(choice)
+        }
         draft = PromptDraft()
     }
 

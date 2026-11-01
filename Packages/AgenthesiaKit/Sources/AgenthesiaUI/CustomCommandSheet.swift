@@ -16,10 +16,19 @@ struct CustomCommandSheet: View {
 
     var body: some View {
         Form {
-            TextField("Executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
-            TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5)
-            Text("One argument per line. Use an installed, authenticated ACP agent.")
-                .font(.caption).foregroundStyle(.secondary)
+            // Sections give long paths the full width; a labelled field in a grouped form is short and right-aligned.
+            Section("Executable") {
+                TextField("Executable", text: $executable, prompt: Text("/path/to/agent or command on PATH"))
+                    .labelsHidden()
+            }
+            Section {
+                TextField("Arguments", text: $arguments, axis: .vertical).lineLimit(2...5).labelsHidden()
+            } header: {
+                Text("Arguments")
+            } footer: {
+                Text("One argument per line. Use an installed, authenticated ACP agent.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 420)

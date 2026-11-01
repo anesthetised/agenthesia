@@ -4,6 +4,7 @@ import Persistence
 import SwiftUI
 import Testing
 
+@testable import AgentRuntime
 @testable import AgenthesiaCore
 @testable import AgenthesiaUI
 
@@ -14,14 +15,14 @@ import Testing
         let sessions: SessionManager
         let model: SessionWindowModel
 
-        @MainActor init() throws {
+        @MainActor init(catalog: AgentCatalog? = nil) throws {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sessions = SessionManager(
                 library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")),
                 worktreesRoot: directory.appending(path: "trees")
             )
             sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
-            model = SessionWindowModel(sessions: sessions)
+            model = SessionWindowModel(sessions: sessions, catalog: catalog)
         }
 
         @MainActor func remove() async {
@@ -146,6 +147,45 @@ import Testing
         #expect(model.showingSetup && model.draft == PromptDraft(text: "hello"))
         #expect(model.draftError == nil)
         #expect(fixture.sessions.owners.isEmpty)
+        await fixture.remove()
+    }
+
+    @Test func onlyAStartedSessionRemembersItsAgentAndPickingAnotherClearsTheError() async throws {
+        let suite = "session-draft-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let root = FileManager.default.temporaryDirectory.appending(path: suite)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = AgentCatalog(
+            registry: AgentRegistry.Client(cacheDirectory: root) { _ in .init(status: 404, data: Data()) },
+            installer: AgentInstaller(root: root.appending(path: "Agents"), download: { _, _ in }),
+            defaults: defaults,
+            environment: { _ in [:] },
+            probe: { _ in throw AgentProbe.Failure.timedOut(seconds: 20) },
+            checkNode: { _ in throw NodeRuntime.Failure.missingNode }
+        )
+        let fixture = try Fixture(catalog: catalog)
+        let started = try fixture.mock()
+        let model = fixture.model
+        model.draftDirectory = fixture.directory
+        model.draftAgent = started
+        model.draft = PromptDraft(text: "hello")
+        model.startDraft()
+        await model.owner?.startup?.value
+        #expect(catalog.lastChoice == started)
+        // A second window's start fails: the agent that started a session stays the default.
+        let other = SessionWindowModel(sessions: fixture.sessions, catalog: catalog)
+        let missing = AgentCatalog.Choice.custom(.init(executable: "/does-not-exist", arguments: []))
+        other.draftDirectory = fixture.directory
+        other.draftAgent = missing
+        other.draft = PromptDraft(text: "hello")
+        other.startDraft()
+        await other.owner?.startup?.value
+        await other.returnToDraft()
+        #expect(catalog.lastChoice == started && other.draftError != nil)
+        other.draftAgent = started
+        #expect(other.draftError == nil)
+        other.close()
         await fixture.remove()
     }
 

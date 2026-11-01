@@ -26,6 +26,8 @@ public final class LiveSession {
     /// The draft a new session was started with (ADR-0040), held until it is submitted at the first idle state.
     /// It stays when startup fails or is cancelled, so the window can return it to the draft.
     public private(set) var initialPrompt: PromptDraft?
+    /// Runs once the initial prompt was submitted, e.g. to remember the agent the session started with.
+    @ObservationIgnored public var onInitialPromptSubmitted: (() -> Void)?
     /// The configured agent's name, once its install is known.
     public var agentName: String? { agent?.name }
     /// Turns finished when the user last looked at the session in a key window (ADR-0026). In memory only.
@@ -278,6 +280,8 @@ public final class LiveSession {
             Self.content(initialPrompt.text, attachments: initialPrompt.attachments, checkout: checkout)
         )
         self.initialPrompt = nil
+        onInitialPromptSubmitted?()
+        onInitialPromptSubmitted = nil
     }
 
     private func fail(_ error: any Error) async {

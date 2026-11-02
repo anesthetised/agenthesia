@@ -1204,6 +1204,122 @@ extension LiveTranscriptTests {
         #expect(controller.table.numberOfRows == 5)
     }
 
+    /// A group of two tool calls, the first with output beyond the collapsed bound ending in `needle`.
+    private func foldedOutput() async throws -> (RecordedTranscript, LiveTranscriptSource) {
+        let recorded = try await RecordedTranscript()
+        let output = (1...60).map { "line \($0)" }.joined(separator: "\n") + "\nthe Needle"
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "a",
+                    title: "Search",
+                    kind: .search,
+                    status: .completed,
+                    content: [.content(.init(content: .init(text: output)))]
+                )
+            )
+        )
+        try await recorded.apply(tool("b", status: .failed))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "All done"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        return (recorded, source)
+    }
+
+    @Test func findReachesFoldedOutputAndRevealsIt() async throws {
+        let (_, source) = try await foldedOutput()
+        let items = source.state.items
+        #expect(source.rows == [.item(0), .group(first: 1), .item(3)])
+        #expect(!source.message(at: 1).markdown.contains("Needle"))
+
+        // Case and diacritics do not matter, and blank queries match nothing.
+        #expect(TranscriptSearch.matches("néedle", in: items) == [1])
+        #expect(TranscriptSearch.matches("all DONE", in: items) == [3])
+        #expect(TranscriptSearch.matches("  ", in: items).isEmpty)
+        #expect(TranscriptSearch.failedToolCalls(in: items) == [2])
+
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(source.reveal(item: 1))
+        controller.update(source)
+        controller.reveal(row: row)
+        #expect(source.rows == [.item(0), .group(first: 1), .item(1), .item(2), .item(3)])
+        #expect(row == 2 && controller.table.selectedRowIndexes == [2])
+        #expect(source.message(at: row).markdown.contains("Needle"))
+        #expect(source.reveal(item: 99) == nil)
+    }
+
+    @Test func findMarksVisibleTextAndClearsIt() async throws {
+        let (_, source) = try await foldedOutput()
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let answer = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
+        let field = try #require(views(LinkTextField.self, in: answer).first)
+        func marked() -> Bool {
+            let text = field.attributedStringValue
+            guard text.length > 0 else { return false }
+            return text.attribute(.backgroundColor, at: 4, effectiveRange: nil) != nil
+        }
+        #expect(!marked())
+        controller.findQuery = "done"
+        #expect(marked())
+        controller.findQuery = ""
+        #expect(!marked())
+        let highlighted = TranscriptSearch.highlighted(NSAttributedString(string: "a b a"), query: "A")
+        #expect(highlighted.attribute(.backgroundColor, at: 0, effectiveRange: nil) != nil)
+        #expect(highlighted.attribute(.backgroundColor, at: 2, effectiveRange: nil) == nil)
+        #expect(highlighted.attribute(.backgroundColor, at: 4, effectiveRange: nil) != nil)
+    }
+
+    @Test func copyReturnsWholeCardsAndASummaryAloneCopiesItsCards() async throws {
+        let (_, source) = try await foldedOutput()
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+
+        // Collapsed: the summary copies the whole output, which its cards would not show.
+        controller.table.selectRowIndexes([1], byExtendingSelection: false)
+        #expect(controller.selectedMarkdown.contains("Needle"))
+
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        #expect(source.cardCount(ofGroupAt: 1) == 2)
+        #expect(source.message(at: 2).copyText?().contains("Needle") == true)
+        // Expanded and selected alone, it still copies them; with a card selected, nothing is copied twice.
+        controller.table.selectRowIndexes([1], byExtendingSelection: false)
+        #expect(controller.selectedMarkdown.contains("Needle"))
+        controller.table.selectRowIndexes([1, 2], byExtendingSelection: false)
+        let both = controller.selectedMarkdown
+        #expect(both.components(separatedBy: "Needle").count == 2)
+        #expect(source.cardCount(ofGroupAt: 0) == 0)
+    }
+
+    @Test func findStepsWrapAndTheStatusSaysWhere() {
+        var find = TranscriptFindState(isOpen: true, query: "x", matches: [2, 5, 9])
+        #expect(find.status == "3 matches")
+        // The first step lands on the newest; next and previous wrap.
+        #expect(find.step(in: find.matches, backward: false) == 9)
+        find.reveal = .init(item: 9)
+        #expect(find.status == "3 of 3")
+        #expect(find.step(in: find.matches, backward: false) == 2)
+        #expect(find.step(in: find.matches, backward: true) == 5)
+        find.reveal = .init(item: 2)
+        #expect(find.step(in: find.matches, backward: true) == 9)
+        find.matches = [2]
+        #expect(find.status == "1 of 1")
+        find.reveal = nil
+        #expect(find.status == "1 match")
+        find.matches = []
+        #expect(find.status == "No matches")
+        find.query = " "
+        #expect(find.status.isEmpty)
+    }
+
     /// A row wider than the column kept AppKit's cell at the column's width plus margins, off center (#183).
     @Test func rowsFillTheTableAndCenterTheColumn() async throws {
         let recorded = try await RecordedTranscript()

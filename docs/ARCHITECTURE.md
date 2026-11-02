@@ -289,6 +289,13 @@ decline. Requests without a recorded response after a restart show that none was
 controls. Non-text content is identified with attachment placeholders rather than silently dropped.
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
+Find in the transcript (`TranscriptFindBar`, `TranscriptFindState`, `TranscriptSearch`) reads each item's full text, so it
+also finds what a folded group or collapsed card does not show. Matches are items, not occurrences. Typing only counts
+and marks the text in visible rows, 150 ms after the last key; Return and ⌘G step to a match, and only a step expands
+the group and card that hide it, scrolls to the row and selects it. Streaming rows are not marked until they finish, and
+a streamed answer is counted again at the next edit or step, not on every chunk. Copy returns a tool card's whole
+output whether or not it is collapsed, and an expanded summary selected alone copies its cards.
+
 Saved history opens read-only. Its Continue action selects a new owner that reattaches the saved
 session ([ADR-0017](adr/0017-continue-saved-sessions.md)): `LiveSession.resume` looks up the session's
 agent install, checks the executable and the working directory, and launches the agent there without
@@ -319,7 +326,7 @@ new session whose startup failed before its first prompt was submitted, which re
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
 ⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.

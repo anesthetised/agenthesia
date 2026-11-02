@@ -54,12 +54,15 @@ protocol TranscriptSource: AnyObject {
     func message(at row: Int) -> TranscriptMessage
     func isStreaming(at row: Int) -> Bool
     func toggleExpansion(at row: Int)
+    /// How many card rows follow the summary at `row` while it is expanded.
+    func cardCount(ofGroupAt row: Int) -> Int
     func choosePermission(at row: Int, option: Int)
 }
 
 extension TranscriptSource {
     var rows: [TranscriptRow] { (0..<messageCount).map(TranscriptRow.item) }
     func toggleExpansion(at row: Int) {}
+    func cardCount(ofGroupAt row: Int) -> Int { 0 }
     func choosePermission(at row: Int, option: Int) {}
 }
 
@@ -151,16 +154,14 @@ final class LiveTranscriptSource: TranscriptSource {
 
     /// The Markdown of a group's cards, as each card's Copy returns it.
     private func groupMarkdown(first: Int) -> String {
-        groupItems(first: first).compactMap { item in
-            item.toolCall.map {
-                Self.toolCard(
-                    $0,
-                    output: item.commandOutput,
-                    expanded: expanded.contains(item.id),
-                    diff: cachedDiff
-                ).markdown
-            }
-        }.joined(separator: "\n\n")
+        groupItems(first: first).indices.map(fullToolMarkdown).joined(separator: "\n\n")
+    }
+
+    /// A card with all its output, whether or not it is collapsed on screen.
+    private func fullToolMarkdown(_ index: Int) -> String {
+        let item = state.items[index]
+        guard let tool = item.toolCall else { return "" }
+        return Self.toolCard(tool, output: item.commandOutput, expanded: true, diff: cachedDiff).markdown
     }
 
     private func message(item index: Int) -> TranscriptMessage {
@@ -188,6 +189,7 @@ final class LiveTranscriptSource: TranscriptSource {
             )
             var message = render(id: item.id, role: "Tool", markdown: card.markdown, links: links(tool))
             message.tool = card.header
+            message.copyText = { [weak self] in self?.fullToolMarkdown(index) ?? "" }
             return message
         }
         if let permission = item.permission {
@@ -249,6 +251,25 @@ final class LiveTranscriptSource: TranscriptSource {
             }
         }
         return message
+    }
+
+    /// Makes the item's row exist and its whole text visible, expanding what hides it. Returns its row.
+    func reveal(item index: Int) -> Int? {
+        let items = state.items
+        guard items.indices.contains(index) else { return nil }
+        if items[index].toolCall != nil {
+            var first = index
+            while first > 0, items[first - 1].toolCall != nil { first -= 1 }
+            if groupItems(first: first).count > 1 { expandedGroups.insert(items[first].id) }
+        }
+        expanded.insert(items[index].id)
+        revision += 1
+        return rows.firstIndex(of: .item(index))
+    }
+
+    func cardCount(ofGroupAt row: Int) -> Int {
+        guard case .group(let first) = rows[row], expandedGroups.contains(state.items[first].id) else { return 0 }
+        return groupItems(first: first).count
     }
 
     func toggleExpansion(at row: Int) {
@@ -604,6 +625,7 @@ final class LiveTranscriptSource: TranscriptSource {
 struct LiveTranscript: NSViewRepresentable {
     let session: SessionController
     let pathIndex: TranscriptPathIndex
+    var find = TranscriptFindState()
     /// A clicked path link, with the session whose transcript it was in.
     let onOpenPath: (PathLink, UUID) -> Void
 
@@ -612,6 +634,7 @@ struct LiveTranscript: NSViewRepresentable {
         let source = LiveTranscriptSource()
         let frames = SessionFrameDriver()
         weak var session: SessionController?
+        var revealed: UUID?
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView { context.coordinator.table.scroll }
@@ -625,7 +648,14 @@ struct LiveTranscript: NSViewRepresentable {
         }
         coordinator.source.pathIndex = pathIndex
         coordinator.source.update(session)
+        var row: Int?
+        if let reveal = find.reveal, reveal.id != coordinator.revealed {
+            coordinator.revealed = reveal.id
+            row = coordinator.source.reveal(item: reveal.item)
+        }
         coordinator.table.update(coordinator.source)
+        coordinator.table.findQuery = find.isOpen ? find.query : ""
+        if let row { coordinator.table.reveal(row: row) }
     }
     static func dismantleNSView(_ view: NSScrollView, coordinator: Coordinator) { coordinator.frames.stop() }
 }

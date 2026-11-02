@@ -46,6 +46,19 @@ public struct SessionCommands: Commands {
             Button("Search Sessions") { model?.searchFocusRequests += 1 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(model == nil)
+            Button("Find in Transcript") { model?.openFind() }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(model?.canFind != true)
+            Button("Find Next") { model?.findNext() }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(model?.find.isOpen != true || model?.find.query.isEmpty != false)
+            Button("Find Previous") { model?.findNext(backward: true) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(model?.find.isOpen != true || model?.find.query.isEmpty != false)
+            Button("Next Failed Tool Call") { model?.nextFailedToolCall() }
+                .keyboardShortcut("g", modifiers: [.command, .option])
+                .disabled(model?.canFind != true)
+            Divider()
             Button("Previous Session") { Task { [model] in await model?.navigate(backward: true) } }
                 .keyboardShortcut("[", modifiers: [.command, .option])
                 .disabled(model?.navigationTarget(backward: true) == nil)

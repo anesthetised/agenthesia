@@ -248,6 +248,63 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func theFindBarAppearsAndAStepSelectsTheMatchInTheTranscript() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        _ = NSApplication.shared
+        let view = NSHostingView(rootView: RootView(model: model))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        func table() -> NSTableView? {
+            func find(_ view: NSView) -> NSTableView? {
+                if let table = view as? TranscriptTableView { return table }
+                return view.subviews.lazy.compactMap(find).first
+            }
+            return find(view)
+        }
+        try await waitUntil { (table()?.numberOfRows ?? 0) > 1 }
+        model.openFind()
+        model.find.query = "first"
+        model.findNext()
+        try await waitUntil { table()?.selectedRowIndexes.isEmpty == false }
+        await fixture.remove()
+    }
+
+    @Test func theWindowFindsInTheDisplayedSessionAndForgetsOnClose() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        #expect(!model.canFind)
+        let (first, second) = try await twoSessions(fixture)
+        model.show(first)
+        #expect(model.canFind)
+        model.openFind()
+        model.find.query = "first"
+        model.updateFindMatches()
+        #expect(model.find.matches.isEmpty == false)
+        model.findNext()
+        let item = try #require(model.find.reveal?.item)
+        #expect(model.find.current == model.find.matches.firstIndex(of: item))
+        // Another session is searched on its own.
+        model.show(second)
+        model.updateFindMatches()
+        #expect(model.find.status == "No matches")
+        model.closeFind()
+        #expect(!model.find.isOpen && model.find.query.isEmpty && model.find.reveal == nil)
+        model.showingSetup = true
+        #expect(!model.canFind)
+        await fixture.remove()
+    }
+
     @Test func sendStartsTheSessionWithTheDraftAndClearsIt() async throws {
         let fixture = try Fixture()
         let model = fixture.model

@@ -97,6 +97,30 @@ import SwiftUI
             composerDrafts[id] = newValue == ComposerDraft() ? nil : newValue
         }
     }
+    var find = TranscriptFindState()
+    var canFind: Bool { !closed && !inDraft && !isLoadingHistory && displayed != nil }
+    func openFind() {
+        guard canFind else { return }
+        find.isOpen = true
+        find.focusRequests += 1
+        updateFindMatches()
+    }
+    func closeFind() { find = TranscriptFindState() }
+    func updateFindMatches() {
+        guard find.isOpen, let items = displayed?.transcript.items else { return }
+        find.matches = TranscriptSearch.matches(find.query, in: items)
+    }
+    /// Steps to a match, recounting first so that what arrived since is found too.
+    func findNext(backward: Bool = false) {
+        updateFindMatches()
+        if let item = find.step(in: find.matches, backward: backward) { find.reveal = .init(item: item) }
+    }
+    func nextFailedToolCall() {
+        guard canFind, let items = displayed?.transcript.items else { return }
+        if let item = find.step(in: TranscriptSearch.failedToolCalls(in: items), backward: false) {
+            find.reveal = .init(item: item)
+        }
+    }
     /// The queued message being edited may have been sent while another session was shown.
     func dropStaleQueueEdit() {
         guard let id = composer.editingQueueID, displayed?.queuedPrompts.contains(where: { $0.id == id }) != true

@@ -28,6 +28,7 @@ struct SessionSidebarRows: View {
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .contextMenu {
+            newSessionButton(row.project)
             windowMenu(.live(owner))
             if let session { discardButton(session) }
         }
@@ -43,8 +44,17 @@ struct SessionSidebarRows: View {
         )
         .tag(AnyHashable(record.id))
         .contextMenu {
+            newSessionButton(row.project)
             windowMenu(.saved(record))
             discardButton(record)
+        }
+    }
+
+    /// Opens the draft with the row's project; a starting session has no project yet.
+    @ViewBuilder private func newSessionButton(_ project: ProjectRecord?) -> some View {
+        if let project {
+            Button("New Session in Project") { model.newSession(in: project) }
+                .disabled(!model.canStart)
         }
     }
 

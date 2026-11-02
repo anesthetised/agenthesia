@@ -332,6 +332,13 @@ Wave 2:
   red before the fix; covered by a hosted test) and VoiceOver. Known limits: a selected card loses its selection when
   it folds, ⌘C with only an expanded summary selected copies nothing, collapsed cards copy truncated text, and an older
   group whose last call never finished keeps showing its title while the session runs.
+- #159: the context menu of a sidebar row (live or saved) offers New Session in Project when the row has a project:
+  `SessionWindowModel.newSession(in:)` sets `draftDirectory` and shows the draft, keeping the typed message and agent.
+  Tested: a window-model test that the draft opens with the older session's project over the newest default and keeps
+  its text. The menu item itself is not reachable in hosted views. Running app, MockAgent, isolated home, light and
+  dark: the item on live and saved rows opens the draft with the row's project, keeps the typed text and starts nothing.
+  Not checked: VoiceOver and a row without a project. The draft's toolbar title still shows the session that was open
+  before.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

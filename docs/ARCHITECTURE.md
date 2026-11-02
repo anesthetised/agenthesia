@@ -114,6 +114,9 @@ or after sign-in, submits it with intent `whenReady` like a typed prompt, and a 
 If startup fails or is cancelled (Cancel Startup, End Session at sign-in), the owner is no longer live and still
 holds its prompt; `SessionWindowModel.abandonedStart` reports it, and `RootView` calls `returnToDraft`, which puts
 the prompt back into the draft with the owner's error and ends the owner, so the sidebar does not list it.
+A session row's context menu offers New Session in Project (`SessionWindowModel.newSession(in:)`), which opens the
+draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
+and offers nothing.
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
 exits during `initialize`) removes the worktree and branch its `LiveSession` made (#176). The record is written

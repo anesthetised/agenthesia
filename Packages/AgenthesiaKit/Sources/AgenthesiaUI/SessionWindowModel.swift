@@ -431,6 +431,12 @@ import SwiftUI
             && selectedAgent.flatMap(record(for:)) != nil
     }
 
+    /// Opens the draft with `project` selected; the typed message and agent stay (ADR-0040).
+    func newSession(in project: ProjectRecord) {
+        draftDirectory = URL(filePath: project.rootPath, directoryHint: .isDirectory)
+        showingSetup = true
+    }
+
     /// Send in the draft: starts the session with the draft as its initial prompt. An empty draft starts nothing.
     func startDraft() {
         guard canStartDraft, let directory = selectedDirectory, let choice = selectedAgent,

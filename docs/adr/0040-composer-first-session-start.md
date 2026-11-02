@@ -100,10 +100,17 @@ pill, and the app does not guess from a name. The specification says categories 
 correctness; here they decide only what the draft offers, and the session's own controls still list everything once
 it runs. Effort, booleans and unknown types wait for the session, as before.
 
+**A mode is applied only when chosen in this draft (owner's decision).** The model hint is applied by default. The mode
+pill offers the cached choices but reads `Default mode` until the user picks one, and only a mode picked in this draft
+is sent to the agent; otherwise the session keeps the mode the agent starts in. So a mode that stops asking for
+permission never comes back by itself, because the app cannot recognise such a mode from its name without
+agent-specific knowledge (principle 8). The cost is one extra choice for each session started in plan mode.
+
 **Where they are applied.** In `SessionController.createRemote`, after `session/new` returned and **before the
 session record is created** (`SessionController.swift:168-195`):
 
-1. Compare each hint with the options the agent just reported. An equal value sends nothing.
+1. Compare the model hint, and a mode picked in this draft, with the options the agent just reported. An equal value
+   sends nothing.
 2. Otherwise `setConfigOption`, one at a time in the agent's order. Each response is the complete list, and the next
    step uses it, because a change of mode may change what else exists.
 3. Write the final list into the `started` event. So history and the composer show the confirmed values and ADR-0019
@@ -151,12 +158,10 @@ as hints once the agent has reported them in an earlier session; effort cannot.
 
 ### Consequences and risks
 
-- **A permissive mode comes back by default.** If the user's last mode lets the agent act without asking (for example
-  an agent's "bypass" mode), the next draft shows and reapplies it. The app cannot tell such a mode from its name without
-  agent-specific knowledge (principle 8), and the specification asks agents not to reduce oversight without user
-  action; here the visible pill and Send are that action, which is thin. The owner should weigh this. If it is too
-  thin, mode hints can be shown but applied only when changed in this draft, or the mode cache can be dropped and only
-  the model kept.
+- **The last mode is not remembered as a default.** Someone who always works in plan mode picks it for each session.
+  Reapplying it automatically was rejected: a mode that lets the agent act without asking (for example a "bypass" mode)
+  would come back with only a visible pill as the safeguard, and the specification asks agents not to reduce oversight
+  without user action. Dropping the mode cache entirely was rejected too, because starting in plan mode is the main gain.
 - A stale hint costs an agent start, one bounce and possibly a sign-in check, on an upgrade that removes a value.
 - Startup gains round trips before the record exists. `startupUpdates` buffers notifications until the session is
   established, and config responses must keep working there; this is why the issue is `agent:strong`.

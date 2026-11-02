@@ -46,6 +46,6 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amendments proposed (sidebar row, inspector, docked permission) |
 | [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amendment proposed (mode and model hints) |
 | [0041](0041-review-pane.md) | Review as a pane, with Ask agent | Proposed |
-| [0042](0042-allow-edits-in-this-worktree.md) | Allow edits in this worktree | Proposed |
+| [0042](0042-allow-edits-in-this-worktree.md) | Allow edits in this worktree | Proposed, deferred |
 
 Template: Status, Date, Context, Decision, Consequences.

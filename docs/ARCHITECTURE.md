@@ -119,7 +119,7 @@ draft with the row's project selected and keeps the typed message and agent; a s
 and offers nothing.
 
 > **Proposed (#195):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) would add cached mode and model
-> hints to the draft, applied before the session record is created. This section describes the code as it is.
+> hints to the draft, applied before the session record is created; a mode only when picked in the draft. This section describes the code as it is.
 
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
@@ -226,7 +226,7 @@ button. The composer has no status text.
 
 > **Proposed (#195):** [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) would dock a pending permission as one
 > card above the composer, with `Waiting for you` in the status line. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md)
-> would add a pill while edits are allowed. The text here and below describes the code as it is.
+> (deferred) would add a pill while edits are allowed. The text here and below describes the code as it is.
 
 Composer errors show as a red caption above the card.
 
@@ -299,7 +299,7 @@ controls. Non-text content is identified with attachment placeholders rather tha
 
 > **Proposed (#195):** the permission card's buttons would leave the transcript
 > ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), and "the app keeps no policy of its own" would no longer
-> hold for an explicitly enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md)).
+> hold for an explicitly enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md), deferred).
 
 The session's bounded stderr log and environment diagnostics are visible in the window.
 

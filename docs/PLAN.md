@@ -425,7 +425,7 @@ milestone `M15 — UI/UX redesign` and the tier shown.
 | Done cleared when on screen, `New response below` | [ADR-0026](adr/0026-app-wide-session-manager.md), amendment |
 | Mode and model hints in the draft | [ADR-0040](adr/0040-composer-first-session-start.md), amendment |
 | Review as a pane, viewed marks, Ask agent | [ADR-0041](adr/0041-review-pane.md) |
-| Allow edits in this worktree | [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) |
+| Allow edits in this worktree (deferred by the owner, not in M15) | [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) |
 
 Implementation issues, in order. Within a wave the issues are independent, apart from the listed dependencies.
 
@@ -439,14 +439,15 @@ Implementation issues, in order. Within a wave the issues are independent, apart
 | 2 | Readable branch names: migration, naming, removal check with real repositories, inspector display. Takes over #191's branch item | Inspector | `agent:strong` | Inspector layout |
 | 3 | Viewport bookkeeping and Done: target item, pure on-screen check, watching only while unseen, clip changes, folded groups. Rendering Lab S1, S7, S9 with the owner's approval | Done | `agent:strong` | Docked card (shared geometry) |
 | 3 | `New response below` and ⌥⌘↓ Jump to Latest | Done | `agent:light` | Viewport bookkeeping |
-| 3 | Apply hints at session start: in `createRemote` before the record, rejection returns the draft, no history row or worktree left, cache in `AgentCatalog` | Hints | `agent:strong` | — |
+| 3 | Apply hints at session start: in `createRemote` before the record, the model by default and a mode only when picked in the draft, rejection returns the draft, no history row or worktree left, cache in `AgentCatalog` | Hints | `agent:strong` | — |
 | 3 | Draft pills from the cache: shared rendering with `SessionConfigControls`, tooltip, reset on agent change | Hints | `agent:light` | Apply hints (a pill must never promise what is not applied) |
 | 4 | Review pane: slot in `DetailPanes`, ⌃⌘R toggle, no-flicker refresh, hold on selection with `Show latest`, new diff text view, merge sheet in `RootView` | Review | `agent:strong` | Diff line model |
 | 4 | Viewed marks and line counts | Review | `agent:light` | Review pane |
 | 4 | Ask agent: selection to lines, insertion at the caret, ⌥⌘A, stale-quote note | Review | `agent:light` | Review pane, #189, #193 |
-| 5 | Count edit requests in real sessions (the owner, or a read-only query the owner runs) and revisit ADR-0042 with the number | Allow edits | `agent:light` | Docked card in use |
-| 5 | Edit rule: pure function over tool call, options and root, with every path case from the ADR; mock agent reporting chosen kinds and locations | Allow edits | `agent:strong` | The count, if the owner proceeds |
-| 5 | Switch, automatic answer, durable mark, folded records, notices, tripwire, pill. Rendering Lab S7, S9 with the owner's approval | Allow edits | `agent:strong` | Edit rule, compact permission record |
+
+ADR-0042 has no issues while it is deferred. If it is taken up, it starts with counting edit requests in real sessions
+(read-only, with the owner's approval), then a pure edit rule with a mock agent that reports chosen kinds and locations,
+then the switch itself, last of all and after the docked card.
 
 Open issues these meet, and do not replace: #189 and #193 come before Ask agent; #190 before the docked card, which uses
 its status line; #194 (transcript find) shares row identity with the viewport work, so whichever lands second rebases.
@@ -456,9 +457,9 @@ Pitfalls known so far:
 
 - `RootView.swift` and `TranscriptTable.swift` are shared by the docked card, the viewport work, the review pane and #194:
   merge in table order and rebase.
-- Worth the owner's attention before accepting: the branch rename reverses a line of ADR-0032 and touches the removal
-  check; a cached permissive mode is reapplied by default (ADR-0040's amendment); ADR-0042 goes beyond the brief by also
-  excluding every dot-path and `core.hooksPath`.
+- The owner decided on 2026-11-02: branch names become real and stored, which reverses a line of ADR-0032 and touches
+  the removal check; a mode is applied only when chosen in the draft; ADR-0042 is deferred. The owner reads the
+  amendments before they are accepted.
 - ADR-0041 replaces `MarkdownPreview` in review with its own diff view, so large diffs need a look, and a benchmark if
   they turn out slower.
 - MockAgent needs commands for several pending requests and for chosen tool kinds and locations; otherwise those paths

@@ -1,6 +1,7 @@
 # 0042. Allow edits in this worktree
 
-- Status: Proposed (#195)
+- Status: Proposed, deferred by the owner on 2026-11-02 (#195). It is not part of M15 and starts no work. It is revisited
+  after the docked permission card has shipped, with a count of how many prompts are edits.
 - Date: 2026-11-02
 - Decider: Project owner
 - Related: [0006](0006-worktree-isolation.md), [0032](0032-worktree-merge-and-discard.md),

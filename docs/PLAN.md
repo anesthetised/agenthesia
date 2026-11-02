@@ -333,8 +333,8 @@ Wave 2:
   it folds, ⌘C with only an expanded summary selected copies nothing, collapsed cards copy truncated text, and an older
   group whose last call never finished keeps showing its title while the session runs.
 
-None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
-VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
+Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
+screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 
 #178, two intermittent CI failures (2026-11-01):
 

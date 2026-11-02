@@ -28,7 +28,9 @@ import Testing
                 timeout: .milliseconds(300)
             )
         }
-        #expect(ContinuousClock.now - start < .seconds(5))
+        // The 300 ms timeout and the 1 s grace period are far below this; a loaded CI runner took 5.9 s once. It still
+        // has to be well under the 20 s default, so a kill that never happens fails.
+        #expect(ContinuousClock.now - start < .seconds(15))
         #expect(FileManager.default.fileExists(atPath: marker.path(percentEncoded: false)))
     }
 

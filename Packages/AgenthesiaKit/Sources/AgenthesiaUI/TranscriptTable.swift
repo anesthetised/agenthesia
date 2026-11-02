@@ -27,6 +27,10 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
     private var followingBottom = true
     private var adjustingScroll = false
     private var followScheduled = false
+    /// What the find bar searches for; rows that show text mark it.
+    var findQuery = "" {
+        didSet { if findQuery != oldValue { highlightVisibleRows() } }
+    }
     /// Opens a file of the displayed session; without it, path links do nothing.
     var openPath: ((PathLink) -> Void)?
 
@@ -73,7 +77,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             guard (0..<session.messageCount).contains(row) else { return nil }
             let message = session.message(at: row)
             // An expanded group's cards are rows of their own, so a selection never copies them twice.
-            if message.kind == .group, message.tool?.expanded == true { return nil }
+            let cards = session.cardCount(ofGroupAt: row)
+            if cards > 0, table.selectedRowIndexes.intersects(integersIn: (row + 1)..<(row + 1 + cards)) { return nil }
             return message.copyText?() ?? message.markdown
         }.joined(separator: "\n\n")
     }
@@ -168,12 +173,31 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         }
         if !changed.isEmpty { table.noteHeightOfRows(withIndexesChanged: changed) }
         revision = session.revision
+        if !findQuery.isEmpty { highlightVisibleRows() }
         table.layoutSubtreeIfNeeded()
         if followingBottom {
             followEnd()
         } else {
             scroll.contentView.scroll(to: origin)
             scroll.reflectScrolledClipView(scroll.contentView)
+        }
+    }
+
+    private func highlightVisibleRows() {
+        table.enumerateAvailableRowViews { _, row in
+            (table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptMessageRow)?.highlight(findQuery)
+        }
+    }
+
+    /// Scrolls to a row that find stepped to and selects it. Row heights settle during layout, so it scrolls again after.
+    func reveal(row: Int) {
+        guard row < table.numberOfRows else { return }
+        followingBottom = false
+        table.selectRowIndexes([row], byExtendingSelection: false)
+        table.scrollRowToVisible(row)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, row < self.table.numberOfRows else { return }
+            self.table.scrollRowToVisible(row)
         }
     }
 
@@ -233,6 +257,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             width: TranscriptColumn.width(inRowOfWidth: tableView.tableColumns[0].width),
             controller: self
         )
+        rowView.highlight(findQuery)
         return rowView
     }
 
@@ -315,6 +340,10 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Shown only while the pointer is over the row; Copy stays available as an accessibility action.
     private var copyButton: NSButton?
     private weak var statusLabel: NSTextField?
+    /// The field showing the message, with its text before find marked it. A streaming row has none.
+    private weak var messageField: LinkTextField?
+    private var messageText = NSAttributedString()
+    private var markedQuery = ""
     private(set) var hovering = false
 
     init(markdown: String) {
@@ -362,11 +391,24 @@ private final class TranscriptMessageRow: NSTableCellView {
         copyButton?.setAccessibilityElement(hovering)
     }
 
+    func highlight(_ query: String) {
+        guard query != markedQuery, let messageField else { return }
+        markedQuery = query
+        messageField.attributedStringValue = TranscriptSearch.highlighted(messageText, query: query)
+    }
+
+    private func setMessageField(_ field: LinkTextField, text: NSAttributedString) {
+        messageField = field
+        messageText = text
+        markedQuery = ""
+    }
+
     /// Replaces the row's header and body.
     func show(_ message: TranscriptMessage, streaming: Bool, width: CGFloat, controller: TranscriptTableController) {
         stack?.removeFromSuperview()
         actions = nil
         bubble = nil
+        messageField = nil
         markdown = message.markdown
         links = message.links
         tool = message.tool
@@ -392,6 +434,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             let cell = BubbleCell()
             cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
             cell.field.attributedStringValue = message.text
+            setMessageField(cell.field, text: message.text)
             cell.fit(columnWidth: width)
             bubble = cell
             content = cell
@@ -400,6 +443,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
             cell.field.preferredMaxLayoutWidth = max(1, width)
             cell.field.attributedStringValue = message.text
+            setMessageField(cell.field, text: message.text)
             content = cell
         }
         if message.kind == .thought { content.alphaValue = Self.thoughtAlpha }
@@ -622,6 +666,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
         cell.field.preferredMaxLayoutWidth = max(1, width)
         cell.field.attributedStringValue = message.text
+        setMessageField(cell.field, text: message.text)
         if message.kind == .thought { cell.alphaValue = Self.thoughtAlpha }
         contentWidth?.isActive = false
         // The body follows the header; option buttons, if any, stay after it.

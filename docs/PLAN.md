@@ -360,6 +360,12 @@ Wave 2:
   saved draft. Tests: window-model tests of both, and a hosted test that types into the real text view, switches and
   sends with Return; it fails when the switch resets the draft. Not yet seen in the running app (#160). Not checked: ⌘Z
   right after a switch, which keeps using the same text view and undo stack as before.
+- #194: ⌘F finds in the transcript, including what folded groups and collapsed cards hide; a step expands them, scrolls
+  to the row and selects it, and ⌥⌘G jumps to the next failed tool call. Copy now returns a tool card's whole output, and
+  an expanded summary selected alone copies its cards. Tests: search, reveal, marking, copying and stepping in hosted
+  views, and the bar selecting a match in a hosted `RootView`. Not measured: the search on a long session, and Rendering
+  Lab, because the streaming path gains nothing while find is closed; only the check that it is closed. Not seen in the
+  running app, including whether ⌘F reaches the menu from the composer and whether Escape closes the bar (#160).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

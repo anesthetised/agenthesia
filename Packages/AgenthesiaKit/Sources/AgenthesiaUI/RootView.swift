@@ -138,7 +138,7 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            model.dropStaleQueueEdit(); showingQuickOpen = false; fileQuery = ""; model.review = nil
+            model.dropStaleQueueEdit(); model.closeFind(); showingQuickOpen = false; fileQuery = ""; model.review = nil
         }
         .onChange(of: model.files.sessionID) {
             if model.review?.id != model.files.sessionID { model.review = nil }
@@ -233,10 +233,13 @@ public struct RootView: View {
         let widths = panes.widths(filePane: model.filePaneWidth, inspector: model.inspectorWidth)
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
-                LiveTranscript(session: session, pathIndex: pathIndex(for: session)) {
+                LiveTranscript(session: session, pathIndex: pathIndex(for: session), find: model.find) {
                     openFile($0.path, line: $0.line, for: $1)
                 }
                 .id(session.session.id)
+                .overlay(alignment: .topTrailing) {
+                    if model.find.isOpen { TranscriptFindBar(model: model) }
+                }
                 if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
                 if let signIn = model.signIn {
                     Divider()

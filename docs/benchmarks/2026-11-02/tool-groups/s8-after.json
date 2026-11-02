@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "20261102T090533.992883Z",
+  "mode": "lab",
+  "runs": 3,
+  "timeoutSeconds": 180,
+  "commit": "ffd0c257a6ac293fc3acf1290a178967388a2f20",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+    "S8:App"
+  ],
+  "results": [
+    {
+      "repetition": 1,
+      "scenario": "S8:App",
+      "log": "run-1-1.log",
+      "wallSeconds": 14.305172082999999,
+      "samples": [
+        {
+          "measurements": {
+            "applyLatencyP95MS": 11.986999999999998,
+            "peakBacklogChunks": 7,
+            "elapsedMS": 12445.977959,
+            "viewportHeight": 340,
+            "backingScale": 2,
+            "toolUpdates": 124,
+            "screenMaximumFPS": 120,
+            "chunkIntervalMS": 10,
+            "viewportWidth": 868,
+            "chunks": 1244,
+            "applyLatencyMaxMS": 68.86249999999994,
+            "characters": 16249
+          },
+          "report": {
+            "frames": 1434,
+            "hitches": 22,
+            "p99": 16.66666683740914,
+            "estimatedMissed": 56,
+            "load": 2.84521484375,
+            "excessMilliseconds": 470.7619601394981,
+            "max": 72.673249989748,
+            "memory": 81.28227996826172,
+            "freeMemory": 72,
+            "p95": 8.333333535119891,
+            "p50": 8.333333302289248
+          },
+          "id": "6D3D64C0-727D-4941-A68E-372BD8DCCB7F",
+          "scenario": "S8 Group toggles, App: production transcript, warm"
+        }
+      ]
+    },
+    {
+      "repetition": 2,
+      "scenario": "S8:App",
+      "log": "run-2-1.log",
+      "wallSeconds": 14.303045249999997,
+      "samples": [
+        {
+          "report": {
+            "p99": 16.66666683740914,
+            "freeMemory": 72,
+            "max": 69.52816667035222,
+            "excessMilliseconds": 488.23612672276795,
+            "p95": 8.333333535119891,
+            "frames": 1432,
+            "hitches": 24,
+            "estimatedMissed": 58,
+            "memory": 77.73542785644531,
+            "load": 2.57666015625,
+            "p50": 8.333333302289248
+          },
+          "measurements": {
+            "backingScale": 2,
+            "viewportHeight": 340,
+            "toolUpdates": 124,
+            "chunkIntervalMS": 10,
+            "applyLatencyMaxMS": 65.28954199999998,
+            "viewportWidth": 868,
+            "characters": 16249,
+            "applyLatencyP95MS": 12.44504199999974,
+            "screenMaximumFPS": 120,
+            "elapsedMS": 12445.297167,
+            "peakBacklogChunks": 7,
+            "chunks": 1244
+          },
+          "id": "4E685EAF-74C6-404B-8F90-6B48509F8640",
+          "scenario": "S8 Group toggles, App: production transcript, warm"
+        }
+      ]
+    },
+    {
+      "repetition": 3,
+      "scenario": "S8:App",
+      "log": "run-3-1.log",
+      "wallSeconds": 14.301415833999997,
+      "samples": [
+        {
+          "scenario": "S8 Group toggles, App: production transcript, warm",
+          "measurements": {
+            "viewportWidth": 868,
+            "peakBacklogChunks": 7,
+            "elapsedMS": 12445.038457999999,
+            "chunkIntervalMS": 10,
+            "viewportHeight": 340,
+            "toolUpdates": 124,
+            "backingScale": 2,
+            "applyLatencyMaxMS": 65.66358299999997,
+            "chunks": 1244,
+            "characters": 16249,
+            "screenMaximumFPS": 120,
+            "applyLatencyP95MS": 11.605625000001396
+          },
+          "id": "768AF957-D253-4C8C-84B8-2A474F76253E",
+          "report": {
+            "excessMilliseconds": 480.25200283154845,
+            "p95": 8.333333535119891,
+            "p50": 8.333333302289248,
+            "freeMemory": 72,
+            "memory": 79.07917785644531,
+            "frames": 1435,
+            "hitches": 23,
+            "p99": 17.454083310440183,
+            "estimatedMissed": 57,
+            "load": 3.25439453125,
+            "max": 70.43291674926877
+          }
+        }
+      ]
+    }
+  ]
+}

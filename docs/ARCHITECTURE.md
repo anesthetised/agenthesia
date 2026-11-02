@@ -187,6 +187,19 @@ right-aligned label under the bubble. Agent messages have no role label; thought
 dimmed. Tool, permission and input rows keep their headers. `role` stays in the model, and Copy returns a row's
 Markdown without it.
 
+The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
+`TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
+permission request or an input form, ends a group, and one call stays a plain card. `ToolGroupSummary` words the row
+from the ACP tool kinds (`Ran 3 commands, edited 2 files`, `· 1 failed` in the failure color); while the session runs
+and the group's last call is pending or in progress, it shows that call's title instead (`just test…`). A group
+is a header without a body, collapsed by default and expanded by its disclosure into the existing cards, which follow
+it as rows; `LiveTranscriptSource` keys that by the group's first item, separately from each card's own expansion.
+`TranscriptTableController` diffs the rows by identity (`CollectionDifference`) and inserts and removes only those that
+changed, so the others keep their views, selected text and table selection. A row that folds away loses its selection.
+A group has no Markdown of its own: its `copyText` builds its cards' Markdown only when asked, which also keeps
+streaming from rendering cards nobody sees. A table selection skips an expanded group's summary, so that its cards are
+copied once.
+
 Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
 hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of
 its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history

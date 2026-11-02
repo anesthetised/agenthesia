@@ -317,9 +317,24 @@ Wave 2:
   removal (and, separately, the record check) made those tests fail. Not tested: a failure after the record was written
   (only the started-session case covers the record check), a failure inside `SessionWorkspace.prepare` after
   `git worktree add`, quitting the app during removal, and the removal in the running app.
+- #155: consecutive tool calls fold into a summary row (`TranscriptRow.fold`, `ToolGroupSummary`), and the table
+  inserts and removes only changed rows. Covered by unit tests of the folding and every wording, and by hosted-view
+  tests of expanding and collapsing, in-place streaming updates (row views, selected text and table selection
+  survive), Copy as Markdown, follow-bottom, a kept scroll position and resizing. Rendering Lab S7:App now folds and the
+  new S8:App toggles the group while streaming. New S9:App repeats S7 on a 10,000-item history. A running call shows its
+  bare title (`just test…`): agents' titles are often verbs, so the issue's `Running just test…` would read
+  `Running Run tests…`. Rendering Lab, 3 interleaved rounds, load 3–8, 70–72% free memory
+  ([results](benchmarks/2026-11-02/tool-groups/README.md)): S9 shows no cost from folding a long history; S1 and S7 hit
+  somewhat more often, which 3 runs cannot tell from noise, and their percentiles are unchanged in the 2 quieter rounds.
+  Running app, MockAgent, isolated home, light and dark: folding, expansion, a single card, follow-bottom, a kept scroll
+  position, Copy and a group that keeps growing. Not checked: a permission request ending a group (MockAgent cannot
+  produce one; covered by a hosted test), the bare title with a verb title, the status color fix on a selected row (seen
+  red before the fix; covered by a hosted test) and VoiceOver. Known limits: a selected card loses its selection when
+  it folds, ⌘C with only an expanded summary selected copies nothing, collapsed cards copy truncated text, and an older
+  group whose last call never finished keeps showing its title while the session runs.
 
-None of these was seen in the running app: only automated and hosted-view tests ran, no screenshots were taken and
-VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
+Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
+screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.
 
 #178, two intermittent CI failures (2026-11-01):
 

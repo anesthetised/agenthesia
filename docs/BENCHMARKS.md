@@ -96,6 +96,13 @@ Every 100 ms one card changes status and gains an output line, 124 updates per r
 view as the answer grows, as they do in a session; off-screen cards are only re-rendered when shown.
 `toolUpdates` in the measurements counts applied changes. S7 exists only for `App`.
 
+Since #155 the five calls fold into one summary row, as they do in a session, so S7 from before that change measures
+five visible cards and later runs measure one header. `just lab-run S8:App --runs 3` is S7 with the group also expanded
+or collapsed at every update, which inserts and removes rows while the answer streams; it has no earlier baseline.
+`just lab-run S9:App --runs 3` is S7 below a 10,000-item history instead of 200 items. The prototype now folds on every
+appended chunk, as the live transcript does on every state change, so S9 shows that cost on a long history. S7 and S8
+fold on every chunk too. To compare, run S9 against a commit from before #155 with the scenario added by hand.
+
 Results for #19 on an M1 Pro (MacBookPro18,2, 120 Hz display), macOS 27.0.1, optimized Debug lab, fresh
 process per run, 1-minute load 2.6–4.9 and 80–81% free memory throughout. Hitches are callbacks over one
 frame interval:

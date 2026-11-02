@@ -20,9 +20,12 @@ struct TranscriptMessage {
     var kind = Kind.card
     /// Right-aligned under a user bubble: `not sent` or `sent together`.
     var caption: String?
+    /// What Copy returns instead of `markdown`, built only when asked: a folded group's tool cards.
+    var copyText: (() -> String)?
 
-    /// How a row presents its role: users get a bubble, agent text no label, thoughts a `Thinking` caption.
-    enum Kind: Equatable { case card, user, agent, thought }
+    /// How a row presents its role: users get a bubble, agent text no label, thoughts a `Thinking` caption,
+    /// a group of tool calls only a header.
+    enum Kind: Equatable { case card, user, agent, thought, group }
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
@@ -46,6 +49,8 @@ struct ToolCardHeader: Equatable {
 protocol TranscriptSource: AnyObject {
     var revision: Int { get }
     var messageCount: Int { get }
+    /// The rows by identity, so that the table inserts and removes only those that changed.
+    var rows: [TranscriptRow] { get }
     func message(at row: Int) -> TranscriptMessage
     func isStreaming(at row: Int) -> Bool
     func toggleExpansion(at row: Int)
@@ -53,13 +58,15 @@ protocol TranscriptSource: AnyObject {
 }
 
 extension TranscriptSource {
+    var rows: [TranscriptRow] { (0..<messageCount).map(TranscriptRow.item) }
     func toggleExpansion(at row: Int) {}
     func choosePermission(at row: Int, option: Int) {}
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
 final class LiveTranscriptSource: TranscriptSource {
-    var state = TranscriptState()
+    var state = TranscriptState() { didSet { fold() } }
+    private(set) var rows: [TranscriptRow] = []
     var running = false
     var revision = 0
     /// Answers go to the controller, which owns the request's lifetime.
@@ -88,7 +95,18 @@ final class LiveTranscriptSource: TranscriptSource {
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
     private var inputDrafts: [UUID: InputDraft] = [:]
     private var expanded: Set<Int64> = []
-    var messageCount: Int { state.items.count }
+    /// Keyed by the group's first item, so that a growing group keeps its expansion.
+    private var expandedGroups: Set<Int64> = [] { didSet { fold() } }
+    var messageCount: Int { rows.count }
+
+    private func fold() {
+        let items = state.items
+        rows = TranscriptRow.fold(
+            count: items.count,
+            isToolCall: { items[$0].toolCall != nil },
+            isExpanded: { expandedGroups.contains(items[$0].id) }
+        )
+    }
 
     func update(_ controller: SessionController) {
         self.controller = controller
@@ -101,12 +119,52 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     func isStreaming(at row: Int) -> Bool {
-        guard let message = state.items[row].message else { return false }
+        guard case .item(let index) = rows[row] else { return false }
+        return isStreaming(item: index)
+    }
+
+    private func isStreaming(item index: Int) -> Bool {
+        guard let message = state.items[index].message else { return false }
         return running && message.role != .user && message.turnID == state.activeTurn
     }
 
     func message(at row: Int) -> TranscriptMessage {
-        let item = state.items[row]
+        switch rows[row] {
+        case .item(let index): message(item: index)
+        case .group(let first): groupMessage(first: first)
+        }
+    }
+
+    private func groupItems(first: Int) -> ArraySlice<TranscriptState.Item> {
+        let items = state.items
+        let end = TranscriptRow.groupEnd(from: first, count: items.count) { items[$0].toolCall != nil }
+        return items[first..<end]
+    }
+
+    private func groupMessage(first: Int) -> TranscriptMessage {
+        TranscriptMessage(
+            group: groupItems(first: first).compactMap(\.toolCall),
+            running: running,
+            expanded: expandedGroups.contains(state.items[first].id)
+        ) { [weak self] in self?.groupMarkdown(first: first) ?? "" }
+    }
+
+    /// The Markdown of a group's cards, as each card's Copy returns it.
+    private func groupMarkdown(first: Int) -> String {
+        groupItems(first: first).compactMap { item in
+            item.toolCall.map {
+                Self.toolCard(
+                    $0,
+                    output: item.commandOutput,
+                    expanded: expanded.contains(item.id),
+                    diff: cachedDiff
+                ).markdown
+            }
+        }.joined(separator: "\n\n")
+    }
+
+    private func message(item index: Int) -> TranscriptMessage {
+        let item = state.items[index]
         if let input = item.input, case .form(let schema) = input.request.mode {
             let active = controller?.pendingInputs.contains { $0.id == input.requestID } == true
             let draft = inputDrafts[input.requestID] ?? InputDraft(schema: schema)
@@ -178,7 +236,7 @@ final class LiveTranscriptSource: TranscriptSource {
         }
         let (role, markdown) = Self.content(item)
         // Streaming rows keep their text until they finish; user prompts never link.
-        let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(at: row)
+        let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(item: index)
         var message = render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
         message.isNotice = item.message == nil
         if let source = item.message {
@@ -194,13 +252,20 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     func toggleExpansion(at row: Int) {
-        let id = state.items[row].id
-        if expanded.remove(id) == nil { expanded.insert(id) }
+        switch rows[row] {
+        case .item(let index):
+            let id = state.items[index].id
+            if expanded.remove(id) == nil { expanded.insert(id) }
+        case .group(let first):
+            let id = state.items[first].id
+            if expandedGroups.remove(id) == nil { expandedGroups.insert(id) }
+        }
         revision += 1
     }
 
     func choosePermission(at row: Int, option: Int) {
-        guard let permission = state.items[row].permission, let id = permission.requestID,
+        guard case .item(let index) = rows[row], let permission = state.items[index].permission,
+            let id = permission.requestID,
             permission.options.indices.contains(option)
         else { return }
         controller?.answerPermission(id, with: permission.options[option].optionId)

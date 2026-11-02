@@ -1218,9 +1218,9 @@ extension LiveTranscriptTests {
         let status = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 1 failed" })
         #expect(status.textColor == .systemRed)
 
-        let rowView = try #require(controller.table.rowView(atRow: 0, makeIfNecessary: true))
-        rowView.isEmphasized = true
-        rowView.isSelected = true
+        // AppKit sets this on a selected row in a key window, which a hosted test does not have.
+        let cell = try #require(row as? NSTableCellView)
+        cell.backgroundStyle = .emphasized
         #expect(status.textColor == .alternateSelectedControlTextColor)
 
         // A header rebuilt while the row stays selected keeps the readable color.
@@ -1230,7 +1230,7 @@ extension LiveTranscriptTests {
         let rebuilt = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 2 failed" })
         #expect(rebuilt.textColor == .alternateSelectedControlTextColor)
 
-        rowView.isSelected = false
+        cell.backgroundStyle = .normal
         #expect(rebuilt.textColor == .systemRed)
     }
 
@@ -1297,7 +1297,7 @@ extension LiveTranscriptTests {
         let rowCount = controller.table.numberOfRows
         let group = rowCount - 2
         let groupRow = try #require(controller.table.view(atColumn: 0, row: group, makeIfNecessary: true))
-        #expect(labels(in: groupRow).contains("Running Call c…"))
+        #expect(labels(in: groupRow).contains("Call c…"))
         let header = try #require(views(NSStackView.self, in: groupRow).first)
         let answerRow = try #require(controller.table.view(atColumn: 0, row: rowCount - 1, makeIfNecessary: true))
         let answer = try #require(views(NSTextView.self, in: answerRow).first)
@@ -1427,7 +1427,7 @@ extension LiveTranscriptTests {
             prototype.didAppend()
             let plain: [TranscriptRow] = [.item(0), .item(1), .group(first: 2), .item(7)]
             #expect(prototype.rows == plain)
-            #expect(prototype.message(at: 2).tool?.kind.hasPrefix("Running") == true)
+            #expect(prototype.message(at: 2).tool?.kind.hasSuffix("…") == true)
             #expect(prototype.isStreaming(at: 3))
             #expect(!prototype.isStreaming(at: 2))
             prototype.toggleGroups()

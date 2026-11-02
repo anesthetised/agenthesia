@@ -47,3 +47,32 @@ The numbers do not settle S1 and S7. Their hitch counts are higher after the cha
 round, and the worst *after* run is always the first round, at a load of 6–7. In the two quieter rounds the frame-time
 percentiles are unchanged. Hitches stay in the single digits for S1 and move from about 20 to 22–32 for S7. Three runs
 cannot tell a small regression from noise; a quiet repeat of S1 and S7 with more runs would.
+
+## Quiet rerun of S1 and S7 (2026-11-02)
+
+Command: `just lab-run S1:App,S7:App --runs 1` per side and round, five rounds, with the sides interleaved (before first
+in odd rounds, after first in even ones). Same machine, toolchain and lab build settings as above. *Before* is
+`527cb3c` and *after* is `e0b1a66`, the merge of #155; both were clean checkouts, so no scenario was patched in. The
+owner left the Mac alone and the script waited for a 1-minute load average below 4 after the builds. The reports record
+a load of 1.4–3.2 per run and 85% free memory on every run. The raw reports are `rerun-before.json` and `rerun-after.json` (five reports each, in round
+order).
+
+| | Scenario | Hitches per run | Median max frame, ms | p95 / p99 frame, ms | Apply p95, ms |
+|---|---|---|---|---|---|
+| Before | S1 | 2, 0, 2, 0, 3 | 16.7 | 8.3 / 8.3 | 9.3–9.8 |
+| After | S1 | 2, 0, 0, 0, 0 | 12.1 | 8.3 / 8.3 | 9.0–10.2 |
+| Before | S7 | 17, 16, 19, 23, 16 | 16.9 | 8.3 / 16.7 | 9.4–13.0 |
+| After | S7 | 26, 20, 20, 21, 20 | 22.4 | 8.3 / 16.7 | 9.9–10.2 |
+
+Frames delivered are the same on both sides (S1: 1487–1490; S7: 1463–1473 before, 1465–1471 after).
+
+### Reading
+
+S1 shows no cost: streaming without tool calls is the same or better after the change, so the extra hitches in the
+first measurement most likely came from the load of 6–7 in its first round.
+
+S7 is slightly worse after the change, and consistently. The median hitch count is 20 against 17 (the ranges overlap,
+16–23 against 20–26), and in four of five runs the worst frame is 22–23 ms where no *before* run exceeded 17 ms: one
+frame over the 8.3 ms budget by about two intervals. Percentiles and apply latency are unchanged. S7 is the worst case
+for this change: a tool call updates every 10 chunks, and each update rebuilds the summary row and folds the rows again.
+A session shows that at most while a tool call is running, so the cost is accepted for now.

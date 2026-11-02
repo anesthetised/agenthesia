@@ -325,7 +325,10 @@ Wave 2:
   bare title (`just test…`): agents' titles are often verbs, so the issue's `Running just test…` would read
   `Running Run tests…`. Rendering Lab, 3 interleaved rounds, load 3–8, 70–72% free memory
   ([results](benchmarks/2026-11-02/tool-groups/README.md)): S9 shows no cost from folding a long history; S1 and S7 hit
-  somewhat more often, which 3 runs cannot tell from noise, and their percentiles are unchanged in the 2 quieter rounds.
+  somewhat more often, which 3 runs could not tell from noise. A quiet rerun (5 interleaved rounds, load 1.4–3.2, 85%
+  free memory, clean `527cb3c` against `e0b1a66`) settled it: S1 is unchanged, and S7 is slightly worse (median 20
+  hitches against 17, worst frame 22 ms against 17 ms), the cost of rebuilding the summary row on every tool update.
+  Accepted for now.
   Running app, MockAgent, isolated home, light and dark: folding, expansion, a single card, follow-bottom, a kept scroll
   position, Copy and a group that keeps growing. Not checked: a permission request ending a group (MockAgent cannot
   produce one; covered by a hosted test), the bare title with a verb title, the status color fix on a selected row (seen

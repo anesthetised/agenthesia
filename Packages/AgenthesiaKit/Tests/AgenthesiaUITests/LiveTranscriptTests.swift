@@ -1204,6 +1204,44 @@ extension LiveTranscriptTests {
         #expect(controller.table.numberOfRows == 5)
     }
 
+    /// A row wider than the column kept AppKit's cell at the column's width plus margins, off center (#183).
+    @Test func rowsFillTheTableAndCenterTheColumn() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Before"))))
+        try await recorded.apply(tool("a"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Between"))))
+        try await recorded.apply(tool("b", kind: .read))
+        try await recorded.apply(tool("c"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Streaming"))))
+        let source = LiveTranscriptSource()
+        source.running = true
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller, width: 864)
+        defer { window.close() }
+        controller.update(source)
+        for width in [864.0, 500, 1364, 864] {
+            window.setContentSize(.init(width: width, height: 600))
+            let cells = try (0..<controller.table.numberOfRows).map { row in
+                try #require(controller.table.view(atColumn: 0, row: row, makeIfNecessary: true))
+            }
+            window.contentView?.layoutSubtreeIfNeeded()
+            #expect(cells.count == 6)
+            // Narrower than the window where a legacy scroller takes room, as on CI.
+            let rowWidth = controller.scroll.contentView.bounds.width
+            for (row, cell) in cells.enumerated() {
+                let stack = try #require(views(NSStackView.self, in: cell).first)
+                let place = "row \(row) at \(rowWidth) pt"
+                #expect(abs(cell.frame.width - rowWidth) <= 1, "cell is \(cell.frame.width) pt, \(place)")
+                let expected = TranscriptColumn.minX(inRowOfWidth: rowWidth)
+                #expect(abs(stack.frame.minX - expected) <= 1, "column starts at \(stack.frame.minX), \(place)")
+                let columnWidth = TranscriptColumn.width(inRowOfWidth: rowWidth)
+                #expect(abs(stack.frame.width - columnWidth) <= 1, "column is \(stack.frame.width) pt, \(place)")
+            }
+        }
+    }
+
     @Test func aSelectedRowsStatusStaysReadableOnTheAccentColor() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(tool("a", kind: .read))

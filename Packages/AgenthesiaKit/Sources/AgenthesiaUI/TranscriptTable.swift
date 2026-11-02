@@ -444,7 +444,9 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins.
     private func columnConstraints(for view: NSView) -> [NSLayoutConstraint] {
         let fill = view.widthAnchor.constraint(equalTo: widthAnchor, constant: -2 * TranscriptColumn.minMargin)
-        fill.priority = .defaultHigh
+        // Below AppKit's width for the cell (priority 500): above it, a wide row shrinks to fit the column's maximum
+        // and the column loses its center.
+        fill.priority = .init(499)
         return [
             view.centerXAnchor.constraint(equalTo: centerXAnchor),
             view.widthAnchor.constraint(lessThanOrEqualToConstant: TranscriptColumn.maxWidth),

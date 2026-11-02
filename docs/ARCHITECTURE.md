@@ -118,6 +118,10 @@ A session row's context menu offers New Session in Project (`SessionWindowModel.
 draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
 and offers nothing.
 
+> **Proposed (#195):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) would add cached mode and model
+> hints to the draft, applied before the session record is created. This section describes the code as it is.
+
+
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
 exits during `initialize`) removes the worktree and branch its `LiveSession` made (#176). The record is written
 when the agent accepts `session/new`, so `LiveSession.removeUnstartedWorktree` asks the store and does nothing when a
@@ -219,6 +223,11 @@ that the queue is paused. A session that cannot take a prompt (saved, ended, fai
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
 merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
 button. The composer has no status text.
+
+> **Proposed (#195):** [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) would dock a pending permission as one
+> card above the composer, with `Waiting for you` in the status line. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md)
+> would add a pill while edits are allowed. The text here and below describes the code as it is.
+
 Composer errors show as a red caption above the card.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
@@ -287,6 +296,11 @@ and labeled as remembered by the agent; the app keeps no policy of its own. Answ
 the recorded response (the option's name and kind, or cancellation), never an inferred approval or
 decline. Requests without a recorded response after a restart show that none was recorded and have no
 controls. Non-text content is identified with attachment placeholders rather than silently dropped.
+
+> **Proposed (#195):** the permission card's buttons would leave the transcript
+> ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), and "the app keeps no policy of its own" would no longer
+> hold for an explicitly enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md)).
+
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
 Find in the transcript (`TranscriptFindBar`, `TranscriptFindState`, `TranscriptSearch`) reads each item's full text, so it
@@ -316,6 +330,11 @@ including owners that have no project yet, in start order) and *Settled* (saved 
 newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
 A row (`SessionRow`) shows a project badge (`ProjectBadge.initials`; the tint is a 64-bit FNV-1a hash of the name, since `hashValue` changes per launch), the title, the project with ` · Merged` or ` · Discarded`, the status symbol and `RelativeTime.short` of the session's start (`createdAt`). Needs You and Working scroll in the sidebar list (`SessionSidebarList`); Settled is a footer pinned to the bottom edge (`SettledFooter`, `safeAreaInset`), hidden when there are no saved sessions. Its header (`Settled · N`, a disclosure button labelled “Settled, N sessions, expanded/collapsed”) is always visible. The footer is collapsed by default and keeps its state in `@SceneStorage`, but stays open while one of its rows is selected; expanded, it grows upward with its own list, at most 45 % of the sidebar's height. History refreshes on its own, so the toolbar has no Refresh button.
 The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` with the sidebar placement; the text is `SessionWindowModel.sidebarQuery`, not persisted). `SessionSidebar(query:)` is the pure filter: rows whose title or project name `localizedStandardContains` the trimmed query (a starting or untitled session matches as “New Session”), empty sections omitted, `isFiltered` set. The list, `SettledFooter` (open while a query is entered, its count is the number of matches), Previous/Next Session and Next Session Needing Input all read the filtered sidebar, so navigation only visits visible rows. With no match the list shows `ContentUnavailableView.search`. ⌥⌘F (Session → Search Sessions) focuses the field through `searchFocused`.
+
+> **Proposed (#195):** the row's second line would be `project · reason` and its time the last activity
+> ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)). *Done* would clear when the finished result is on screen,
+> not when the window is key ([ADR-0026's amendment](adr/0026-app-wide-session-manager.md)).
+
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed
@@ -428,6 +447,9 @@ and a path restored to its base has no entry. Browsing stops when the displayed 
 its window closes, rather than when the agent process ends; Continue keeps the same session's files
 across its startup.
 
+> **Proposed (#195):** [ADR-0041](adr/0041-review-pane.md) would replace the sheet below with a pane of the detail column;
+> what review compares would not change.
+
 *Review Changes* (⌃⌘R in the Session menu, also in the inspector) opens a native sheet with a
 selectable file list and one unified diff. `SessionWorkspace.review` compares the current working tree
 with `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)),
@@ -481,6 +503,9 @@ base branch, only for sessions in an Agenthesia worktree), *Changes* (`+added �
 `SessionFiles.changeStats`, the changed-file list with per-file counts, Refresh Files, Review Changes…,
 Merge…, Discard Worktree…, with the enabled states of the Session menu) and *Agent* (agent name and the
 Agent Log toggle, live sessions only). The path bar under the composer and the sidebar's changed files are gone.
+
+> **Proposed (#195):** [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) would lead with Changes, merge Workspace
+> and Branch into one block, and give new sessions a readable, stored branch name instead of `agenthesia/<session id>`.
 
 The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
 as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file

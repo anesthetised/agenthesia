@@ -52,6 +52,8 @@ before implementation.
   (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
 - M15 (UI/UX redesign, #144) is planned under [ADR-0039](adr/0039-t3-style-window-layout.md) and
   [ADR-0040](adr/0040-composer-first-session-start.md); see the M15 section below.
+- M15 follow-ups are proposed as ADR amendments and two new ADRs (#195), awaiting the owner; see the end of the M15
+  section.
 
 ## Previous batch: session interactions (merged)
 
@@ -408,6 +410,61 @@ Wave 1 status (2026-10-29):
 
 - #149 implemented: `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines
   against the session base; covered by temporary-repository tests, no UI yet (#150).
+
+### M15 follow-ups: proposed decisions (#195, 2026-11-02)
+
+Two UI/UX reviews after M15 proposed follow-ups that the owner accepted. Each is recorded as `Proposed`, and nothing
+below starts before the owner accepts its decision. **The issues are not opened yet**; they follow acceptance, with the
+milestone `M15 — UI/UX redesign` and the tier shown.
+
+| Decision | Where |
+|---|---|
+| Sidebar row: `project · reason`, last activity | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment |
+| Inspector: Changes first, compact Workspace, readable branch | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment |
+| Pending permission docked above the composer | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment |
+| Done cleared when on screen, `New response below` | [ADR-0026](adr/0026-app-wide-session-manager.md), amendment |
+| Mode and model hints in the draft | [ADR-0040](adr/0040-composer-first-session-start.md), amendment |
+| Review as a pane, viewed marks, Ask agent | [ADR-0041](adr/0041-review-pane.md) |
+| Allow edits in this worktree | [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) |
+
+Implementation issues, in order. Within a wave the issues are independent, apart from the listed dependencies.
+
+| Order | Issue | Decision | Tier | Depends on |
+|---|---|---|---|---|
+| 1 | Sidebar reason and last activity: pure `reason` in Core with a test per state, `lastEvents()` timestamps, Settled sort, truncation, accessibility label | Sidebar row | `agent:light` | — |
+| 1 | Inspector layout: order, compact block, Merge disabled with no changes, Discard secondary, Refresh only when watching failed. Takes over #191's repeated-label item | Inspector | `agent:light` | — |
+| 1 | Pure diff line model: parse `UnifiedDiff` output into lines with old and new numbers; quote builder with ranges, removed lines, fences | Review | `agent:light` | — |
+| 2 | Docked permission card: card, row of buttons, visible shortcuts, `1 of 3`, focus rules, arming, clip-view follow-bottom, VoiceOver announcement | Permission | `agent:strong` | #190 |
+| 2 | Compact permission record: one-line row with Details, tool row hides its diff while pending, buttons leave `TranscriptTable` | Permission | `agent:light` | Docked card |
+| 2 | Readable branch names: migration, naming, removal check with real repositories, inspector display. Takes over #191's branch item | Inspector | `agent:strong` | Inspector layout |
+| 3 | Viewport bookkeeping and Done: target item, pure on-screen check, watching only while unseen, clip changes, folded groups. Rendering Lab S1, S7, S9 with the owner's approval | Done | `agent:strong` | Docked card (shared geometry) |
+| 3 | `New response below` and ⌥⌘↓ Jump to Latest | Done | `agent:light` | Viewport bookkeeping |
+| 3 | Apply hints at session start: in `createRemote` before the record, rejection returns the draft, no history row or worktree left, cache in `AgentCatalog` | Hints | `agent:strong` | — |
+| 3 | Draft pills from the cache: shared rendering with `SessionConfigControls`, tooltip, reset on agent change | Hints | `agent:light` | Apply hints (a pill must never promise what is not applied) |
+| 4 | Review pane: slot in `DetailPanes`, ⌃⌘R toggle, no-flicker refresh, hold on selection with `Show latest`, new diff text view, merge sheet in `RootView` | Review | `agent:strong` | Diff line model |
+| 4 | Viewed marks and line counts | Review | `agent:light` | Review pane |
+| 4 | Ask agent: selection to lines, insertion at the caret, ⌥⌘A, stale-quote note | Review | `agent:light` | Review pane, #189, #193 |
+| 5 | Count edit requests in real sessions (the owner, or a read-only query the owner runs) and revisit ADR-0042 with the number | Allow edits | `agent:light` | Docked card in use |
+| 5 | Edit rule: pure function over tool call, options and root, with every path case from the ADR; mock agent reporting chosen kinds and locations | Allow edits | `agent:strong` | The count, if the owner proceeds |
+| 5 | Switch, automatic answer, durable mark, folded records, notices, tripwire, pill. Rendering Lab S7, S9 with the owner's approval | Allow edits | `agent:strong` | Edit rule, compact permission record |
+
+Open issues these meet, and do not replace: #189 and #193 come before Ask agent; #190 before the docked card, which uses
+its status line; #194 (transcript find) shares row identity with the viewport work, so whichever lands second rebases.
+When the inspector issues open, tick or remove the two #191 items they take over. #192 is independent.
+
+Pitfalls known so far:
+
+- `RootView.swift` and `TranscriptTable.swift` are shared by the docked card, the viewport work, the review pane and #194:
+  merge in table order and rebase.
+- Worth the owner's attention before accepting: the branch rename reverses a line of ADR-0032 and touches the removal
+  check; a cached permissive mode is reapplied by default (ADR-0040's amendment); ADR-0042 goes beyond the brief by also
+  excluding every dot-path and `core.hooksPath`.
+- ADR-0041 replaces `MarkdownPreview` in review with its own diff view, so large diffs need a look, and a benchmark if
+  they turn out slower.
+- MockAgent needs commands for several pending requests and for chosen tool kinds and locations; otherwise those paths
+  can be checked only in hosted views.
+- PLAN's earlier note that the draft cannot offer model or mode, and ARCHITECTURE.md's notes marked `Proposed`, are
+  replaced when the implementation lands.
 
 ## Next steps
 

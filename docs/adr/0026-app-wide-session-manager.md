@@ -78,3 +78,88 @@ the `SessionLibrary` live claim is removed. Several agent processes may run at o
 each live transcript, while rendering cost stays bounded by the displayed rows. Notification
 permission, the Dock badge and the quit confirmation are new system integrations tested through
 injected seams; the actual system prompts are checked by hand.
+
+## Amendment (2026-11-02, proposed): Done means the result was on screen
+
+- Status: Proposed (#195). Until the owner accepts it, the *done* mark above stands.
+- Related: [0039](0039-t3-style-window-layout.md), [0007](0007-transcript-rendering.md)
+
+### Context
+
+"Showing the session in a key window clears it" is what the code does: `viewingUnseenResult` needs only an active
+window, a displayed session and a finished turn (`RootView.swift:125-127,197-199`). Someone who scrolled up to read an
+earlier message while the agent works loses the mark the moment the turn ends, with the result out of view: nothing
+says that a response arrived below, and the sidebar row leaves Needs You. Table state already knows the difference:
+`followingBottom` keeps the reader's intent and `followsBottom` measures it with a 24 pt tolerance
+(`TranscriptTable.swift:27,81-83`). Both are private to the table, and nothing above it asks.
+
+### Decision
+
+**The mark clears when the result is on screen.** All of these must hold: the window appears active, the session is
+displayed live (the existing conditions), and the end of the finished turn has been in the viewport. A key window
+alone no longer counts. There is no dwell time.
+
+**`New response below`.** A capsule at the bottom edge of the transcript, centered in the column, above the status
+line. It shows while the reader is not following the end and the transcript's end changed since they left it: a new
+last item, or more text in the last one. It is not shown merely for being scrolled up. A click or **⌥⌘↓** (Session →
+Jump to Latest, disabled at the end) scrolls to the end and resumes following, without animation; that also satisfies
+the rule above if a result was waiting. ⌘↓ is not used because the composer's text view needs it, and a menu shortcut
+would take it from the composer. VoiceOver reads the capsule as a button; its appearance is not announced during
+streaming, to stay calm (principle 7).
+
+**Notifications stay quiet.** The rule for posting is unchanged: only when the session is not shown in the key window
+of the active app. A reader scrolled up in that window gets the capsule and the sidebar reason, no banner. So a Done
+mark can now exist with no notification, which is correct: the user is here, just not looking at that row. The Dock
+badge still counts only sessions that need input.
+
+### Viewport bookkeeping
+
+- **Target.** When a turn completes, Core records the identity of the transcript's last item (an event-sequence `Int64`,
+  as `Item.id`), not a row index: rows are renumbered whenever a group folds, expands or grows. The mark stays a count
+  (`completedTurns` against `seenTurns`), and reaching the latest target marks every turn seen, as `markSeen` does now.
+- **Geometry.** A pure function, in the manner of `followsBottom`: the target's row is on screen when its bottom edge
+  is within the visible rect, with the same 24 pt tolerance. A message taller than the viewport therefore counts only
+  once its end was reached; the top of a long answer is not the result yet.
+- **Watching only when needed.** The view is told the target only while `hasUnseenResult` is true. With no target there
+  is nothing to compute, so ordinary streaming pays nothing for this. Scrolling, an update and a layout each recheck,
+  coalesced to one check per run-loop turn, and only a change is reported to SwiftUI.
+- **Clip changes count as well.** The check also runs when the clip view changes size, because the docked permission
+  card (ADR-0039) and the panes (ADR-0041) change the viewport without any scrolling.
+
+**Follow-bottom.** A reader following the end is on screen by definition, so the common case clears the mark as soon
+as the turn ends, as today. Nothing here changes when following stops or resumes, except the jump above.
+
+**Folded groups.** If the target is inside a collapsed group (ADR-0039), the group's summary row is the result: seeing
+"Edited 3 files" is enough, and nothing has to be expanded. The identity resolves to the summary, or to the item's own
+row when the group is expanded. A group that grows while the reader is away counts as a change at the end. Expanding
+a group above the viewport keeps the reader's origin, as now.
+
+**Session switches.** `LiveTranscript` is rebuilt per session (`.id(session.session.id)`, `RootView.swift:243`) and starts
+at the end, so selecting a finished session shows its result and clears its mark, as today. A scroll position per
+session is not added.
+
+### Alternatives
+
+- **Keep the key-window rule.** No work at all, but the mark then means "the window was in front", and it clears at
+  the moment it is most needed.
+- **Row visible at all, by its top edge.** Clears sooner and needs less geometry, but it reports "seen" for a long
+  answer of which one line showed.
+- **A dwell time (visible for one second).** Closer to reading, but timers on the scroll path, and tests that wait,
+  for a difference nobody asked for.
+- **A notification while scrolled up.** More noticeable, and contrary to principle 7: the user is in this window.
+
+### Consequences and risks
+
+- `LiveSession.markSeen` gets a new caller, and the view and Core exchange a target, on the path that scrolling takes.
+  It is performance-sensitive by location, though idle in the common case: Rendering Lab S1, S7 and S9 are rerun before
+  and after, with the owner's approval.
+- A session left scrolled up keeps its row in Needs You, with `Finished`, until the user looks. That is the point, but
+  it may feel sticky; the jump is one key away.
+- Reading the result in a second window clears the mark for all windows, because the owner is shared.
+- Sending a prompt while scrolled up does not resume following, as today; the capsule then appears for the agent's
+  answer.
+
+### Not decided
+
+Whether sending a prompt jumps to the end, a scroll position restored per session, marking a position in the
+transcript (an "unread" line), and the keys of #194's find.

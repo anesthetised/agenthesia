@@ -10,10 +10,6 @@ public struct RootView: View {
     @State private var model: SessionWindowModel
     /// The window's persisted value: the system restores it after relaunch (ADR-0026).
     @Binding private var target: WindowTarget
-    @State private var prompt = ""
-    @State private var attachments: [URL] = []
-    @State private var editingQueueID: UUID?
-    @State private var savedDraft: (text: String, attachments: [URL])?
     @State private var submitting = false
     @State private var configError: String?
     @State private var showingLog = false
@@ -142,7 +138,7 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            finishEditing(); showingQuickOpen = false; fileQuery = ""; model.review = nil
+            model.dropStaleQueueEdit(); showingQuickOpen = false; fileQuery = ""; model.review = nil
         }
         .onChange(of: model.files.sessionID) {
             if model.review?.id != model.files.sessionID { model.review = nil }
@@ -320,20 +316,20 @@ public struct RootView: View {
                     onError: { model.errorMessage = $0.localizedDescription }
                 )
             }
-            if editingQueueID != nil {
+            if model.composer.editingQueueID != nil {
                 HStack {
                     Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Cancel Edit", action: finishEditing)
+                    Button("Cancel Edit") { model.composer.finishEditing() }
                 }
             }
             ComposerInput(
-                text: $prompt,
-                attachments: $attachments,
+                text: Bindable(model).composer.message.text,
+                attachments: Bindable(model).composer.message.attachments,
                 commands: session.transcript.commands,
                 isEnabled: !submitting,
                 onSubmit: submit,
-                attachmentsEditable: editingQueueID == nil,
+                attachmentsEditable: model.composer.editingQueueID == nil,
                 onRecall: recallQueuedPrompt,
                 onStop: { Task { await model.owner?.stop() } }
             )
@@ -344,8 +340,8 @@ public struct RootView: View {
         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
         .background { permissionShortcuts(session) }
         .dropDestination(for: URL.self) { urls, _ in
-            guard editingQueueID == nil, !submitting else { return false }
-            ComposerInput.add(urls, to: &attachments)
+            guard model.composer.editingQueueID == nil, !submitting else { return false }
+            ComposerInput.add(urls, to: &model.composer.message.attachments)
             return true
         }
     }
@@ -356,14 +352,14 @@ public struct RootView: View {
             Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
                 .labelStyle(.iconOnly).buttonStyle(.borderless)
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help("Attach files or folders (⇧⌘A)").disabled(editingQueueID != nil || submitting)
+                .help("Attach files or folders (⇧⌘A)").disabled(model.composer.editingQueueID != nil || submitting)
             SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
             Spacer(minLength: 0)
             let action = ComposerPrimaryAction(
                 turnActive: session.status == .running || session.status == .stopping
                     || !session.pendingInputs.isEmpty,
                 hasDraft: hasDraft,
-                editingQueued: editingQueueID != nil,
+                editingQueued: model.composer.editingQueueID != nil,
                 idleWithEmptyQueue: session.status == .idle && session.queuedPrompts.isEmpty
             )
             Menu("Send options", systemImage: "chevron.down") {
@@ -372,13 +368,14 @@ public struct RootView: View {
                     modifiers: .command
                 )
                 .disabled(
-                    (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                    (!hasDraft && session.queuedPrompts.isEmpty) || submitting || model.composer.editingQueueID != nil
                         || session.isChangingConfig
                 )
                 Button("Send Whole Queue Now") { submit(.allNow) }
                     .keyboardShortcut(.return, modifiers: [.command, .shift])
                     .disabled(
-                        (!hasDraft && session.queuedPrompts.isEmpty) || submitting || editingQueueID != nil
+                        (!hasDraft && session.queuedPrompts.isEmpty) || submitting
+                            || model.composer.editingQueueID != nil
                             || session.isChangingConfig
                     )
             }.labelStyle(.iconOnly).menuStyle(.borderlessButton).fixedSize()
@@ -396,7 +393,7 @@ public struct RootView: View {
     }
 
     private var hasDraft: Bool {
-        !attachments.isEmpty || !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !model.composer.message.isEmpty
     }
 
     private func chooseAttachments() {
@@ -404,7 +401,7 @@ public struct RootView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.directoryURL = model.owner?.workingDirectory
-        if panel.runModal() == .OK { ComposerInput.add(panel.urls, to: &attachments) }
+        if panel.runModal() == .OK { ComposerInput.add(panel.urls, to: &model.composer.message.attachments) }
     }
 
     /// ⌥⌘1… answer the oldest pending request with the option its card lists at that position.
@@ -422,51 +419,39 @@ public struct RootView: View {
     private func send() { submit(.whenReady) }
 
     private func submit(_ intent: SessionController.SubmissionIntent) {
-        guard editingQueueID == nil || intent == .whenReady else { return }
+        guard model.composer.editingQueueID == nil || intent == .whenReady else { return }
         guard model.restored == nil, !submitting, let owner = model.owner,
             let session = owner.controller, !session.isChangingConfig,
             [.idle, .running, .stopping].contains(session.status),
             hasDraft || (intent != .whenReady && !session.queuedPrompts.isEmpty)
         else { return }
-        let text = prompt, files = attachments, editingID = editingQueueID
+        let id = session.session.id
+        let draft = model.composer
         model.errorMessage = nil
         submitting = true
         Task {
             defer { submitting = false }
-            if let editingID {
+            if let editingID = draft.editingQueueID {
                 do {
-                    try await session.updateQueuedPrompt(editingID, text: text)
-                    finishEditing()
+                    try await session.updateQueuedPrompt(editingID, text: draft.message.text)
+                    model.composerDrafts[id]?.finishEditing()
                 } catch { model.errorMessage = error.localizedDescription }
-            } else if await owner.submit(text, attachments: files, intent: intent) {
-                // Acceptance is durable; a failed append leaves the composed draft intact.
-                prompt = ""
-                attachments = []
+            } else if await owner.submit(draft.message.text, attachments: draft.message.attachments, intent: intent) {
+                // Acceptance is durable; a failed append leaves the composed draft intact. The window may show another
+                // session by now, so this clears the draft that was sent.
+                model.composerDrafts[id] = nil
             }
         }
     }
 
     private func editQueuedPrompt(_ entry: QueuedPrompt) {
-        guard !submitting, editingQueueID == nil else { return }
-        savedDraft = (prompt, attachments)
-        editingQueueID = entry.id
-        prompt = entry.text
-        attachments = entry.content.compactMap {
-            guard case .resourceLink(let link) = $0, let url = URL(string: link.uri), url.isFileURL else { return nil }
-            return url
-        }
+        guard !submitting, model.composer.editingQueueID == nil else { return }
+        model.composer.edit(entry)
     }
 
     private func recallQueuedPrompt() {
-        guard prompt.isEmpty, attachments.isEmpty, let entry = model.displayed?.queuedPrompts.last else { return }
+        guard model.composer.message == PromptDraft(), let entry = model.displayed?.queuedPrompts.last else { return }
         editQueuedPrompt(entry)
-    }
-
-    private func finishEditing() {
-        prompt = savedDraft?.text ?? ""
-        attachments = savedDraft?.attachments ?? []
-        editingQueueID = nil
-        savedDraft = nil
     }
 
     static func launchCommand(executable: String, arguments: String) -> (executable: String, arguments: [String]) {

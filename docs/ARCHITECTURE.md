@@ -223,7 +223,9 @@ Composer errors show as a red caption above the card.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
 lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
-turn. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
+turn. Each session keeps its own unsent text, attachments and queue edit (`ComposerDraft`, in
+`SessionWindowModel.composerDrafts`) for as long as the window lives, so looking at another session loses nothing; they
+do not survive a relaunch, and two windows on one session have separate drafts. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
 `resource_link` blocks built by `ResourceLink.file` in Core. For a session in a linked worktree,
 `SessionWorkspace.linkedCheckout` supplies the main checkout, and links to checkout paths that exist in
 the worktree point there. A draft that is a bare `/word` lists the matching commands from

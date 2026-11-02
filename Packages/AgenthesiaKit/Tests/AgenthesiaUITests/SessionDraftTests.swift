@@ -125,6 +125,129 @@ import Testing
         await fixture.remove()
     }
 
+    /// Two live MockAgent sessions in one window, both idle; the second is displayed.
+    private func twoSessions(_ fixture: Fixture) async throws -> (first: LiveSession, second: LiveSession) {
+        let model = fixture.model
+        model.draftDirectory = fixture.directory
+        model.draftAgent = try fixture.mock()
+        var owners: [LiveSession] = []
+        for text in ["first", "second"] {
+            model.draft = PromptDraft(text: text)
+            model.showingSetup = true
+            model.startDraft()
+            let owner = try #require(model.owner)
+            await owner.startup?.value
+            let controller = try #require(owner.controller)
+            try await waitUntil { controller.status == .idle && controller.transcript.items.count > 1 }
+            owners.append(owner)
+        }
+        return (owners[0], owners[1])
+    }
+
+    @Test func eachSessionKeepsItsComposerDraft() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, second) = try await twoSessions(fixture)
+        let file = fixture.directory.appending(path: "notes.txt")
+
+        model.show(first)
+        #expect(model.composer == ComposerDraft())
+        model.composer.message = PromptDraft(text: "for the first", attachments: [file])
+        model.show(second)
+        #expect(model.composer == ComposerDraft())
+        model.composer.message.text = "for the second"
+        model.show(first)
+        #expect(model.composer.message == PromptDraft(text: "for the first", attachments: [file]))
+        model.show(second)
+        #expect(model.composer.message.text == "for the second")
+
+        // The window's draft for a new session is separate, and an emptied composer is not kept.
+        model.showingSetup = true
+        #expect(model.draft.isEmpty)
+        model.show(second)
+        model.composer.message.text = ""
+        #expect(model.composerDrafts.count == 1)
+        await fixture.remove()
+    }
+
+    @Test func aQueueEditSurvivesSwitchingUnlessItsMessageWasSent() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, second) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        // The turn waits for the permission answer, so the next message stays queued.
+        #expect(await first.submit("/write note.txt hello", attachments: [], intent: .whenReady))
+        try await waitUntil { controller.status == .running && controller.pendingPermissions.isEmpty == false }
+        #expect(await first.submit("queued", attachments: [], intent: .whenReady))
+        let entry = try #require(controller.queuedPrompts.first)
+
+        model.composer.message.text = "typed"
+        model.composer.edit(entry)
+        #expect(model.composer.message.text == "queued" && model.composer.editingQueueID == entry.id)
+        model.show(second)
+        model.dropStaleQueueEdit()
+        model.show(first)
+        model.dropStaleQueueEdit()
+        #expect(model.composer.message.text == "queued" && model.composer.editingQueueID == entry.id)
+
+        try await controller.removeQueuedPrompt(entry.id)
+        model.show(second)
+        model.show(first)
+        model.dropStaleQueueEdit()
+        #expect(model.composer.message.text == "typed" && model.composer.editingQueueID == nil)
+        await fixture.remove()
+    }
+
+    @Test func theComposerShowsTheDisplayedSessionsDraftAndSendingClearsOnlyThat() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, second) = try await twoSessions(fixture)
+        model.show(first)
+        _ = NSApplication.shared
+        let view = NSHostingView(rootView: RootView(model: model))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        func composer() -> NSTextView? {
+            func find(_ view: NSView) -> NSTextView? {
+                if let text = view as? FileTextView { return text }
+                return view.subviews.lazy.compactMap(find).first
+            }
+            return find(view)
+        }
+        func showing(_ text: String) async throws {
+            try await waitUntil { composer()?.string == text }
+        }
+
+        try await waitUntil { composer() != nil }
+        try #require(composer()).insertText("typed in the first", replacementRange: NSRange(location: 0, length: 0))
+        #expect(model.composer.message.text == "typed in the first")
+        model.show(second)
+        try await showing("")
+        try #require(composer()).insertText("typed in the second", replacementRange: NSRange(location: 0, length: 0))
+        model.show(first)
+        try await showing("typed in the first")
+
+        // Return sends the draft of the session shown; the other session's draft stays.
+        let controller = try #require(first.controller)
+        let messages = controller.transcript.items.count
+        try #require(composer()).doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        try await waitUntil { controller.transcript.items.count > messages }
+        try await showing("")
+        #expect(model.composerDrafts[controller.session.id] == nil)
+        model.show(second)
+        try await showing("typed in the second")
+        await fixture.remove()
+    }
+
     @Test func sendStartsTheSessionWithTheDraftAndClearsIt() async throws {
         let fixture = try Fixture()
         let model = fixture.model

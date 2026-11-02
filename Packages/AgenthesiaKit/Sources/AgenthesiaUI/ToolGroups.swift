@@ -47,7 +47,7 @@ struct ToolGroupSummary: Equatable {
             let title = last.title.split(whereSeparator: \.isNewline).first?.replacing("`", with: ""),
             !title.isEmpty
         {
-            text = "Running \(title)…"
+            text = "\(title)…"
             return
         }
         var counts: [Activity: Int] = [:]

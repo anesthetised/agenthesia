@@ -1204,6 +1204,36 @@ extension LiveTranscriptTests {
         #expect(controller.table.numberOfRows == 5)
     }
 
+    @Test func aSelectedRowsStatusStaysReadableOnTheAccentColor() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(tool("a", kind: .read))
+        try await recorded.apply(tool("b", status: .failed))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let status = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 1 failed" })
+        #expect(status.textColor == .systemRed)
+
+        let rowView = try #require(controller.table.rowView(atRow: 0, makeIfNecessary: true))
+        rowView.isEmphasized = true
+        rowView.isSelected = true
+        #expect(status.textColor == .alternateSelectedControlTextColor)
+
+        // A header rebuilt while the row stays selected keeps the readable color.
+        try await recorded.apply(tool("c", status: .failed))
+        publish(recorded, to: source)
+        controller.update(source)
+        let rebuilt = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 2 failed" })
+        #expect(rebuilt.textColor == .alternateSelectedControlTextColor)
+
+        rowView.isSelected = false
+        #expect(rebuilt.textColor == .systemRed)
+    }
+
     @Test func aCardAndItsOwnExpansionAreKeptApartFromItsGroupsExpansion() async throws {
         let recorded = try await RecordedTranscript()
         let output = (1...40).map { "line \($0)" }.joined(separator: "\n")

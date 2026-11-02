@@ -314,6 +314,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     var actions: NSView?
     /// Shown only while the pointer is over the row; Copy stays available as an accessibility action.
     private var copyButton: NSButton?
+    private weak var statusLabel: NSTextField?
     private(set) var hovering = false
 
     init(markdown: String) {
@@ -343,6 +344,13 @@ private final class TranscriptMessageRow: NSTableCellView {
     override func layout() {
         super.layout()
         bubble?.fit(columnWidth: TranscriptColumn.width(inRowOfWidth: bounds.width))
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            guard let tool else { return }
+            statusLabel?.textColor = statusColor(tool.tone)
+        }
     }
 
     override func mouseEntered(with event: NSEvent) { setHovering(true) }
@@ -550,7 +558,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         // Users and the agent speak without a label; their Copy button stays at the row's trailing edge.
         let labeled = message.kind == .card || message.kind == .thought || message.kind == .group
         let header = NSStackView(
-            views: (labeled ? Self.toolHeader(message.tool, role: role, controller: controller) : []) + [
+            views: (labeled ? toolHeader(message.tool, role: role, controller: controller) : []) + [
                 NSView(), copy,
             ]
         )
@@ -558,7 +566,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         return header
     }
 
-    private static func toolHeader(
+    private func toolHeader(
         _ tool: ToolCardHeader?,
         role: NSTextField,
         controller: TranscriptTableController
@@ -588,14 +596,20 @@ private final class TranscriptMessageRow: NSTableCellView {
         icon.setAccessibilityElement(false)
         let status = NSTextField(labelWithString: tool.status)
         status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        status.textColor =
-            switch tool.tone {
-            case .neutral: .secondaryLabelColor
-            case .running: .controlAccentColor
-            case .success: .systemGreen
-            case .failure: .systemRed
-            }
+        status.textColor = statusColor(tool.tone)
+        statusLabel = status
         return views + [icon, role, status]
+    }
+
+    /// The selection's accent color hides a tone's color, the running tone's entirely.
+    private func statusColor(_ tone: ToolCardHeader.Tone) -> NSColor {
+        guard backgroundStyle != .emphasized else { return .alternateSelectedControlTextColor }
+        return switch tone {
+        case .neutral: .secondaryLabelColor
+        case .running: .controlAccentColor
+        case .success: .systemGreen
+        case .failure: .systemRed
+        }
     }
 
     func showFinished(_ message: DemoSession.Message, width: CGFloat, controller: TranscriptTableController) {

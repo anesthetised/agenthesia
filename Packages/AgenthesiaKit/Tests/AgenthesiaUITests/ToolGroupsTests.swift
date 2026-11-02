@@ -98,7 +98,7 @@ import Testing
         for status in [ACP.ToolCallStatus.inProgress, .pending] {
             group[1].status = status
             let summary = ToolGroupSummary(group, running: true)
-            #expect(summary.text == "Running just test…")
+            #expect(summary.text == "just test…")
             #expect(summary.failed == 1)
             // A session that ended left the call unfinished; it does not run.
             #expect(ToolGroupSummary(group, running: false).text == "Ran 1 command, read 1 file")
@@ -114,7 +114,7 @@ import Testing
         var group = calls(.read, .execute)
         group[1].status = .inProgress
         group[1].title = "`swift test`\n  --parallel"
-        #expect(ToolGroupSummary(group, running: true).text == "Running swift test…")
+        #expect(ToolGroupSummary(group, running: true).text == "swift test…")
         for empty in ["", "\n", "``"] {
             group[1].title = empty
             #expect(ToolGroupSummary(group, running: true).text == "Ran 1 command, read 1 file")

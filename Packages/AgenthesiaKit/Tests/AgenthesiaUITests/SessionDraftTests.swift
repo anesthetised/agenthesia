@@ -109,6 +109,7 @@ import Testing
         await model.refresh()
         await model.showHistory(records[1])
         #expect(!model.showingSetup)
+        #expect(model.windowTitle == records[1].title ?? "New Session" && model.windowSubtitle == "Newer")
         model.draft.text = "keep me"
         // The row of the older session names its project, and the newest one is the draft's default.
         let row = try #require(
@@ -119,6 +120,8 @@ import Testing
         #expect(model.showingSetup && model.sidebarSelection == nil)
         #expect(model.selectedDirectory == URL(filePath: project.rootPath, directoryHint: .isDirectory))
         #expect(project.name == "Older" && model.draft.text == "keep me")
+        // The previous session stays displayed behind the draft, but the window does not name it.
+        #expect(model.windowTitle == "New Session" && model.windowSubtitle.isEmpty)
         await fixture.remove()
     }
 

@@ -1228,13 +1228,15 @@ extension LiveTranscriptTests {
             }
             window.contentView?.layoutSubtreeIfNeeded()
             #expect(cells.count == 6)
+            // Narrower than the window where a legacy scroller takes room, as on CI.
+            let rowWidth = controller.scroll.contentView.bounds.width
             for (row, cell) in cells.enumerated() {
                 let stack = try #require(views(NSStackView.self, in: cell).first)
-                let place = "row \(row) at \(width) pt"
-                #expect(abs(cell.frame.width - width) <= 1, "cell is \(cell.frame.width) pt, \(place)")
-                let expected = TranscriptColumn.minX(inRowOfWidth: width)
+                let place = "row \(row) at \(rowWidth) pt"
+                #expect(abs(cell.frame.width - rowWidth) <= 1, "cell is \(cell.frame.width) pt, \(place)")
+                let expected = TranscriptColumn.minX(inRowOfWidth: rowWidth)
                 #expect(abs(stack.frame.minX - expected) <= 1, "column starts at \(stack.frame.minX), \(place)")
-                let columnWidth = TranscriptColumn.width(inRowOfWidth: width)
+                let columnWidth = TranscriptColumn.width(inRowOfWidth: rowWidth)
                 #expect(abs(stack.frame.width - columnWidth) <= 1, "column is \(stack.frame.width) pt, \(place)")
             }
         }

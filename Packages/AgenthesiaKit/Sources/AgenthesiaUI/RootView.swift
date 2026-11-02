@@ -47,7 +47,7 @@ public struct RootView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
-                if model.showingSetup && model.canStart {
+                if model.inDraft {
                     SessionDraftView(model: model)
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,8 +83,8 @@ public struct RootView: View {
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(model.displayed?.title ?? model.displayed?.session.title ?? "New Session")
-            .navigationSubtitle(model.projects.first { $0.id == model.displayed?.session.projectID }?.name ?? "")
+            .navigationTitle(model.windowTitle)
+            .navigationSubtitle(model.windowSubtitle)
             .toolbar {
                 Button("Quick Open", systemImage: "doc.text.magnifyingglass") {
                     fileQuery = ""

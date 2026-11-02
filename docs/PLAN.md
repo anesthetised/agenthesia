@@ -342,6 +342,11 @@ Wave 2:
 - #183: in a pane wider than 768 pt the transcript column sat off center, because its fill constraint (priority 750)
   outranked AppKit's width for the cell (500) and the cell shrank. The fill constraint now sits just below it. A hosted
   test covers user, agent, tool, group and streaming rows at 500, 864 and 1364 pt and fails without the fix. Not yet seen in the running app (#160).
+- #185: the draft's toolbar title and subtitle named the session still displayed behind it, because the draft only hides
+  the session. `SessionWindowModel.windowTitle` and `windowSubtitle` now give `New Session` and no subtitle in the draft;
+  a window-model test covers both states. The earlier note that a failed Continue's error carries into a new draft was
+  not reproduced: the draft reads only `draftError`, which a resumed session never sets, and the error seen was the one
+  under the saved session's composer. Not yet seen in the running app (#160).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

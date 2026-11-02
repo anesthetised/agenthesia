@@ -81,6 +81,12 @@ import SwiftUI
         return session
     }
     var canStart: Bool { !closed }
+    /// The draft is not the session that stays displayed behind it.
+    var inDraft: Bool { showingSetup && canStart }
+    var windowTitle: String { inDraft ? "New Session" : displayed?.title ?? displayed?.session.title ?? "New Session" }
+    var windowSubtitle: String {
+        inDraft ? "" : projects.first { $0.id == displayed?.session.projectID }?.name ?? ""
+    }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {
         guard !closed, !showingSetup, let id = displayed?.session.id ?? owner?.sessionID else { return .launch }

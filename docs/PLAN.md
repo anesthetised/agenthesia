@@ -351,6 +351,12 @@ Wave 2:
   5 s bound on slow CI runners (a 300 ms timeout and a 1 s grace period), twice in one day, with the whole core group
   twice as slow as on main. The bound is now 15 s, still under the 20 s default. The two failures in #178's title are
   not fixed by this; the issue stays open.
+- #189: text typed in the composer was lost when the window showed another session, because one `prompt` state served
+  the whole window and was reset on every switch. Each session now keeps its text, attachments and queue edit in
+  `SessionWindowModel.composerDrafts` while the window lives. A queue edit whose message was sent meanwhile returns the
+  saved draft. Tests: window-model tests of both, and a hosted test that types into the real text view, switches and
+  sends with Return; it fails when the switch resets the draft. Not yet seen in the running app (#160). Not checked: ⌘Z
+  right after a switch, which keeps using the same text view and undo stack as before.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

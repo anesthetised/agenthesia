@@ -87,6 +87,22 @@ import SwiftUI
     var windowSubtitle: String {
         inDraft ? "" : projects.first { $0.id == displayed?.session.projectID }?.name ?? ""
     }
+    /// Each session's unsent composer, by session ID, for as long as the window lives. An empty one is not kept.
+    var composerDrafts: [UUID: ComposerDraft] = [:]
+    /// The composer of the displayed session.
+    var composer: ComposerDraft {
+        get { displayed.flatMap { composerDrafts[$0.session.id] } ?? ComposerDraft() }
+        set {
+            guard let id = displayed?.session.id else { return }
+            composerDrafts[id] = newValue == ComposerDraft() ? nil : newValue
+        }
+    }
+    /// The queued message being edited may have been sent while another session was shown.
+    func dropStaleQueueEdit() {
+        guard let id = composer.editingQueueID, displayed?.queuedPrompts.contains(where: { $0.id == id }) != true
+        else { return }
+        composer.finishEditing()
+    }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {
         guard !closed, !showingSetup, let id = displayed?.session.id ?? owner?.sessionID else { return .launch }

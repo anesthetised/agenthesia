@@ -347,6 +347,10 @@ Wave 2:
   a window-model test covers both states. The earlier note that a failed Continue's error carries into a new draft was
   not reproduced: the draft reads only `draftError`, which a resumed session never sets, and the error seen was the one
   under the saved session's composer. Not yet seen in the running app (#160).
+- #178, probe timing: `AgentProbeTests.aSilentCommandTimesOutAndIsTerminated` took 5.03 s and then 5.88 s against its
+  5 s bound on slow CI runners (a 300 ms timeout and a 1 s grace period), twice in one day, with the whole core group
+  twice as slow as on main. The bound is now 15 s, still under the 20 s default. The two failures in #178's title are
+  not fixed by this; the issue stays open.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

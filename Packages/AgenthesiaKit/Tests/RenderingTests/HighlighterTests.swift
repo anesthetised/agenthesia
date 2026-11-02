@@ -47,6 +47,8 @@ import Testing
     }
 }
 
+// Mitigation for #178: building attributed strings on several threads at once crashed hosted runs; see PLAN.md.
+@MainActor
 @Suite struct HighlighterTests {
     let highlighter = Highlighter()
 
@@ -58,7 +60,7 @@ import Testing
             .map(\.name)
     }
 
-    static let samples: [(CodeLanguage, String, keyword: String, string: String, comment: String)] = [
+    nonisolated static let samples: [(CodeLanguage, String, keyword: String, string: String, comment: String)] = [
         (.swift, "// note\nlet x = \"hi\"", "let", "\"hi\"", "// note"),
         (.typescript, "// note\nconst x: string = \"hi\";", "const", "\"hi\"", "// note"),
         (.tsx, "// note\nconst x = <div>{\"hi\"}</div>;", "const", "\"hi\"", "// note"),

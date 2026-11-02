@@ -3,6 +3,8 @@ import Testing
 
 @testable import Rendering
 
+// Mitigation for #178: building attributed strings on several threads at once crashed hosted runs; see PLAN.md.
+@MainActor
 @Suite struct MarkdownRendererTests {
     let theme = Theme.standard
     let renderer = MarkdownRenderer()

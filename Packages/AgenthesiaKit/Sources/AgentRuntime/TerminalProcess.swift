@@ -118,7 +118,14 @@ public actor TerminalProcess {
         // POSIX_SPAWN_SETSID makes the command the leader of its own process group.
         groupTermination = ProcessGroupTermination(group: pid, leader: pid) { false }
 
-        let exit = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
+        // The exit event can arrive while the command is still closing the terminal, and that close waits for
+        // the output to be read. `waitpid` blocks until the close is done, so it must not hold the reader's
+        // queue, or the kernel gives up on the unread output.
+        let exit = DispatchSource.makeProcessSource(
+            identifier: pid,
+            eventMask: .exit,
+            queue: DispatchQueue(label: "Agenthesia.TerminalProcess.exit", qos: .userInitiated)
+        )
         exit.setEventHandler { [weak self] in
             var status: Int32 = 0
             var result: pid_t

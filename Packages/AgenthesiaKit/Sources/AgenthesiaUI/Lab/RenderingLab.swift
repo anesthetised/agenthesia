@@ -26,6 +26,7 @@
                     Button("S6: Long code") { Task { await lab.runStream(longCode: true) } }
                     Button("S7: Tool updates") { Task { await lab.runStream(toolUpdates: true) } }
                     Button("S8: Group toggles") { Task { await lab.runStream(toolUpdates: true, groupToggles: true) } }
+                    Button("S9: Tools, 10k") { Task { await lab.runStream(toolUpdates: true, history: 10_000) } }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
                     Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
@@ -163,6 +164,7 @@
                 case "S6": await runStream(longCode: true)
                 case "S7": await runStream(toolUpdates: true)
                 case "S8": await runStream(toolUpdates: true, groupToggles: true)
+                case "S9": await runStream(toolUpdates: true, history: 10_000)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
                 default:
@@ -184,10 +186,16 @@
         /// S1: stream a ~4000-token answer into a 200-item transcript, following its end.
         /// S7 adds five tool calls above the answer, which fold into one row; every 100 ms one changes status and
         /// gains an output line. S8 also expands or collapses the group with each change, inserting and removing rows.
-        func runStream(longCode: Bool = false, toolUpdates: Bool = false, groupToggles: Bool = false) async {
+        /// S9 is S7 below a 10 000-item history, where folding the whole transcript on every update would show.
+        func runStream(
+            longCode: Bool = false,
+            toolUpdates: Bool = false,
+            groupToggles: Bool = false,
+            history: Int = 200
+        ) async {
             if toolUpdates { prototype = .app }
             var generator = TranscriptGenerator(seed: 1)
-            let transcript = LabTranscript(items: generator.items(200))
+            let transcript = LabTranscript(items: generator.items(history))
             let answer =
                 longCode
                 ? "```swift\n" + TranscriptGenerator.swiftFile(lines: 400)
@@ -208,7 +216,9 @@
             let name =
                 longCode
                 ? "S6 Long unclosed code"
-                : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
+                : history > 200
+                    ? "S9 Tool updates, 10k items"
+                    : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
             await measure("\(name), \(prototype.title), warm", in: view.view) {
                 guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
                 let batch = schedule.due(at: milliseconds(since: start) / 1000)

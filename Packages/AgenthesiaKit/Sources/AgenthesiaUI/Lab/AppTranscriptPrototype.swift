@@ -71,6 +71,8 @@
         }
         func append(_ chunk: String) {
             items[items.count - 1].1 += chunk
+            // The live transcript folds on every state change; S9 measures what that costs on a long history.
+            fold()
             revision += 1
             table.update(self)
         }

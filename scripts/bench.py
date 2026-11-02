@@ -26,7 +26,7 @@ def scenarios(value):
     for part in parts:
         if re.fullmatch(r"S[1256]:(A|A2|B|C|App)", part):
             continue
-        if part in ("S7:App", "S8:App"):  # Tool cards exist only in the production table.
+        if part in ("S7:App", "S8:App", "S9:App"):  # Tool cards exist only in the production table.
             continue
         if part.startswith("S4:"):
             flags = part[3:].split("+") if part[3:] else []

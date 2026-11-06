@@ -30,7 +30,7 @@ struct TranscriptMessage {
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
 struct ToolCardHeader: Equatable {
-    enum Tone: Equatable { case neutral, running, success, failure }
+    enum Tone: Equatable { case neutral, running, attention, success, failure }
     var symbol: String
     var kind: String
     var status: String
@@ -448,7 +448,7 @@ final class LiveTranscriptSource: TranscriptSource {
                     let count = min(permission.options.count, 9)
                     if count > 0 { waiting += " · " + (count > 1 ? "⌥⌘1–⌥⌘\(count)" : "⌥⌘1") }
                 }
-                (header.status, header.tone) = (waiting, .running)
+                (header.status, header.tone) = (waiting, .attention)
                 header.actions = permission.options.map(\.name)
                 header.shortcuts = shortcuts
                 var prompt = "The agent asks for permission to run this tool."

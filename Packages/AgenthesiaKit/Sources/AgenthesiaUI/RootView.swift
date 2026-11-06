@@ -50,11 +50,15 @@ public struct RootView: View {
                 } else if let session = model.displayed {
                     GeometryReader { geometry in panes(session, width: geometry.size.width) }
                 } else {
-                    ContentUnavailableView(
-                        model.owner?.isStarting == true ? "Starting session…" : "Start a session",
-                        systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Choose a project and an installed ACP agent.")
-                    )
+                    let starting = model.owner?.isStarting == true
+                    ContentUnavailableView {
+                        Label(
+                            starting ? "Starting session…" : "Start a session",
+                            systemImage: "bubble.left.and.bubble.right"
+                        )
+                    } description: {
+                        if !starting { Text("Choose a project and an installed ACP agent.") }
+                    }
                 }
                 if model.restored == nil, let diagnostic = model.owner?.diagnostic {
                     Text(diagnostic).font(.caption).foregroundStyle(.secondary).padding(8)
@@ -240,7 +244,12 @@ public struct RootView: View {
                 .overlay(alignment: .topTrailing) {
                     if model.find.isOpen { TranscriptFindBar(model: model) }
                 }
-                if let startedAt = session.turnStartedAt { WorkingTimeLine(startedAt: startedAt) }
+                if let startedAt = session.turnStartedAt {
+                    WorkingTimeLine(
+                        startedAt: startedAt,
+                        waiting: !session.pendingPermissions.isEmpty || !session.pendingInputs.isEmpty
+                    )
+                }
                 if let signIn = model.signIn {
                     Divider()
                     SignInPanel(

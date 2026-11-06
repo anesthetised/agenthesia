@@ -478,7 +478,11 @@ Wave 2:
   temporary repositories for creating, the collision fallback, merging and discarding with a stored name, an untouched
   worktree removed after a cancelled start, an old session without a stored name (discard and merge), and stored names
   that fail the check (another session's, `feature/x`, no suffix, outside the prefix), which keep their worktree and
-  branch. Not yet seen in the running app.
+  branch. Running app (scripted, MockAgent, isolated home, dark): `Fix the note parser` made
+  `agenthesia/fix-the-note-parser-a0fbe75f`, shown in the Workspace block and in `git branch`, with the worktree directory
+  still named by the session id; `Исправь парсер заметок` made `agenthesia/isprav-parser-zametok-2b8dc91e`; Discard
+  named the readable branch in its confirmation and removed the branch and the worktree. Not checked: merge with a
+  readable branch in the app (covered by repository tests), a session made before the change, light mode.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

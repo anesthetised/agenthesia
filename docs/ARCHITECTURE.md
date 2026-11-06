@@ -319,19 +319,24 @@ diff is computed once per edit, not on every row update. Side-by-side diffs rema
 escape-free text at render time, shown in a code block with the exit status; collapsed, it keeps the last lines. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
 is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
 text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
-Each permission request is its own card, even when several refer to one tool call. It shows the tool
-call as known when the agent asked and, while pending, a vertical list of native buttons in the
-agent's option order, keeping choices visible in narrow transcripts. ⌥⌘1…⌥⌘9 choose an option of the
-oldest pending request, the one the docked card shows. Return and Escape choose nothing.
-Agent-provided “always” options are returned verbatim
-and labeled as remembered by the agent; the app keeps no policy of its own. Answered cards state only
-the recorded response (the option's name and kind, or cancellation), never an inferred approval or
-decline. Requests without a recorded response after a restart show that none was recorded and have no
-controls. Non-text content is identified with attachment placeholders rather than silently dropped.
+Each permission request is its own record row, even when several refer to one tool call, and the row has no
+buttons: they live on the docked card, where ⌥⌘1…⌥⌘9 choose an option of the oldest pending request. Return and
+Escape choose nothing. The record is one line, like a folded group (`kind == .group`, a header without a body):
+the recorded outcome, then what was asked (`Allowed once · Edit · Write note.txt`; `Waiting for you · …` while
+pending), with a Details disclosure that unfolds the tool call as known when the agent asked and the outcome in
+words. The header is `LiveTranscriptSource.permissionCard`'s `ToolCardHeader` with `record` set: the status leads, the
+summary (the kind and the first line of the title) truncates at the tail. Details are keyed by row identity like any
+card's expansion, Copy returns them whether or not the row is folded, and Find reads them. A tool row whose call has
+a pending request leaves its diff out (`toolCard(hidingDiffs:)`, from `LiveTranscriptSource.pending`) and shows it
+again once the request is answered; the row's height changes then, and follow-bottom or the reader's scroll origin
+handles it as for any row change. Agent-provided “always” options are returned verbatim and labeled as remembered by
+the agent; the app keeps no policy of its own. Answered records state only the recorded response (the option's name
+and kind, or cancellation), never an inferred approval or decline. Requests without a recorded response after a
+restart show that none was recorded. Non-text content is identified with attachment placeholders rather than silently
+dropped.
 
-> **Accepted, not yet implemented (#195):** the permission card's buttons leave the transcript
-> ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), and "the app keeps no policy of its own" would no longer
-> hold for an explicitly enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md), deferred).
+> **Accepted, not yet implemented:** "the app keeps no policy of its own" would no longer hold for an explicitly
+> enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md), deferred).
 
 The session's bounded stderr log and environment diagnostics are visible in the window.
 

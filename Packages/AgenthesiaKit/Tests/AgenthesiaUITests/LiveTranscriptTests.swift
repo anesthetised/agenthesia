@@ -158,30 +158,18 @@ import Testing
         #expect(card(.cancelled).markdown.hasSuffix("Request cancelled; no option was returned to the agent."))
         #expect(card(.unknown(["outcome": "later"])).markdown.hasSuffix("Unrecognized permission outcome."))
         #expect(card(nil).header.status == "No answer")
-        // The oldest pending request shows the shortcuts that answer it; later ones do not.
-        #expect(
-            card(nil, phase: .choosing(shortcuts: true)).header.status
-                == "Waiting for your answer · ⌥⌘1–⌥⌘\(min(options.count, 9))"
-        )
-        #expect(card(nil, phase: .choosing(shortcuts: false)).header.status == "Waiting for your answer")
         // A request that needs the user has its own tone, the sidebar's "needs you" orange, not the running accent.
-        #expect(card(nil, phase: .choosing(shortcuts: false)).header.tone == .attention)
+        #expect(card(nil, phase: .choosing).header.status == "Waiting for you")
+        #expect(card(nil, phase: .choosing).header.tone == .attention)
         #expect(card(nil, phase: .recording).header.tone == .neutral)
-        #expect(
-            card(nil, options: [options[0]], phase: .choosing(shortcuts: true)).header.status
-                == "Waiting for your answer · ⌥⌘1"
-        )
-        #expect(card(nil, options: [], phase: .choosing(shortcuts: true)).header.status == "Waiting for your answer")
-        #expect(card(nil).header.actions.isEmpty)
         #expect(card(nil, phase: .recording).header.status == "Recording answer")
-        #expect(card(nil, phase: .recording).header.actions.isEmpty)
-        let choosing = card(nil, phase: .choosing(shortcuts: true))
-        #expect(choosing.header.actions == options.map(\.name))
-        #expect(choosing.header.shortcuts)
+        let choosing = card(nil, phase: .choosing)
         #expect(choosing.markdown.contains("remembered by the agent, not by Agenthesia"))
-        let once = card(nil, options: [options[0], options[2]], phase: .choosing(shortcuts: false))
-        #expect(!once.header.shortcuts)
-        #expect(!once.markdown.contains("Always"))
+        #expect(!card(nil, options: [options[0], options[2]], phase: .choosing).markdown.contains("Always"))
+        // The header is the one-line record: the outcome, then what was asked; Details holds the rest.
+        #expect(card(.selected("once")).header.kind == "· Edit · Write")
+        #expect(card(.selected("once")).header.record && card(.selected("once")).header.detailsDisclosure)
+        #expect(card(.selected("once")).header.expandable && !card(.selected("once")).header.expanded)
         #expect(
             !options.map(\.optionId).map { card(.selected($0)).markdown }.contains { $0.contains("declined") }
         )
@@ -191,111 +179,12 @@ import Testing
             expanded: false
         )
         #expect(untitled.markdown.hasPrefix("Tool · _Untitled tool call_"))
+        #expect(untitled.header.kind == "· Tool")
         let item = TranscriptState.Item(
             id: 1,
             permission: .init(requestID: nil, toolCall: call, options: [], outcome: .cancelled)
         )
         #expect(LiveTranscriptSource.content(item).0 == "Permission")
-    }
-
-    @Test func pendingPermissionRowsOfferOptionsUntilAnswered() async throws {
-        let recorded = try await RecordedTranscript()
-        let first = UUID()
-        let second = UUID()
-        let options: [ACP.PermissionOption] = [
-            .init(optionId: "allow", name: "Allow", kind: .allowOnce),
-            .init(optionId: "reject", name: "Reject", kind: .rejectOnce),
-        ]
-        try await recorded.apply(.toolCall(.init(toolCallId: "t", title: "Write file", kind: .edit)))
-        for id in [first, second] {
-            try await recorded.append(
-                try SessionEvent.permissionRequested(id: id, toolCall: .init(toolCallId: "t"), options: options)
-                    .storedEvent()
-            )
-        }
-        let source = ChoiceRecorder()
-        source.live.running = true
-        source.live.pending = [first, second]
-        source.live.state = recorded.state
-        source.live.revision += 1
-        let controller = TranscriptTableController()
-        let window = host(controller)
-        defer { window.close() }
-        controller.update(source)
-        let row = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
-        let buttons = views(NSButton.self, in: row).filter {
-            $0.action == #selector(TranscriptTableController.choosePermission(_:))
-        }
-        #expect(buttons.map(\.title) == ["Allow", "Reject"])
-        // Only the oldest pending request answers to ⌥⌘1….
-        #expect(buttons.map(\.toolTip) == [nil, nil])
-        let oldest = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
-        #expect(views(NSButton.self, in: oldest).compactMap(\.toolTip).contains("⌥⌘2"))
-        buttons[1].performClick(nil)
-        #expect(source.choices.count == 1)
-        #expect(source.choices.first?.row == 2)
-        #expect(source.choices.first?.option == 1)
-
-        try await recorded.append(
-            try SessionEvent.permissionResolved(id: second, outcome: .selected("reject")).storedEvent()
-        )
-        source.live.pending = [first]
-        source.live.state = recorded.state
-        source.live.revision += 1
-        controller.update(source)
-        let answered = try #require(controller.table.view(atColumn: 0, row: 2, makeIfNecessary: true))
-        #expect(!views(NSButton.self, in: answered).contains { $0.title == "Reject" })
-        #expect(labels(in: answered).contains("Rejected once"))
-        // Without a controller, an answer has nowhere to go and must not crash.
-        source.live.choosePermission(at: 1, option: 0)
-        source.live.choosePermission(at: 0, option: 0)
-    }
-
-    @Test(arguments: [440.0, 600.0]) func permissionOptionsRemainVisibleInNarrowTranscripts(width: Double) async throws
-    {
-        let recorded = try await RecordedTranscript()
-        let id = UUID()
-        let names = [
-            "Allow this command once", "Always allow commands like this",
-            "Reject this command", "Always reject commands like this",
-        ]
-        let kinds: [ACP.PermissionOptionKind] = [.allowOnce, .allowAlways, .rejectOnce, .rejectAlways]
-        let options = names.enumerated().map { index, name in
-            ACP.PermissionOption(optionId: "option-\(index)", name: name, kind: kinds[index])
-        }
-        try await recorded.append(
-            try SessionEvent.permissionRequested(
-                id: id,
-                toolCall: .init(toolCallId: "t", title: "Run command"),
-                options: options
-            )
-            .storedEvent()
-        )
-        let source = ChoiceRecorder()
-        source.live.running = true
-        source.live.pending = [id]
-        source.live.state = recorded.state
-        let controller = TranscriptTableController()
-        let window = host(controller)
-        defer { window.close() }
-        window.setContentSize(NSSize(width: width, height: 600))
-        controller.scroll.frame = window.contentLayoutRect
-        controller.update(source)
-        window.contentView?.layoutSubtreeIfNeeded()
-        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
-        let buttons = views(NSButton.self, in: row).filter {
-            $0.action == #selector(TranscriptTableController.choosePermission(_:))
-        }
-        #expect(buttons.map(\.title) == names)
-        let viewport = controller.scroll.contentView.bounds
-        for (index, button) in buttons.enumerated() {
-            let rect = button.convert(button.bounds, to: controller.scroll.contentView)
-            #expect(!button.isHiddenOrHasHiddenAncestor)
-            #expect(viewport.contains(rect))
-            button.performClick(nil)
-            #expect(source.choices.last?.row == 0)
-            #expect(source.choices.last?.option == index)
-        }
     }
 
     @Test func commandOutputShowsItsLastLinesAndExitStatus() throws {
@@ -688,20 +577,8 @@ import Testing
     private func labels(in view: NSView) -> [String] { views(NSTextField.self, in: view).map(\.stringValue) }
 }
 
-/// Records answers instead of sending them to a session controller.
-private final class ChoiceRecorder: TranscriptSource {
-    let live = LiveTranscriptSource()
-    var choices: [(row: Int, option: Int)] = []
-    var revision: Int { live.revision }
-    var messageCount: Int { live.messageCount }
-    func message(at row: Int) -> TranscriptMessage { live.message(at: row) }
-    func isStreaming(at row: Int) -> Bool { live.isStreaming(at: row) }
-    func toggleExpansion(at row: Int) { live.toggleExpansion(at: row) }
-    func choosePermission(at row: Int, option: Int) { choices.append((row, option)) }
-}
-
 /// Builds transcript state from stored events, exactly as live sessions and replay do.
-private final class RecordedTranscript {
+final class RecordedTranscript {
     let directory = FileManager.default.temporaryDirectory.appending(path: "transcript-\(UUID())")
     let store: PersistenceStore
     let session: SessionRecord

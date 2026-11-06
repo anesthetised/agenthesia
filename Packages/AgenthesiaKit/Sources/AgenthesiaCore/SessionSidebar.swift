@@ -19,6 +19,10 @@ public import Persistence
         /// Nil while a starting session has no project yet, or when the project is unknown.
         public let project: ProjectRecord?
 
+        /// When the session last did anything: the log's last event, or its start without one. Nil while a starting
+        /// session has no record yet.
+        public let lastActivity: Date?
+
         /// The session's identity once it has one; a starting owner is identified by itself.
         public let id: AnyHashable
 
@@ -34,9 +38,16 @@ public import Persistence
             title.localizedStandardContains(query) || project?.name.localizedStandardContains(query) == true
         }
 
-        @MainActor init(source: Source, project: ProjectRecord?) {
+        @MainActor init(source: Source, project: ProjectRecord?, savedActivity: [UUID: Date] = [:]) {
             self.source = source
             self.project = project
+            lastActivity =
+                switch source {
+                case .live(let owner):
+                    owner.controller?.lastActivity ?? owner.sessionID.flatMap { savedActivity[$0] }
+                        ?? (owner.controller?.session ?? owner.resuming)?.createdAt
+                case .saved(let record): savedActivity[record.id] ?? record.createdAt
+                }
             id =
                 switch source {
                 case .live(let owner): owner.sessionID.map(AnyHashable.init) ?? AnyHashable(owner.id)
@@ -62,12 +73,14 @@ public import Persistence
 
     /// - Needs You: live sessions that wait for a permission or input, failed, or finished unseen, in start order.
     /// - Working: the other live sessions, including starting ones, in start order.
-    /// - Settled: saved sessions that are not live, newest first.
+    /// - Settled: saved sessions that are not live, by last activity, newest first. `activity` holds the time of each
+    ///   saved session's last event; a session without an entry sorts by its start.
     /// A non-blank `query` keeps the rows whose title or project name contains it, ignoring case and diacritics.
     public init(
         projects: [ProjectRecord],
         history: [SessionRecord],
         owners: [LiveSession],
+        activity: [UUID: Date] = [:],
         query: String = ""
     ) {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,7 +92,8 @@ public import Persistence
                 owner,
                 Row(
                     source: .live(owner),
-                    project: (owner.controller?.session ?? owner.resuming).flatMap { projects[$0.projectID] }
+                    project: (owner.controller?.session ?? owner.resuming).flatMap { projects[$0.projectID] },
+                    savedActivity: activity
                 )
             )
         }
@@ -89,8 +103,9 @@ public import Persistence
             (.working, live.filter { ![.needsInput, .failed, .done].contains($0.0.activity) }.map(\.1)),
             (
                 .settled,
-                history.filter { !liveIDs.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
-                    .map { Row(source: .saved($0), project: projects[$0.projectID]) }
+                history.filter { !liveIDs.contains($0.id) }
+                    .map { Row(source: .saved($0), project: projects[$0.projectID], savedActivity: activity) }
+                    .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
             ),
         ]
         sections = kinds.map { ($0.0, $0.1.filter { !filtered || $0.matches(query) }) }

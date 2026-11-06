@@ -1,6 +1,6 @@
 public import Foundation
 
-/// How long ago a session started, as shown on the trailing edge of a sidebar row (ADR-0039).
+/// How long ago a session was last active, as shown on the trailing edge of a sidebar row (ADR-0039).
 public enum RelativeTime {
     /// `now`, `5m`, `3h`, `2d`, `3w`; from four weeks a short date such as `12 Oct`.
     public static func short(

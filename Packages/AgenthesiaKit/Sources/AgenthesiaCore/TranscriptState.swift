@@ -121,6 +121,8 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var activeTurn: UUID?
     public private(set) var stopRequested = false
     public private(set) var lastStopReason: ACP.StopReason?
+    /// The agent rejected the last turn's prompt; a new turn or a continued session clears it.
+    public private(set) var lastTurnFailed = false
     public private(set) var plan: ACP.Plan?
     public private(set) var commands: [ACP.AvailableCommand] = []
     public private(set) var configOptions: [ACP.ConfigOption] = []
@@ -186,11 +188,13 @@ public struct TranscriptState: Equatable, Sendable {
             configOptions = options
         case .reopened(let options, _):
             configOptions = options
+            lastTurnFailed = false
             items.append(Item(id: sequence, reopenedAt: timestamp))
         case .prompt(let id, let content):
             activeTurn = id
             stopRequested = false
             lastStopReason = nil
+            lastTurnFailed = false
             items.append(
                 Item(
                     id: sequence,
@@ -215,6 +219,7 @@ public struct TranscriptState: Equatable, Sendable {
                 activeTurn = turnID
                 stopRequested = false
                 lastStopReason = nil
+                lastTurnFailed = false
             }
             items.append(
                 Item(
@@ -243,6 +248,7 @@ public struct TranscriptState: Equatable, Sendable {
             guard id == activeTurn else { return }
             activeTurn = nil
             stopRequested = false
+            lastTurnFailed = true
             items.append(Item(id: sequence, notice: message, isFailure: true))
         case .inputRequested(let id, let request):
             inputIndices[id] = items.count

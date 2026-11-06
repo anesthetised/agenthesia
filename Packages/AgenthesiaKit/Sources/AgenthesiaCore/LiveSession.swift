@@ -72,6 +72,22 @@ public final class LiveSession {
         )
     }
 
+    /// The sidebar's second-line reason for ``activity`` (ADR-0039); nil when the symbol says it all.
+    public var reason: String? {
+        let activity = activity
+        return SidebarReason.text(
+            activity: activity,
+            signIn: signIn != nil,
+            permissionTitles: controller?.pendingPermissions.map(\.callTitle) ?? [],
+            starting: isStarting || controller?.status == .starting,
+            stopping: controller?.status == .stopping,
+            merging: controller?.isMerging == true,
+            stopReason: controller?.transcript.lastStopReason,
+            promptFailed: controller?.transcript.lastTurnFailed == true,
+            queuePaused: controller.map { $0.queuePaused && !$0.queuedPrompts.isEmpty } == true
+        )
+    }
+
     /// A turn ended since the user last looked at the session.
     public var hasUnseenResult: Bool { (controller?.completedTurns ?? 0) > seenTurns }
 

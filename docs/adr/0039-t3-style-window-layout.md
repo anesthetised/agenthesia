@@ -140,7 +140,7 @@ field of #148 will sit above the list.
 
 ## Amendment (2026-11-02): the sidebar row says why
 
-- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the sidebar text above describes the code.
+- Status: Accepted by the owner on 2026-11-06 (#195); implemented in #203.
 
 ### Context
 

@@ -1,5 +1,6 @@
 import ACP
 import Foundation
+import Persistence
 import Testing
 
 @testable import AgentRuntime
@@ -165,6 +166,70 @@ import Testing
         #expect(try fixture.catalog(registry: []).defaultChoice == .custom(custom))
         #expect(AgentCatalog.record(custom: custom).name == "custom")
         #expect(reopened.name(of: .custom(custom)) == "custom")
+    }
+
+    @Test func configHintsKeepModeAndModelPerAgentAcrossAReopenedCatalog() async throws {
+        let fixture = try CatalogFixture()
+        defer { fixture.remove() }
+        let catalog = try fixture.catalog(registry: [])
+        await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
+        let installed = try #require(catalog.latest.first)
+        let mine = LocalAgent.Command(executable: "/opt/agents/mine", arguments: ["--stdio"])
+        catalog.addCustom(name: "Mine", executable: mine.executable, arguments: mine.arguments)
+        let local = try #require(catalog.localAgents.first)
+        let custom = LocalAgent.Command(executable: "/opt/agents/custom", arguments: [])
+        let mode = ACP.ConfigOption(
+            id: "mode",
+            name: "Mode",
+            category: .mode,
+            value: .select(currentValue: "plan", options: .flat([.init(value: "plan", name: "Plan")]))
+        )
+        let model = ACP.ConfigOption(
+            id: "model",
+            name: "Model",
+            category: .model,
+            value: .select(currentValue: "large", options: .flat([.init(value: "large", name: "Large")]))
+        )
+        let effort = ACP.ConfigOption(
+            id: "effort",
+            name: "Effort",
+            category: .thoughtLevel,
+            value: .select(currentValue: "high", options: .flat([.init(value: "high", name: "High")]))
+        )
+        let unnamed = ACP.ConfigOption(
+            id: "speed",
+            name: "Speed",
+            value: .select(currentValue: "fast", options: .flat([.init(value: "fast", name: "Fast")]))
+        )
+        let fast = ACP.ConfigOption(id: "fast", name: "Fast", category: .model, value: .boolean(currentValue: true))
+        // Only select options with category mode or model are hints; a version counts as its agent.
+        catalog.rememberHints([mode, effort, unnamed, fast, model], for: AgentInstallRecord(installation: installed))
+        catalog.rememberHints([model], for: try #require(catalog.record(for: .local(local.id))))
+        catalog.rememberHints([mode], for: AgentCatalog.record(custom: custom))
+        catalog.rememberHints(
+            [model],
+            for: AgentInstallRecord(name: "Gone", executable: "/gone", installationID: UUID())
+        )
+        let expected: [AgentCatalog.Choice: [ACP.ConfigOption]] = [
+            .installed(agentID: installed.agentID): [mode, model],
+            .local(local.id): [model],
+            .custom(custom): [mode],
+        ]
+        #expect(catalog.configHints == expected)
+
+        let reopened = try fixture.catalog(registry: [])
+        #expect(reopened.configHints == expected)
+        // A list without mode or model removes the entry; an undecodable entry is ignored.
+        reopened.rememberHints([effort], for: .custom(custom))
+        var stored = try #require(fixture.defaults.dictionary(forKey: AgentCatalog.configHintsKey))
+        #expect(stored.count == 2)
+        stored["not a choice"] = Data("[]".utf8)
+        stored[String(decoding: try JSONEncoder().encode(AgentCatalog.Choice.custom(custom)), as: UTF8.self)] = Data(
+            "{".utf8
+        )
+        fixture.defaults.set(stored, forKey: AgentCatalog.configHintsKey)
+        let keys = Set(try fixture.catalog(registry: []).configHints.keys)
+        #expect(keys == [.installed(agentID: installed.agentID), .local(local.id)])
     }
 
     @Test func checksKeepTheLatestProbeResultPerCommandWithTheLoginShellPath() async throws {

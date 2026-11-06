@@ -49,6 +49,8 @@ public final class LiveSession {
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     /// The worktree this owner created for a new session, until it is removed or found to have a record.
     @ObservationIgnored private var created: (id: UUID, worktree: SessionWorkspace.Worktree, baseRevision: String)?
+    /// Keeps the agent's confirmed mode and model as the next draft's hints (ADR-0040); set by `SessionManager`.
+    @ObservationIgnored var catalog: AgentCatalog?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment = LiveSession.shellEnvironment
 
@@ -108,14 +110,16 @@ public final class LiveSession {
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = [],
-        initialPrompt: PromptDraft? = nil
+        initialPrompt: PromptDraft? = nil,
+        configHints: [ACP.ConfigOption] = []
     ) async {
         begin(
             .new(
                 directory: directory,
                 agent: agent,
                 worktreesRoot: worktreesRoot,
-                additionalDirectories: additionalDirectories
+                additionalDirectories: additionalDirectories,
+                configHints: configHints
             ),
             initialPrompt: initialPrompt
         )
@@ -129,7 +133,13 @@ public final class LiveSession {
     }
 
     enum Launch {
-        case new(directory: URL, agent: AgentInstallRecord, worktreesRoot: URL?, additionalDirectories: [URL])
+        case new(
+            directory: URL,
+            agent: AgentInstallRecord,
+            worktreesRoot: URL?,
+            additionalDirectories: [URL],
+            configHints: [ACP.ConfigOption] = []
+        )
         case saved(SessionRecord)
     }
 
@@ -152,7 +162,7 @@ public final class LiveSession {
             guard !isClosed else { return }
             let agent: AgentInstallRecord
             switch launch {
-            case .new(_, let new, _, _): agent = new
+            case .new(_, let new, _, _, _): agent = new
             case .saved(let session):
                 guard let install = try await library.install(id: session.agentInstallID) else {
                     throw LaunchError(message: "The agent of this session is no longer configured.")
@@ -179,12 +189,13 @@ public final class LiveSession {
             guard !isClosed else { return }
             let controller: SessionController
             switch launch {
-            case .new(let directory, _, let worktreesRoot, let additionalDirectories):
+            case .new(let directory, _, let worktreesRoot, let additionalDirectories, let configHints):
                 controller = try await create(
                     directory: directory,
                     agent: agent,
                     worktreesRoot: worktreesRoot,
                     additionalDirectories: additionalDirectories,
+                    configHints: configHints,
                     store: store
                 )
             case .saved(let session):
@@ -204,6 +215,10 @@ public final class LiveSession {
             checkout = await SessionWorkspace.linkedCheckout(of: URL(filePath: controller.session.workingDirectory))
             guard !isClosed else { return }
             self.controller = controller
+            controller.onConfigOptions = { [weak self] options in
+                guard let self, let agent = self.agent else { return }
+                self.catalog?.rememberHints(options, for: agent)
+            }
             controller.fileSystem = try await SessionFileSystem(controller: controller)
             guard !isClosed else { await controller.close(); return }
             try await connect()
@@ -440,6 +455,7 @@ public final class LiveSession {
         agent: AgentInstallRecord,
         worktreesRoot: URL?,
         additionalDirectories: [URL],
+        configHints: [ACP.ConfigOption],
         store: PersistenceStore
     ) async throws -> SessionController {
         let id = UUID()
@@ -477,7 +493,8 @@ public final class LiveSession {
                 branch: workspace.branch
             ),
             store: store,
-            additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }
+            additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) },
+            configHints: configHints
         )
     }
 

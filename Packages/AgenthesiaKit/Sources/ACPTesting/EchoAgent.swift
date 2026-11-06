@@ -32,6 +32,8 @@ public final class EchoAgent: Sendable {
         public var modes = true
         /// Whether sessions expose a model config option.
         public var configOptions = true
+        /// Whether `session/set_mode` and `session/set_config_option` fail with invalid params.
+        public var rejectsConfigChanges = false
         /// Whether `session/new` is followed by an `available_commands_update` listing the prompt verbs.
         public var announcesCommands = false
         /// Delay between streamed chunks.
@@ -173,6 +175,7 @@ public final class EchoAgent: Sendable {
         }
 
         router.on(M.SetMode.self) { request in
+            if options.rejectsConfigChanges { throw RPCError.invalidParams("Mode changes are disabled") }
             try? await connection.notify(
                 M.SessionUpdate.self,
                 .init(sessionId: request.sessionId, update: .currentMode(.init(currentModeId: request.modeId)))
@@ -181,6 +184,7 @@ public final class EchoAgent: Sendable {
         }
 
         router.on(M.SetConfigOption.self) { request in
+            if options.rejectsConfigChanges { throw RPCError.invalidParams("Config changes are disabled") }
             guard request.configId == "model", case .select(let model) = request.value else {
                 throw RPCError.invalidParams("Unknown config option \(request.configId)")
             }

@@ -514,6 +514,20 @@ Wave 2:
   line drawn through the pane's header and the toolbar, the whole height of the window: the ruler drew past its bounds,
   which views no longer clip by default. It now clips, with a bitmap test that fails without it. Not checked: light
   mode, Escape and Merge… from the pane in the app, VoiceOver; the ruler's numbers are not exposed to it.
+  and line counts are #214, Ask agent #215. Not checked in the running app, light or dark (the ruler was checked in
+  hosted snapshots in both), nor VoiceOver; the ruler's numbers are not exposed to it.
+- #211: the draft's hints are applied at start (ADR-0040's amendment), without pills yet (#212).
+  `AgentCatalog.configHints` caches each agent's mode and model options from every confirmed list
+  (`SessionController.onConfigOptions`, through `LiveSession` and `SessionManager.catalog`), in a `configHints` defaults
+  dictionary. Send passes `SessionWindowModel.draftHints`: the cached model, and a mode only when picked in
+  `draftConfig`. `createRemote` sets them after `session/new` and before the record, in the agent's order, and drops
+  the config notifications each response supersedes, so the `started` event holds the final list; a value the agent no
+  longer offers or refuses throws `HintRejected`, so the draft returns with no history row and no worktree. MockAgent
+  gained `--no-config` and `--reject-config`. Tests with MockAgent: an applied model, a picked mode applied with the
+  model (which fails without dropping the superseded notification), an unpicked mode left alone, an equal value that
+  sends nothing, a refused and a no-longer-offered hint (no row, no worktree, branch gone, cache updated), an agent
+  without config options, a change in the session updating the cache, and the cache across a reopened catalog
+  (installed, local and custom agents, undecodable entries). Not checked in the running app.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

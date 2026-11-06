@@ -1,3 +1,4 @@
+import ACP
 import AppKit
 import Foundation
 import Persistence
@@ -455,6 +456,79 @@ import Testing
         other.draftAgent = started
         #expect(other.draftError == nil)
         other.close()
+        await fixture.remove()
+    }
+
+    @Test func sendAppliesTheCachedModelAndAModeOnlyWhenPickedInTheDraft() async throws {
+        let suite = "session-draft-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let root = FileManager.default.temporaryDirectory.appending(path: suite)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = AgentCatalog(
+            registry: AgentRegistry.Client(cacheDirectory: root) { _ in .init(status: 404, data: Data()) },
+            installer: AgentInstaller(root: root.appending(path: "Agents"), download: { _, _ in }),
+            defaults: defaults,
+            environment: { _ in [:] },
+            probe: { _ in throw AgentProbe.Failure.timedOut(seconds: 20) },
+            checkNode: { _ in throw NodeRuntime.Failure.missingNode }
+        )
+        let fixture = try Fixture(catalog: catalog)
+        fixture.sessions.catalog = catalog
+        let agent = try fixture.mock()
+        let modeID = ACP.V1.AgentConnectionAdapter.modeOptionID
+        func option(
+            _ id: String,
+            _ category: ACP.ConfigOptionCategory,
+            _ value: String,
+            _ values: [String]
+        )
+            -> ACP
+            .ConfigOption
+        {
+            .init(
+                id: id,
+                name: id,
+                category: category,
+                value: .select(currentValue: value, options: .flat(values.map { .init(value: $0, name: $0) }))
+            )
+        }
+        // An earlier session ended in code mode with the large model.
+        catalog.rememberHints(
+            [option(modeID, .mode, "code", ["ask", "code"]), option("model", .model, "large", ["small", "large"])],
+            for: agent
+        )
+        func send() async throws -> [ACP.ConfigOption] {
+            let model = fixture.model
+            model.draftDirectory = fixture.directory
+            model.draft = PromptDraft(text: "hello")
+            model.startDraft()
+            let owner = try #require(model.owner)
+            await owner.startup?.value
+            #expect(owner.errorMessage == nil)
+            #expect(model.draftConfig.isEmpty)
+            return try #require(owner.controller).transcript.configOptions
+        }
+        func current(_ id: String, _ options: [ACP.ConfigOption]) -> String? {
+            guard case .select(let value, _) = options.first(where: { $0.id == id })?.value else { return nil }
+            return value
+        }
+        let model = fixture.model
+        model.draftAgent = agent
+        #expect(model.draftHints.map(\.id) == ["model"])
+        let first = try await send()
+        #expect(current(modeID, first) == "ask" && current("model", first) == "large")
+
+        model.showingSetup = true
+        model.draftAgent = agent
+        model.draftConfig[modeID] = "code"
+        #expect(model.draftHints.map(\.id) == [modeID, "model"])
+        // Changing the agent resets what was picked.
+        model.draftAgent = agent
+        #expect(model.draftConfig.isEmpty)
+        model.draftConfig[modeID] = "code"
+        let second = try await send()
+        #expect(current(modeID, second) == "code" && current("model", second) == "large")
         await fixture.remove()
     }
 

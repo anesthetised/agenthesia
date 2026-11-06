@@ -1,6 +1,6 @@
 # 0045. Push after merge, and pull requests from a session
 
-- Status: Proposed (2026-11-07), for the owner's acceptance
+- Status: Accepted (2026-11-07, #220)
 - Date: 2026-11-07
 - Decider: Project owner
 - Supersedes: "one session yields one merge" in [0032](0032-worktree-merge-and-discard.md) when a pull request is

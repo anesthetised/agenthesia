@@ -175,7 +175,7 @@ run before.
 
 ## Amendment (2026-11-07): the first message shows at once
 
-- Status: Proposed, for the owner's acceptance. Until it lands, "Start on Send" above describes the code.
+- Status: Accepted by the owner on 2026-11-07 (#220); not yet implemented. Until it lands, "Start on Send" above describes the code.
 - Related: [0039](0039-t3-style-window-layout.md), [0043](0043-sessions-in-the-project-folder.md)
 
 ### Context

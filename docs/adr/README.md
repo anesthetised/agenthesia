@@ -11,7 +11,7 @@ change may instead be a dated amendment at the end of the ADR, with its own stat
 | [0003](0003-own-acp-implementation.md) | Own ACP implementation | Accepted |
 | [0004](0004-agent-runtime.md) | Agent runtime | Accepted; managed Node and installation decisions superseded by [0034](0034-agent-installs-with-user-runtimes.md) |
 | [0005](0005-event-log.md) | Event log as the source of truth | Accepted |
-| [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted; merge and discard detailed by [0032](0032-worktree-merge-and-discard.md); a folder choice proposed by [0043](0043-sessions-in-the-project-folder.md) |
+| [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted; merge and discard detailed by [0032](0032-worktree-merge-and-discard.md); a folder choice added by [0043](0043-sessions-in-the-project-folder.md) |
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
 | [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted |
@@ -37,20 +37,20 @@ change may instead be a dated amendment at the end of the ADR, with its own stat
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
-| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md); push and pull requests proposed by [0045](0045-push-and-pull-requests.md) |
+| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md); push and pull requests added by [0045](0045-push-and-pull-requests.md) |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 | [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |
 | [0036](0036-agent-settings-and-installed-sessions.md) | Agent settings and sessions of installed agents | Accepted |
 | [0037](0037-local-agents.md) | Local agents | Accepted |
 | [0038](0038-pre-session-sign-in.md) | Sign in before a session | Accepted |
-| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amended (sidebar row, inspector, docked permission); proposed amendment (user blocks, collapsed thoughts, plan, context usage) |
-| [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amended (mode and model hints); proposed amendment (first message shows at once); checkout choice proposed by [0043](0043-sessions-in-the-project-folder.md) |
+| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amended (sidebar row, inspector, docked permission); amended (user blocks, collapsed thoughts, plan, context usage) |
+| [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amended (mode and model hints); amended (first message shows at once); checkout choice added by [0043](0043-sessions-in-the-project-folder.md) |
 | [0041](0041-review-pane.md) | Review as a pane, with Ask agent | Accepted |
 | [0042](0042-allow-edits-in-this-worktree.md) | Allow edits in this worktree | Proposed, deferred |
-| [0043](0043-sessions-in-the-project-folder.md) | Sessions in the project folder | Proposed |
-| [0044](0044-delete-and-archive-sessions.md) | Delete and archive sessions | Proposed |
-| [0045](0045-push-and-pull-requests.md) | Push after merge, and pull requests from a session | Proposed |
-| [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Proposed |
+| [0043](0043-sessions-in-the-project-folder.md) | Sessions in the project folder | Accepted |
+| [0044](0044-delete-and-archive-sessions.md) | Delete and archive sessions | Accepted |
+| [0045](0045-push-and-pull-requests.md) | Push after merge, and pull requests from a session | Accepted |
+| [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

@@ -464,7 +464,6 @@ Wave 2:
   card stretched to the 40 % bound with blank space around a one-line diff, because its flexible frame took the height
   it was offered; it now hugs its content and the diff scrolls only past the bound, with a hosted check that fails
   without the fix. Not checked: VoiceOver's announcement, Full Keyboard Access, a narrow window, light mode.
-  goes. Not yet seen in the running app.
 - #208: new sessions get a readable, stored branch name. `SessionWorkspace.branchName` gives
   `agenthesia/<words>-<first 8 hex digits of the session id>`: the words come from the first line of the initial prompt,
   transliterated with ICU's `Any-Latin; Latin-ASCII; Lower`, reduced to runs of `[a-z0-9]` joined with `-` and cut at a

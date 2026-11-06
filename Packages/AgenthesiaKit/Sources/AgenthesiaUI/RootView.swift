@@ -68,10 +68,7 @@ public struct RootView: View {
                 if let error = (composerShown ? nil : model.errorMessage)
                     ?? (model.restored == nil ? model.owner?.errorMessage : nil)
                 {
-                    Text(error).textSelection(.enabled).foregroundStyle(.red).padding().frame(
-                        maxWidth: .infinity,
-                        alignment: .leading
-                    )
+                    FailureBanner(error, offering: failureActions, perform: perform).padding()
                 }
                 if showingLog, model.restored == nil, let owner = model.owner {
                     Divider()
@@ -288,6 +285,20 @@ public struct RootView: View {
         .frame(width: width)
     }
 
+    /// What a failure banner can do here: Retry is Continue, so it needs a session that can continue.
+    private var failureActions: Set<SessionFailure.Action> {
+        model.canContinue ? [.retry, .agentLog, .newSession, .manageAgents] : [.agentLog, .newSession, .manageAgents]
+    }
+
+    private func perform(_ action: SessionFailure.Action) {
+        switch action {
+        case .retry: model.continueRestored()
+        case .agentLog: showingLog = true
+        case .newSession: model.showingSetup = true
+        case .manageAgents: break  // A Settings link in the banner.
+        }
+    }
+
     private func openFile(_ path: String, line: Int? = nil, for id: UUID?) {
         guard let id, model.displayed?.session.id == id, model.files.sessionID == id else { return }
         showingQuickOpen = false
@@ -300,7 +311,7 @@ public struct RootView: View {
     private func composer(_ session: SessionController) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             if let error = model.errorMessage ?? configError {
-                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                FailureBanner(error, offering: failureActions, perform: perform)
             }
             if let card = ContinueCard.State(
                 status: session.status,

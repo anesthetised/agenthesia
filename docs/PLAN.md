@@ -376,6 +376,14 @@ Wave 2:
   Not tested: the empty state, which needs a session in the middle of starting. Running app (scripted, MockAgent, isolated
   home, light and dark): the line and the card while a permission waits, and the line after it is answered. Not checked:
   an input form (MockAgent has none without a scenario), the empty state while starting, and VoiceOver.
+- #192: session errors show a short sentence with Details (the raw text) and the action that fits, in the transcript
+  column, instead of `RPCError(code: -32002, message: "Unknown session", data: nil)` across the detail column.
+  `SessionFailure` classifies the stored text, like `PromptFailure`: an unknown session offers New Session; an exited
+  agent or closed connection, Retry (Continue) and Agent Log; other agent errors, Agent Log; a missing or removed agent,
+  Manage Agents. The draft also offers Manage Agents beside the empty agent menu when no agent is installed. Tests: the
+  wording and actions of each case against real `RPCError`/`ConnectionError` descriptions, the offered actions, and a
+  hosted banner that stays inside the 720 pt column in a wider window (it fails without the width bound). Not tested
+  by a hosted `RootView`: which actions each place offers, and the button clicks. Not yet seen in the running app (#160).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

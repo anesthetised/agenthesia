@@ -373,7 +373,9 @@ Wave 2:
   `Working for 1s`. A pending permission card's `Waiting for your answer` is orange (a new `attention` tone), as the
   sidebar's Needs input already was; it was the running accent blue. The empty state drops `Choose a project and an
   installed ACP agent.` while a session starts. Tests: the line's text in both states, and the card's tone per phase.
-  Not tested: the empty state, which needs a session in the middle of starting. Not yet seen in the running app (#160).
+  Not tested: the empty state, which needs a session in the middle of starting. Running app (scripted, MockAgent, isolated
+  home, light and dark): the line and the card while a permission waits, and the line after it is answered. Not checked:
+  an input form (MockAgent has none without a scenario), the empty state while starting, and VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

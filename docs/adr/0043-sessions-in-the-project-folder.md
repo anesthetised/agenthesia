@@ -1,6 +1,6 @@
 # 0043. Sessions in the project folder
 
-- Status: Proposed (2026-11-07), for the owner's acceptance
+- Status: Accepted (2026-11-07, #220)
 - Date: 2026-11-07
 - Decider: Project owner
 - Supersedes: "every new session gets its own worktree" in [0006](0006-worktree-isolation.md) as the only choice (it

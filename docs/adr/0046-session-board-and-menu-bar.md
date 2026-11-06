@@ -1,6 +1,6 @@
 # 0046. A session board, a menu bar item, and numbered sessions
 
-- Status: Proposed (2026-11-07), for the owner's acceptance
+- Status: Accepted (2026-11-07, #220)
 - Date: 2026-11-07
 - Decider: Project owner
 - Related: [0026](0026-app-wide-session-manager.md), [0030](0030-notification-activation-and-identity.md),

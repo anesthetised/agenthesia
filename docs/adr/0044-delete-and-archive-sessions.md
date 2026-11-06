@@ -1,6 +1,6 @@
 # 0044. Delete and archive sessions
 
-- Status: Proposed (2026-11-07), for the owner's acceptance
+- Status: Accepted (2026-11-07, #220)
 - Date: 2026-11-07
 - Decider: Project owner
 - Supersedes: "manual settling is not adopted" in [0039](0039-t3-style-window-layout.md), for saved sessions only

@@ -394,7 +394,7 @@ ADR-0042 addresses in its own, narrower way.
 
 ## Amendment (2026-11-07): a quieter transcript, and the work in view
 
-- Status: Proposed, for the owner's acceptance. Until it lands, the transcript, inspector and composer text above
+- Status: Accepted by the owner on 2026-11-07 (#220); not yet implemented. Until it lands, the transcript, inspector and composer text above
   describes the code.
 - Related: [0007](0007-transcript-rendering.md), [0026](0026-app-wide-session-manager.md) (amendment),
   [0046](0046-session-board-and-menu-bar.md)

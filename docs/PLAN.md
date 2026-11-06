@@ -546,17 +546,17 @@ Pitfalls known so far:
 ## M16: Multi-agent workflow (2026-11-07)
 
 Tracking issue #220. After M15, the owner reviewed the codebase and the open issues (with Claude Fable, 2026-11-07)
-and chose a second set of UI/UX changes, several of them against accepted ADRs. Each is a proposed decision first;
-implementation starts once the owner accepts it. The documentation lands in one pull request (`docs/m16-adrs`).
+and chose a second set of UI/UX changes, several of them against accepted ADRs. The owner accepted all of them on
+2026-11-07; the documentation landed in #235.
 
 | Decision | Where | Status |
 |---|---|---|
-| Plan in the inspector and the working line; context usage and cost; collapsed thoughts; user messages as left-aligned blocks | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Proposed |
-| The first message shows at once while the session starts | [ADR-0040](adr/0040-composer-first-session-start.md), amendment of 2026-11-07 | Proposed |
-| Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Proposed |
-| Delete and archive saved sessions | [ADR-0044](adr/0044-delete-and-archive-sessions.md) | Proposed |
-| Push after merge; pull requests with `gh`, the session stays live | [ADR-0045](adr/0045-push-and-pull-requests.md) | Proposed |
-| Session board on an Overview row (⌘0), a menu bar item, ⌘1…⌘9 | [ADR-0046](adr/0046-session-board-and-menu-bar.md) | Proposed |
+| Plan in the inspector and the working line; context usage and cost; collapsed thoughts; user messages as left-aligned blocks | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Accepted |
+| The first message shows at once while the session starts | [ADR-0040](adr/0040-composer-first-session-start.md), amendment of 2026-11-07 | Accepted |
+| Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Accepted |
+| Delete and archive saved sessions | [ADR-0044](adr/0044-delete-and-archive-sessions.md) | Accepted |
+| Push after merge; pull requests with `gh`, the session stays live | [ADR-0045](adr/0045-push-and-pull-requests.md) | Accepted |
+| Session board on an Overview row (⌘0), a menu bar item, ⌘1…⌘9 | [ADR-0046](adr/0046-session-board-and-menu-bar.md) | Accepted |
 
 Not adopted: an inline first-run flow in the draft (stays with #45). ADR-0042 stays deferred.
 

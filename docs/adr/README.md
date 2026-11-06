@@ -37,7 +37,7 @@ change may instead be a dated amendment at the end of the ADR, with its own stat
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
-| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md); push and pull requests added by [0045](0045-push-and-pull-requests.md) |
+| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md), implemented in #208; push and pull requests added by [0045](0045-push-and-pull-requests.md) |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 | [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |

@@ -10,23 +10,34 @@ public struct SessionWorkspace: Sendable {
     /// The branch checked out in the selected checkout when the worktree was created; nil for a detached `HEAD`
     /// or outside Git. Such a session cannot be merged back.
     public let baseBranch: String?
+    /// The session branch the worktree was created on; nil outside Git.
+    public let branch: String?
 
+    /// `topic` names the branch (`branchName`): the first line of the initial prompt.
     public static func prepare(
         directory: URL,
         id: UUID,
+        topic: String? = nil,
         worktreesRoot: URL = defaultWorktreesRoot
     ) async throws -> SessionWorkspace {
         // Git can run for seconds on large checkouts; keep the blocking calls off the cooperative pool.
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(
-                    with: Result { try prepareBlocking(directory: directory, id: id, worktreesRoot: worktreesRoot) }
+                    with: Result {
+                        try prepareBlocking(directory: directory, id: id, topic: topic, worktreesRoot: worktreesRoot)
+                    }
                 )
             }
         }
     }
 
-    private static func prepareBlocking(directory: URL, id: UUID, worktreesRoot: URL) throws -> SessionWorkspace {
+    private static func prepareBlocking(
+        directory: URL,
+        id: UUID,
+        topic: String?,
+        worktreesRoot: URL
+    ) throws -> SessionWorkspace {
         let directory = directory.resolvingSymlinksInPath().standardizedFileURL
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
             throw WorkspaceError(message: "Choose an existing directory.")
@@ -41,7 +52,8 @@ public struct SessionWorkspace: Sendable {
                 projectDirectory: directory,
                 workingDirectory: directory,
                 baseRevision: nil,
-                baseBranch: nil
+                baseBranch: nil,
+                branch: nil
             )
         }
         let root: URL
@@ -67,7 +79,12 @@ public struct SessionWorkspace: Sendable {
         let branch = (try? git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory)).flatMap {
             $0.isEmpty ? nil : $0
         }
-        try git(["worktree", "add", "--quiet", "-b", "agenthesia/\(slug)", destination.path, "HEAD"], in: root)
+        var sessionBranch = branchName(for: id, topic: topic)
+        // A taken name (the user's branch, or one left by a deleted database) falls back to the full session id.
+        if (try? git(["rev-parse", "--verify", "--quiet", "refs/heads/\(sessionBranch)"], in: root)) != nil {
+            sessionBranch = legacyBranchName(for: id)
+        }
+        try git(["worktree", "add", "--quiet", "-b", sessionBranch, destination.path, "HEAD"], in: root)
         let worktree = destination.resolvingSymlinksInPath().standardizedFileURL
         let working = (prefix.isEmpty ? worktree : worktree.appending(path: prefix))
             .resolvingSymlinksInPath().standardizedFileURL
@@ -81,7 +98,8 @@ public struct SessionWorkspace: Sendable {
             projectDirectory: root,
             workingDirectory: working,
             baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: worktree),
-            baseBranch: branch
+            baseBranch: branch,
+            branch: sessionBranch
         )
     }
 

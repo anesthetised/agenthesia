@@ -42,7 +42,7 @@ import Testing
         #expect(try String(contentsOf: repo.appending(path: "file"), encoding: .utf8) == "dirty")
         #expect(
             try await SessionWorkspace.git(["branch", "--show-current"], in: result.workingDirectory)
-                .hasPrefix("agenthesia/")
+                == result.branch
         )
     }
 
@@ -74,6 +74,7 @@ import Testing
         let result = try await SessionWorkspace.prepare(directory: directory, id: UUID())
         #expect(result.workingDirectory == directory.resolvingSymlinksInPath())
         #expect(result.baseRevision == nil)
+        #expect(result.branch == nil)
         try await SessionWorkspace.git(["init", "-q"], in: directory)
         await #expect(throws: (any Error).self) {
             try await SessionWorkspace.prepare(

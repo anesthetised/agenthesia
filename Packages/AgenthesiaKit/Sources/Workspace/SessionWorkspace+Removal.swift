@@ -12,13 +12,16 @@ extension SessionWorkspace {
         public let branch: String
 
         /// Nil unless `workingDirectory` is `<worktreesRoot>/<project directory name>/<session id>` or inside it,
-        /// as `prepare` creates it. Non-Git sessions and sessions in the user's own checkout never match.
+        /// as `prepare` creates it, and `branch` is this session's (`isSessionBranch`). Non-Git sessions and sessions
+        /// in the user's own checkout never match. A session without a stored `branch` has the legacy name.
         public init?(
             projectDirectory: URL,
             workingDirectory: URL,
             sessionID: UUID,
+            branch: String?,
             worktreesRoot: URL = defaultWorktreesRoot
         ) {
+            let branch = branch ?? legacyBranchName(for: sessionID)
             let slug = sessionID.uuidString.lowercased()
             let projectDirectory = projectDirectory.standardizedFileURL
             let expected = worktreesRoot.appending(path: projectDirectory.lastPathComponent).appending(path: slug)
@@ -26,11 +29,12 @@ extension SessionWorkspace {
             // The stored path was resolved at creation; resolving it again could follow a link planted since.
             let working = workingDirectory.standardizedFileURL.path
             guard projectDirectory.path != "/", !expected.path.hasPrefix(projectDirectory.path + "/"),
-                working == expected.path || working.hasPrefix(expected.path + "/")
+                working == expected.path || working.hasPrefix(expected.path + "/"),
+                isSessionBranch(branch, of: sessionID)
             else { return nil }
             self.projectDirectory = projectDirectory
             directory = expected
-            branch = "agenthesia/\(slug)"
+            self.branch = branch
         }
     }
 

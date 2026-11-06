@@ -40,10 +40,10 @@ import Testing
             return AgentInstallRecord(name: "Mock", executable: binary.path, arguments: arguments)
         }
 
-        @MainActor func start(_ agent: AgentInstallRecord) async -> LiveSession {
+        @MainActor func start(_ agent: AgentInstallRecord, initialPrompt: PromptDraft? = nil) async -> LiveSession {
             let owner = LiveSession(library: library)
             owner.environment = { (ProcessInfo.processInfo.environment, nil) }
-            await owner.start(directory: repo, agent: agent, worktreesRoot: trees)
+            await owner.start(directory: repo, agent: agent, worktreesRoot: trees, initialPrompt: initialPrompt)
             return owner
         }
 
@@ -68,12 +68,16 @@ import Testing
         let fixture = Fixture()
         defer { fixture.remove() }
         try await fixture.prepareRepository()
-        let owner = await fixture.start(try fixture.signedOutAgent())
+        let owner = await fixture.start(try fixture.signedOutAgent(), initialPrompt: .init(text: "Fix the note parser"))
         let directory = try #require(owner.workingDirectory)
+        let id = try #require(owner.controller?.session.id)
         #expect(owner.signIn != nil)
         #expect(FileManager.default.fileExists(atPath: directory.path))
-        #expect(try await fixture.worktrees().count == 1)
-        #expect(try await fixture.branches().count == 2)
+        // The readable name, stored with the record; the directory keeps the session id.
+        let branch = "agenthesia/fix-the-note-parser-\(id.uuidString.lowercased().prefix(8))"
+        #expect(owner.controller?.session.branch == branch)
+        #expect(try await fixture.worktrees() == [id.uuidString.lowercased()])
+        #expect(try await fixture.branches().sorted() == [branch, "main"])
         await owner.close()
         #expect(!FileManager.default.fileExists(atPath: directory.path))
         try await fixture.expectNoSessionWorktree()
@@ -111,7 +115,7 @@ import Testing
         #expect(try await fixture.library.history().map(\.id) == [session.id])
         #expect(FileManager.default.fileExists(atPath: session.workingDirectory))
         #expect(try await fixture.worktrees() == [session.id.uuidString.lowercased()])
-        #expect(try await fixture.branches().sorted() == ["agenthesia/\(session.id.uuidString.lowercased())", "main"])
+        #expect(try await fixture.branches().sorted() == [try #require(session.branch), "main"])
     }
 
     @Test func aWorktreeWithAStrayFileIsLeftInPlace() async throws {

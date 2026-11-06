@@ -89,6 +89,14 @@ blocking Quit before consulting it.
 `Workspace.SessionWorkspace` invokes the Git CLI on a Dispatch queue, outside the cooperative pool, and
 reads its errors from stderr only. Git checkouts get a new branch and worktree from HEAD under
 `~/.agenthesia/worktrees/<repo>/<uuid>`; a selected subdirectory maps to the same path in the worktree.
+The branch has a readable name ([ADR-0039](adr/0039-t3-style-window-layout.md), amendment *the inspector leads with the
+work*): `SessionWorkspace.branchName` gives `agenthesia/<words>-<first 8 hex digits of the session id>`, for example
+`agenthesia/fix-note-parser-baaeedd5`. `LiveSession` passes the first line of the initial prompt
+(`SessionTitle.fromPrompt`) as the topic; ICU's `Any-Latin; Latin-ASCII; Lower` transform turns it into Latin, and the
+words are the runs of `[a-z0-9]`, joined with `-` and cut at a word boundary to at most 40 characters (a longer first
+word is cut at 40), or `session` without any. When a branch of that name already exists, `prepare` uses the legacy name
+`agenthesia/<session id>` instead and never touches the existing branch. The name is stored in the session's nullable
+`branch` column and never renamed; sessions created before it have none and keep the derived legacy name.
 After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
 The new worktree's actual initial HEAD is retained as the session's `baseRevision` before launching
 the agent. The branch checked out in the selected checkout at that moment is retained as `baseBranch`
@@ -140,13 +148,16 @@ finishes it. A failure inside `SessionWorkspace.prepare` itself, after `git work
 Discard (ADR-0032) goes through `SessionManager.discard`. It refuses while the session is starting or
 being continued, coalesces concurrent calls and makes Continue unavailable while it runs. It ends the
 session's owners, then `SessionWorkspace.remove` runs `git worktree remove --force` (or `git worktree prune`
-for a directory deleted by hand) and `git branch -D agenthesia/<id>` in the project checkout; once the
+for a directory deleted by hand) and `git branch -D <session branch>` in the project checkout; once the
 directory is gone, a missing branch is not an error, so a failed attempt can be retried.
 `SessionWorkspace.Worktree` only matches a working directory at or inside
-`<worktrees root>/<project directory name>/<session id>`, so non-Git
+`<worktrees root>/<project directory name>/<session id>` with a branch that belongs to the session
+(`isSessionBranch`): the stored name only with the prefix `agenthesia/` and this session's `-<8 hex digits>` suffix,
+or, without a stored name, exactly `agenthesia/<session id>`. Any other stored name makes the session not removable,
+so discard and merge never delete it. Non-Git
 sessions and legacy sessions in the user's own checkout never lose files, and a directory at that path
 which Git does not list as a worktree is left in place. An existing worktree must still be on the exact
-`agenthesia/<id>` branch; another branch, detached HEAD or a failed branch check prevents removal. Only after
+session branch; another branch, detached HEAD or a failed branch check prevents removal. Only after
 Git succeeds is `SessionEvent.worktreeRemoved(.discarded)` appended; replay sets `TranscriptState.worktreeOutcome`, adds
 a notice, and `LiveSession` refuses to continue such a session. Nothing is appended to a session after
 its outcome, so `SessionLibrary.worktreeOutcomes` reads each session's last event
@@ -538,7 +549,8 @@ to its minimum, then the inspector, and the three widths always add up to the co
 sections: *Changes* (`+added −removed · N files` from `SessionFiles.changeStats`, then Review and Merge into
 `<base>`…, then the changed-file list with per-file counts that opens the file pane; Review is the prominent button
 while there are changes, and the two share a row only when the pane is wide enough); *Workspace* (one block: the
-session branch with `from <base>`, only for sessions in an Agenthesia worktree, and the working directory, as
+session branch (the stored name, or `agenthesia/<session id>` for older sessions) with `from <base>`, only for
+sessions in an Agenthesia worktree, and the working directory, as
 selectable text that wraps; Show in Finder and Open in Editor, through `EditorHandoff` with an empty path, are icon
 buttons with tooltips in its header; Discard Worktree… is a plain borderless button at its end); and *Agent* (agent
 name and the Agent Log toggle, live sessions only). Merge is disabled with the help text `No changes to merge` when
@@ -546,9 +558,6 @@ name and the Agent Log toggle, live sessions only). Merge is disabled with the h
 review pane; while the list loads or failed, the merge sheet decides, as before. Refresh Files shows only with
 `SessionFiles.watchError` (`WatchErrorNotice`, beside its message in the inspector and in the review pane's footer).
 The path bar under the composer and the sidebar's changed files are gone.
-
-> **Accepted, not yet implemented (#195):** the inspector shows the branch as `agenthesia/<session id>`;
-> [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) gives new sessions a readable, stored branch name (#208).
 
 The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
 as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file
@@ -578,7 +587,7 @@ The initial `v1` migration creates four tables:
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
 | `agent_install` | Local UUID, name, executable, argument array and creation time. Migration `v4-agent-install-installation` adds the optional AgentRuntime installation ID: one row per installed version, `NULL` for a manual command ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)). Versioned installation metadata lives in AgentRuntime. |
-| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision and `v3-session-base-branch` the optional branch the session started from. |
+| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision, `v3-session-base-branch` the optional branch the session started from, and `v5-session-branch` the optional session branch as created. |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
 The event log uses an ordinary rowid table with a unique composite primary-key index. This keeps

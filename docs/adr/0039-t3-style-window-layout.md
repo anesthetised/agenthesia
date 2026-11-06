@@ -219,7 +219,7 @@ of "needs you" (#190).
 
 ## Amendment (2026-11-02): the inspector leads with the work
 
-- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the inspector text above describes the code.
+- Status: Accepted by the owner on 2026-11-06 (#195); the layout is implemented in #204, the branch name in #208.
 - Supersedes: "generated branch names are not adopted" in
   [0032](0032-worktree-merge-and-discard.md), and the matching removal check described there.
 

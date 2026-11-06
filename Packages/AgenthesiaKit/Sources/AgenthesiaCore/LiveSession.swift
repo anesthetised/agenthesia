@@ -443,19 +443,21 @@ public final class LiveSession {
         store: PersistenceStore
     ) async throws -> SessionController {
         let id = UUID()
-        let workspace: SessionWorkspace
-        if let worktreesRoot {
-            workspace = try await SessionWorkspace.prepare(directory: directory, id: id, worktreesRoot: worktreesRoot)
-        } else {
-            workspace = try await SessionWorkspace.prepare(directory: directory, id: id)
-        }
+        let worktreesRoot = worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
+        let workspace = try await SessionWorkspace.prepare(
+            directory: directory,
+            id: id,
+            topic: initialPrompt.flatMap { SessionTitle.fromPrompt($0.text) },
+            worktreesRoot: worktreesRoot
+        )
         workingDirectory = workspace.workingDirectory
         if let baseRevision = workspace.baseRevision,
             let worktree = SessionWorkspace.Worktree(
                 projectDirectory: workspace.projectDirectory,
                 workingDirectory: workspace.workingDirectory,
                 sessionID: id,
-                worktreesRoot: worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
+                branch: workspace.branch,
+                worktreesRoot: worktreesRoot
             )
         {
             created = (id, worktree, baseRevision)
@@ -471,7 +473,8 @@ public final class LiveSession {
                 agentInstallID: install.id,
                 workingDirectory: workspace.workingDirectory.path,
                 baseRevision: workspace.baseRevision,
-                baseBranch: workspace.baseBranch
+                baseBranch: workspace.baseBranch,
+                branch: workspace.branch
             ),
             store: store,
             additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) }

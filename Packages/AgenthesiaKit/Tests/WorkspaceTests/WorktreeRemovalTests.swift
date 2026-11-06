@@ -20,13 +20,22 @@ import Testing
             try await commit("Initial", in: repo)
         }
 
-        func prepare(_ id: UUID = UUID()) async throws -> (SessionWorkspace, SessionWorkspace.Worktree) {
-            let workspace = try await SessionWorkspace.prepare(directory: repo, id: id, worktreesRoot: trees)
+        func prepare(
+            _ id: UUID = UUID(),
+            topic: String? = nil
+        ) async throws -> (SessionWorkspace, SessionWorkspace.Worktree) {
+            let workspace = try await SessionWorkspace.prepare(
+                directory: repo,
+                id: id,
+                topic: topic,
+                worktreesRoot: trees
+            )
             let worktree = try #require(
                 SessionWorkspace.Worktree(
                     projectDirectory: workspace.projectDirectory,
                     workingDirectory: workspace.workingDirectory,
                     sessionID: id,
+                    branch: workspace.branch,
                     worktreesRoot: trees
                 )
             )
@@ -75,6 +84,83 @@ import Testing
         #expect(branches.contains("main") && branches.count == 2)
         // A retry after success changes nothing.
         try await SessionWorkspace.remove(worktree)
+    }
+
+    @Test func aReadableNameIsCreatedInASessionDirectoryAndRemoved() async throws {
+        let fixture = try await Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let id = UUID()
+        let (workspace, worktree) = try await fixture.prepare(id, topic: "Fix the note parser")
+        let name = "agenthesia/fix-the-note-parser-\(id.uuidString.lowercased().prefix(8))"
+        #expect(workspace.branch == name && worktree.branch == name)
+        #expect(try await SessionWorkspace.git(["branch", "--show-current"], in: workspace.workingDirectory) == name)
+        #expect(worktree.directory.lastPathComponent == id.uuidString.lowercased())
+        #expect(
+            try await SessionWorkspace.removeUntouched(worktree, baseRevision: try #require(workspace.baseRevision))
+        )
+        #expect(!FileManager.default.fileExists(atPath: worktree.directory.path))
+        #expect(try await fixture.branches() == ["main"])
+    }
+
+    @Test func aTakenNameFallsBackToTheSessionIDAndTheOtherBranchIsKept() async throws {
+        let fixture = try await Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let id = UUID()
+        let taken = SessionWorkspace.branchName(for: id, topic: "Fix it")
+        try await SessionWorkspace.git(["branch", taken], in: fixture.repo)
+        let (workspace, worktree) = try await fixture.prepare(id, topic: "Fix it")
+        let legacy = "agenthesia/\(id.uuidString.lowercased())"
+        #expect(workspace.branch == legacy && worktree.branch == legacy)
+        #expect(try await SessionWorkspace.git(["branch", "--show-current"], in: workspace.workingDirectory) == legacy)
+        try await SessionWorkspace.remove(worktree)
+        #expect(try await fixture.branches().sorted() == [taken, "main"])
+    }
+
+    @Test func aWorktreeWithoutAStoredNameIsRemovedByItsLegacyName() async throws {
+        let fixture = try await Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let id = UUID()
+        let legacy = "agenthesia/\(id.uuidString.lowercased())"
+        let directory = fixture.trees.appending(path: "repo/\(id.uuidString.lowercased())")
+        try await SessionWorkspace.git(
+            ["worktree", "add", "-q", "-b", legacy, directory.path, "HEAD"],
+            in: fixture.repo
+        )
+        let worktree = try #require(
+            SessionWorkspace.Worktree(
+                projectDirectory: fixture.repo.resolvingSymlinksInPath(),
+                workingDirectory: directory.resolvingSymlinksInPath(),
+                sessionID: id,
+                branch: nil,
+                worktreesRoot: fixture.trees
+            )
+        )
+        #expect(worktree.branch == legacy)
+        try await SessionWorkspace.remove(worktree)
+        #expect(!FileManager.default.fileExists(atPath: directory.path))
+        #expect(try await fixture.branches() == ["main"])
+    }
+
+    @Test func aStoredNameThatFailsTheCheckIsNotRemovable() async throws {
+        let fixture = try await Fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let id = UUID()
+        let (workspace, _) = try await fixture.prepare(id)
+        for name in [
+            SessionWorkspace.branchName(for: UUID(), topic: nil), "main", "feature/x",
+            "feature/x-\(id.uuidString.lowercased().prefix(8))", "agenthesia/no-suffix",
+        ] {
+            #expect(
+                SessionWorkspace.Worktree(
+                    projectDirectory: workspace.projectDirectory,
+                    workingDirectory: workspace.workingDirectory,
+                    sessionID: id,
+                    branch: name,
+                    worktreesRoot: fixture.trees
+                ) == nil,
+                "\(name)"
+            )
+        }
     }
 
     @Test func prunesADirectoryDeletedByHand() async throws {
@@ -146,6 +232,7 @@ import Testing
                 projectDirectory: workspace.projectDirectory,
                 workingDirectory: subdirectory,
                 sessionID: id,
+                branch: workspace.branch,
                 worktreesRoot: fixture.trees
             ) == worktree
         )
@@ -161,6 +248,7 @@ import Testing
                     projectDirectory: workspace.projectDirectory,
                     workingDirectory: directory,
                     sessionID: sessionID,
+                    branch: workspace.branch,
                     worktreesRoot: fixture.trees
                 ) == nil
             )
@@ -176,6 +264,7 @@ import Testing
                 projectDirectory: plain.projectDirectory,
                 workingDirectory: plain.workingDirectory,
                 sessionID: id,
+                branch: plain.branch,
                 worktreesRoot: fixture.trees
             ) == nil
         )

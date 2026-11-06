@@ -92,11 +92,20 @@ import Testing
     @Test func onlyWorktreeSessionsHaveABranch() async throws {
         let fixture = try await fixture(git: true)
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
-        let name = "agenthesia/\(fixture.record.id.uuidString.lowercased())"
+        let name = "agenthesia/session-\(fixture.record.id.uuidString.lowercased().prefix(8))"
+        #expect(fixture.record.branch == name)
         #expect(SessionInspector.branchName(of: fixture.record) == name)
         #expect(fixture.record.baseBranch == "main")
-        let legacy = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/tmp")
-        #expect(SessionInspector.branchName(of: legacy) == nil)
+        let plain = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/tmp")
+        #expect(SessionInspector.branchName(of: plain) == nil)
+        // A worktree session from before names were stored shows its derived name in full.
+        let legacy = SessionRecord(
+            projectID: UUID(),
+            agentInstallID: UUID(),
+            workingDirectory: "/tmp",
+            baseRevision: String(repeating: "a", count: 40)
+        )
+        #expect(SessionInspector.branchName(of: legacy) == "agenthesia/\(legacy.id.uuidString.lowercased())")
     }
 
     @Test func countsReadAsAddedAndRemoved() {

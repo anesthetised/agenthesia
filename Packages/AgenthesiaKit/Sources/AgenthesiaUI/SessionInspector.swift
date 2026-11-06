@@ -4,7 +4,7 @@ import Persistence
 import SwiftUI
 import Workspace
 
-/// The displayed session's details beside its transcript: workspace, branch, changes and agent (ADR-0039).
+/// The displayed session's details beside its transcript: changes, workspace and branch, and agent (ADR-0039).
 struct SessionInspector: View {
     let model: SessionWindowModel
     @Binding var showingLog: Bool
@@ -19,37 +19,43 @@ struct SessionInspector: View {
 
     var body: some View {
         Form {
-            if let directory { workspace(directory) }
-            if let session {
-                if let name = Self.branchName(of: session) { branch(name, base: session.baseBranch) }
-                if model.files.root != nil, model.files.sessionID == session.id { changes(session) }
-            }
+            if let session, model.files.root != nil, model.files.sessionID == session.id { changes(session) }
+            if let directory { workspace(directory, session: session) }
             if model.restored == nil, let owner = model.owner { agent(owner) }
         }.formStyle(.grouped)
     }
 
-    private func workspace(_ directory: URL) -> some View {
-        Section("Workspace") {
-            Text(directory.path).lineLimit(1).truncationMode(.middle).help(directory.path)
-            Button("Show in Finder", systemImage: "folder") {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+    private func workspace(_ directory: URL, session: SessionRecord?) -> some View {
+        Section {
+            if let session, let name = Self.branchName(of: session) {
+                VStack(alignment: .leading) {
+                    Label(name, systemImage: "arrow.triangle.branch")
+                    if let base = session.baseBranch { Text("from \(base)").foregroundStyle(.secondary) }
+                }.textSelection(.enabled)
             }
-            Button("Open in Editor", systemImage: "square.and.pencil") {
-                EditorHandoff.open(path: "", line: nil, root: directory, editorID: editorID)
+            Label(directory.path, systemImage: "folder").textSelection(.enabled)
+            if let session {
+                Button("Discard Worktree…", systemImage: "trash") { Task { await model.requestDiscard(session) } }
+                    .buttonStyle(.borderless)
+                    .disabled(!model.canDiscard)
             }
+        } header: {
+            HStack {
+                Text("Workspace")
+                Spacer()
+                Button("Show in Finder", systemImage: "folder") {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+                }.help("Show in Finder")
+                Button("Open in Editor", systemImage: "square.and.pencil") {
+                    EditorHandoff.open(path: "", line: nil, root: directory, editorID: editorID)
+                }.help("Open in Editor")
+            }.labelStyle(.iconOnly).buttonStyle(.borderless)
         }
     }
 
     /// The branch of the worktree Agenthesia created for the session; sessions without a base have none.
     static func branchName(of session: SessionRecord) -> String? {
         session.baseRevision == nil ? nil : "agenthesia/\(session.id.uuidString.lowercased())"
-    }
-
-    private func branch(_ name: String, base: String?) -> some View {
-        Section("Branch") {
-            LabeledContent("Name", value: name)
-            if let base { LabeledContent("Base", value: base) }
-        }
     }
 
     private func changes(_ session: SessionRecord) -> some View {
@@ -69,6 +75,8 @@ struct SessionInspector: View {
                     Text("· ^[\(files.changedPaths.count) file](inflect: true)").foregroundStyle(.secondary)
                 }
             }
+            actions
+            WatchErrorNotice(files: files)
             ForEach(files.changedPaths, id: \.self) { path in
                 Button {
                     onOpen(path, session.id)
@@ -84,19 +92,34 @@ struct SessionInspector: View {
                     }.contentShape(.rect)
                 }.buttonStyle(.plain).help(path)
             }
-            if let error = files.watchError {
-                Text("Automatic refresh is unavailable: \(error)").font(.caption).foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-            Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
-            Button("Review Changes…", systemImage: "text.badge.checkmark", action: model.openReview)
-                .disabled(!model.canReview)
-            Button(model.mergeCommandTitle, systemImage: "arrow.triangle.merge") {
-                Task { await model.requestMerge() }
-            }.disabled(!model.canMerge)
-            Button("Discard Worktree…", systemImage: "trash") { Task { await model.requestDiscard(session) } }
-                .disabled(!model.canDiscard)
         }
+    }
+
+    /// Review leads while there are changes; the buttons wrap onto two rows when the pane is narrow.
+    private var actions: some View {
+        let prominent = !model.files.changedPaths.isEmpty
+        let merge = Button(model.mergeCommandTitle, systemImage: "arrow.triangle.merge") {
+            Task { await model.requestMerge() }
+        }
+        .buttonStyle(.bordered)
+        .disabled(!model.canMerge)
+        .help(model.mergeHelp ?? "")
+        return ViewThatFits(in: .horizontal) {
+            HStack {
+                review(prominent: prominent)
+                merge
+            }
+            VStack(alignment: .leading) {
+                review(prominent: prominent)
+                merge
+            }
+        }
+    }
+
+    @ViewBuilder private func review(prominent: Bool) -> some View {
+        let button = Button("Review", systemImage: "text.badge.checkmark", action: model.openReview)
+            .disabled(!model.canReview)
+        if prominent { button.buttonStyle(.borderedProminent) } else { button.buttonStyle(.bordered) }
     }
 
     private func agent(_ owner: LiveSession) -> some View {
@@ -122,4 +145,21 @@ struct ChangeCounts: View {
     }
 
     static func label(_ lines: ChangeStats.Lines) -> String { "\(lines.added) added, \(lines.removed) removed" }
+}
+
+/// Why the file list does not refresh itself, with the way out: a manual refresh.
+struct WatchErrorNotice: View {
+    let files: SessionFiles
+
+    var body: some View {
+        if let error = files.watchError {
+            HStack {
+                Text("Automatic refresh is unavailable: \(error)").font(.caption).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                Spacer(minLength: 8)
+                Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless).help("Refresh Files")
+            }
+        }
+    }
 }

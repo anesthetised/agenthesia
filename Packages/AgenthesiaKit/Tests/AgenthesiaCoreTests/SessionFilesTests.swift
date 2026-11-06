@@ -293,6 +293,27 @@ import Workspace
         #expect(files.watchError == nil)
     }
 
+    @Test func theChangeListIsKnownToBeEmptyOnlyWhenItIsCurrent() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let files = SessionFiles()
+        defer { files.close() }
+        #expect(!files.hasNoChanges, "Nothing is attached")
+        await files.attach(record(root))
+        #expect(!files.isGitRepository && !files.hasNoChanges, "Without Git there is no change list")
+        files.close()
+        try "hello".write(to: root.appending(path: "hello.txt"), atomically: true, encoding: .utf8)
+        try await git(["init", "-q"], in: root)
+        try await git(["add", "."], in: root)
+        try await git(["commit", "-qm", "Initial"], in: root)
+        await files.attach(record(root))
+        #expect(files.hasNoChanges)
+        try "edited".write(to: root.appending(path: "hello.txt"), atomically: true, encoding: .utf8)
+        await files.refresh()
+        #expect(files.changedPaths == ["hello.txt"] && !files.hasNoChanges)
+    }
+
     @Test func cancelledAttachmentCanAttachTheSameSessionAgain() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "session-files-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

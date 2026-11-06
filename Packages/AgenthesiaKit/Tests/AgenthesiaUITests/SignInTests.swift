@@ -8,6 +8,7 @@ import Testing
 
 @testable import AgenthesiaCore
 @testable import AgenthesiaUI
+@testable import Workspace
 
 /// The sign-in panel, its terminal sheet and the window model behind them (ADR-0033).
 @MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct SignInTests {
@@ -121,6 +122,43 @@ import Testing
 
         model.signIn(with: "mock-login")
         await eventually { model.signIn == nil && owner.controller?.status == .idle }
+        await sessions.closeAll()
+    }
+
+    @Test func reviewWaitsForTheSignIn() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-sign-in-review-\(UUID())")
+        let repo = directory.appending(path: "repo")
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await SessionWorkspace.git(["init", "-q"], in: repo)
+        try await SessionWorkspace.git(
+            [
+                "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "-c",
+                "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "Initial",
+            ],
+            in: repo
+        )
+        let sessions = SessionManager(
+            library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")),
+            worktreesRoot: directory.appending(path: "trees")
+        )
+        sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
+        let model = SessionWindowModel(sessions: sessions)
+        model.start(
+            directory: repo,
+            executable: try mockAgent(),
+            arguments: ["--auth", "--auth-file", directory.appending(path: "signed-in").path(percentEncoded: false)]
+        )
+        await model.owner?.startup?.value
+        await model.refresh()
+        #expect(model.signIn != nil)
+        await model.files.attach(try #require(model.displayed?.session))
+        await model.files.refresh()
+        #expect(model.files.isGitRepository && !model.canReview)
+
+        model.signIn(with: "mock-login")
+        await eventually { model.signIn == nil }
+        #expect(model.canReview)
         await sessions.closeAll()
     }
 

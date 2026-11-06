@@ -48,8 +48,9 @@ import Testing
         #expect(summary(.execute, .execute) == "Ran 2 commands")
         #expect(summary(.read) == "Read 1 file")
         #expect(summary(.read, .read) == "Read 2 files")
-        #expect(summary(.edit) == "Edited 1 file")
-        #expect(summary(.edit, .edit) == "Edited 2 files")
+        // Calls, not files: two edits may change the same file.
+        #expect(summary(.edit) == "Made 1 edit")
+        #expect(summary(.edit, .edit) == "Made 2 edits")
         #expect(summary(.delete) == "Deleted 1 file")
         #expect(summary(.delete, .delete) == "Deleted 2 files")
         #expect(summary(.move) == "Moved 1 file")
@@ -64,10 +65,10 @@ import Testing
     }
 
     @Test func summaryJoinsKindsInAFixedOrderAndCapitalizesOnlyTheFirst() {
-        #expect(summary(.edit, .execute, .edit, .execute, .execute) == "Ran 3 commands, edited 2 files")
+        #expect(summary(.edit, .execute, .edit, .execute, .execute) == "Ran 3 commands, made 2 edits")
         #expect(
             summary(.other, .think, .fetch, .search, .move, .delete, .edit, .read, .execute)
-                == "Ran 1 command, read 1 file, edited 1 file, deleted 1 file, moved 1 file, "
+                == "Ran 1 command, read 1 file, made 1 edit, deleted 1 file, moved 1 file, "
                 + "searched 1 time, fetched 1 URL, thought, used 1 tool"
         )
     }

@@ -248,7 +248,6 @@ public struct RootView: View {
                     )
                 }
                 if let signIn = model.signIn {
-                    Divider()
                     SignInPanel(
                         agentName: model.owner?.agentName ?? "the agent",
                         signIn: signIn,
@@ -406,7 +405,7 @@ public struct RootView: View {
                     Divider()
                     Button("Stop Turn") { Task { await model.stop() } }
                 }
-            }.labelStyle(.iconOnly).menuStyle(.borderlessButton).fixedSize()
+            }.labelStyle(.iconOnly).menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Button {
                 if action == .stop { Task { await model.owner?.stop() } } else { send() }
             } label: {

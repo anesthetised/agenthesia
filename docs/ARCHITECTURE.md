@@ -197,7 +197,7 @@ Markdown without it.
 The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
 `TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
 permission request or an input form, ends a group, and one call stays a plain card. `ToolGroupSummary` words the row
-from the ACP tool kinds (`Ran 3 commands, edited 2 files`, `· 1 failed` in the failure color); while the session runs
+from the ACP tool kinds (`Ran 3 commands, made 2 edits`, `· 1 failed` in the failure color); while the session runs
 and the group's last call is pending or in progress, it shows that call's title instead (`just test…`). A group
 is a header without a body, collapsed by default and expanded by its disclosure into the existing cards, which follow
 it as rows; `LiveTranscriptSource` keys that by the group's first item, separately from each card's own expansion.

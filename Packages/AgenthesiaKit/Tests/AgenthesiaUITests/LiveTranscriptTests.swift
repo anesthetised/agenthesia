@@ -1124,6 +1124,41 @@ extension LiveTranscriptTests {
         return try #require(views(NSButton.self, in: view).first { $0.bezelStyle == .disclosure })
     }
 
+    @Test func aCardWithoutDetailsKeepsItsIconBesideOneWithADisclosure() async throws {
+        let recorded = try await RecordedTranscript()
+        let output = (1...40).map { "line \($0)" }.joined(separator: "\n")
+        try await recorded.apply(tool("short"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Between"))))
+        try await recorded.apply(
+            .toolCall(
+                .init(
+                    toolCallId: "long",
+                    title: "Run",
+                    kind: .execute,
+                    status: .completed,
+                    content: [.content(.init(content: .init(text: output)))]
+                )
+            )
+        )
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        func iconX(row: Int) throws -> (x: CGFloat, inertDisclosure: Bool) {
+            let view = try #require(controller.table.view(atColumn: 0, row: row, makeIfNecessary: true))
+            view.layoutSubtreeIfNeeded()
+            let icon = try #require(views(NSImageView.self, in: view).first)
+            let toggle = try #require(views(NSButton.self, in: view).first { $0.bezelStyle == .disclosure })
+            return (icon.convert(icon.bounds, to: view).minX, !toggle.isEnabled)
+        }
+        let short = try iconX(row: 0)
+        let long = try iconX(row: 2)
+        #expect(short.inertDisclosure && !long.inertDisclosure)
+        #expect(short.x == long.x)
+    }
+
     @Test func permissionRequestsAndInputFormsEndAGroupAndOneCallStaysACard() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(tool("a"))

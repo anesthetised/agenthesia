@@ -54,7 +54,7 @@ import SwiftUI
     var review: SessionReview?
 
     var canReview: Bool {
-        !closed && !showingSetup && !isLoadingHistory && files.root != nil && files.isGitRepository
+        !closed && !showingSetup && !isLoadingHistory && signIn == nil && files.root != nil && files.isGitRepository
             && files.sessionID == displayed?.session.id
     }
 

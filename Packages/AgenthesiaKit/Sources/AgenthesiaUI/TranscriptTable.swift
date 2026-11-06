@@ -618,22 +618,22 @@ private final class TranscriptMessageRow: NSTableCellView {
         controller: TranscriptTableController
     ) -> [NSView] {
         guard let tool else { return [role] }
-        var views: [NSView] = []
-        if tool.expandable {
-            let disclosure = NSButton(
-                title: "",
-                target: controller,
-                action: #selector(TranscriptTableController.toggleExpansion(_:))
-            )
-            disclosure.bezelStyle = .disclosure
-            disclosure.setButtonType(.pushOnPushOff)
-            disclosure.state = tool.expanded ? .on : .off
-            disclosure.setAccessibilityLabel(
-                tool.detailsDisclosure
-                    ? (tool.expanded ? "Hide details" : "Details") : (tool.expanded ? "Show less" : "Show all")
-            )
-            views.append(disclosure)
-        }
+        // Without details the disclosure stays, invisible and inert, so the icon column does not shift between cards.
+        let disclosure = NSButton(
+            title: "",
+            target: controller,
+            action: #selector(TranscriptTableController.toggleExpansion(_:))
+        )
+        disclosure.bezelStyle = .disclosure
+        disclosure.setButtonType(.pushOnPushOff)
+        disclosure.state = tool.expanded ? .on : .off
+        disclosure.alphaValue = tool.expandable ? 1 : 0
+        disclosure.isEnabled = tool.expandable
+        disclosure.setAccessibilityElement(tool.expandable)
+        disclosure.setAccessibilityLabel(
+            tool.detailsDisclosure
+                ? (tool.expanded ? "Hide details" : "Details") : (tool.expanded ? "Show less" : "Show all")
+        )
         let icon = NSImageView(
             image: NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.kind) ?? NSImage()
         )
@@ -644,7 +644,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         status.textColor = statusColor(tool.tone)
         statusLabel = status
-        return views + [icon, role, status]
+        return [disclosure, icon, role, status]
     }
 
     /// The selection's accent color hides a tone's color, the running tone's entirely.

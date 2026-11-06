@@ -396,6 +396,17 @@ Wave 2:
   back. Running app (scripted, MockAgent, isolated home, light and dark): the Queue capsule while a permission waits, the
   Send options items during a turn, and ⌘L from the sidebar and the transcript. Not checked: Save while editing a queued
   message, ⌘L from the inspector or a text field in the file pane, ⌘. with a draft, and VoiceOver.
+- #191: polish from the UI/UX review. The Send options menu hides its second chevron; Review Changes has its own symbol
+  (`text.badge.checkmark`) and stays disabled while the sign-in panel shows; the Branch and Agent inspector rows are
+  labeled `Name` instead of repeating their section title; a tool card without details keeps an invisible, disabled
+  disclosure, so the icon column does not shift; the sign-in panel uses the composer's card style and 720 pt column.
+  A group says `made 2 edits` instead of `edited 2 files`, because it counts calls, not distinct paths (`read N files`
+  has the same problem and is left as is). ADR-0040 now says ⇧⌘N. Tests: every `ToolGroupSummary` wording, the icon
+  position of a card with and without a disclosure, and `canReview` through a sign-in. The branch-name item moves to the
+  readable branch names issue under ADR-0039's amendment (#196). Running app (scripted, MockAgent, isolated home, light
+  and dark): one chevron on Send options, the Review symbol and `Name` rows in the inspector, aligned icons in an
+  expanded group with and without a disclosure, `made 1 edit` in a group summary, and the sign-in panel in the column
+  with Review disabled until signed in. Not checked: the Agent row's label and VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

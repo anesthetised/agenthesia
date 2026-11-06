@@ -8,6 +8,7 @@ struct SessionDraftView: View {
     @Bindable var model: SessionWindowModel
     @State private var checkout: DraftCheckout?
     @State private var editingCommand = false
+    @State private var catalogLoaded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,7 +17,14 @@ struct SessionDraftView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             VStack(alignment: .leading, spacing: 6) {
                 if let error = model.draftError {
-                    Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    FailureBanner(error, offering: [.manageAgents], perform: { _ in })
+                }
+                if catalogLoaded, model.selectedAgent == nil, model.catalog?.choices.isEmpty == true {
+                    HStack {
+                        Text("No agent is installed.").foregroundStyle(.secondary)
+                        SettingsLink { Text("Manage Agents…") }
+                    }
+                    .font(.caption)
                 }
                 card
             }
@@ -24,7 +32,10 @@ struct SessionDraftView: View {
             .padding(.horizontal, 16).padding(.bottom, 12)
             .frame(maxWidth: .infinity)
         }
-        .task { await model.catalog?.reloadInstallations() }
+        .task {
+            await model.catalog?.reloadInstallations()
+            catalogLoaded = true
+        }
         .task(id: model.selectedDirectory) {
             checkout = nil
             if let directory = model.selectedDirectory { checkout = await DraftCheckout.of(directory) }

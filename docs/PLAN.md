@@ -426,7 +426,13 @@ Wave 2:
   line and 120 characters; the tooltip and the accessibility label hold the whole row. Tests: a case per reason, title
   cutting, live reasons against `MockAgent`, last activity of live and saved sessions, the Settled order, the width
   rule and a hosted row that stays one line high. Not tested: the `Question` and `Merging` reasons against a real
-  agent and merge (the pure function only), and the sidebar's refresh after a session ends. Not yet seen in the running app.
+  agent and merge (the pure function only), and the sidebar's refresh after a session ends. Running app (scripted,
+  MockAgent, isolated home, dark): `Finished` with the unseen dot, `Allow? Write note.txt`, `Prompt failed` staying in
+  Working, `Failed`, `Sign in`, last-activity times, the accessibility labels, and Settled after a relaunch (its order
+  there matched start order too, so the sort is shown by tests only). The check found a gap after a cut project, as the
+  next text followed the project's share instead of its width, and a label that kept `last active now` while the time
+  moved on; both are fixed, the gap with a hosted test that fails without the fix. At the default 240 pt sidebar a
+  permission reason is cut to `Allow? Writ…`, as the rule says. Not checked: light mode, VoiceOver itself.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

@@ -458,7 +458,12 @@ Wave 2:
   hook, because later transcript updates also follow the end. Tests: the card's state for one and several requests,
   shortcuts, arming with an injected instant, answers reaching only the oldest request, wrapping, the MockAgent
   command, and a hosted `RootView` that keeps following the end and the composer's focus while the card appears and
-  goes. Not yet seen in the running app.
+  goes. Running app (scripted, MockAgent, isolated home, dark): one card for `writes 3 hello` with `1 of 3`, the shortcuts
+  shown on the buttons, a double ⌥⌘1 answering one request only (arming), ⌥⌘1 and ⌥⌘2 answering while text is typed
+  in the composer, which keeps the text and focus, and the card leaving after the last answer. The check found the
+  card stretched to the 40 % bound with blank space around a one-line diff, because its flexible frame took the height
+  it was offered; it now hugs its content and the diff scrolls only past the bound, with a hosted check that fails
+  without the fix. Not checked: VoiceOver's announcement, Full Keyboard Access, a narrow window, light mode.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

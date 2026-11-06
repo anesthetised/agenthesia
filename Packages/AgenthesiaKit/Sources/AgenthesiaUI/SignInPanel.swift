@@ -27,7 +27,11 @@ struct SignInPanel: View {
             }
             SignInMethods(methods: signIn.methods, pending: signIn.pending, onSignIn: onSignIn, onCancel: onCancel)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.bar, in: .rect(cornerRadius: 16))
+        .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
+        .frame(maxWidth: TranscriptColumn.maxWidth)
+        .padding(.horizontal, 16).padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
     }
 }

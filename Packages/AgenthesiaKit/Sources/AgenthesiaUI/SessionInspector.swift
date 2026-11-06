@@ -47,7 +47,7 @@ struct SessionInspector: View {
 
     private func branch(_ name: String, base: String?) -> some View {
         Section("Branch") {
-            LabeledContent("Branch", value: name)
+            LabeledContent("Name", value: name)
             if let base { LabeledContent("Base", value: base) }
         }
     }
@@ -89,7 +89,7 @@ struct SessionInspector: View {
                     .textSelection(.enabled)
             }
             Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
-            Button("Review Changes…", systemImage: "doc.text.magnifyingglass", action: model.openReview)
+            Button("Review Changes…", systemImage: "text.badge.checkmark", action: model.openReview)
                 .disabled(!model.canReview)
             Button(model.mergeCommandTitle, systemImage: "arrow.triangle.merge") {
                 Task { await model.requestMerge() }
@@ -101,7 +101,7 @@ struct SessionInspector: View {
 
     private func agent(_ owner: LiveSession) -> some View {
         Section("Agent") {
-            if let name = owner.agentName { LabeledContent("Agent", value: name) }
+            if let name = owner.agentName { LabeledContent("Name", value: name) }
             Toggle("Agent Log", systemImage: "terminal", isOn: $showingLog)
         }
     }

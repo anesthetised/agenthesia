@@ -92,7 +92,7 @@ struct ToolGroupSummary: Equatable {
             return switch self {
             case .execute: "ran \(counted("command"))"
             case .read: "read \(counted("file"))"
-            case .edit: "edited \(counted("file"))"
+            case .edit: "made \(counted("edit"))"
             case .delete: "deleted \(counted("file"))"
             case .move: "moved \(counted("file"))"
             case .search: "searched \(counted("time"))"

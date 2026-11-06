@@ -22,7 +22,7 @@ every Git session its own worktree and the launch form does not ask about it, so
 
 ## Decision
 
-**Draft screen.** New Session (⌘N) and a window with no session show a draft: an empty transcript area
+**Draft screen.** New Session (⇧⌘N) and a window with no session show a draft: an empty transcript area
 with the line "What should the agent do?" and the composer card of ADR-0039. Above the text, the card
 shows three chips:
 

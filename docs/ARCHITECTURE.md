@@ -217,7 +217,7 @@ The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md))
 Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the session's
 config controls as borderless pill menus that show the value only (the option name is in the tooltip and the
 accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
-Queue, Save, or Stop for an empty draft while a turn runs or stops). There is no status line for editable sessions:
+Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). There is no status line for editable sessions:
 the transcript shows that a turn runs, a pending permission card lists its ⌥⌘ shortcuts, and the queue header says
 that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
@@ -345,7 +345,7 @@ new session whose startup failed before its first prompt was submitted, which re
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
 ⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G. Permission answers keep ⌥⌘1…⌥⌘9. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.

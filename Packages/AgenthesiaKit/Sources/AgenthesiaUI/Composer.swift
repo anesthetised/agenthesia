@@ -13,6 +13,8 @@ struct ComposerInput: View {
     var attachmentsEditable = true
     var onRecall: () -> Void = {}
     var onStop: () -> Void = {}
+    /// Each increase moves keyboard focus to the text (Session → Focus Composer).
+    var focusRequests = 0
     @State private var selection = 0
     /// Escape hides the commands until the draft leaves command mode.
     @State private var dismissed = false
@@ -27,7 +29,8 @@ struct ComposerInput: View {
                 isEditable: isEnabled,
                 onCommand: { handle($0, matches: matches) },
                 onFiles: { if isEnabled && attachmentsEditable { Self.add($0, to: &attachments) } },
-                onShortcut: { handleShortcut($0, matches: matches) }
+                onShortcut: { handleShortcut($0, matches: matches) },
+                focusRequests: focusRequests
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -195,6 +198,7 @@ struct ComposerTextView: NSViewRepresentable {
     var onCommand: (Selector) -> Bool
     var onFiles: ([URL]) -> Void
     var onShortcut: (NSEvent) -> Bool = { _ in false }
+    var focusRequests = 0
 
     static let font = NSFont.preferredFont(forTextStyle: .body)
     private static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
@@ -232,6 +236,10 @@ struct ComposerTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? FileTextView else { return }
         update(textView, coordinator: context.coordinator)
+        if context.coordinator.focusRequests != focusRequests {
+            context.coordinator.focusRequests = focusRequests
+            textView.window?.makeFirstResponder(textView)
+        }
     }
 
     private func update(_ textView: FileTextView, coordinator: Coordinator) {
@@ -265,8 +273,12 @@ struct ComposerTextView: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerTextView
+        var focusRequests: Int
 
-        init(_ parent: ComposerTextView) { self.parent = parent }
+        init(_ parent: ComposerTextView) {
+            self.parent = parent
+            focusRequests = parent.focusRequests
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }

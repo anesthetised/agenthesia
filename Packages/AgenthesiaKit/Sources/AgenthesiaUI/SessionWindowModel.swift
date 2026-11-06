@@ -98,6 +98,16 @@ import SwiftUI
         }
     }
     var find = TranscriptFindState()
+    /// Counts the requests (⌘L) to focus the composer's text.
+    var composerFocusRequests = 0
+    /// The composer card is shown: not the draft, a restored session's Continue card or a sign-in.
+    var canFocusComposer: Bool {
+        !closed && !inDraft && !isLoadingHistory && restored == nil && signIn == nil && owner?.controller != nil
+    }
+    func focusComposer() {
+        guard canFocusComposer else { return }
+        composerFocusRequests += 1
+    }
     var canFind: Bool { !closed && !inDraft && !isLoadingHistory && displayed != nil }
     func openFind() {
         guard canFind else { return }

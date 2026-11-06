@@ -1,5 +1,5 @@
-/// What the composer's round button does (ADR-0039): Send, Queue and Save share the arrow; Stop replaces it while
-/// a turn runs and there is nothing to send.
+/// What the composer's round button does (ADR-0039): Send, Queue and Save share the arrow, and Queue and Save add
+/// their name to it; Stop replaces it while a turn runs and there is nothing to send.
 enum ComposerPrimaryAction: Equatable {
     case send, queue, save, stop
 
@@ -24,6 +24,14 @@ enum ComposerPrimaryAction: Equatable {
         case .save: "Save"
         case .stop: "Stop"
         }
+    }
+
+    /// Queue and Save look like Send, so they say what they do next to the arrow.
+    var showsTitle: Bool { self == .queue || self == .save }
+
+    /// The Send options item that sends at once; steering interrupts a running turn (ADR-0028).
+    static func sendNowTitle(hasDraft: Bool, turnActive: Bool) -> String {
+        (hasDraft ? "Send Draft Now" : "Send Queue Now") + (turnActive ? " (Interrupts Turn)" : "")
     }
 
     var symbol: String { self == .stop ? "stop.fill" : "arrow.up" }

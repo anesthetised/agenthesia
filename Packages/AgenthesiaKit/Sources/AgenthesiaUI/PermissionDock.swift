@@ -100,6 +100,11 @@ private struct PermissionCard: View {
     @State private var armed = false
     @State private var showsAllFiles = false
     @State private var diffHeight: CGFloat = 0
+    /// The card without its diff: header, title, buttons and padding.
+    @State private var chromeHeight: CGFloat = 0
+
+    /// The diff at its own height while the card fits in `maxHeight`, scrolling beyond that (ADR-0039: at most 40 %).
+    private var shownDiffHeight: CGFloat { min(diffHeight, max(40, maxHeight - chromeHeight)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -132,7 +137,7 @@ private struct PermissionCard: View {
                         diffHeight = $0
                     }
                 }
-                .frame(maxHeight: diffHeight)
+                .frame(height: shownDiffHeight)
             }
             WrappingLayout(spacing: 8) {
                 ForEach(docked.options.enumerated(), id: \.offset) { index, option in
@@ -142,7 +147,12 @@ private struct PermissionCard: View {
             .disabled(!armed)
         }
         .padding(12)
-        .frame(maxHeight: maxHeight)
+        // The card hugs its content; a flexible frame here would stretch it to `maxHeight` with blank space.
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+        } action: { height in
+            chromeHeight = height - (docked.diffs.isEmpty ? 0 : shownDiffHeight)
+        }
         .background(.bar, in: .rect(cornerRadius: 16))
         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
         .accessibilityElement(children: .contain)

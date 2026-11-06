@@ -147,6 +147,8 @@ import Testing
         try await waitUntil { controller.pendingPermissions.count == 2 && scroll.contentView.bounds.height < height }
         try await waitUntil(followsEnd)
         #expect(window.firstResponder === composer)
+        // A one-line diff makes a short card: it hugs its content instead of taking the whole 40 % bound.
+        try await waitUntil { height - scroll.contentView.bounds.height < 0.3 * 700 }
 
         for request in controller.pendingPermissions {
             #expect(controller.answerPermission(request.id, with: "allow"))

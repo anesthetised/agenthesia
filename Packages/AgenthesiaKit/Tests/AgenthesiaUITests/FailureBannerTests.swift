@@ -13,9 +13,9 @@ import Testing
     }
 
     @Test func onlyTheOfferedActionsShow() {
-        #expect(banner(unknown, offering: [.newSession, .retry]).actions == [.newSession])
-        #expect(banner(unknown, offering: [.retry, .agentLog]).actions.isEmpty)
-        #expect(banner("closed", offering: [.retry, .agentLog, .newSession]).actions == [.retry, .agentLog])
+        #expect(banner(unknown, offering: [.newSession, .agentLog]).actions == [.newSession])
+        #expect(banner(unknown, offering: [.agentLog, .manageAgents]).actions.isEmpty)
+        #expect(banner("closed", offering: [.agentLog, .newSession]).actions == [.agentLog])
         #expect(banner("closed").actions.isEmpty)
     }
 

@@ -19,7 +19,7 @@ struct SessionDraftView: View {
                 if let error = model.draftError {
                     FailureBanner(error, offering: [.manageAgents], perform: { _ in })
                 }
-                if catalogLoaded, model.catalog?.choices.isEmpty == true {
+                if catalogLoaded, model.selectedAgent == nil, model.catalog?.choices.isEmpty == true {
                     HStack {
                         Text("No agent is installed.").foregroundStyle(.secondary)
                         SettingsLink { Text("Manage Agents…") }

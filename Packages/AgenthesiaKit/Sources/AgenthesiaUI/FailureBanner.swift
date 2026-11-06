@@ -27,7 +27,6 @@ struct FailureBanner: View {
                 HStack {
                     ForEach(actions, id: \.self) { action in
                         switch action {
-                        case .retry: Button("Retry") { perform(action) }
                         case .agentLog: Button("Agent Log") { perform(action) }
                         case .newSession: Button("New Session") { perform(action) }
                         case .manageAgents: SettingsLink { Text("Manage Agents…") }

@@ -27,19 +27,19 @@ struct SessionFailureTests {
         #expect(error.details == "RPCError(code: -32603, message: \"model overloaded\", data: nil)")
     }
 
-    @Test func aClosedConnectionOffersRetryAndTheLog() {
+    @Test func aClosedConnectionOffersTheLog() {
         let closed = failure(ConnectionError.closed)
         #expect(closed.summary == "The connection to the agent closed.")
-        #expect(closed.actions == [.retry, .agentLog] && closed.details == "closed")
+        #expect(closed.actions == [.agentLog] && closed.details == "closed")
     }
 
-    @Test func anExitedAgentOffersRetryAndTheLogWithoutDetails() {
+    @Test func anExitedAgentOffersTheLogWithoutDetails() {
         for text in [
             "The agent exited with code 1. Continue to reconnect.",
             "The agent killed by signal 9. Continue to reconnect.",
         ] {
             let exited = SessionFailure(text)
-            #expect(exited.summary == text && exited.details == nil && exited.actions == [.retry, .agentLog])
+            #expect(exited.summary == text && exited.details == nil && exited.actions == [.agentLog])
         }
     }
 

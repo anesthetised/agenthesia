@@ -285,14 +285,11 @@ public struct RootView: View {
         .frame(width: width)
     }
 
-    /// What a failure banner can do here: Retry is Continue, so it needs a session that can continue.
-    private var failureActions: Set<SessionFailure.Action> {
-        model.canContinue ? [.retry, .agentLog, .newSession, .manageAgents] : [.agentLog, .newSession, .manageAgents]
-    }
+    /// What a failure banner can do here. Reconnecting is the Continue card's button, so the banner has no Retry.
+    private let failureActions: Set<SessionFailure.Action> = [.agentLog, .newSession, .manageAgents]
 
     private func perform(_ action: SessionFailure.Action) {
         switch action {
-        case .retry: model.continueRestored()
         case .agentLog: showingLog = true
         case .newSession: model.showingSetup = true
         case .manageAgents: break  // A Settings link in the banner.

@@ -171,6 +171,25 @@ import Testing
         }
     }
 
+    @Test func theStatusAndTheSummaryReadAsOnePhrase() async throws {
+        let id = UUID()
+        let live = source(try await transcript(id: id), pending: [pending(id)])
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(live)
+        let rows = (0..<controller.table.numberOfRows).compactMap {
+            controller.table.view(atColumn: 0, row: $0, makeIfNecessary: true)
+        }
+        let status = try #require(
+            rows.lazy.flatMap { self.views(NSTextField.self, in: $0) }.first {
+                $0.stringValue == "Waiting for you"
+            }
+        )
+        let header = try #require(status.superview as? NSStackView)
+        #expect(header.customSpacing(after: status) < header.spacing)
+    }
+
     @Test func copyReturnsTheRecordWithItsDetailsWhetherOrNotItIsFolded() async throws {
         let live = source(try await transcript(outcome: .cancelled))
         let controller = TranscriptTableController()

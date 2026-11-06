@@ -572,6 +572,8 @@ private final class TranscriptMessageRow: NSTableCellView {
             ]
         )
         header.distribution = .fill
+        // `· kind` follows a record's status as one phrase, so the stack's gap would read as a double space.
+        if message.tool?.record == true, let status = statusLabel { header.setCustomSpacing(3, after: status) }
         return header
     }
 

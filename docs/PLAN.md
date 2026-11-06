@@ -441,8 +441,11 @@ Wave 2:
   the review pane; Refresh Files shows only with `watchError`, beside its message (inspector and review footer). The
   branch name is unchanged (readable names are #208). Tests: `hasNoChanges` with Git, without Git, attached and
   edited; Merge's state, help text and sheet without and with changes and with an unknown list; the notice with and
-  without a watch error and its refresh clearing it; the existing hosted `RootView` and section-height tests. Not yet
-  seen in the running app.
+  without a watch error and its refresh clearing it; the existing hosted `RootView` and section-height tests. Running
+  app (scripted, MockAgent, isolated home, dark): the order, Merge disabled with `No changes to merge`, Review prominent
+  and Merge enabled once a file changed in the worktree, the Workspace block with its header icons and their help texts,
+  and Discard at its end. Not checked: a watch error (MockAgent cannot cause one; covered by a hosted test), light
+  mode, the stacked buttons at the inspector's minimum width, and VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

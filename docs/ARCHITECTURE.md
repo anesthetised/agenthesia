@@ -229,15 +229,25 @@ Inside it come the queue, the editing hint, attachments, the text and a bottom r
 config controls as borderless pill menus that show the value only (the option name is in the tooltip and the
 accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
 Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). There is no status line for editable sessions:
-the transcript shows that a turn runs, a pending permission card lists its ⌥⌘ shortcuts, and the queue header says
+the transcript shows that a turn runs, the docked permission card shows its ⌥⌘ shortcuts, and the queue header says
 that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
 merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
 button. The composer has no status text.
 
-> **Accepted, not yet implemented (#195):** [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) docks a pending permission as one
-> card above the composer, with `Waiting for you` in the status line. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md)
-> (deferred) would add a pill while edits are allowed. The text here and below describes the code as it is.
+The oldest pending permission request is docked above the composer card (`PermissionDock`,
+[ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), between `Waiting for you` in the status line and the card,
+so it stays on screen whatever the scroll position. `DockedPermission` builds it from
+`SessionController.pendingPermissions`, which carry the tool call as known when the agent asked: the kind and the
+paths (locations, then the diffs' files), the title as secondary text, the first diff with `+n more files` that
+expands in place, and `1 of 3` while several are pending. The card is at most 40 % of the column's height and its diff
+scrolls inside it. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
+(`WrappingLayout`) instead of truncating; none is the default, and Return and Escape stay with the composer. The card
+never takes focus. Each request gets a new card identity, so `PermissionArming` ignores clicks and shortcuts for
+400 ms after a request appears, including the next one after an answer, and the buttons look disabled meanwhile.
+VoiceOver announces each new request. The card shrinks the table's clip view; the table relayouts and follows the end,
+which a hosted test covers. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) (deferred) would add a pill while
+edits are allowed.
 
 Composer errors show as a red caption above the card.
 
@@ -301,7 +311,7 @@ text selection. Truncated code blocks retain their fence delimiter when closed b
 Each permission request is its own card, even when several refer to one tool call. It shows the tool
 call as known when the agent asked and, while pending, a vertical list of native buttons in the
 agent's option order, keeping choices visible in narrow transcripts. ⌥⌘1…⌥⌘9 choose an option of the
-oldest pending request; the composer status shows that shortcut range. Return and Escape choose nothing.
+oldest pending request, the one the docked card shows. Return and Escape choose nothing.
 Agent-provided “always” options are returned verbatim
 and labeled as remembered by the agent; the app keeps no policy of its own. Answered cards state only
 the recorded response (the option's name and kind, or cancellation), never an inferred approval or

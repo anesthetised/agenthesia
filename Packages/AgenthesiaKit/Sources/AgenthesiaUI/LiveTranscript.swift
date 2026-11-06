@@ -444,7 +444,7 @@ final class LiveTranscriptSource: TranscriptSource {
             case .choosing(let shortcuts):
                 var waiting = "Waiting for your answer"
                 if shortcuts {
-                    // ⌥⌘1… answer the oldest request (RootView.permissionShortcuts).
+                    // ⌥⌘1… answer the oldest request, which the docked card shows (PermissionDock).
                     let count = min(permission.options.count, 9)
                     if count > 0 { waiting += " · " + (count > 1 ? "⌥⌘1–⌥⌘\(count)" : "⌥⌘1") }
                 }

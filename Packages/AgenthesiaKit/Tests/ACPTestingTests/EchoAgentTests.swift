@@ -13,6 +13,9 @@ final class EchoClient: Sendable {
     private let updates = Locked<[ACP.SessionUpdate]>([])
     let files = Locked<[String: String]>(["/a.txt": "hello"])
     let permissionAnswer = Locked<ACP.PermissionOutcome>(.selected("allow"))
+    /// Requests received so far; while `holdsPermissions` is set, each request waits before it is answered.
+    let permissionRequests = Locked<Int>(0)
+    let holdsPermissions = Locked<Bool>(false)
 
     init(options: EchoAgent.Options = .init()) async {
         let (agentSide, clientSide) = InMemoryTransport.pair()
@@ -24,6 +27,8 @@ final class EchoClient: Sendable {
         let updates = updates
         let files = files
         let permissionAnswer = permissionAnswer
+        let permissionRequests = permissionRequests
+        let holdsPermissions = holdsPermissions
         router.on(M.SessionUpdate.self) { notification in updates.withLock { $0.append(notification.update) } }
         router.on(M.ReadTextFile.self) { request in
             guard let content = files.withLock({ $0[request.path] }) else {
@@ -35,7 +40,11 @@ final class EchoClient: Sendable {
             files.withLock { $0[request.path] = request.content }
             return .init()
         }
-        router.on(M.RequestPermission.self) { _ in .init(outcome: permissionAnswer.withLock { $0 }) }
+        router.on(M.RequestPermission.self) { _ in
+            permissionRequests.withLock { $0 += 1 }
+            while holdsPermissions.withLock({ $0 }) { await Task.yield() }
+            return .init(outcome: permissionAnswer.withLock { $0 })
+        }
         await connection.start(handler: router)
     }
 
@@ -143,6 +152,26 @@ final class EchoClient: Sendable {
 
         client.permissionAnswer.withLock { $0 = .cancelled }
         #expect(try await client.prompt("write /d.txt nope", in: session) == .cancelled)
+    }
+
+    @Test func writesSeveralFilesWithTheirRequestsPendingTogether() async throws {
+        let client = await EchoClient()
+        _ = try await client.initialize()
+        let session = try await client.newSession().sessionId
+        client.holdsPermissions.withLock { $0 = true }
+        let turn = Task { try await client.prompt("/writes 3 hello", in: session) }
+        while client.permissionRequests.withLock({ $0 }) < 3 { await Task.yield() }
+        client.holdsPermissions.withLock { $0 = false }
+        #expect(try await turn.value == .endTurn)
+        #expect(
+            client.files.withLock { [$0["note1.txt"], $0["note2.txt"], $0["note3.txt"]] } == [
+                "hello", "hello", "hello",
+            ]
+        )
+
+        client.permissionAnswer.withLock { $0 = .cancelled }
+        #expect(try await client.prompt("writes 0 x", in: session) == .cancelled)
+        #expect(client.permissionRequests.withLock { $0 } == 4)
     }
 
     @Test func failsFileToolsWithoutCapability() async throws {

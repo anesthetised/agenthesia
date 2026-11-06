@@ -48,7 +48,7 @@ public struct RootView: View {
                 } else if model.isLoadingHistory {
                     ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let session = model.displayed {
-                    GeometryReader { geometry in panes(session, width: geometry.size.width) }
+                    GeometryReader { geometry in panes(session, size: geometry.size) }
                 } else {
                     let starting = model.owner?.isStarting == true
                     ContentUnavailableView {
@@ -225,7 +225,8 @@ public struct RootView: View {
     /// The transcript, the file pane and the inspector side by side. Widths are computed from the column's width
     /// (`DetailPanes`) instead of an `HSplitView`, whose split view kept stale divider positions when a pane
     /// appeared or the window shrank (ADR-0039, amendment 2026-10-30).
-    private func panes(_ session: SessionController, width: CGFloat) -> some View {
+    private func panes(_ session: SessionController, size: CGSize) -> some View {
+        let width = size.width
         let panes = DetailPanes(
             width: width,
             filePane: filesMatchSession && model.files.selectedPath != nil,
@@ -256,7 +257,7 @@ public struct RootView: View {
                         onCancel: model.cancelSignIn
                     )
                 } else {
-                    composer(session)
+                    composer(session, height: size.height)
                 }
             }.frame(width: widths.transcript)
             if panes.showsFilePane {
@@ -304,8 +305,10 @@ public struct RootView: View {
         }
     }
 
-    private func composer(_ session: SessionController) -> some View {
+    /// The docked permission card, failures, and the composer card or the Continue card; `height` is the column's.
+    private func composer(_ session: SessionController, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            PermissionDock(session: session, maxHeight: 0.4 * height)
             if let error = model.errorMessage ?? configError {
                 FailureBanner(error, offering: failureActions, perform: perform)
             }
@@ -358,7 +361,6 @@ public struct RootView: View {
         .padding(12)
         .background(.bar, in: .rect(cornerRadius: 16))
         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
-        .background { permissionShortcuts(session) }
         .dropDestination(for: URL.self) { urls, _ in
             guard model.composer.editingQueueID == nil, !submitting else { return false }
             ComposerInput.add(urls, to: &model.composer.message.attachments)
@@ -436,18 +438,6 @@ public struct RootView: View {
         panel.allowsMultipleSelection = true
         panel.directoryURL = model.owner?.workingDirectory
         if panel.runModal() == .OK { ComposerInput.add(panel.urls, to: &model.composer.message.attachments) }
-    }
-
-    /// ⌥⌘1… answer the oldest pending request with the option its card lists at that position.
-    private func permissionShortcuts(_ session: SessionController) -> some View {
-        ZStack {
-            if let request = session.pendingPermissions.first {
-                ForEach(Array(request.options.prefix(9).enumerated()), id: \.offset) { index, option in
-                    Button(option.name) { session.answerPermission(request.id, with: option.optionId) }
-                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
-                }
-            }
-        }.frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
     }
 
     private func send() { submit(.whenReady) }

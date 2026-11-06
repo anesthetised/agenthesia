@@ -14,6 +14,11 @@ struct SessionRow: View {
     let lastActivity: Date?
 
     var body: some View {
+        // Every minute, so that the time and the accessibility label agree.
+        TimelineView(.everyMinute) { context in row(now: context.date) }
+    }
+
+    private func row(now: Date) -> some View {
         HStack {
             ProjectBadgeView(name: project)
             VStack(alignment: .leading) {
@@ -29,10 +34,8 @@ struct SessionRow: View {
             Spacer()
             if let activity { StatusIcon(activity: activity) }
             if let lastActivity {
-                TimelineView(.everyMinute) { context in
-                    Text(RelativeTime.short(from: lastActivity, to: context.date))
-                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                }
+                Text(RelativeTime.short(from: lastActivity, to: now))
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }
         .contentShape(.rect)
@@ -44,7 +47,8 @@ struct SessionRow: View {
                 project: project,
                 reason: reason,
                 status: activity,
-                lastActivity: lastActivity
+                lastActivity: lastActivity,
+                now: now
             )
         )
     }
@@ -104,11 +108,10 @@ struct SubtitleLayout: Layout {
         }
         var x = bounds.minX
         for (subview, width) in zip(subviews, widths) {
-            subview.place(
-                at: CGPoint(x: x, y: bounds.minY),
-                proposal: ProposedViewSize(width: width, height: bounds.height)
-            )
-            x += width
+            let proposal = ProposedViewSize(width: width, height: bounds.height)
+            subview.place(at: CGPoint(x: x, y: bounds.minY), proposal: proposal)
+            // A truncated text is narrower than its share; the next one follows the text, not the share.
+            x += subview.sizeThatFits(proposal).width
         }
     }
 }

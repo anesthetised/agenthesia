@@ -97,6 +97,39 @@ import Testing
         #expect(height(reason: "Allow? " + String(repeating: "a very long tool title ", count: 12)) == short)
     }
 
+    @Test func theReasonFollowsATruncatedProjectWithoutAGap() async throws {
+        _ = NSApplication.shared
+        final class Frames { var project = CGRect.zero, reason = CGRect.zero }
+        let frames = Frames()
+        let host = NSHostingView(
+            rootView: SubtitleLayout {
+                Text("agh-m15g-check-project").lineLimit(1)
+                    .onGeometryChange(for: CGRect.self) {
+                        $0.frame(in: .named("line"))
+                    } action: {
+                        frames.project = $0
+                    }
+                Text(" · Prompt failed").lineLimit(1)
+                    .onGeometryChange(for: CGRect.self) {
+                        $0.frame(in: .named("line"))
+                    } action: {
+                        frames.reason = $0
+                    }
+            }
+            .coordinateSpace(.named("line"))
+            .font(.caption)
+            .frame(width: 140, alignment: .leading)
+        )
+        host.frame = CGRect(x: 0, y: 0, width: 140, height: 20)
+        for _ in 0..<20 where frames.reason == .zero {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        // The project is cut, and the reason starts where its text ends, not where its share would.
+        #expect(frames.project.width > 0 && frames.project.width < 140 * 0.6)
+        #expect(abs(frames.reason.minX - frames.project.maxX) < 1)
+    }
+
     @Test func badgeTintFollowsTheNameHashAndIsStable() {
         #expect(ProjectBadgeView.tints.count == 8)
         for name in ["agenthesia", "my-project", "", "élan"] {

@@ -368,6 +368,12 @@ Wave 2:
   views, and the bar selecting a match in a hosted `RootView`. Not measured: the search on a long session, and Rendering
   Lab, because the streaming path gains nothing while find is closed; only the check that it is closed. Not seen in the
   running app, including whether ⌘F reaches the menu from the composer and whether Escape closes the bar (#160).
+- #190: status lines no longer contradict the state. `WorkingTimeLine` reads `Waiting for you`, with the sidebar's
+  orange icon instead of the spinner, while a permission request or an input form is pending, instead of a running
+  `Working for 1s`. A pending permission card's `Waiting for your answer` is orange (a new `attention` tone), as the
+  sidebar's Needs input already was; it was the running accent blue. The empty state drops `Choose a project and an
+  installed ACP agent.` while a session starts. Tests: the line's text in both states, and the card's tone per phase.
+  Not tested: the empty state, which needs a session in the middle of starting. Not yet seen in the running app (#160).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

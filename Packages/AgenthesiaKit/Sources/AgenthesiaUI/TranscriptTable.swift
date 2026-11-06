@@ -653,6 +653,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         return switch tone {
         case .neutral: .secondaryLabelColor
         case .running: .controlAccentColor
+        case .attention: .systemOrange
         case .success: .systemGreen
         case .failure: .systemRed
         }

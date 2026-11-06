@@ -164,6 +164,9 @@ import Testing
                 == "Waiting for your answer · ⌥⌘1–⌥⌘\(min(options.count, 9))"
         )
         #expect(card(nil, phase: .choosing(shortcuts: false)).header.status == "Waiting for your answer")
+        // A request that needs the user has its own tone, the sidebar's "needs you" orange, not the running accent.
+        #expect(card(nil, phase: .choosing(shortcuts: false)).header.tone == .attention)
+        #expect(card(nil, phase: .recording).header.tone == .neutral)
         #expect(
             card(nil, options: [options[0]], phase: .choosing(shortcuts: true)).header.status
                 == "Waiting for your answer · ⌥⌘1"

@@ -391,3 +391,84 @@ answer, which rejects stale and repeated answers, so two windows showing one car
 
 Docking input forms, an order between a pending form and a pending permission, and any app-side "always", which
 ADR-0042 addresses in its own, narrower way.
+
+## Amendment (2026-11-07): a quieter transcript, and the work in view
+
+- Status: Proposed, for the owner's acceptance. Until it lands, the transcript, inspector and composer text above
+  describes the code.
+- Related: [0007](0007-transcript-rendering.md), [0026](0026-app-wide-session-manager.md) (amendment),
+  [0046](0046-session-board-and-menu-bar.md)
+
+### Context
+
+Two things the protocol sends are reduced into `TranscriptState` and shown nowhere: the agent's **plan**
+(`session/update` `plan`, replaced whole on each update) and its **context usage** (`usage_update`: tokens used, the
+window's size, and a cost when the agent knows one). Both are agent-agnostic and both answer the question the window
+exists for, what the agent is doing and how much room it has left.
+
+Two things the transcript shows are louder than they are worth. **Thoughts** stream in full at 65 % opacity under a
+`Thinking` caption; a long turn is mostly thinking, so the reader scrolls through reasoning to find the answer. **User
+messages** are right-aligned bubbles at most 80 % of the column wide, copied from T3 Code; a prompt with a pasted
+stack trace or a code block then wraps in a narrow box on the right while the agent's reply with the same code sits
+on the left, and the eye has to change margin at every turn. The bubble was chosen over role labels so that turns are
+visible at a glance; a tinted block does that too, without the narrowing.
+
+### Decision
+
+**User messages are left-aligned blocks.** A user message fills the column's width, keeps the left margin of the
+agent's text, and sits on a tinted rounded rectangle (`.quaternary`, the corner radius of the tool cards) with no
+label. Attachments stay chips inside the block. The accessibility label still begins with `You`. Where the decision
+above says "right-aligned bubbles at most 80 % of the column wide", read "left-aligned tinted blocks", and in *Visual
+language* the user bubble becomes the user block.
+
+**Thoughts are collapsed.** A thought is one row with a disclosure, like a tool card: while streaming it reads
+`Thinking…` followed by the last line of the thought so far, in secondary text; when the agent moves on it reads
+`Thought for 12s`, the time from the first thought chunk to the next item of another kind, taken from event timestamps,
+so history shows it too. Consecutive thoughts fold into one row, as consecutive tool calls do, with the summed time.
+Expansion is remembered per row and survives streamed updates; Find (#194) searches the full text and expands the row
+it steps to; Copy returns the full text. Where the decision above says "thoughts stay secondary text", read "thoughts
+are collapsed rows".
+
+**The plan is in the inspector and in the status line.**
+
+- A **Plan** section leads the inspector while the session has a plan: one row per entry, a checkmark for `completed`,
+  a filled dot for `in_progress`, an empty circle for `pending`, the text in full and dimmed when completed; the
+  priority is in the row's tooltip and accessibility label, not drawn. Each update replaces the list, as the protocol
+  defines. When the turn ends, the section stays and collapses to its header, `Plan · 7 of 7`; it is gone when the next
+  turn brings no plan.
+- The **status line** reads `Working for 1m 12s · 3 of 7 · Writing tests` while an entry is in progress, counting
+  completed entries; `Working for 1m 12s · 3 of 7 done` while none is; and `Working for 1m 12s` without a plan.
+  `Waiting for you` is unchanged.
+- The **sidebar reason** of a Working row, `none` in the table above, becomes the in-progress entry's text while there
+  is one, truncated like any reason. The board's cards (ADR-0046) show the same.
+
+**Context usage is in the inspector, and in the composer when it matters.**
+
+- The **Agent** section shows `Context 84k of 200k · 42 %` and, when the update carries a cost, `Cost 1.23 USD` in the
+  currency the agent names, formatted by the system. Nothing is shown before the first `usage_update`.
+- The composer's bottom row shows a small ring with the percentage, beside the config pills, only from **70 %**, and
+  in the attention color from 90 %. Its tooltip and accessibility label carry the numbers. Below 70 % the row is as
+  today: the number is not actionable yet, and the row is the busiest in the window.
+
+### Alternatives
+
+- **Keep the bubbles and widen them to 100 %.** The smaller change, but the right alignment is the problem, not only
+  the width.
+- **A block with a `You` caption.** Clearer in a screenshot; the tint already says it, and ADR-0039 removed the labels
+  for a reason.
+- **Thoughts expanded while streaming, collapsed afterwards.** Shows the reasoning as it comes, at the price of a
+  transcript that rearranges itself at each answer and more work for follow-bottom.
+- **A plan card in the transcript**, live-updating at the end of the turn, as terminal agents draw it. Visible without
+  the inspector, but it moves while the reader reads and touches `TranscriptTable` and follow-bottom, which the
+  inspector does not.
+- **The ring always.** Familiar from editors, but a permanent element for a number that rarely matters.
+
+### Consequences and risks
+
+- `TranscriptTable` gains the thought row kind with a disclosure and a fold of consecutive thoughts; the row model
+  change needs the Rendering Lab streaming scenarios rerun, with the owner's approval, as #155 did.
+- `LiveTranscriptSource` records the first chunk's time per thought run; events already carry timestamps.
+- The status line, the sidebar reason and the board read `transcript.plan`; a pure function picks the in-progress
+  entry and the counts, tested per state.
+- The ring and the Agent rows read `transcript.usage`; an agent that never sends it changes nothing.
+- The screenshots of the bubble transcript become outdated and are replaced by the verification issue.

@@ -530,6 +530,56 @@ Pitfalls known so far:
 - PLAN's earlier note that the draft cannot offer model or mode, and ARCHITECTURE.md's notes marked `Accepted, not yet implemented`, are
   replaced when the implementation lands.
 
+## M16: Multi-agent workflow (2026-11-07)
+
+Tracking issue #220. After M15, the owner reviewed the codebase and the open issues (with Claude Fable, 2026-11-07)
+and chose a second set of UI/UX changes, several of them against accepted ADRs. Each is a proposed decision first;
+implementation starts once the owner accepts it. The documentation lands in one pull request (`docs/m16-adrs`).
+
+| Decision | Where | Status |
+|---|---|---|
+| Plan in the inspector and the working line; context usage and cost; collapsed thoughts; user messages as left-aligned blocks | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Proposed |
+| The first message shows at once while the session starts | [ADR-0040](adr/0040-composer-first-session-start.md), amendment of 2026-11-07 | Proposed |
+| Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Proposed |
+| Delete and archive saved sessions | [ADR-0044](adr/0044-delete-and-archive-sessions.md) | Proposed |
+| Push after merge; pull requests with `gh`, the session stays live | [ADR-0045](adr/0045-push-and-pull-requests.md) | Proposed |
+| Session board on an Overview row (⌘0), a menu bar item, ⌘1…⌘9 | [ADR-0046](adr/0046-session-board-and-menu-bar.md) | Proposed |
+
+Not adopted: an inline first-run flow in the draft (stays with #45). ADR-0042 stays deferred.
+
+Issues, in order. Within a wave the issues are independent apart from the listed dependencies.
+
+| Order | Issue | Decision | Tier | Depends on |
+|---|---|---|---|---|
+| 1 | #221 Plan: inspector section, `PlanProgress` in Core, working line text, Working-row reason, MockAgent scenario | Transcript | `agent:light` | — |
+| 1 | #222 Context usage and cost: Agent section rows, composer ring from 70 %, MockAgent scenario | Transcript | `agent:light` | — |
+| 1 | #224 User messages as left-aligned blocks; `bubbleWidth` goes | Transcript | `agent:light` | — |
+| 1 | #225 First message shows at once: one-item transcript source, `Starting <agent> in …` line | Draft | `agent:light` | #224 |
+| 1 | #226 ⌘1…⌘9: Switch to Session submenu over the filtered sidebar | Keyboard | `agent:light` | — |
+| 1 | #223 Collapsed thoughts: disclosure row, fold of consecutive thoughts, Rendering Lab rerun with the owner's approval | Transcript | `agent:strong` | #224 |
+| 2 | #227 Session board: `WindowTarget.board`, Overview row, cards, answers with the Open-first rule, arming | Board | `agent:strong` | #221, #206 (operation line, arming) |
+| 2 | #228 Menu bar item: `MenuBarExtra`, count, sessions, permission submenu | Board | `agent:light` | #227 |
+| 3 | #229 Sessions in the project folder: checkout menu, in-place `prepare`, Changes since start, Merge and Discard disabled | Workflow | `agent:strong` | — |
+| 3 | #230 Delete a saved session: `deleteSession`, worktree removal first, confirmation, windows | Workflow | `agent:strong` | #227 (landing place; the draft until then) |
+| 3 | #231 Archive: `archivedAt`, Settled filter, search reason, Continue reset | Workflow | `agent:light` | — |
+| 3 | #232 Push after merge: upstream detection, checkbox, remembered choice, failure after a successful merge | Workflow | `agent:strong` | — |
+| 3 | #233 Pull request with `gh`: availability, sheet, push and `gh pr create`, `pullRequestOpened`, inspector link and Push | Workflow | `agent:strong` | #208, #232 |
+| 4 | #234 Verify in the running app and refresh screenshots | — | `agent:light` | all |
+
+Pitfalls known so far:
+
+- `RootView.swift` and `TranscriptTable.swift` are shared with the open M15 work (#206, #207, #209, #210, #213):
+  M15 merges first, M16 rebases; within M16, merge in table order.
+- #223 changes the row model again after #155 and #209; the streaming benchmarks are the gate, and the owner approves
+  the workload before a run.
+- #229 and #232/#233 touch safety paths (`prepare`, the removal check, the merge). Real-repository tests, a local bare
+  remote for pushes, and a fake `gh` on PATH; never run these checks against this repository.
+- #230 is the first operation that removes events; the store needs cascade or explicit deletes for every table that
+  references a session, and a test that lists the tables so a new one cannot be forgotten.
+- A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
+- #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
+  warning that they stay forever.
+
 ## Next steps
 
 The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI

@@ -121,6 +121,11 @@ and offers nothing.
 > **Accepted, not yet implemented (#195):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) adds cached mode and model
 > hints to the draft, applied before the session record is created; a mode only when picked in the draft. This section describes the code as it is.
 
+> **Proposed (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md) turns the Checkout label into a menu for Git
+> projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default), and
+> [ADR-0040's second amendment](adr/0040-composer-first-session-start.md) shows the held first message as a user block
+> with `Starting <agent>…` instead of the empty `Starting session…` view.
+
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
 exits during `initialize`) removes the worktree and branch its `LiveSession` made (#176). The record is written
@@ -193,6 +198,12 @@ Copy button is shown only while the pointer is over the row (`NSTrackingArea`, `
 right-aligned label under the bubble. Agent messages have no role label; thoughts keep a `Thinking` caption and are
 dimmed. Tool, permission and input rows keep their headers. `role` stays in the model, and Copy returns a row's
 Markdown without it.
+
+> **Proposed (M16):** [ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md) makes user messages
+> left-aligned tinted blocks of the column's width, collapses thoughts into one disclosure row (`Thinking… <last
+> line>`, then `Thought for 12s`, consecutive thoughts folded), adds the plan step to the working line (`Working for
+> 1m 12s · 3 of 7 · Writing tests`), a Plan section and context usage to the inspector, and a context ring to the
+> composer from 70 %. This section describes the code as it is.
 
 The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
 `TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
@@ -335,6 +346,13 @@ The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` wit
 > **Accepted, not yet implemented (#195):** *Done* clears when the finished result is on screen, not when the window is
 > key ([ADR-0026's amendment](adr/0026-app-wide-session-manager.md)).
 
+> **Proposed (M16):** [ADR-0046](adr/0046-session-board-and-menu-bar.md) adds an *Overview* row above the sections
+> (⌘0; a board of live-session cards that can answer requests without a diff), a `MenuBarExtra` with the Needs You
+> count and the sessions, and ⌘1…⌘9 for the first nine rows of Needs You and Working. [ADR-0044](adr/0044-delete-and-archive-sessions.md)
+> adds Delete Session… and Archive Session for saved sessions; archived sessions leave Settled and show up in search
+> with the reason `Archived`. A Working row's reason becomes the plan's in-progress step
+> ([ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md)).
+
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
 has seen; a window marks the displayed session seen while it is the key window. A live session is failed
@@ -466,6 +484,14 @@ symlink. `UnifiedDiff` runs off the main actor and the existing native Markdown 
 and word highlights. Session replacement or window closure dismisses review and cancels its view tasks.
 *Merge…* in review and *Merge into <base>…* in the Session menu open the merge sheet, above the review
 when it is shown.
+
+> **Proposed (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds a `Push <base> to <remote>` checkbox to the
+> merge sheet (when the base has an upstream; the last choice is remembered) and *Open Pull Request…* through `gh`
+> (push of the session branch, `gh pr create`, a `pullRequestOpened` event, the link and a Push button in the
+> inspector; the session stays live and local Merge is hidden). [ADR-0043](adr/0043-sessions-in-the-project-folder.md)
+> adds sessions that run in a Git project's own folder: `baseRevision` is `HEAD` at start, `baseBranch` the checked-out
+> branch, Changes and Review compare with that revision, and Merge and Discard are not offered; the in-place form is
+> recognised by the removal check's location test.
 
 ### Transcript paths and Open in Editor
 

@@ -172,3 +172,34 @@ as hints once the agent has reported them in an earlier session; effort cannot.
 
 Hints for effort or other categories, a per-project cache, and letting a mode be chosen in the draft for an agent never
 run before.
+
+## Amendment (2026-11-07): the first message shows at once
+
+- Status: Proposed, for the owner's acceptance. Until it lands, "Start on Send" above describes the code.
+- Related: [0039](0039-t3-style-window-layout.md), [0043](0043-sessions-in-the-project-folder.md)
+
+### Context
+
+Send holds the draft in memory (`LiveSession.initialPrompt`) and the window shows `Starting session…` in an empty
+detail column until the agent is up and the prompt is submitted; with an install check, a sign-in and a worktree to
+create, that is several seconds in which the message the user just wrote is nowhere on screen. A failed start brings
+it back to the draft, so nothing is lost, but the window reads as if nothing happened.
+
+### Decision
+
+From Send until the first idle state, the detail column shows the **transcript layout with the held message** as its
+only row, a user block as ADR-0039's amendment draws it, with its attachments, followed by the status line
+`Starting <agent>…` and the compact card ADR-0039 gives sessions that cannot take a prompt (`Starting…`, no Continue).
+The row is the held prompt rendered by the same table from a one-item source, so when the session's own transcript
+replaces it, the message stays where it was and the layout does not jump.
+
+- If the agent asks to sign in, the sign-in panel replaces the card as today; the message stays above it.
+- If startup fails or is cancelled, the draft returns with the text and the error, as today.
+- The Checkout chip's choice (ADR-0043) is shown in the status line while starting: `Starting <agent> in a new
+  worktree…` or `Starting <agent> in the project folder…`.
+
+### Consequences
+
+- `RootView` shows the held prompt instead of `ContentUnavailableView` while `owner.isStarting`; `LiveTranscript`
+  gains a source for a draft, or `TranscriptTable` is fed a one-item `TranscriptSource`.
+- The window title is the draft's first line already (ADR-0039 titles); nothing changes there.

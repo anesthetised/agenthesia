@@ -407,6 +407,13 @@ Wave 2:
   and dark): one chevron on Send options, the Review symbol and `Name` rows in the inspector, aligned icons in an
   expanded group with and without a disclosure, `made 1 edit` in a group summary, and the sign-in panel in the column
   with Review disabled until signed in. Not checked: the Agent row's label and VoiceOver.
+- #205: the diff line model and the quote builder for the review pane (ADR-0041), without UI. `UnifiedDiff.parse`
+  (`Rendering`) turns `make`'s output into `DiffLine`s, one per text line, with the old and new number and, for a removed
+  line, the new line that follows it. `DiffQuote.make` (`AgenthesiaUI`, next to `LiveTranscriptSource.fenced`) builds the
+  Ask agent quote: new-file ranges (`7-13, 25-29`), `42 (removed)` for lines with nothing kept beside them, the lines in
+  a `diff` fence, and the `(from an earlier version…)` note. Hunk headers stay out of the quote. Tests: every line
+  kind, several hunks, a new and a deleted file, a missing final newline, and quotes within a hunk, across hunks and of
+  removed lines only. Not wired to any view yet (#213, #215).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

@@ -79,9 +79,9 @@ each live transcript, while rendering cost stays bounded by the displayed rows. 
 permission, the Dock badge and the quit confirmation are new system integrations tested through
 injected seams; the actual system prompts are checked by hand.
 
-## Amendment (2026-11-02, proposed): Done means the result was on screen
+## Amendment (2026-11-02): Done means the result was on screen
 
-- Status: Proposed (#195). Until the owner accepts it, the *done* mark above stands.
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the *done* mark above describes the code.
 - Related: [0039](0039-t3-style-window-layout.md), [0007](0007-transcript-rendering.md)
 
 ### Context

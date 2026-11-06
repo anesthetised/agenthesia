@@ -52,8 +52,8 @@ before implementation.
   (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
 - M15 (UI/UX redesign, #144) is planned under [ADR-0039](adr/0039-t3-style-window-layout.md) and
   [ADR-0040](adr/0040-composer-first-session-start.md); see the M15 section below.
-- M15 follow-ups are proposed as ADR amendments and two new ADRs (#195), awaiting the owner; see the end of the M15
-  section.
+- M15 follow-ups are accepted as ADR amendments and ADR-0041 (#195, 2026-11-06); ADR-0042 is deferred. See the end of
+  the M15 section.
 
 ## Previous batch: session interactions (merged)
 
@@ -411,10 +411,10 @@ Wave 1 status (2026-10-29):
 - #149 implemented: `SessionWorkspace.changeStats` and `SessionFiles.changeStats` count added and removed lines
   against the session base; covered by temporary-repository tests, no UI yet (#150).
 
-### M15 follow-ups: proposed decisions (#195, 2026-11-02)
+### M15 follow-ups: accepted decisions (#195, 2026-11-02)
 
-Two UI/UX reviews after M15 proposed follow-ups that the owner accepted. Each is recorded as `Proposed`, and nothing
-below starts before the owner accepts its decision. **The issues are not opened yet**; they follow acceptance, with the
+Two UI/UX reviews after M15 proposed follow-ups that the owner accepted. The owner accepted the amendments and ADR-0041
+on 2026-11-06; ADR-0042 stays `Proposed`, deferred. **The issues are not opened yet**; they are opened next, with the
 milestone `M15 — UI/UX redesign` and the tier shown.
 
 | Decision | Where |
@@ -458,13 +458,12 @@ Pitfalls known so far:
 - `RootView.swift` and `TranscriptTable.swift` are shared by the docked card, the viewport work, the review pane and #194:
   merge in table order and rebase.
 - The owner decided on 2026-11-02: branch names become real and stored, which reverses a line of ADR-0032 and touches
-  the removal check; a mode is applied only when chosen in the draft; ADR-0042 is deferred. The owner reads the
-  amendments before they are accepted.
+  the removal check; a mode is applied only when chosen in the draft; ADR-0042 is deferred.
 - ADR-0041 replaces `MarkdownPreview` in review with its own diff view, so large diffs need a look, and a benchmark if
   they turn out slower.
 - MockAgent needs commands for several pending requests and for chosen tool kinds and locations; otherwise those paths
   can be checked only in hosted views.
-- PLAN's earlier note that the draft cannot offer model or mode, and ARCHITECTURE.md's notes marked `Proposed`, are
+- PLAN's earlier note that the draft cannot offer model or mode, and ARCHITECTURE.md's notes marked `Accepted, not yet implemented`, are
   replaced when the implementation lands.
 
 ## Next steps

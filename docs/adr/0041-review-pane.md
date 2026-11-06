@@ -1,9 +1,9 @@
 # 0041. Review as a pane, with Ask agent
 
-- Status: Proposed (#195)
+- Status: Accepted (#195, 2026-11-06)
 - Date: 2026-11-02
 - Decider: Project owner
-- Would supersede, once accepted: the native review sheet described in ARCHITECTURE.md (no ADR fixed the sheet;
+- Supersedes: the native review sheet described in ARCHITECTURE.md (no ADR fixed the sheet;
   [0032](0032-worktree-merge-and-discard.md) decides what review compares, which stays)
 - Related: [0039](0039-t3-style-window-layout.md), [0018](0018-composer-attachments.md),
   [0010](0010-prompt-queue-and-steering.md), [0024](0024-changed-files-session-base.md)

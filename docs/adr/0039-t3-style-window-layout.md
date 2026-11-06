@@ -138,9 +138,9 @@ grows upward with a list of its own, at most 45 % of the sidebar's height. It st
 rows is selected, and Previous and Next Session keep the order Needs You, Working, Settled. The search
 field of #148 will sit above the list.
 
-## Amendment (2026-11-02, proposed): the sidebar row says why
+## Amendment (2026-11-02): the sidebar row says why
 
-- Status: Proposed (#195). Until the owner accepts it, the sidebar text above stands.
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the sidebar text above describes the code.
 
 ### Context
 
@@ -217,10 +217,10 @@ bug; Needs You and Working keep start order, so rows do not jump while the user 
 Whether the Dock badge or notifications reuse the reason text, a per-tool-call count in the reason, and the color
 of "needs you" (#190).
 
-## Amendment (2026-11-02, proposed): the inspector leads with the work
+## Amendment (2026-11-02): the inspector leads with the work
 
-- Status: Proposed (#195). Until the owner accepts it, the inspector text above stands.
-- Would supersede, once accepted: "generated branch names are not adopted" in
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the inspector text above describes the code.
+- Supersedes: "generated branch names are not adopted" in
   [0032](0032-worktree-merge-and-discard.md), and the matching removal check described there.
 
 ### Context
@@ -307,9 +307,9 @@ For the layout:
 A manual branch name, pushing or pull requests (ADR-0032), and hiding Discard when there are no changes: it remains
 useful then, to clean up.
 
-## Amendment (2026-11-02, proposed): a pending permission docks above the composer
+## Amendment (2026-11-02): a pending permission docks above the composer
 
-- Status: Proposed (#195). Until the owner accepts it, the transcript and composer text above stands.
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the transcript and composer text above describes the code.
 
 ### Context
 

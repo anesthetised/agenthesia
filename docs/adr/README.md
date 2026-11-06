@@ -1,7 +1,8 @@
 # Architecture Decision Records
 
 Each ADR records one decision: its context, the decision itself and its consequences.
-ADRs are immutable once accepted; to change a decision, write a new ADR that supersedes the old one.
+ADRs are immutable once accepted; to change a decision, write a new ADR that supersedes the old one. A narrow
+change may instead be a dated amendment at the end of the ADR, with its own status (as in ADR-0039).
 
 | # | Title | Status |
 |---|---|---|
@@ -30,22 +31,22 @@ ADRs are immutable once accepted; to change a decision, write a new ADR that sup
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted; base pin settled by [0032](0032-worktree-merge-and-discard.md) |
 | [0025](0025-transcript-paths-and-editor-handoff.md) | Transcript paths and editor handoff | Accepted |
-| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted; sidebar superseded by [0039](0039-t3-style-window-layout.md); launch form superseded by [0040](0040-composer-first-session-start.md); amendment proposed (Done mark) |
+| [0026](0026-app-wide-session-manager.md) | App-wide session manager | Accepted; sidebar superseded by [0039](0039-t3-style-window-layout.md); launch form superseded by [0040](0040-composer-first-session-start.md); amendment (Done mark) |
 | [0027](0027-recoverable-prompt-errors.md) | Keep sessions alive after prompt error responses | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0028](0028-empty-draft-sends-queue.md) | Send the queue when Command-Return has no draft | Accepted; empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md) |
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
-| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming would change with a proposed amendment of [0039](0039-t3-style-window-layout.md) |
+| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md) |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 | [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |
 | [0036](0036-agent-settings-and-installed-sessions.md) | Agent settings and sessions of installed agents | Accepted |
 | [0037](0037-local-agents.md) | Local agents | Accepted |
 | [0038](0038-pre-session-sign-in.md) | Sign in before a session | Accepted |
-| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amendments proposed (sidebar row, inspector, docked permission) |
-| [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amendment proposed (mode and model hints) |
-| [0041](0041-review-pane.md) | Review as a pane, with Ask agent | Proposed |
+| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amended (sidebar row, inspector, docked permission) |
+| [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amended (mode and model hints) |
+| [0041](0041-review-pane.md) | Review as a pane, with Ask agent | Accepted |
 | [0042](0042-allow-edits-in-this-worktree.md) | Allow edits in this worktree | Proposed, deferred |
 
 Template: Status, Date, Context, Decision, Consequences.

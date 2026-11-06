@@ -72,9 +72,9 @@ that project selected. Existing session navigation is unchanged.
   before `session/new`, the draft can show them.
 - Opening a notification or restoring a window is unaffected: they select sessions, not drafts.
 
-## Amendment (2026-11-02, proposed): the draft shows the last mode and model as hints
+## Amendment (2026-11-02): the draft shows the last mode and model as hints
 
-- Status: Proposed (#195). Until the owner accepts it, "the pill menus are absent" above stands.
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, "the pill menus are absent" above describes the code.
 - Related: [0019](0019-session-config-controls.md), [0039](0039-t3-style-window-layout.md),
   [0042](0042-allow-edits-in-this-worktree.md)
 

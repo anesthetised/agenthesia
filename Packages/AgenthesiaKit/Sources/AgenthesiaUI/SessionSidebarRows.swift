@@ -22,9 +22,9 @@ struct SessionSidebarRows: View {
         return SessionRow(
             title: row.title,
             project: row.project?.name,
-            outcome: session.flatMap { model.outcome(of: $0.id) },
+            reason: owner.reason ?? session.flatMap { model.outcome(of: $0.id) }?.label,
             activity: owner.activity,
-            started: session?.createdAt
+            lastActivity: row.lastActivity
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .contextMenu {
@@ -38,9 +38,9 @@ struct SessionSidebarRows: View {
         SessionRow(
             title: row.title,
             project: row.project?.name,
-            outcome: model.outcomes[record.id],
+            reason: model.outcomes[record.id]?.label,
             activity: nil,
-            started: record.createdAt
+            lastActivity: row.lastActivity
         )
         .tag(AnyHashable(record.id))
         .contextMenu {

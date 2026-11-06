@@ -28,6 +28,8 @@ import SwiftUI
     var restored: SessionController?
     /// Sessions whose worktree was merged or discarded, read with history (ADR-0032).
     var outcomes: [UUID: WorktreeOutcome] = [:]
+    /// The time of each saved session's last event, read with history (ADR-0039).
+    var lastActivity: [UUID: Date] = [:]
     /// Merged sessions whose worktree removal failed, found at each history refresh rather than on every render.
     var leftoverWorktrees: Set<UUID> = []
     /// The discard waiting for confirmation.
@@ -158,7 +160,13 @@ import SwiftUI
     /// Counts the requests (⌥⌘F) to focus the sidebar's search field.
     var searchFocusRequests = 0
     var sidebar: SessionSidebar {
-        SessionSidebar(projects: projects, history: history, owners: sessions.owners, query: sidebarQuery)
+        SessionSidebar(
+            projects: projects,
+            history: history,
+            owners: sessions.owners,
+            activity: lastActivity,
+            query: sidebarQuery
+        )
     }
 
     var sidebarSelection: AnyHashable? {
@@ -416,7 +424,7 @@ import SwiftUI
         do {
             history = try await library.history()
             projects = try await library.projects()
-            outcomes = try await library.worktreeOutcomes()
+            (outcomes, lastActivity) = try await library.lastEvents()
             leftoverWorktrees = Set(
                 history.filter {
                     if case .merged = outcomes[$0.id] {

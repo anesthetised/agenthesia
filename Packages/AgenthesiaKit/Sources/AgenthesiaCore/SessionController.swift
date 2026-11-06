@@ -18,6 +18,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         public let options: [ACP.PermissionOption]
         /// What the agent wants to do, as named when it asked.
         public let toolTitle: String?
+        /// ``toolTitle``, or else the title the agent reported when it announced the call; the sidebar's reason.
+        public let callTitle: String?
     }
 
     /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
@@ -46,6 +48,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public var queuedPrompts: [QueuedPrompt] { transcript.queuedPrompts }
     public private(set) var queuePaused = false
+    /// The minute of the last event written to the log (ADR-0039), for the sidebar's time. It changes at most
+    /// once a minute, because `enqueue` runs for every streamed batch and the row has no use for finer resolution.
+    public private(set) var lastActivity: Date?
     /// Turns that ended on their own, not by Stop; the sidebar compares it with what the user has seen.
     public private(set) var completedTurns = 0
     public private(set) var status: Status = .ready {
@@ -264,6 +269,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             let page = try await store.events(in: id, after: controller.reduced.sequence)
             guard !page.isEmpty else { break }
             for event in page { try controller.reduced.apply(event) }
+            if let last = page.last { controller.noteActivity(at: last.event.timestamp) }
         }
         controller.queuePaused = !controller.reduced.queuedPrompts.isEmpty || controller.reduced.queuePaused
         controller.publishTranscript()
@@ -774,7 +780,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             return .cancelled
         }
         if status == .running, !Task.isCancelled, permissions[id]?.response == nil {
-            pendingPermissions.append(PendingPermission(id: id, options: options, toolTitle: toolCall.title))
+            // The request may name the call only by id; the log has the title the agent reported earlier.
+            let reported = reduced.items.last(where: { $0.permission?.requestID == id })?.permission?.toolCall.title
+            let callTitle = toolCall.title ?? reported.flatMap { $0.isEmpty ? nil : $0 }
+            pendingPermissions.append(
+                PendingPermission(id: id, options: options, toolTitle: toolCall.title, callTitle: callTitle)
+            )
             publishTranscript()
             await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
@@ -969,11 +980,19 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 throw error
             }
             for event in stored { try self.reduced.apply(event) }
+            if let last = stored.last { self.noteActivity(at: last.event.timestamp) }
             await self.adoptTitle()
             if self.status == .failed || self.status == .closed { self.publishTranscript() }
         }
         tail = task
         return task
+    }
+
+    func noteActivity(at date: Date) {
+        let minute = Date(
+            timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60
+        )
+        if minute != lastActivity { lastActivity = minute }
     }
 
     /// The agent's title wins; an untitled session is named after its first accepted prompt, once. The title is

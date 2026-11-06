@@ -46,7 +46,13 @@ public actor SessionLibrary {
 
     /// Sessions whose worktree was merged or discarded; the outcome is always a session's last event (ADR-0032).
     public func worktreeOutcomes() async throws -> [UUID: WorktreeOutcome] {
-        try await store().lastEvents().compactMapValues(WorktreeOutcome.init(lastEvent:))
+        try await lastEvents().outcomes
+    }
+
+    /// The worktree outcomes and the time of each session's last event (ADR-0039), from one query.
+    public func lastEvents() async throws -> (outcomes: [UUID: WorktreeOutcome], activity: [UUID: Date]) {
+        let events = try await store().lastEvents()
+        return (events.compactMapValues(WorktreeOutcome.init(lastEvent:)), events.mapValues(\.event.timestamp))
     }
 
     /// Appends to a session without a live owner; the caller makes sure none writes to it meanwhile.

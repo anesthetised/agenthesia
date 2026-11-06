@@ -205,4 +205,129 @@ import Testing
         #expect(SessionSidebar(projects: [], history: [], owners: [starting], query: "beta").rows.isEmpty)
         await manager.closeAll()
     }
+
+    @Test func liveReasonsFollowTheSessionThroughATurn() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        #expect(owner.reason == "Starting")
+        await owner.startup?.value
+        #expect(owner.reason == nil)
+        await owner.send("hello")
+        #expect(owner.reason == "Finished")
+        owner.markSeen()
+        #expect(owner.reason == nil)
+
+        // A rejected prompt stays idle, out of Needs You, and says so until the next turn.
+        await owner.send("fail")
+        #expect(owner.activity == .idle && owner.reason == "Prompt failed")
+        await owner.send("hello")
+        #expect(owner.reason == "Finished")
+        owner.markSeen()
+
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+        #expect(owner.reason == nil)
+        await owner.stop()
+        await turn.value
+        // Stop pauses the queue, but an empty queue has nothing to wait for.
+        #expect(owner.reason == nil)
+
+        await owner.send("exit")
+        while controller.status != .closed { await Task.yield() }
+        #expect(owner.reason == "Failed")
+        await manager.closeAll()
+    }
+
+    @Test func aPendingPermissionNamesItsTool() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("write note.txt hi") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        #expect(owner.activity == .needsInput && owner.reason == "Allow? Write note.txt")
+        await owner.stop()
+        await turn.value
+        await manager.closeAll()
+    }
+
+    @Test func theControllerRemembersTheMinuteOfItsLastEvent() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        await owner.send("hello")
+        let controller = try #require(owner.controller)
+        let activity = try #require(controller.lastActivity)
+        #expect(abs(activity.timeIntervalSinceNow) < 120)
+        #expect(activity.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 60) == 0)
+
+        // Later events of the same minute leave it alone; a later minute moves it.
+        controller.noteActivity(at: activity.addingTimeInterval(59))
+        #expect(controller.lastActivity == activity)
+        controller.noteActivity(at: activity.addingTimeInterval(61))
+        #expect(controller.lastActivity == activity.addingTimeInterval(60))
+        await manager.closeAll()
+    }
+
+    @Test func savedSessionsTakeTheirLastActivityFromTheLog() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        await owner.send("hello")
+        let record = try #require(owner.controller?.session)
+        let live = try #require(owner.controller?.lastActivity)
+        await manager.closeAll()
+
+        let (outcomes, activity) = try await manager.library.lastEvents()
+        #expect(outcomes.isEmpty)
+        let last = try #require(activity[record.id])
+        #expect(abs(last.timeIntervalSinceNow) < 120)
+        let restored = try await SessionController.history(id: record.id, store: manager.library.store())
+        #expect(restored.lastActivity != nil && abs(restored.lastActivity!.timeIntervalSince(live)) < 120)
+    }
+
+    @Test func settledSortsByLastActivityAndRowsReportIt() async throws {
+        let project = ProjectRecord(name: "Project", rootPath: "/p")
+        func saved(age: TimeInterval) -> SessionRecord {
+            SessionRecord(
+                projectID: project.id,
+                agentInstallID: UUID(),
+                workingDirectory: project.rootPath,
+                createdAt: Date(timeIntervalSinceNow: -age)
+            )
+        }
+        // `started` began first but was active last; `silent` has no events and sorts by its start.
+        let (started, middle, silent) = (saved(age: 900), saved(age: 600), saved(age: 300))
+        let activity = [started.id: Date(timeIntervalSinceNow: -10), middle.id: Date(timeIntervalSinceNow: -400)]
+        let sidebar = SessionSidebar(
+            projects: [project],
+            history: [middle, silent, started],
+            owners: [],
+            activity: activity
+        )
+        #expect(sidebar.rows.map(\.id) == [started, silent, middle].map { AnyHashable($0.id) })
+        #expect(sidebar.rows.map(\.lastActivity) == [activity[started.id], silent.createdAt, activity[middle.id]])
+        // Without the log the order is the start order, as before.
+        let plain = SessionSidebar(projects: [project], history: [started, middle, silent], owners: [])
+        #expect(plain.rows.map(\.id) == [silent, middle, started].map { AnyHashable($0.id) })
+    }
+
+    @Test func liveRowsShowTheControllersActivityOrFallBackToTheLog() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        // A starting session has no record yet.
+        #expect(SessionSidebar(projects: [], history: [], owners: [owner]).rows.first?.lastActivity == nil)
+        await owner.startup?.value
+        await owner.send("hello")
+        let controller = try #require(owner.controller)
+        let sidebar = SessionSidebar(projects: [], history: [], owners: [owner])
+        #expect(sidebar.rows.first?.lastActivity == controller.lastActivity)
+        await manager.closeAll()
+    }
 }

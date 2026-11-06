@@ -309,7 +309,8 @@ useful then, to clean up.
 
 ## Amendment (2026-11-02): a pending permission docks above the composer
 
-- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the transcript and composer text above describes the code.
+- Status: Accepted by the owner on 2026-11-06 (#195). The docked card is implemented in #206; the compact record in the
+  transcript, and the tool card hiding its diff while its request is pending, are #207.
 
 ### Context
 

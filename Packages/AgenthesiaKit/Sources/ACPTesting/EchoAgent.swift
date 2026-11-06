@@ -5,6 +5,8 @@ public import JSONRPC
 ///
 /// - `read <path>` reads a file through `fs/read_text_file` and echoes it.
 /// - `write <path> <text>` asks for permission, then writes through `fs/write_text_file`.
+/// - `writes <count> <text>` does the same for `note1.txt` … `note<count>.txt` at once, so up to nine
+///   requests are pending together.
 /// - `plan` reports a plan, `think` reports a thought.
 /// - `tools` streams a long answer while earlier tool calls change: an update before its call,
 ///   several calls, a failure, long output, and diff, terminal and unknown content. The test run reports
@@ -200,6 +202,11 @@ public final class EchoAgent: Sendable {
     static let commands: [ACP.AvailableCommand] = [
         .init(name: "read", description: "Read a file through the client", input: .init(hint: "path")),
         .init(name: "write", description: "Write a file after asking for permission", input: .init(hint: "path text")),
+        .init(
+            name: "writes",
+            description: "Write several files, asking for each permission at once",
+            input: .init(hint: "count text")
+        ),
         .init(name: "tools", description: "Report tool calls"),
         .init(name: "plan", description: "Report a plan"),
         .init(name: "think", description: "Report a thought"),
@@ -301,7 +308,7 @@ extension EchoAgent {
 
 extension EchoAgent {
     /// One prompt turn.
-    struct Turn {
+    struct Turn: Sendable {
         let request: ACP.V1.PromptRequest
         let connection: Connection
         let state: State
@@ -325,6 +332,16 @@ extension EchoAgent {
                 if try await write(path: words[1], content: words[2]) == .cancelled {
                     return .init(stopReason: .cancelled)
                 }
+            case "writes" where words.count >= 3:
+                let count = min(max(Int(words[1]) ?? 1, 1), 9)
+                let content = words[2]
+                let outcomes = try await withThrowingTaskGroup(of: ACP.PermissionOutcome.self) { group in
+                    for index in 1...count {
+                        group.addTask { try await write(path: "note\(index).txt", content: content) }
+                    }
+                    return try await group.reduce(into: []) { $0.append($1) }
+                }
+                if outcomes.contains(.cancelled) { return .init(stopReason: .cancelled) }
             case "tools":
                 return .init(stopReason: await tools())
             case "plan":

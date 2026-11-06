@@ -20,6 +20,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         public let toolTitle: String?
         /// ``toolTitle``, or else the title the agent reported when it announced the call; the sidebar's reason.
         public let callTitle: String?
+        /// The tool call as known when the agent asked, which the docked card shows (ADR-0039).
+        public let toolCall: ACP.ToolCall
     }
 
     /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
@@ -781,10 +783,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         }
         if status == .running, !Task.isCancelled, permissions[id]?.response == nil {
             // The request may name the call only by id; the log has the title the agent reported earlier.
-            let reported = reduced.items.last(where: { $0.permission?.requestID == id })?.permission?.toolCall.title
-            let callTitle = toolCall.title ?? reported.flatMap { $0.isEmpty ? nil : $0 }
+            let reported =
+                reduced.items.last(where: { $0.permission?.requestID == id })?.permission?.toolCall
+                ?? .init(toolCallId: toolCall.toolCallId, title: toolCall.title ?? "")
+            let callTitle = toolCall.title ?? (reported.title.isEmpty ? nil : reported.title)
             pendingPermissions.append(
-                PendingPermission(id: id, options: options, toolTitle: toolCall.title, callTitle: callTitle)
+                PendingPermission(
+                    id: id,
+                    options: options,
+                    toolTitle: toolCall.title,
+                    callTitle: callTitle,
+                    toolCall: reported
+                )
             )
             publishTranscript()
             await withTaskCancellationHandler {

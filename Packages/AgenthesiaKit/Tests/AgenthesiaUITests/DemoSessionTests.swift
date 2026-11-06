@@ -218,6 +218,25 @@ struct DemoSessionTests {
         session.stop()
     }
 
+    /// The docked permission card shrinks the clip view without changing the table (ADR-0039, amendment 2026-11-02).
+    @Test func aShrinkingClipViewKeepsTheLastLinesInView() async throws {
+        let session = DemoSession()
+        let token = try #require(session.begin("Hello"))
+        session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(session)
+        await nextMainTurn()
+        for height in [140.0, 300.0] {
+            controller.scroll.setFrameSize(NSSize(width: 600, height: height))
+            controller.scroll.layoutSubtreeIfNeeded()
+            await nextMainTurn()
+            #expect(abs(controller.scroll.contentView.bounds.maxY - controller.table.frame.height) < 1)
+        }
+        session.stop()
+    }
+
     @Test(arguments: [false, true])
     func sidebarWidthChangesKeepRowsAttachedAndReadable(completed: Bool) async throws {
         let session = DemoSession()

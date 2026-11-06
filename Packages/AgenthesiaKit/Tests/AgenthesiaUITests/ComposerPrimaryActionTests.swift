@@ -36,4 +36,20 @@ import Testing
         #expect([ComposerPrimaryAction.send, .queue, .save].allSatisfy { $0.symbol == "arrow.up" })
         #expect(ComposerPrimaryAction.queue.help.hasPrefix("Queue"))
     }
+
+    @Test func queueAndSaveShowTheirNameWhileSendAndStopStayRound() {
+        #expect(ComposerPrimaryAction.queue.showsTitle && ComposerPrimaryAction.save.showsTitle)
+        #expect(!ComposerPrimaryAction.send.showsTitle && !ComposerPrimaryAction.stop.showsTitle)
+    }
+
+    @Test func sendNowSaysItInterruptsOnlyWhileATurnIsActive() {
+        #expect(ComposerPrimaryAction.sendNowTitle(hasDraft: true, turnActive: false) == "Send Draft Now")
+        #expect(ComposerPrimaryAction.sendNowTitle(hasDraft: false, turnActive: false) == "Send Queue Now")
+        #expect(
+            ComposerPrimaryAction.sendNowTitle(hasDraft: true, turnActive: true) == "Send Draft Now (Interrupts Turn)"
+        )
+        #expect(
+            ComposerPrimaryAction.sendNowTitle(hasDraft: false, turnActive: true) == "Send Queue Now (Interrupts Turn)"
+        )
+    }
 }

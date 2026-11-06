@@ -351,7 +351,8 @@ public struct RootView: View {
                 onSubmit: submit,
                 attachmentsEditable: model.composer.editingQueueID == nil,
                 onRecall: recallQueuedPrompt,
-                onStop: { Task { await model.owner?.stop() } }
+                onStop: { Task { await model.owner?.stop() } },
+                focusRequests: model.composerFocusRequests
             )
             composerControls(session)
         }
@@ -375,15 +376,18 @@ public struct RootView: View {
                 .help("Attach files or folders (⇧⌘A)").disabled(model.composer.editingQueueID != nil || submitting)
             SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
             Spacer(minLength: 0)
+            let turnActive =
+                session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty
             let action = ComposerPrimaryAction(
-                turnActive: session.status == .running || session.status == .stopping
-                    || !session.pendingInputs.isEmpty,
+                turnActive: turnActive,
                 hasDraft: hasDraft,
                 editingQueued: model.composer.editingQueueID != nil,
                 idleWithEmptyQueue: session.status == .idle && session.queuedPrompts.isEmpty
             )
             Menu("Send options", systemImage: "chevron.down") {
-                Button(hasDraft ? "Send Draft Now" : "Send Queue Now") { submit(.now) }.keyboardShortcut(
+                Button(ComposerPrimaryAction.sendNowTitle(hasDraft: hasDraft, turnActive: turnActive)) {
+                    submit(.now)
+                }.keyboardShortcut(
                     .return,
                     modifiers: .command
                 )
@@ -398,11 +402,22 @@ public struct RootView: View {
                             || model.composer.editingQueueID != nil
                             || session.isChangingConfig
                     )
+                if model.canStop {
+                    Divider()
+                    Button("Stop Turn") { Task { await model.stop() } }
+                }
             }.labelStyle(.iconOnly).menuStyle(.borderlessButton).fixedSize()
-            Button(action.title, systemImage: action.symbol) {
+            Button {
                 if action == .stop { Task { await model.owner?.stop() } } else { send() }
+            } label: {
+                if action.showsTitle {
+                    Label(action.title, systemImage: action.symbol)
+                } else {
+                    Label(action.title, systemImage: action.symbol).labelStyle(.iconOnly)
+                }
             }
-            .labelStyle(.iconOnly).buttonStyle(.borderedProminent).buttonBorderShape(.circle)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(action.showsTitle ? .capsule : .circle)
             .help(action.help)
             .disabled(
                 action == .stop

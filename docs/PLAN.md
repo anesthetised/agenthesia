@@ -388,6 +388,14 @@ Wave 2:
   an agent that exited, and Continue of a saved session that the agent no longer knows. That check removed Retry, which
   repeated the Continue button above it, and the no-agent line, which showed beside a chosen custom command and doubled
   the banner's Manage Agents. Not checked: VoiceOver, the config error and the `-32000` case.
+- #193: Queue and Save show their name beside the arrow in a capsule button, Send and Stop stay round; the Send options
+  menu says "(Interrupts Turn)" on Send Now while a turn runs and lists Stop Turn; Session → Focus Composer (⌘L) moves
+  keyboard focus to the composer's text from the transcript, the sidebar and the inspector. The claim that Stop is
+  missing from the menu while a draft exists did not hold: Session → Stop and ⌘. only depend on a running turn. Tests:
+  the action's labels, the window model's request counter and a hosted `RootView` that takes focus away and gets it
+  back. Running app (scripted, MockAgent, isolated home, light and dark): the Queue capsule while a permission waits, the
+  Send options items during a turn, and ⌘L from the sidebar and the transcript. Not checked: Save while editing a queued
+  message, ⌘L from the inspector or a text field in the file pane, ⌘. with a draft, and VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

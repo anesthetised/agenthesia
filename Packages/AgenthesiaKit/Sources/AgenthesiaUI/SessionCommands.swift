@@ -43,6 +43,9 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model?.canResumeQueue != true)
             Divider()
+            Button("Focus Composer") { model?.focusComposer() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(model?.canFocusComposer != true)
             Button("Search Sessions") { model?.searchFocusRequests += 1 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(model == nil)

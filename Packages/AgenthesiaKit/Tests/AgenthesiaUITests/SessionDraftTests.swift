@@ -305,6 +305,57 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func focusComposerNeedsTheComposerCardAndCountsRequests() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        model.focusComposer()
+        #expect(!model.canFocusComposer && model.composerFocusRequests == 0)
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        #expect(model.canFocusComposer)
+        model.focusComposer()
+        model.focusComposer()
+        #expect(model.composerFocusRequests == 2)
+        model.showingSetup = true
+        #expect(!model.canFocusComposer)
+        model.focusComposer()
+        #expect(model.composerFocusRequests == 2)
+        await fixture.remove()
+    }
+
+    @Test func focusComposerMovesKeyboardFocusBackToTheText() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        _ = NSApplication.shared
+        let view = NSHostingView(rootView: RootView(model: model))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        func composer() -> NSTextView? {
+            func find(_ view: NSView) -> NSTextView? {
+                if let text = view as? FileTextView { return text }
+                return view.subviews.lazy.compactMap(find).first
+            }
+            return find(view)
+        }
+        try await waitUntil { composer() != nil }
+        let text = try #require(composer())
+        window.makeFirstResponder(nil)
+        #expect(window.firstResponder !== text)
+        model.focusComposer()
+        try await waitUntil { window.firstResponder === text }
+        await fixture.remove()
+    }
+
     @Test func sendStartsTheSessionWithTheDraftAndClearsIt() async throws {
         let fixture = try Fixture()
         let model = fixture.model

@@ -667,6 +667,10 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #231 (archive) landed: migration `v6-session-archived-at`, `PersistenceStore.setArchived`, the Settled filter and
+  the `Archived` search reason, Previous/Next skipping archived rows, the Archive/Unarchive menu items and the Continue
+  reset, with Swift Testing tests (a migration test on a v5 database file, the model, the sidebar). The running-app
+  check with `MockAgent` in light and dark is still open (#234).
 
 ## Next steps
 

@@ -70,6 +70,9 @@ enum Schema {
         migrator.registerMigration("v5-session-branch") { db in
             try db.execute(sql: "ALTER TABLE session ADD COLUMN branch TEXT")
         }
+        migrator.registerMigration("v6-session-archived-at") { db in
+            try db.execute(sql: "ALTER TABLE session ADD COLUMN archivedAt REAL")
+        }
         return migrator
     }
 }

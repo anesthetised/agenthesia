@@ -42,6 +42,11 @@ public enum SidebarReason {
         }
     }
 
+    /// The reason under a saved session. An archived one is listed only by a search, so `Archived` says why it is
+    /// there and wins over how its worktree ended (ADR-0044).
+    /// - Parameter outcome: The short form of the worktree outcome, if there is one.
+    public static func saved(archived: Bool, outcome: String?) -> String? { archived ? "Archived" : outcome }
+
     /// An agent-authored title reduced to its first line, whitespace collapsed, at most ``titleLimit`` characters.
     static func displayTitle(_ title: String) -> String? {
         let lines = title.split(whereSeparator: \.isNewline).map { $0.split(whereSeparator: \.isWhitespace) }

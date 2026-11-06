@@ -23,6 +23,11 @@ public struct SessionCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(model?.canEnd != true)
+            Button(model?.archiveCommandTitle ?? "Archive Session") {
+                Task { [model] in await model?.toggleArchived() }
+            }
+            .disabled(model?.canArchive != true)
+            .help(model?.archiveHelp ?? "")
             Button("Discard Worktree…") {
                 Task { [model] in
                     guard let session = model?.displayed?.session else { return }

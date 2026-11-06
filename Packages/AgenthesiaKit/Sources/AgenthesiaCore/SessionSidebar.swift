@@ -82,9 +82,10 @@ public import Persistence
 
     /// - Needs You: live sessions that wait for a permission or input, failed, or finished unseen, in start order.
     /// - Working: the other live sessions, including starting ones, in start order.
-    /// - Settled: saved sessions that are not live, by last activity, newest first. `activity` holds the time of each
-    ///   saved session's last event; a session without an entry sorts by its start.
+    /// - Settled: saved sessions that are not live or archived, by last activity, newest first. `activity` holds the
+    ///   time of each saved session's last event; a session without an entry sorts by its start.
     /// A non-blank `query` keeps the rows whose title or project name contains it, ignoring case and diacritics.
+    /// Only a query lists archived sessions (ADR-0044).
     public init(
         projects: [ProjectRecord],
         history: [SessionRecord],
@@ -112,7 +113,7 @@ public import Persistence
             (.working, live.filter { ![.needsInput, .failed, .done].contains($0.0.activity) }.map(\.1)),
             (
                 .settled,
-                history.filter { !liveIDs.contains($0.id) }
+                history.filter { !liveIDs.contains($0.id) && (filtered || $0.archivedAt == nil) }
                     .map { Row(source: .saved($0), project: projects[$0.projectID], savedActivity: activity) }
                     .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
             ),

@@ -497,15 +497,22 @@ the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its st
 widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
 dragged them to (`PaneDivider` on each pane's leading edge, also adjustable with VoiceOver; stored in
 `SessionWindowModel`); when the column is too narrow the transcript gives way first, then the file pane shrinks
-to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's `SessionWindowModel` and has four sections: *Workspace* (working directory, Show in
-Finder, Open in Editor through `EditorHandoff` with an empty path), *Branch* (`agenthesia/<session id>` and the
-base branch, only for sessions in an Agenthesia worktree), *Changes* (`+added −removed · N files` from
-`SessionFiles.changeStats`, the changed-file list with per-file counts, Refresh Files, Review Changes…,
-Merge…, Discard Worktree…, with the enabled states of the Session menu) and *Agent* (agent name and the
-Agent Log toggle, live sessions only). The path bar under the composer and the sidebar's changed files are gone.
+to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's
+`SessionWindowModel` and leads with the work ([ADR-0039](adr/0039-t3-style-window-layout.md), amendment). Three
+sections: *Changes* (`+added −removed · N files` from `SessionFiles.changeStats`, then Review and Merge into
+`<base>`…, then the changed-file list with per-file counts that opens the file pane; Review is the prominent button
+while there are changes, and the two share a row only when the pane is wide enough); *Workspace* (one block: the
+session branch with `from <base>`, only for sessions in an Agenthesia worktree, and the working directory, as
+selectable text that wraps; Show in Finder and Open in Editor, through `EditorHandoff` with an empty path, are icon
+buttons with tooltips in its header; Discard Worktree… is a plain borderless button at its end); and *Agent* (agent
+name and the Agent Log toggle, live sessions only). Merge is disabled with the help text `No changes to merge` when
+`SessionFiles.hasNoChanges` (the list is current, without an error, and empty), also in the Session menu and the
+review pane; while the list loads or failed, the merge sheet decides, as before. Refresh Files shows only with
+`SessionFiles.watchError` (`WatchErrorNotice`, beside its message in the inspector and in the review pane's footer).
+The path bar under the composer and the sidebar's changed files are gone.
 
-> **Accepted, not yet implemented (#195):** [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) leads with Changes,
-> merges Workspace and Branch into one block, and gives new sessions a readable, stored branch name instead of `agenthesia/<session id>`.
+> **Accepted, not yet implemented (#195):** the inspector shows the branch as `agenthesia/<session id>`;
+> [ADR-0039's amendment](adr/0039-t3-style-window-layout.md) gives new sessions a readable, stored branch name (#208).
 
 The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
 as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file

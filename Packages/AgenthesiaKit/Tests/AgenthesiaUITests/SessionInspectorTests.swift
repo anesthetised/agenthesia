@@ -131,7 +131,7 @@ import Testing
         let withBranch = await height(of: git.model)
         let withoutBranch = await height(of: plain.model)
         #expect(withoutBranch > 0)
-        #expect(withBranch > withoutBranch, "Branch is missing from the Git session")
+        #expect(withBranch > withoutBranch, "The branch is missing from the Git session")
         #expect(plain.model.files.isGitRepository == false)
         // A saved session has no agent to show.
         await git.model.sessions.closeAll()
@@ -140,6 +140,45 @@ import Testing
         #expect(git.model.restored != nil)
         await git.model.files.attach(git.model.filesSession)
         #expect(await height(of: git.model) < withBranch, "Agent is shown for a saved session")
+    }
+
+    @Test func mergeWaitsForChangesAndSaysWhy() async throws {
+        let fixture = try await fixture(git: true)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let model = fixture.model
+        #expect(model.files.hasNoChanges)
+        #expect(!model.canMerge && model.mergeHelp == "No changes to merge")
+        await model.requestMerge()
+        #expect(model.merge == nil, "The sheet does not open without changes")
+        try "new\n".write(
+            to: URL(filePath: fixture.record.workingDirectory).appending(path: "added.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        await model.files.refresh()
+        #expect(model.canMerge && model.mergeHelp == nil)
+        // An unknown list leaves the decision to the merge sheet.
+        model.files.close()
+        #expect(model.canMerge && model.mergeHelp == nil)
+    }
+
+    @Test func refreshShowsOnlyWithAWatchError() async throws {
+        let fixture = try await fixture(git: true)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let files = fixture.model.files
+        let (view, window) = host(WatchErrorNotice(files: files))
+        defer { window.close() }
+        for _ in 0..<10 { await settle() }
+        #expect(files.watchError == nil && view.fittingSize.height == 0)
+        files.close()
+        files.watcherFactory = { _, _ in throw CocoaError(.fileReadUnknown) }
+        await files.attach(fixture.record)
+        for _ in 0..<10 { await settle() }
+        #expect(files.watchError != nil && view.fittingSize.height > 0)
+        files.watcherFactory = { try await SessionFileChanges(directory: $0, onChange: $1) }
+        await files.refresh()
+        for _ in 0..<10 { await settle() }
+        #expect(files.watchError == nil && view.fittingSize.height == 0)
     }
 
     @Test func theRootViewHostsTheInspectorBesideTheLaunchFormAndSessions() async throws {

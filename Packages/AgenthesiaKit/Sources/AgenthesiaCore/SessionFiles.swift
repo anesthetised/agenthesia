@@ -11,6 +11,11 @@ public final class SessionFiles {
     public private(set) var isGitRepository = false
     public private(set) var matches: [String] = []
     public private(set) var changedPaths: [String] = []
+    /// The change list is current, without an error, and empty. A list that is loading or failed is unknown.
+    public var hasNoChanges: Bool {
+        root != nil && isGitRepository && !isLoadingIndex && indexError == nil && changesError == nil
+            && changedPaths.isEmpty
+    }
     /// Line counts of the net change, refreshed together with `changedPaths`.
     public private(set) var changeStats = ChangeStats()
     /// Paths of the latest published index, which transcript inline code can link to (ADR-0025).

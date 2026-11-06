@@ -20,8 +20,6 @@ struct SessionReviewView: View {
                     }
                 }
                 Spacer()
-                Button("Refresh Files", systemImage: "arrow.clockwise") { Task { await files.refresh() } }
-                    .labelStyle(.iconOnly)
             }.padding()
             Divider()
             if let error = review.error {
@@ -60,12 +58,11 @@ struct SessionReviewView: View {
             }
             Divider()
             HStack {
-                if let error = files.watchError {
-                    Text("Automatic refresh is unavailable: \(error)").font(.caption).foregroundStyle(.secondary)
-                }
+                WatchErrorNotice(files: files)
                 Spacer()
                 Button("Merge…") { Task { await model.requestMerge() } }
                     .disabled(!model.canMerge)
+                    .help(model.mergeHelp ?? "")
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }.padding()
         }

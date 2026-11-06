@@ -433,6 +433,16 @@ Wave 2:
   next text followed the project's share instead of its width, and a label that kept `last active now` while the time
   moved on; both are fixed, the gap with a hosted test that fails without the fix. At the default 240 pt sidebar a
   permission reason is cut to `Allow? Writ…`, as the rule says. Not checked: light mode, VoiceOver itself.
+- #204: the inspector leads with the work. Order is Changes, then one Workspace block (branch with `from <base>`, path;
+  selectable, wrapping, no repeated labels; Show in Finder and Open in Editor are icon buttons with tooltips in its
+  header; Discard Worktree… is a borderless button at its end), then Agent. In Changes the summary is followed by
+  Review (prominent while there are changes) and Merge into `<base>`…, then the file list, so the actions stay in view.
+  Merge is disabled with `No changes to merge` when `SessionFiles.hasNoChanges`, in the inspector, the Session menu and
+  the review pane; Refresh Files shows only with `watchError`, beside its message (inspector and review footer). The
+  branch name is unchanged (readable names are #208). Tests: `hasNoChanges` with Git, without Git, attached and
+  edited; Merge's state, help text and sheet without and with changes and with an unknown list; the notice with and
+  without a watch error and its refresh clearing it; the existing hosted `RootView` and section-height tests. Not yet
+  seen in the running app.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

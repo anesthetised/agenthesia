@@ -240,11 +240,16 @@ import SwiftUI
         }
         return sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
     }
-    var canMerge: Bool {
+    var canMerge: Bool { canMergeSession && !hasNoChanges }
+    private var canMergeSession: Bool {
         guard !closed, !showingSetup, !isLoadingHistory, let session = displayed?.session else { return false }
         return outcome(of: session.id) == nil
             && sessions.canDiscard(session, project: projects.first { $0.id == session.projectID })
     }
+    /// The displayed session's file list is loaded and empty; while it loads or failed, the merge sheet decides.
+    private var hasNoChanges: Bool { files.sessionID == displayed?.session.id && files.hasNoChanges }
+    /// Why Merge is disabled when nothing else is in the way.
+    var mergeHelp: String? { canMergeSession && hasNoChanges ? "No changes to merge" : nil }
     var mergeCommandTitle: String { displayed?.session.baseBranch.map { "Merge into \($0)…" } ?? "Merge…" }
     /// The displayed transcript knows an outcome recorded after the last history refresh.
     func outcome(of id: UUID) -> WorktreeOutcome? {

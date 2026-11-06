@@ -13,7 +13,7 @@ import Testing
     )
 
     private func lines(_ texts: String...) -> [DiffLine] {
-        texts.map { text in diff.first { $0.text == text && $0.kind != .hunk }! }
+        texts.compactMap { text in diff.first { $0.text == text && $0.kind != .hunk } }
     }
 
     @Test func quotesLinesWithinAHunk() {

@@ -242,7 +242,7 @@ import Testing
         let before = controller.table.frame.height
 
         try await answer(id, in: recorded, live: live, controller: controller)
-        #expect(controller.table.frame.height > before)
+        #expect(try await grows(controller, from: before))
         #expect(try await reachesEnd(controller))
     }
 
@@ -265,7 +265,7 @@ import Testing
         NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: controller.scroll)
         let before = controller.table.frame.height
         try await answer(id, in: recorded, live: live, controller: controller)
-        #expect(controller.table.frame.height > before)
+        #expect(try await grows(controller, from: before))
         #expect(abs(controller.scroll.contentView.bounds.origin.y - 40) < 1)
     }
 
@@ -307,6 +307,17 @@ import Testing
         live.state = recorded.state
         live.revision += 1
         controller.update(live)
+    }
+
+    /// A restored diff makes its row taller once the table lays out again, which a loaded runner may delay.
+    private func grows(_ controller: TranscriptTableController, from height: CGFloat) async throws -> Bool {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            controller.table.layoutSubtreeIfNeeded()
+            if controller.table.frame.height > height { return true }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return false
     }
 
     /// New rows measure themselves during layout, and the table follows them on the next main queue turn.

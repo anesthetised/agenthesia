@@ -71,3 +71,104 @@ that project selected. Existing session navigation is unchanged.
 - Model, mode and effort cannot be chosen before the first message. If agents later expose config options
   before `session/new`, the draft can show them.
 - Opening a notification or restoring a window is unaffected: they select sessions, not drafts.
+
+## Amendment (2026-11-02): the draft shows the last mode and model as hints
+
+- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, "the pill menus are absent" above describes the code.
+- Related: [0019](0019-session-config-controls.md), [0039](0039-t3-style-window-layout.md),
+  [0042](0042-allow-edits-in-this-worktree.md)
+
+### Context
+
+ADR-0040 accepted that model and mode cannot be chosen before the first message, because config options exist only
+after `session/new`. In practice, the first prompt of each session runs with whatever the agent defaults to, and
+choosing a plan mode or a smaller model means sending first and stopping, or starting with a throwaway message. The
+ACP specification confirms the constraint: options arrive with the session setup response, and only then. It allows
+changing them at any time, and requires a response with the complete list. So the agent cannot tell the draft what it
+offers, but the app has heard it before: every `started`, `reopened` and `configOptions` event holds a confirmed list.
+
+### Decision
+
+**Pills as hints.** If the app has a cached list for the selected agent, the composer's bottom row shows its **mode and
+model** as the same pill menus a live session has (`SessionConfigControls`). They are hints from a cache, not facts:
+the tooltip and the accessibility label say `Last used with this agent; confirmed when the session starts`, and they
+are drawn as secondary. Changing a pill changes only this draft (`SessionWindowModel`), and changing the agent resets
+them.
+
+**What is shown.** Select options with category `mode` or `model`, which are the agent's own labels; no category, no
+pill, and the app does not guess from a name. The specification says categories are for UX and must not be needed for
+correctness; here they decide only what the draft offers, and the session's own controls still list everything once
+it runs. Effort, booleans and unknown types wait for the session, as before.
+
+**A mode is applied only when chosen in this draft (owner's decision).** The model hint is applied by default. The mode
+pill offers the cached choices but reads `Default mode` until the user picks one, and only a mode picked in this draft
+is sent to the agent; otherwise the session keeps the mode the agent starts in. So a mode that stops asking for
+permission never comes back by itself, because the app cannot recognise such a mode from its name without
+agent-specific knowledge (principle 8). The cost is one extra choice for each session started in plan mode.
+
+**Where they are applied.** In `SessionController.createRemote`, after `session/new` returned and **before the
+session record is created** (`SessionController.swift:168-195`):
+
+1. Compare the model hint, and a mode picked in this draft, with the options the agent just reported. An equal value
+   sends nothing.
+2. Otherwise `setConfigOption`, one at a time in the agent's order. Each response is the complete list, and the next
+   step uses it, because a change of mode may change what else exists.
+3. Write the final list into the `started` event. So history and the composer show the confirmed values and ADR-0019
+   holds: the agent's returned settings are authoritative, and nothing is shown as accepted before it is committed.
+4. Submit the initial prompt at the first idle state, as ADR-0040 says. After sign-in, this runs in the same place,
+   because `session/new` does.
+
+**A rejection returns the draft.** An error response, or a hint whose option or value the agent no longer offers,
+fails the start: the draft returns with the text, attachments and error (`The agent does not offer “Plan” any more`).
+A session that silently ran in another mode than its pill showed would be the worst outcome here; a mode can be the
+difference between read-only and writing. Because the record does not exist yet, the existing path applies:
+`removeUnstartedWorktree` (`LiveSession.swift:307`) removes the worktree, `returnToDraft` ends the owner, and nothing
+stays in append-only history. The pills then show the list the agent just reported, so the next Send works; one
+bounce, at most, per stale hint.
+
+**The cache.** `UserDefaults`, one small JSON value per agent, kept by `AgentCatalog` beside `lastAgent`
+(`AgentCatalog.swift:49`), keyed by `AgentCatalog.Choice`, so that an installed agent keeps its hints across versions.
+It holds the mode and model options as last confirmed, with their choices and names. Any confirmed list updates it,
+except during step 1–2 above: it is written after the hints were applied or the start failed, so that the agent's
+default on `session/new` never overwrites the user's choice. Losing the cache costs one session without pills.
+
+**An agent that never reported modes** has no cache entry or an entry without such options, so the draft shows no pills
+and behaves exactly as ADR-0040 describes. The first session with an agent always looks like that.
+
+**The changed statement.** ADR-0040's "until then the command list is empty and the pill menus are absent" becomes:
+until then the command list is empty and the pill menus are absent, **except for cached mode and model hints**. Its
+consequence "Model, mode and effort cannot be chosen before the first message" becomes: mode and model can be chosen
+as hints once the agent has reported them in an earlier session; effort cannot.
+
+### Alternatives
+
+- **Read the cache from history** (the last `configOptions` of the agent's newest session). No new store, like the
+  default project, but sessions refer to an `agent_install`, which changes across versions, and opening a draft would
+  read an append-only log for a value that is safe to lose.
+- **Apply after the record exists, through the public `setConfigOption`.** Reuses the path as is, and adds nothing to
+  startup. But a rejection then leaves an empty saved session forever and a worktree to discard, because history is
+  append-only and #176 removes only unrecorded worktrees.
+- **Keep the session and report the rejection in its composer.** No second start, but the worktree, the empty record and
+  a composer that shows a mode the user did not pick; and the prompt is one Return from running there. The owner's
+  decision is to return the draft.
+- **Run with the agent's value when the hint is stale and the user never touched the pill.** Fewer bounces, but the pill
+  promised a value; the user would have to read the composer afterwards to find out.
+- **Start the agent when the draft opens.** Already rejected in ADR-0040: processes and worktrees for abandoned drafts.
+- **Do nothing.** ADR-0040 stands and the first prompt runs with the default.
+
+### Consequences and risks
+
+- **The last mode is not remembered as a default.** Someone who always works in plan mode picks it for each session.
+  Reapplying it automatically was rejected: a mode that lets the agent act without asking (for example a "bypass" mode)
+  would come back with only a visible pill as the safeguard, and the specification asks agents not to reduce oversight
+  without user action. Dropping the mode cache entirely was rejected too, because starting in plan mode is the main gain.
+- A stale hint costs an agent start, one bounce and possibly a sign-in check, on an upgrade that removes a value.
+- Startup gains round trips before the record exists. `startupUpdates` buffers notifications until the session is
+  established, and config responses must keep working there; this is why the issue is `agent:strong`.
+- Agents whose options differ per project will bounce once when the user switches projects with a value only one offers.
+- `ConfigOption` is stored outside the event log, so a format change must tolerate an undecodable value by ignoring it.
+
+### Not decided
+
+Hints for effort or other categories, a per-project cache, and letting a mode be chosen in the draft for an agent never
+run before.

@@ -206,6 +206,71 @@ import Testing
         await manager.closeAll()
     }
 
+    private func numbered(_ sidebar: SessionSidebar) -> [AnyHashable] { sidebar.numberedRows.map(\.id) }
+
+    @Test func numberedRowsAreNeedsYouThenWorkingAndLeaveOutSettled() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = AgentInstallRecord(name: "Missing", executable: "/nope")
+        let working = manager.start(directory: directory, agent: agent)
+        let failed = manager.start(directory: directory, agent: missing)
+        for owner in [working, failed] { await owner.startup?.value }
+        let saved = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
+        let owners = [working, failed]
+
+        // Needs You comes first although it started later; the saved session is shown but has no number.
+        let sidebar = SessionSidebar(projects: [], history: [saved], owners: owners)
+        #expect(sidebar.sections.map(\.kind) == [.needsYou, .working, .settled])
+        let ids = [AnyHashable(failed.id), AnyHashable(try #require(working.sessionID))]
+        #expect(numbered(sidebar) == ids)
+        // Fewer than nine rows leave the other numbers without one.
+        #expect(sidebar.numberedRows.count == 2 && sidebar.rows.count == 3)
+        #expect(numbered(SessionSidebar(projects: [], history: [saved], owners: [])).isEmpty)
+        #expect(numbered(SessionSidebar(projects: [], history: [], owners: [])).isEmpty)
+        await manager.closeAll()
+    }
+
+    @Test func numberedRowsStopAtNineInSidebarOrder() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = AgentInstallRecord(name: "Missing", executable: "/nope")
+        let failed = (0..<5).map { _ in manager.start(directory: directory, agent: missing) }
+        for owner in failed { await owner.startup?.value }
+        // Starting sessions are working and have no identity yet; the sidebar is built before they progress.
+        let starting = (0..<6).map { _ in manager.start(directory: directory, agent: agent) }
+        let sidebar = SessionSidebar(projects: [], history: [], owners: starting + failed)
+        #expect(sidebar.rows.count == 11)
+        #expect(numbered(sidebar) == (failed + starting.prefix(4)).map { AnyHashable($0.id) })
+        await manager.closeAll()
+    }
+
+    @Test func numberedRowsFollowTheSearchFilter() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var owners: [LiveSession] = []
+        for name in ["billing", "search"] {
+            let folder = directory.appending(path: name)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            owners.append(manager.start(directory: folder, agent: agent))
+        }
+        let failed = manager.start(directory: directory, agent: AgentInstallRecord(name: "x", executable: "/nope"))
+        owners.append(failed)
+        for owner in owners { await owner.startup?.value }
+        let projects = try await manager.library.projects()
+        func ids(_ query: String) -> [AnyHashable] {
+            numbered(SessionSidebar(projects: projects, history: [], owners: owners, query: query))
+        }
+        let (billing, search) = try (
+            AnyHashable(#require(owners[0].sessionID)), AnyHashable(#require(owners[1].sessionID))
+        )
+        #expect(ids("") == [AnyHashable(failed.id), billing, search])
+        // The numbers are those of the visible rows, so a filter renumbers them.
+        #expect(ids("search") == [search])
+        #expect(ids("BILLING") == [billing])
+        #expect(ids("nothing").isEmpty)
+        await manager.closeAll()
+    }
+
     @Test func liveReasonsFollowTheSessionThroughATurn() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

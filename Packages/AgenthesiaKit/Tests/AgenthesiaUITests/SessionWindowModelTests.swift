@@ -394,6 +394,45 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func switchToSessionListsAndSelectsTheNumberedRows() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-numbered-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        #expect(model.numberedSessions.count == 9 && model.numberedSessions.allSatisfy { $0 == nil })
+        let working = sessions.start(directory: directory, agent: try mock())
+        await working.startup?.value
+        let failed = sessions.start(
+            directory: directory,
+            agent: AgentInstallRecord(name: "Missing", executable: "/missing")
+        )
+        await failed.startup?.value
+        await model.refresh()
+        // Nine items always; the first two have rows (Needs You first), the others are disabled in the menu.
+        let items = model.numberedSessions
+        #expect(items.count == 9)
+        #expect(items.prefix(2).allSatisfy { $0 != nil } && items.dropFirst(2).allSatisfy { $0 == nil })
+        let (first, second) = (try #require(items[0]), try #require(items[1]))
+        let workingID = try #require(working.sessionID)
+        #expect(first.id == AnyHashable(failed.id) && second.id == AnyHashable(workingID))
+        #expect(first.title == "New Session")
+
+        model.showingSetup = true
+        model.switchToSession(first)
+        #expect(model.owner === failed && !model.showingSetup)
+        model.switchToSession(second)
+        #expect(model.owner === working && model.sidebarSelection == second.id)
+
+        // Titles and numbers follow the search; a number whose row the filter hides has no item.
+        model.sidebarQuery = "nothing"
+        #expect(model.numberedSessions.allSatisfy { $0 == nil })
+        model.sidebarQuery = ""
+        model.close()
+        #expect(model.numberedSessions.allSatisfy { $0 == nil })
+        await sessions.closeAll()
+    }
+
     @Test func commandsAffectOnlyTheSelectedWindowAndSkipToInput() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-commands-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

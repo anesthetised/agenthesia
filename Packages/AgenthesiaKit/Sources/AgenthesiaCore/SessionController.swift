@@ -189,6 +189,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             workingDirectory: session.workingDirectory,
             baseRevision: session.baseRevision,
             baseBranch: session.baseBranch,
+            branch: session.branch,
             createdAt: session.createdAt
         )
         do {

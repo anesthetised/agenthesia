@@ -279,6 +279,7 @@ public final class SessionManager {
             projectDirectory: URL(filePath: project.rootPath, directoryHint: .isDirectory),
             workingDirectory: URL(filePath: session.workingDirectory, directoryHint: .isDirectory),
             sessionID: session.id,
+            branch: session.branch,
             worktreesRoot: worktreesRoot
         )
     }

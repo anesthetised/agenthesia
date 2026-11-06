@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import Workspace
 
 @testable import AgenthesiaCore
 @testable import Persistence
@@ -43,6 +44,33 @@ import Testing
         return (owner, try #require(owner.controller?.session))
     }
 
+    /// A saved session whose worktree was added by hand on `branch`, as `prepare` lays it out, and whose record stores
+    /// `stored` as its branch: a session from before names were stored, or one whose stored name fails the check.
+    func savedSession(
+        _ fixture: Fixture,
+        branch: String,
+        stored: String?,
+        id: UUID = UUID()
+    ) async throws
+        -> SessionRecord
+    {
+        let repo = fixture.repo.resolvingSymlinksInPath()
+        let directory = fixture.trees.appending(path: "repo/\(id.uuidString.lowercased())")
+        try await git(["worktree", "add", "-q", "-b", branch, directory.path, "HEAD"], in: repo)
+        let library = fixture.manager.library
+        let session = SessionRecord(
+            id: id,
+            projectID: try await library.project(directory: repo).id,
+            agentInstallID: try await library.install(fixture.agent).id,
+            workingDirectory: directory.resolvingSymlinksInPath().path,
+            baseRevision: try await git(["rev-parse", "HEAD"], in: repo),
+            baseBranch: "main",
+            branch: stored
+        )
+        try await library.store().createSession(session)
+        return session
+    }
+
     func project(of session: SessionRecord, in manager: SessionManager) async throws -> ProjectRecord? {
         try await manager.library.projects().first { $0.id == session.projectID }
     }
@@ -65,19 +93,15 @@ import Testing
         )
         #expect(manager.canDiscard(session, project: try await project(of: session, in: manager)))
         let summary = try await manager.discardSummary(session)
-        #expect(
-            summary
-                == .init(uncommittedFiles: 1, commits: 0, branch: "agenthesia/\(session.id.uuidString.lowercased())")
-        )
+        let branch = SessionWorkspace.branchName(for: session.id, topic: nil)
+        #expect(session.branch == branch)
+        #expect(try await manager.library.store().session(id: session.id)?.branch == branch)
+        #expect(summary == .init(uncommittedFiles: 1, commits: 0, branch: branch))
         try await manager.discard(session)
         #expect(owner.isClosed && manager.owners.map(\.id) == [other.id])
         #expect(!FileManager.default.fileExists(atPath: session.workingDirectory))
         #expect(FileManager.default.fileExists(atPath: otherSession.workingDirectory))
-        #expect(
-            try await branches(fixture.repo).sorted() == [
-                "agenthesia/\(otherSession.id.uuidString.lowercased())", "main",
-            ]
-        )
+        #expect(try await branches(fixture.repo).sorted() == [try #require(otherSession.branch), "main"])
         #expect(try await manager.library.worktreeOutcomes() == [session.id: .discarded])
         // History shows the outcome without an agent, and Continue fails before reaching one.
         let restored = try await SessionController.restore(id: session.id, store: manager.library.store())
@@ -200,6 +224,56 @@ import Testing
         #expect(owner.isLive)
         #expect(FileManager.default.fileExists(atPath: plain.path))
         await manager.closeAll()
+    }
+
+    @Test func aSessionWithoutAStoredBranchIsDiscardedByItsLegacyName() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let id = UUID()
+        let legacy = "agenthesia/\(id.uuidString.lowercased())"
+        let session = try await savedSession(fixture, branch: legacy, stored: nil, id: id)
+        #expect(manager.canDiscard(session, project: try await project(of: session, in: manager)))
+        #expect(try await manager.discardSummary(session).branch == legacy)
+        try await manager.discard(session)
+        #expect(!FileManager.default.fileExists(atPath: session.workingDirectory))
+        #expect(try await branches(fixture.repo) == ["main"])
+        #expect(try await manager.library.worktreeOutcomes()[session.id] == .discarded)
+    }
+
+    /// Another session's name, names outside `agenthesia/`, and one without this session's suffix.
+    @Test(arguments: ["another session", "feature/x", "agenthesia/no-suffix", "outside the prefix"])
+    func aStoredBranchThatFailsTheCheckIsNeverDeleted(kind: String) async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let id = UUID()
+        let name =
+            switch kind {
+            case "another session": SessionWorkspace.branchName(for: UUID(), topic: "Fix the parser")
+            case "outside the prefix": "feature/fix-\(id.uuidString.lowercased().prefix(8))"
+            default: kind
+            }
+        let session = try await savedSession(fixture, branch: name, stored: name, id: id)
+        try "work".write(
+            to: URL(filePath: session.workingDirectory).appending(path: "new.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        #expect(!manager.canDiscard(session, project: try await project(of: session, in: manager)))
+        await #expect(throws: SessionManager.DiscardError.notRemovable) { try await manager.discardSummary(session) }
+        await #expect(throws: SessionManager.DiscardError.notRemovable) { try await manager.discard(session) }
+        await #expect(throws: SessionManager.DiscardError.notRemovable) { try await manager.mergeCheck(session) }
+        await #expect(throws: SessionManager.DiscardError.notRemovable) {
+            try await manager.merge(session, message: "Work")
+        }
+        #expect(
+            FileManager.default.fileExists(
+                atPath: URL(filePath: session.workingDirectory).appending(path: "new.txt").path
+            )
+        )
+        #expect(try await branches(fixture.repo).sorted() == [name, "main"].sorted())
+        #expect(try await manager.library.worktreeOutcomes().isEmpty)
     }
 
     @Test func outcomesRoundTripThroughTheEventLog() throws {

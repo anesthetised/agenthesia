@@ -50,6 +50,21 @@ import Testing
         try await manager.library.store().events(in: session.id).last
     }
 
+    @Test func aSessionWithoutAStoredBranchMergesByItsLegacyName() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let id = UUID()
+        let legacy = "agenthesia/\(id.uuidString.lowercased())"
+        let session = try await helpers.savedSession(fixture, branch: legacy, stored: nil, id: id)
+        try write("hello", to: "greeting.txt", in: session)
+        #expect(try await manager.mergeCheck(session) == .ready(baseBranch: "main", files: 1, commits: 0))
+        let commit = try await manager.merge(session, message: "Add a greeting")
+        #expect(try await helpers.git(["rev-parse", "main"], in: fixture.repo) == commit)
+        #expect(!FileManager.default.fileExists(atPath: session.workingDirectory))
+        #expect(try await helpers.branches(fixture.repo) == ["main"])
+    }
+
     @Test func mergeCommitsTheSessionEndsItAndRecordsTheOutcome() async throws {
         let fixture = try await fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
@@ -68,9 +83,7 @@ import Testing
         #expect(owner.isClosed && manager.owners.map(\.id) == [other.id])
         #expect(!manager.isMerging(session.id))
         #expect(!FileManager.default.fileExists(atPath: session.workingDirectory))
-        #expect(
-            !(try await helpers.branches(fixture.repo)).contains("agenthesia/\(session.id.uuidString.lowercased())")
-        )
+        #expect(!(try await helpers.branches(fixture.repo)).contains(try #require(session.branch)))
         let outcome = WorktreeOutcome.merged(commit: commit, into: "main")
         #expect(try await manager.library.worktreeOutcomes()[session.id] == outcome)
         #expect(try await lastEvent(of: session, in: manager).flatMap(WorktreeOutcome.init(lastEvent:)) == outcome)

@@ -67,6 +67,9 @@ enum Schema {
         migrator.registerMigration("v4-agent-install-installation") { db in
             try db.execute(sql: "ALTER TABLE agent_install ADD COLUMN installationID TEXT")
         }
+        migrator.registerMigration("v5-session-branch") { db in
+            try db.execute(sql: "ALTER TABLE session ADD COLUMN branch TEXT")
+        }
         return migrator
     }
 }

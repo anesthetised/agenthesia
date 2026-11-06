@@ -53,9 +53,10 @@ struct SessionInspector: View {
         }
     }
 
-    /// The branch of the worktree Agenthesia created for the session; sessions without a base have none.
+    /// The branch of the worktree Agenthesia created for the session: the stored name, or the legacy one derived from
+    /// the session id. Sessions without a base have none.
     static func branchName(of session: SessionRecord) -> String? {
-        session.baseRevision == nil ? nil : "agenthesia/\(session.id.uuidString.lowercased())"
+        session.baseRevision == nil ? nil : session.branch ?? SessionWorkspace.legacyBranchName(for: session.id)
     }
 
     private func changes(_ session: SessionRecord) -> some View {

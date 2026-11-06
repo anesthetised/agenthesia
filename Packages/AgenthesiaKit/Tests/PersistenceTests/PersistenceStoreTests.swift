@@ -41,6 +41,7 @@ final class PersistenceStoreTests: Sendable {
             workingDirectory: project.rootPath,
             baseRevision: String(repeating: "a", count: 40),
             baseBranch: "feature/x",
+            branch: "agenthesia/fix-it-baaeedd5",
             createdAt: date
         )
         try await store.createProject(project)
@@ -78,6 +79,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(
             try await database.read { try Schema.migrator.appliedMigrations($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
+                "v5-session-branch",
             ]
         )
     }
@@ -174,6 +176,53 @@ final class PersistenceStoreTests: Sendable {
         #expect(records.first?.installationID == nil)
         #expect(records.first?.arguments == ["--acp"])
         #expect(records.last == installed)
+    }
+
+    @Test func upgradingFromV4KeepsSessionsWithoutAStoredBranch() async throws {
+        let url = directory.appending(path: "v4.sqlite")
+        let session = UUID()
+        do {
+            let legacy = try DatabaseQueue(path: url.path(percentEncoded: false))
+            try Schema.migrator.migrate(legacy, upTo: "v4-agent-install-installation")
+            let project = UUID().uuidString
+            let agent = UUID().uuidString
+            try await legacy.write { db in
+                try db.execute(sql: "INSERT INTO project VALUES (?, 'P', '/tmp/p', 0)", arguments: [project])
+                try db.execute(
+                    sql: "INSERT INTO agent_install VALUES (?, 'Agent', 'agent', CAST('[]' AS BLOB), 0, NULL)",
+                    arguments: [agent]
+                )
+                try db.execute(
+                    sql: "INSERT INTO session VALUES (?, ?, ?, 'remote', 1, 'S', '/tmp/tree', 0, ?, 'main')",
+                    arguments: [session.uuidString, project, agent, String(repeating: "c", count: 40)]
+                )
+                try db.execute(
+                    sql: "INSERT INTO event VALUES (?, 1, 'future', 1, CAST('{\"keep\":true}' AS BLOB), 0)",
+                    arguments: [session.uuidString]
+                )
+            }
+            try legacy.close()
+        }
+        let upgraded = try PersistenceStore(databaseURL: url)
+        let record = try #require(await upgraded.session(id: session))
+        #expect(record.branch == nil)
+        #expect(record.baseRevision == String(repeating: "c", count: 40))
+        #expect(record.baseBranch == "main")
+        #expect(record.title == "S" && record.workingDirectory == "/tmp/tree")
+        #expect(try await upgraded.events(in: session).map(\.event.payload) == [Data("{\"keep\":true}".utf8)])
+        // New sessions store their branch beside the old ones.
+        let new = SessionRecord(
+            projectID: record.projectID,
+            agentInstallID: record.agentInstallID,
+            workingDirectory: "/tmp/new",
+            baseRevision: record.baseRevision,
+            baseBranch: "main",
+            branch: "agenthesia/fix-it-baaeedd5",
+            createdAt: date
+        )
+        try await upgraded.createSession(new)
+        #expect(try await PersistenceStore(databaseURL: url).session(id: new.id) == new)
+        #expect(try await upgraded.sessions(in: record.projectID).map(\.branch) == [nil, new.branch])
     }
 
     @Test(arguments: [Date(timeIntervalSinceReferenceDate: 800_000_000.0.nextUp), Date()])
@@ -363,6 +412,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(
             try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
+                "v5-session-branch",
                 "future-version",
             ]
         )

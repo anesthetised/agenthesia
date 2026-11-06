@@ -464,6 +464,24 @@ Wave 2:
   card stretched to the 40 % bound with blank space around a one-line diff, because its flexible frame took the height
   it was offered; it now hugs its content and the diff scrolls only past the bound, with a hosted check that fails
   without the fix. Not checked: VoiceOver's announcement, Full Keyboard Access, a narrow window, light mode.
+- #208: new sessions get a readable, stored branch name. `SessionWorkspace.branchName` gives
+  `agenthesia/<words>-<first 8 hex digits of the session id>`: the words come from the first line of the initial prompt,
+  transliterated with ICU's `Any-Latin; Latin-ASCII; Lower`, reduced to runs of `[a-z0-9]` joined with `-` and cut at a
+  word boundary to at most 40 characters; `session` without a prompt or usable characters. A name that already exists
+  falls back to the legacy `agenthesia/<session id>`, and the existing branch is untouched. The worktree directory stays
+  the session id. Migration `v5-session-branch` adds a nullable `session.branch`; older sessions keep the derived legacy
+  name, in removal and in the inspector. `Worktree` takes the stored name and accepts it only under `agenthesia/` with
+  this session's `-<8 hex>` suffix, or the exact legacy name; otherwise discard and merge refuse with `notRemovable` and
+  delete nothing. Tests: naming (Latin, Cyrillic, Chinese, accents, emoji, long text) with `git check-ref-format` for
+  each, the removal check, the migration on a database file made by the v4 schema with a session and an event, and real
+  temporary repositories for creating, the collision fallback, merging and discarding with a stored name, an untouched
+  worktree removed after a cancelled start, an old session without a stored name (discard and merge), and stored names
+  that fail the check (another session's, `feature/x`, no suffix, outside the prefix), which keep their worktree and
+  branch. Running app (scripted, MockAgent, isolated home, dark): `Fix the note parser` made
+  `agenthesia/fix-the-note-parser-a0fbe75f`, shown in the Workspace block and in `git branch`, with the worktree directory
+  still named by the session id; `Исправь парсер заметок` made `agenthesia/isprav-parser-zametok-2b8dc91e`; Discard
+  named the readable branch in its confirmation and removed the branch and the worktree. Not checked: merge with a
+  readable branch in the app (covered by repository tests), a session made before the change, light mode.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

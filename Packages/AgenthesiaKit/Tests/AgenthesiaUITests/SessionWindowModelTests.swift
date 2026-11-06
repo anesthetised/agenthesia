@@ -586,7 +586,7 @@ import Testing
         #expect(pending.title == "Discard the worktree of “\(record.title ?? "New Session")”?")
         #expect(
             pending.message
-                == "0 uncommitted files and 0 commits on agenthesia/\(record.id.uuidString.lowercased()) will be deleted. This cannot be undone."
+                == "0 uncommitted files and 0 commits on \(try #require(record.branch)) will be deleted. This cannot be undone."
         )
         if dismissedBeforeAction {
             // SwiftUI dismisses the alert before its button's asynchronous task gets to run.

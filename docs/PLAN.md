@@ -52,8 +52,8 @@ before implementation.
   (pre-session sign-in) is in progress under the owner-approved [ADR-0038](adr/0038-pre-session-sign-in.md).
 - M15 (UI/UX redesign, #144) is planned under [ADR-0039](adr/0039-t3-style-window-layout.md) and
   [ADR-0040](adr/0040-composer-first-session-start.md); see the M15 section below.
-- M15 follow-ups are accepted as ADR amendments and ADR-0041 (#195, 2026-11-06); ADR-0042 is deferred. See the end of
-  the M15 section.
+- M15 follow-ups are accepted as ADR amendments and ADR-0041 (#195, 2026-11-06); ADR-0042 is deferred. #190, #192,
+  #193 and most of #191 landed (#199–#202); the implementation issues are #203–#215, at the end of the M15 section.
 
 ## Previous batch: session interactions (merged)
 
@@ -453,8 +453,8 @@ Wave 1 status (2026-10-29):
 ### M15 follow-ups: accepted decisions (#195, 2026-11-02)
 
 Two UI/UX reviews after M15 proposed follow-ups that the owner accepted. The owner accepted the amendments and ADR-0041
-on 2026-11-06; ADR-0042 stays `Proposed`, deferred. **The issues are not opened yet**; they are opened next, with the
-milestone `M15 — UI/UX redesign` and the tier shown.
+on 2026-11-06; ADR-0042 stays `Proposed`, deferred. The issues are #203–#215, in the milestone `M15 — UI/UX redesign`
+with the tier shown.
 
 | Decision | Where |
 |---|---|
@@ -470,27 +470,26 @@ Implementation issues, in order. Within a wave the issues are independent, apart
 
 | Order | Issue | Decision | Tier | Depends on |
 |---|---|---|---|---|
-| 1 | Sidebar reason and last activity: pure `reason` in Core with a test per state, `lastEvents()` timestamps, Settled sort, truncation, accessibility label | Sidebar row | `agent:light` | — |
-| 1 | Inspector layout: order, compact block, Merge disabled with no changes, Discard secondary, Refresh only when watching failed. Takes over #191's repeated-label item | Inspector | `agent:light` | — |
-| 1 | Pure diff line model: parse `UnifiedDiff` output into lines with old and new numbers; quote builder with ranges, removed lines, fences | Review | `agent:light` | — |
-| 2 | Docked permission card: card, row of buttons, visible shortcuts, `1 of 3`, focus rules, arming, clip-view follow-bottom, VoiceOver announcement | Permission | `agent:strong` | #190 |
-| 2 | Compact permission record: one-line row with Details, tool row hides its diff while pending, buttons leave `TranscriptTable` | Permission | `agent:light` | Docked card |
-| 2 | Readable branch names: migration, naming, removal check with real repositories, inspector display. Takes over #191's branch item | Inspector | `agent:strong` | Inspector layout |
-| 3 | Viewport bookkeeping and Done: target item, pure on-screen check, watching only while unseen, clip changes, folded groups. Rendering Lab S1, S7, S9 with the owner's approval | Done | `agent:strong` | Docked card (shared geometry) |
-| 3 | `New response below` and ⌥⌘↓ Jump to Latest | Done | `agent:light` | Viewport bookkeeping |
-| 3 | Apply hints at session start: in `createRemote` before the record, the model by default and a mode only when picked in the draft, rejection returns the draft, no history row or worktree left, cache in `AgentCatalog` | Hints | `agent:strong` | — |
-| 3 | Draft pills from the cache: shared rendering with `SessionConfigControls`, tooltip, reset on agent change | Hints | `agent:light` | Apply hints (a pill must never promise what is not applied) |
-| 4 | Review pane: slot in `DetailPanes`, ⌃⌘R toggle, no-flicker refresh, hold on selection with `Show latest`, new diff text view, merge sheet in `RootView` | Review | `agent:strong` | Diff line model |
-| 4 | Viewed marks and line counts | Review | `agent:light` | Review pane |
-| 4 | Ask agent: selection to lines, insertion at the caret, ⌥⌘A, stale-quote note | Review | `agent:light` | Review pane, #189, #193 |
+| 1 | #203 Sidebar reason and last activity: pure `reason` in Core with a test per state, `lastEvents()` timestamps, Settled sort, truncation, accessibility label | Sidebar row | `agent:light` | — |
+| 1 | #204 Inspector layout: order, compact block, Merge disabled with no changes, Discard secondary, Refresh only when watching failed. Takes over #191's repeated-label item | Inspector | `agent:light` | — |
+| 1 | #205 Pure diff line model: parse `UnifiedDiff` output into lines with old and new numbers; quote builder with ranges, removed lines, fences | Review | `agent:light` | — |
+| 2 | #206 Docked permission card: card, row of buttons, visible shortcuts, `1 of 3`, focus rules, arming, clip-view follow-bottom, VoiceOver announcement | Permission | `agent:strong` | #190 |
+| 2 | #207 Compact permission record: one-line row with Details, tool row hides its diff while pending, buttons leave `TranscriptTable` | Permission | `agent:light` | #206 |
+| 2 | #208 Readable branch names: migration, naming, removal check with real repositories, inspector display. Takes over #191's branch item | Inspector | `agent:strong` | #204 |
+| 3 | #209 Viewport bookkeeping and Done: target item, pure on-screen check, watching only while unseen, clip changes, folded groups. Rendering Lab S1, S7, S9 with the owner's approval | Done | `agent:strong` | #206 (shared geometry) |
+| 3 | #210 `New response below` and ⌥⌘↓ Jump to Latest | Done | `agent:light` | #209 |
+| 3 | #211 Apply hints at session start: in `createRemote` before the record, the model by default and a mode only when picked in the draft, rejection returns the draft, no history row or worktree left, cache in `AgentCatalog` | Hints | `agent:strong` | — |
+| 3 | #212 Draft pills from the cache: shared rendering with `SessionConfigControls`, tooltip, reset on agent change | Hints | `agent:light` | #211 (a pill must never promise what is not applied) |
+| 4 | #213 Review pane: slot in `DetailPanes`, ⌃⌘R toggle, no-flicker refresh, hold on selection with `Show latest`, new diff text view, merge sheet in `RootView` | Review | `agent:strong` | #205 |
+| 4 | #214 Viewed marks and line counts | Review | `agent:light` | #213 |
+| 4 | #215 Ask agent: selection to lines, insertion at the caret, ⌥⌘A, stale-quote note | Review | `agent:light` | #213, #189, #193 |
 
 ADR-0042 has no issues while it is deferred. If it is taken up, it starts with counting edit requests in real sessions
 (read-only, with the owner's approval), then a pure edit rule with a mock agent that reports chosen kinds and locations,
 then the switch itself, last of all and after the docked card.
 
-Open issues these meet, and do not replace: #189 and #193 come before Ask agent; #190 before the docked card, which uses
-its status line; #194 (transcript find) shares row identity with the viewport work, so whichever lands second rebases.
-When the inspector issues open, tick or remove the two #191 items they take over. #192 is independent.
+#189, #190, #192, #193 and #194 have landed. #194 (transcript find) shares row identity with the viewport work (#209),
+which rebases on it. #191's repeated-label item landed in #202; its branch item moved to #208, and #191 closes with it.
 
 Pitfalls known so far:
 

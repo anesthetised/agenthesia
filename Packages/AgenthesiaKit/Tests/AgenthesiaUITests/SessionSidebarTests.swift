@@ -36,13 +36,7 @@ import Testing
         await model.refresh()
         await model.showHistory(first)
         let host = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1600, height: 600))
         window.contentView = host
         window.orderFront(nil)
         defer { model.close(); window.close() }
@@ -74,13 +68,7 @@ import Testing
         sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
         let model = SessionWindowModel(sessions: sessions)
         let host = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1600, height: 600))
         window.contentView = host
         window.orderFront(nil)
         let gate = SessionPersistenceGate()
@@ -158,13 +146,7 @@ import Testing
         _ = NSApplication.shared
         let binding = Binding(get: { box.value }, set: { box.value = $0 })
         let host = NSHostingView(rootView: RootView(model: model, target: binding))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1600, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1600, height: 600))
         window.contentView = host
         window.orderFront(nil)
         return (host, window)

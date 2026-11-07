@@ -26,8 +26,7 @@ import Testing
             + "\", data: nil)"
         let host = NSHostingView(rootView: banner(long, offering: [.agentLog]))
         host.frame = .init(x: 0, y: 0, width: width, height: 400)
-        let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: host.frame.size)
         window.contentView = host
         window.appearance = NSAppearance(named: .aqua)
         window.orderFront(nil)

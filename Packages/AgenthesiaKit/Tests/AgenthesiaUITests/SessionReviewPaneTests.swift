@@ -34,13 +34,7 @@ import Testing
         let host = NSHostingView(
             rootView: SessionReviewPane(review: review, files: files, model: model, height: 500)
         )
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 500),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 800, height: 500))
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = host
         defer { window.close() }
@@ -156,13 +150,7 @@ import Testing
         defer { files.close() }
         let model = SessionWindowModel(sessions: SessionManager())
         let host = NSHostingView(rootView: SessionReviewPane(review: review, files: files, model: model, height: 500))
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 500),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 800, height: 500))
         window.contentView = host
         defer { window.close() }
         host.layoutSubtreeIfNeeded()

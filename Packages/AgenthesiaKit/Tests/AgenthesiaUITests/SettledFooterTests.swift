@@ -127,13 +127,7 @@ import Testing
         model = SessionWindowModel(sessions: manager)
         await model.refresh()
         host = NSHostingView(rootView: RootView(model: model))
-        window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        window = OffscreenWindow(size: .init(width: 900, height: 600))
         window.contentView = host
         window.orderFront(nil)
     }

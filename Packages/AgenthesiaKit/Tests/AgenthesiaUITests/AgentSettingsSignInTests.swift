@@ -54,6 +54,7 @@ import Testing
         let flow = try fixture.flow()
         await flow.prepare()
         let host = NSHostingView(rootView: AgentSignInSheet(flow: flow, onDone: {}))
+        // A bare window: the test is about `NSWindow`'s own default, not hosted layout.
         let window = NSWindow()
         window.contentView = host
         host.layoutSubtreeIfNeeded()
@@ -72,13 +73,7 @@ import Testing
         defer { fixture.remove() }
         let flow = try fixture.flow()
         await flow.prepare()
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 560),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 600, height: 560))
         let host = NSHostingView(rootView: SettingsView(catalog: fixture.catalog))
         window.contentView = host
         host.layoutSubtreeIfNeeded()
@@ -95,6 +90,7 @@ import Testing
         let signingIn = Task { await flow.signIn(with: "mock-terminal") }
         try await eventually { flow.terminal != nil }
         let terminal = try #require(flow.terminal)
+        // A bare window: the test is about `NSWindow`'s own default, not hosted layout.
         let window = NSWindow()
         let host = NSHostingView(rootView: SignInTerminalSheet(terminal: terminal, onDone: {}))
         window.contentView = host

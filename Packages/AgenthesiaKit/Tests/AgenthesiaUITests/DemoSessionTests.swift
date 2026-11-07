@@ -273,13 +273,7 @@ struct DemoSessionTests {
         let session = DemoSession()
         let presentation = SidebarPresentation()
         let hosting = NSHostingView(rootView: SidebarHarness(session: session, presentation: presentation))
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
         window.appearance = NSAppearance(named: lightAppearance ? .aqua : .darkAqua)
         window.contentView = hosting
         defer { window.close() }
@@ -338,13 +332,7 @@ struct DemoSessionTests {
     }
 
     private func host(_ controller: TranscriptTableController) -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 300),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 600, height: 300))
         controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = 600
         window.contentView = controller.scroll

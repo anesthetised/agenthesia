@@ -91,6 +91,7 @@ import Testing
     }
 
     @Test func highlightingPreservesSelectionViewportAndAccessibility() async throws {
+        // A plain window: the Rendering tests cannot see the UI tests' `OffscreenWindow`, and this one is never shown.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.titled],
@@ -159,6 +160,7 @@ import Testing
     }
 
     @Test func gutterNumbersTheVisibleLines() throws {
+        // A plain window: the Rendering tests cannot see the UI tests' `OffscreenWindow`, and this one is never shown.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.titled],
@@ -191,6 +193,7 @@ import Testing
     }
 
     private func hostedView(lines: Int) -> SourceView {
+        // A plain window: the Rendering tests cannot see the UI tests' `OffscreenWindow`, and this one is never shown.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.titled],
@@ -251,6 +254,7 @@ import Testing
         view.setText((1...2_000).map { "line \($0)" }.joined(separator: "\n"), language: nil)
         view.showLine(1_500)
         #expect(selectedText(in: view) == "line 1500")
+        // A plain window: the Rendering tests cannot see the UI tests' `OffscreenWindow`, and this one is never shown.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.titled],

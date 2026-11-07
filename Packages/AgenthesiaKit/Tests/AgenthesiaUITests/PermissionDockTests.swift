@@ -118,13 +118,7 @@ import Testing
         let controller = fixture.controller
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: fixture.model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
         window.contentView = view
         window.orderFront(nil)
         defer { window.close() }

@@ -207,13 +207,7 @@ import Testing
         model.show(first)
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
         window.contentView = view
         window.orderFront(nil)
         defer { window.close() }
@@ -256,13 +250,7 @@ import Testing
         model.show(first)
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
         window.contentView = view
         window.orderFront(nil)
         defer { window.close() }
@@ -337,13 +325,7 @@ import Testing
         model.show(first)
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700), drivesDisplayLink: true)
         window.contentView = view
         window.orderFront(nil)
         defer { window.close() }
@@ -409,13 +391,7 @@ import Testing
         model.show(first)
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
         window.contentView = view
         window.orderFront(nil)
         defer { window.close() }
@@ -680,13 +656,7 @@ import Testing
         model.draftAgent = agent
         _ = NSApplication.shared
         let host = NSHostingView(rootView: RootView(model: model).frame(width: 900, height: 600))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 900, height: 600))
         window.contentView = host
         window.orderFront(nil)
         defer { window.close() }
@@ -744,13 +714,7 @@ import Testing
         let model = fixture.model
         _ = NSApplication.shared
         let host = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 600))
         window.contentView = host
         window.orderFront(nil)
         defer { window.close() }

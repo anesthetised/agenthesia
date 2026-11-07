@@ -633,6 +633,20 @@ Wave 2:
   mitigation and 7 of 12 with it; after, 12 of 12 passed with it. `SourceView.highlightTask` now holds the latest
   highlight and the tests await it (`renderedColor` and `replacedTextIsNotHighlightedLate`, whose 300 ms sleep could
   also pass too early). The mitigation stays unchanged, so the #126 exposure is the same.
+- #251, hosted test windows (2026-11-07, Xcode 27): `OffscreenWindow` replaces the hand-made `NSWindow`s of the UI
+  tests (`[.titled]` or `[.titled, .resizable]` and no `.fullSizeContentView`), which showed on screen during
+  `just test` and drew `RootView`'s toolbar as an opaque band over the top of the detail column and the inspector.
+  The helper uses the style mask of the `WindowGroup` window and sits at (-30000, -30000). A `RootView` screenshot with
+  the old window and with the helper shows the band gone and the toolbar split per column as in the app. Tests that
+  measured a bare view under the title bar now take its safe area into account (`ContinueCardTests`,
+  `SessionInspectorTests.refreshShowsOnlyWithAWatchError`, `ReviewDiffTests`, `TranscriptResultTests`). Not checked:
+  `screencapture -l` returns "could not create image from window" for a window that overlaps no display, so the
+  proof window was moved to a 2 pt sliver at the screen edge. A view's display link does not tick in an off-screen
+  window, so `SessionFrameDriver` published no streamed frames: `theReviewDiffKeepsItsSelectionAcrossRefreshesAndStreaming`
+  failed every run and `aReplyWhileScrolledUpShowsTheCapsuleAndTheJumpFollowsTheEndAgain` once. Those two, and the
+  `SessionPaneLayoutTests` fixture they share, pass `drivesDisplayLink: true`: a transparent window on the screen that
+  ignores the mouse. The Rendering tests keep their `NSWindow`s: that target cannot see the helper, and the windows are
+  never shown. The app was not launched.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

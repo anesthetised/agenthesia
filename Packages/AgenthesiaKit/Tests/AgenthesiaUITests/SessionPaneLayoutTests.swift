@@ -41,13 +41,7 @@ import Testing
         try "hello\n".write(to: working.appending(path: "notes.txt"), atomically: true, encoding: .utf8)
         _ = NSApplication.shared
         let view = NSHostingView(rootView: RootView(model: inspector.model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: width, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: width, height: 700), drivesDisplayLink: true)
         window.contentView = view
         window.orderFront(nil)
         let fixture = Fixture(inspector: inspector, model: inspector.model, view: view, window: window)

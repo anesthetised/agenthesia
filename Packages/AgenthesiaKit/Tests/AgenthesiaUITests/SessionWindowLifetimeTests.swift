@@ -178,13 +178,7 @@ import Testing
 
     private func host(_ model: SessionWindowModel) -> NSWindow {
         _ = NSApplication.shared
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 100, height: 100))
         let view = SessionWindowLifetime.View()
         view.model = model
         window.contentView = view

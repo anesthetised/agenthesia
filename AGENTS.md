@@ -61,6 +61,15 @@ Automated tests cover logic and hosted views; what only the real app shows (syst
 Dock, menus, window opening and restoration) is checked in the built app, with the bundled `MockAgent` as
 the agent so no real agent or tokens are involved.
 
+Hosted view tests put their views in `OffscreenWindow` (`Packages/AgenthesiaKit/Tests/AgenthesiaUITests`), never in
+a hand-made `NSWindow`. It has the chrome of the app's `WindowGroup` window (`.fullSizeContentView`, so the toolbar
+does not draw as a band over `RootView`'s columns) and sits far outside every display, so `just test` shows nothing.
+`screencapture -l` cannot image such a window; a screenshot needs a temporary test that moves it onto a screen. A
+view's display link, which `SessionFrameDriver` publishes streamed transcript frames with, ticks only in a window on
+a screen, so a test that streams into the hosted view passes `drivesDisplayLink: true`: the window then sits on the
+screen, fully transparent and deaf to the mouse. A view alone directly under the title bar gets its safe area:
+measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `window.contentLayoutRect`.
+
 - **Prefer computer use.** When the session has computer-use tools, drive `just run`'s app with them and
   save screenshots as evidence. Request access for Agenthesia and any system surface involved, such as
   Notification Center or System Settings.

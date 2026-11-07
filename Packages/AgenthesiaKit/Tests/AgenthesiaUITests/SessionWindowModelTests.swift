@@ -501,6 +501,25 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func stopOnAnIdleSessionDoesNotPauseTheQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-idle-stop-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.refresh()
+        let controller = try #require(owner.controller)
+        #expect(controller.status == .idle && !model.canStop)
+        // The composer's ⌘. and round button call this; without Stop available it must do nothing.
+        await model.stop()
+        #expect(!controller.queuePaused)
+        await sessions.closeAll()
+    }
+
     @Test func transcriptTableDoesNotRetainItsSource() {
         let table = TranscriptTableController()
         weak var retained: DemoSession?

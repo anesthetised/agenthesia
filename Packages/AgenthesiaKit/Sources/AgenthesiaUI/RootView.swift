@@ -367,7 +367,7 @@ public struct RootView: View {
                 onSubmit: submit,
                 attachmentsEditable: model.composer.editingQueueID == nil,
                 onRecall: recallQueuedPrompt,
-                onStop: { Task { await model.owner?.stop() } },
+                onStop: { Task { await model.stop() } },
                 focusRequests: model.composerFocusRequests,
                 insertion: model.composerInsertion
             )
@@ -424,7 +424,7 @@ public struct RootView: View {
                 }
             }.labelStyle(.iconOnly).menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Button {
-                if action == .stop { Task { await model.owner?.stop() } } else { send() }
+                if action == .stop { Task { await model.stop() } } else { send() }
             } label: {
                 if action.showsTitle {
                     Label(action.title, systemImage: action.symbol)

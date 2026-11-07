@@ -91,7 +91,9 @@ captioned `not sent`.
   empty queue sends immediately and clears the pause ([ADR-0029](../adr/0029-empty-queue-recovery.md)).
 - With entries still queued and paused, Return queues the new draft behind them. Sending a draft now leaves them paused;
   sending the last queued entry now (Send Queue Now, Send Whole Queue Now) clears the pause.
-- A saved session opens read-only, with the Continue card in place of the composer, so its queue is not shown. After
+- A saved session opens read-only, with the Continue card in place of the composer. Its retained queue shows above the
+  card, read-only, captioned `Queued · sent after Continue`, without edit, move or delete buttons; it is read from the
+  session's history, and a session that cannot continue (merged, discarded) does not show it. After
   Continue, retained entries stay paused until the user resumes or sends them; an empty queue starts unpaused
   ([ADR-0017](../adr/0017-continue-saved-sessions.md), ADR-0029).
 - The sidebar row of an idle session with a paused, nonempty queue reads `Queue paused`; after a prompt error it reads
@@ -101,5 +103,6 @@ captioned `not sent`.
 
 - 2026-11-08, #261: summarised from ADR-0010, ADR-0021, ADR-0027, ADR-0028, ADR-0029 and ADR-0039, checked against main
   at c65b8a1.
+- 2026-11-08, #267: a saved session shows its retained queue read-only above the Continue card.
 - 2026-11-08, #263: ⌘. in the composer and the round button follow Session → Stop: nothing happens while Stop is
   unavailable, so an idle session's queue is not paused.

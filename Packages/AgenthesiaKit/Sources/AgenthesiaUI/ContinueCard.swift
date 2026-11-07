@@ -1,3 +1,4 @@
+import ACP
 import AgenthesiaCore
 import SwiftUI
 
@@ -26,15 +27,39 @@ struct ContinueCard: View {
     }
 
     let state: State
+    /// The last confirmed settings the session continues with, as `settingsLine` makes them.
+    var settings: String?
     let onContinue: () -> Void
 
+    /// The current value names of the select options in the agent's order, then the booleans that are on by name,
+    /// such as `Opus 5.5 · High · Plan`; nil when there are none.
+    static func settingsLine(_ options: [ACP.ConfigOption]) -> String? {
+        let parts = options.compactMap { option -> String? in
+            switch option.value {
+            case .select(let current, let choices):
+                return choices.allOptions.first { $0.value == current }?.name ?? current
+            case .boolean(let isOn):
+                return isOn ? option.name : nil
+            case .unknown:
+                return nil
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            Label(state.title, systemImage: state.symbol).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            if state.showsContinue {
-                Button("Continue", systemImage: "play.fill", action: onContinue)
-                    .buttonStyle(.borderedProminent).help("Reconnect to the agent.")
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Label(state.title, systemImage: state.symbol).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if state.showsContinue {
+                    Button("Continue", systemImage: "play.fill", action: onContinue)
+                        .buttonStyle(.borderedProminent).help("Reconnect to the agent.")
+                }
+            }
+            if let settings {
+                Text(settings).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .accessibilityLabel("Settings: \(settings)")
             }
         }
         .padding(12)

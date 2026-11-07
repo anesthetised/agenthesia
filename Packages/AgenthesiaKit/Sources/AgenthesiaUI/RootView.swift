@@ -332,7 +332,21 @@ public struct RootView: View {
                 outcome: model.outcome(of: session.session.id),
                 canContinue: model.canContinue
             ) {
-                ContinueCard(state: card, onContinue: model.continueRestored)
+                // What Continue brings back (ADR-0039): the retained queue and the last confirmed settings.
+                if card.showsContinue, !session.queuedPrompts.isEmpty {
+                    PromptQueue(
+                        session: session,
+                        editable: false,
+                        caption: "Queued · sent after Continue",
+                        onEdit: { _ in },
+                        onError: { _ in }
+                    )
+                }
+                ContinueCard(
+                    state: card,
+                    settings: card.showsContinue ? ContinueCard.settingsLine(session.transcript.configOptions) : nil,
+                    onContinue: model.continueRestored
+                )
             } else {
                 editorCard(session)
             }

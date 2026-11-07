@@ -129,7 +129,11 @@ instead. The draft before a session exists is described in [session-start.md](se
   | Merging | `Merging…` | no |
   | Merged or discarded | `Merged · read-only`, `Discarded · read-only` | no |
 
-- Settings are not shown on this card.
+- When the card offers Continue, it has a second line with the last confirmed settings, read from the session's
+  history: the current value name of each select option in the agent's order, then the booleans that are on by name,
+  joined by ` · `, for example `Opus 5.5 · High · Plan`. No line when there are none.
+- When the session has retained queued entries, they show above the card, read-only, as in
+  [queue.md](queue.md#recovery).
 
 ## Planned (M18)
 
@@ -152,3 +156,4 @@ moves it into the text above and deletes it here.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0018, ADR-0019 and ADR-0039 (Composer, amendment of 2026-11-02), checked
   against main at c65b8a1.
+- 2026-11-08, #267: the Continue card shows the last confirmed settings and the retained queue above it.

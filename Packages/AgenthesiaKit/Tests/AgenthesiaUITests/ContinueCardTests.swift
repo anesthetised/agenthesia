@@ -1,9 +1,11 @@
+import ACP
 import AgenthesiaCore
 import AppKit
 import Persistence
 import SwiftUI
 import Testing
 
+@testable import AgenthesiaCore
 @testable import AgenthesiaUI
 
 @MainActor @Suite(.serialized, .timeLimit(.minutes(1))) struct ContinueCardTests {
@@ -109,6 +111,105 @@ import Testing
         // The composer's editor is gone; the card offers Continue.
         #expect(views(NSTextView.self, in: host).filter(\.isEditable).isEmpty)
         #expect(model.displayed?.status == .readOnly)
+    }
+
+    private func select(
+        _ id: String,
+        name: String,
+        current: ACP.ConfigValueID,
+        choices: [(ACP.ConfigValueID, String)]
+    ) -> ACP.ConfigOption {
+        ACP.ConfigOption(
+            id: id,
+            name: name,
+            value: .select(
+                currentValue: current,
+                options: .flat(choices.map { ACP.ConfigSelectOption(value: $0.0, name: $0.1) })
+            )
+        )
+    }
+
+    @Test func settingsLineNamesSelectValuesInOrderThenBooleansThatAreOn() {
+        let model = select(
+            "model",
+            name: "Model",
+            current: "opus",
+            choices: [("sonnet", "Sonnet 5.5"), ("opus", "Opus 5.5")]
+        )
+        let effort = select("effort", name: "Effort", current: "high", choices: [("high", "High")])
+        let mode = select("mode", name: "Mode", current: "plan", choices: [("plan", "Plan")])
+        let fast = ACP.ConfigOption(id: "fast", name: "Fast mode", value: .boolean(currentValue: true))
+        let thinking = ACP.ConfigOption(id: "think", name: "Thinking", value: .boolean(currentValue: false))
+        #expect(ContinueCard.settingsLine([model, effort, mode]) == "Opus 5.5 · High · Plan")
+        #expect(ContinueCard.settingsLine([model, thinking, fast]) == "Opus 5.5 · Fast mode")
+        // A value the agent no longer lists reads as its identifier.
+        #expect(
+            ContinueCard.settingsLine([select("model", name: "Model", current: "gone", choices: [])]) == "gone"
+        )
+    }
+
+    @Test func settingsLineIsNilWithoutSettings() {
+        #expect(ContinueCard.settingsLine([]) == nil)
+        let off = ACP.ConfigOption(id: "fast", name: "Fast mode", value: .boolean(currentValue: false))
+        #expect(ContinueCard.settingsLine([off]) == nil)
+    }
+
+    @Test func savedSessionShowsItsQueueReadOnlyAndItsSettings() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "continue-queue-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = SessionManager(library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")))
+        let store = try await sessions.library.store()
+        let project = ProjectRecord(name: "Project", rootPath: directory.path)
+        let agent = AgentInstallRecord(name: "Mock", executable: "unused")
+        let record = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            agentSessionID: "saved",
+            title: "Saved",
+            workingDirectory: project.rootPath
+        )
+        try await store.createProject(project)
+        try await store.createAgentInstall(agent)
+        try await store.createSession(record)
+        let options = [
+            select("model", name: "Model", current: "opus", choices: [("opus", "Opus 5.5")]),
+            select("mode", name: "Mode", current: "plan", choices: [("plan", "Plan")]),
+        ]
+        let queued = [
+            QueuedPrompt(content: [.init(text: "first retained")]), QueuedPrompt(content: [.init(text: "second")]),
+        ]
+        _ = try await store.append(
+            [
+                try SessionEvent.started(configOptions: options).storedEvent(),
+                try SessionEvent.queueChanged(queued).storedEvent(),
+            ],
+            to: record.id
+        )
+        let model = SessionWindowModel(sessions: sessions)
+        await model.refresh()
+        await model.showHistory(record)
+        let host = NSHostingView(rootView: RootView(model: model))
+        let window = OffscreenWindow(size: .init(width: 1000, height: 600))
+        window.contentView = host
+        window.orderFront(nil)
+        defer { model.close(); window.close() }
+        for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        #expect(model.canContinue)
+        #expect(model.displayed?.queuedPrompts.map(\.text) == ["first retained", "second"])
+        let labels = accessibilityTexts(host)
+        #expect(labels.contains("Queued · sent after Continue"))
+        #expect(labels.contains("first retained") && labels.contains("second"))
+        #expect(labels.contains("Opus 5.5 · Plan"))
+        // Read-only: no edit, move or delete buttons.
+        #expect(!labels.contains("Edit queued message") && !labels.contains("Delete queued message"))
+    }
+
+    /// Every label, title and string value in the accessibility tree below `root`.
+    private func accessibilityTexts(_ root: Any) -> [String] {
+        guard let element = root as? any NSAccessibilityProtocol else { return [] }
+        let own = [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String]
+        return own.compactMap(\.self) + (element.accessibilityChildren() ?? []).flatMap(accessibilityTexts)
     }
 
     private func click(_ card: ContinueCard) async throws {

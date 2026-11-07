@@ -47,6 +47,44 @@ import Testing
         #expect(gutter.ruleThickness > 20)
     }
 
+    @Test func theGutterDrawsNothingOutsideTheDiff() async throws {
+        _ = NSApplication.shared
+        final class Backdrop: NSView {
+            override func draw(_ dirtyRect: NSRect) {
+                NSColor.black.setFill()
+                dirtyRect.fill()
+            }
+        }
+        let container = Backdrop(frame: .init(x: 0, y: 0, width: 480, height: 500))
+        let scroll = DiffTextView.scrollable()
+        scroll.frame = .init(x: 0, y: 100, width: 480, height: 300)
+        container.addSubview(scroll)
+        let window = NSWindow(
+            contentRect: container.frame,
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = container
+        defer { window.close() }
+        let textView = try #require(scroll.documentView as? DiffTextView)
+        await show("a\nb\n", "a\nB\n", in: textView)
+        let gutter = try #require(scroll.verticalRulerView as? DiffGutter)
+        container.layoutSubtreeIfNeeded()
+        container.display()
+        let bitmap = try #require(container.bitmapImageRepForCachingDisplay(in: container.bounds))
+        container.cacheDisplay(in: container.bounds, to: bitmap)
+        // Above and below the scroll view, every column across the gutter stays the backdrop's black.
+        let scale = CGFloat(bitmap.pixelsWide) / container.bounds.width
+        for x in stride(from: 0, through: gutter.ruleThickness + 2, by: 1) {
+            for y in [CGFloat(20), 80, 420, 480] {
+                let color = try #require(bitmap.colorAt(x: Int(x * scale), y: Int(y * scale)))
+                #expect(color.brightnessComponent < 0.05, "x \(x), y \(y)")
+            }
+        }
+    }
+
     @Test func aNewDiffKeepsTheTopLineAndEndsTheSelection() async throws {
         let (textView, window) = host()
         defer { window.close() }

@@ -139,6 +139,8 @@ final class DiffGutter: NSRulerView {
         self.textView = textView
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         clientView = textView
+        // The ruler's own background and edge are drawn past its bounds unless clipped (views no longer clip by default).
+        clipsToBounds = true
         update()
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(

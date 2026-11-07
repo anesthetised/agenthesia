@@ -146,6 +146,26 @@ import Testing
         #expect(sessions.shownSessionIDs.isEmpty)
     }
 
+    @Test func onlyAnActiveWindowShowingTheLiveSessionWatchesForItsResult() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-result-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await owner.send("hello")
+        let result = try #require(owner.unseenResult)
+        #expect(model.unseenResult(appearsActive: true) == result)
+        // A window that is not key watches nothing, so the mark stays.
+        #expect(model.unseenResult(appearsActive: false) == nil)
+        #expect(owner.activity == .done)
+        model.showingSetup = true
+        #expect(model.unseenResult(appearsActive: true) == nil)
+        await sessions.closeAll()
+    }
+
     @Test func sidebarFollowsTheManagerAndRefreshLoadsProjects() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-sidebar-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

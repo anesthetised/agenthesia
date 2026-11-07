@@ -60,6 +60,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     public private(set) var lastActivity: Date?
     /// Turns that ended on their own, not by Stop; the sidebar compares it with what the user has seen.
     public private(set) var completedTurns = 0
+    /// The transcript's last item when such a turn last ended: where its result ends (ADR-0026's amendment).
+    public private(set) var lastResultItem: Int64?
     public private(set) var status: Status = .ready {
         didSet {
             switch status {
@@ -685,7 +687,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             try await record(events)
             // A delayed cancel must reach the connection before a subsequent prompt is allowed.
             try await stopTask?.value
-            if reason != .cancelled { completedTurns += 1 }
+            if reason != .cancelled {
+                completedTurns += 1
+                lastResultItem = reduced.items.last?.id
+            }
             if status == .running || status == .stopping { status = .idle }
         } catch {
             promptStarted = false

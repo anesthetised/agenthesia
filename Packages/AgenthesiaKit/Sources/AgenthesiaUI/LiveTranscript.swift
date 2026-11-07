@@ -54,12 +54,15 @@ protocol TranscriptSource: AnyObject {
     func toggleExpansion(at row: Int)
     /// How many card rows follow the summary at `row` while it is expanded.
     func cardCount(ofGroupAt row: Int) -> Int
+    /// The row that shows the item with this identity, once it is displayed.
+    func row(ofItem id: Int64) -> Int?
 }
 
 extension TranscriptSource {
     var rows: [TranscriptRow] { (0..<messageCount).map(TranscriptRow.item) }
     func toggleExpansion(at row: Int) {}
     func cardCount(ofGroupAt row: Int) -> Int { 0 }
+    func row(ofItem id: Int64) -> Int? { nil }
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
@@ -278,6 +281,10 @@ final class LiveTranscriptSource: TranscriptSource {
         expanded.insert(items[index].id)
         revision += 1
         return rows.firstIndex(of: .item(index))
+    }
+
+    func row(ofItem id: Int64) -> Int? {
+        state.items.lastIndex { $0.id == id }.flatMap { TranscriptRow.row(showing: $0, in: rows) }
     }
 
     func cardCount(ofGroupAt row: Int) -> Int {
@@ -649,6 +656,10 @@ struct LiveTranscript: NSViewRepresentable {
     let session: SessionController
     let pathIndex: TranscriptPathIndex
     var find = TranscriptFindState()
+    /// Where an unseen result ends; the table watches the viewport for it only while it is set (ADR-0026's amendment).
+    var unseenResult: Int64?
+    /// The end of `unseenResult` was on screen.
+    var onResultShown: (Int64) -> Void = { _ in }
     /// A clicked path link, with the session whose transcript it was in.
     let onOpenPath: (PathLink, UUID) -> Void
 
@@ -678,6 +689,8 @@ struct LiveTranscript: NSViewRepresentable {
         }
         coordinator.table.update(coordinator.source)
         coordinator.table.findQuery = find.isOpen ? find.query : ""
+        coordinator.table.resultShown = onResultShown
+        coordinator.table.unseenResult = unseenResult
         if let row { coordinator.table.reveal(row: row) }
     }
     static func dismantleNSView(_ view: NSScrollView, coordinator: Coordinator) { coordinator.frames.stop() }

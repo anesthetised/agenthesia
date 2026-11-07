@@ -95,6 +95,11 @@ import SwiftUI
     }
     var library: SessionLibrary { sessions.library }
     var displayed: SessionController? { restored ?? owner?.controller }
+    /// The end of the live session's unseen result, which the transcript watches for while the window appears active
+    /// (ADR-0026's amendment).
+    func unseenResult(appearsActive: Bool) -> Int64? {
+        appearsActive && !showingSetup && restored == nil ? owner?.unseenResult : nil
+    }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
     /// A removed worktree has no files left to browse.
     var filesSession: SessionRecord? {

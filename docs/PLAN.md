@@ -514,8 +514,6 @@ Wave 2:
   line drawn through the pane's header and the toolbar, the whole height of the window: the ruler drew past its bounds,
   which views no longer clip by default. It now clips, with a bitmap test that fails without it. Not checked: light
   mode, Escape and Merge… from the pane in the app, VoiceOver; the ruler's numbers are not exposed to it.
-  and line counts are #214, Ask agent #215. Not checked in the running app, light or dark (the ruler was checked in
-  hosted snapshots in both), nor VoiceOver; the ruler's numbers are not exposed to it.
 - #211: the draft's hints are applied at start (ADR-0040's amendment), without pills yet (#212).
   `AgentCatalog.configHints` caches each agent's mode and model options from every confirmed list
   (`SessionController.onConfigOptions`, through `LiveSession` and `SessionManager.catalog`), in a `configHints` defaults
@@ -531,6 +529,22 @@ Wave 2:
   after Large was picked in one session, the next session from the draft started on `Model: Large` with the mode left
   at Ask. Not checked: a rejection in the app (a `--reject-config` command is a different agent with no cached hints;
   tests cover it), light mode.
+- #209: *Done* clears when the end of the finished turn was on screen, not when the window is key (ADR-0026's
+  amendment). `SessionController.lastResultItem` records the transcript's last item when a turn ends on its own;
+  `LiveSession.unseenResult` gives it while the turn is unseen, and `markSeen(reaching:)` sees every turn only for the
+  latest one. `SessionWindowModel.unseenResult(appearsActive:)` passes it to `LiveTranscript` only while the window
+  appears active and shows the live session. The table resolves it to a row (`TranscriptRow.row(showing:in:)`: a folded
+  group's summary, or the item's own row) and checks the pure `TranscriptTableController.showsEnd(of:in:)` (bottom edge
+  in the visible rect, 24 pt tolerance), coalesced to one check per main-queue turn after an update, a table layout, a
+  scroll or a clip-view resize; it observes the clip view only while a target is set. With no target, the per-update
+  path only tests it for `nil`. For #210: `followsEnd` and `scrollToEnd()`. Tests: the pure check (visible, partly
+  visible, scrolled away, within the tolerance, a shrunk and a grown clip), the folded and expanded row, Done staying
+  off screen and clearing when scrolled in or after the jump, a growing clip, an item not yet displayed, a window that
+  is not active, the latest turn's end against an earlier one, and no check running without a target (a counter).
+  Breaking the nil guard, the update hook or the bottom-edge rule made a test fail; in hosted tables the table's own
+  layout already runs on every scroll and clip resize, so no test fails without the clip-view observers, which stay
+  as the ADR's explicit watch. Not checked: the running app, light and dark, VoiceOver; Rendering Lab S1, S7 and S9
+  wait for the owner's approval of the workload.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

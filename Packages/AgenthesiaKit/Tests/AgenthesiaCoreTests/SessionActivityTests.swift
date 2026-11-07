@@ -45,6 +45,29 @@ import Testing
         return (directory, manager, AgentInstallRecord(name: "Mock", executable: binary.path))
     }
 
+    @Test func theUnseenResultIsTheEndOfTheLatestTurnUntilThatEndWasShown() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        #expect(owner.unseenResult == nil)
+        await owner.send("hello")
+        let controller = try #require(owner.controller)
+        let first = try #require(controller.lastResultItem)
+        #expect(owner.unseenResult == first)
+        await owner.send("again")
+        let second = try #require(controller.lastResultItem)
+        controller.publishTranscript()
+        #expect(second > first && controller.transcript.items.last?.id == second)
+        #expect(owner.unseenResult == second)
+        // An earlier turn's end is not the latest result; reaching the latest sees every turn.
+        owner.markSeen(reaching: first)
+        #expect(owner.activity == .done)
+        owner.markSeen(reaching: second)
+        #expect(owner.activity == .idle && owner.unseenResult == nil)
+        await manager.closeAll()
+    }
+
     @Test func aFinishedTurnIsDoneUntilSeenAndStopDoesNotCount() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

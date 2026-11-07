@@ -27,6 +27,16 @@ enum TranscriptRow: Hashable {
         return rows
     }
 
+    /// The row that shows item `index`: its own, or the summary of the folded group it is in.
+    static func row(showing index: Int, in rows: [TranscriptRow]) -> Int? {
+        rows.lastIndex { row in
+            switch row {
+            case .item(let item): item <= index
+            case .group(let first): first <= index
+            }
+        }
+    }
+
     /// The end of the run of tool calls at `first`.
     static func groupEnd(from first: Int, count: Int, isToolCall: (Int) -> Bool) -> Int {
         var end = first

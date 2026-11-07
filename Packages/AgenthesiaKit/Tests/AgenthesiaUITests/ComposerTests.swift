@@ -87,6 +87,23 @@ struct ComposerTests {
         #expect(received == [file])
     }
 
+    @Test func anInsertionGoesAtTheCaretOnLinesOfItsOwn() {
+        #expect(FileTextView.block("q", after: "") == "q\n")
+        #expect(FileTextView.block("q", after: "line\n") == "q\n")
+        #expect(FileTextView.block("q", after: "Hi") == "\nq\n")
+        let view = FileTextView()
+        view.string = "Hi there"
+        view.setSelectedRange(NSRange(location: 2, length: 0))
+        view.insertBlock("quote")
+        #expect(view.string == "Hi\nquote\n there")
+        #expect(view.selectedRange() == NSRange(location: 9, length: 0))
+        // Selected text stays; the quote follows it.
+        view.string = "Hi there"
+        view.setSelectedRange(NSRange(location: 0, length: 2))
+        view.insertBlock("quote")
+        #expect(view.string == "Hi\nquote\n there")
+    }
+
     @Test func textViewReportsEditsAndCommands() throws {
         var text = "", commands: [Selector] = []
         let representable = ComposerTextView(

@@ -15,6 +15,8 @@ struct ComposerInput: View {
     var onStop: () -> Void = {}
     /// Each increase moves keyboard focus to the text (Session → Focus Composer).
     var focusRequests = 0
+    /// Text to put at the caret, such as an Ask agent quote; each one is inserted once.
+    var insertion: ComposerInsertion?
     @State private var selection = 0
     /// Escape hides the commands until the draft leaves command mode.
     @State private var dismissed = false
@@ -30,7 +32,8 @@ struct ComposerInput: View {
                 onCommand: { handle($0, matches: matches) },
                 onFiles: { if isEnabled && attachmentsEditable { Self.add($0, to: &attachments) } },
                 onShortcut: { handleShortcut($0, matches: matches) },
-                focusRequests: focusRequests
+                focusRequests: focusRequests,
+                insertion: insertion
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -190,6 +193,12 @@ struct ComposerInput: View {
     }
 }
 
+/// Text for the composer to insert at its caret; a new value is inserted even when the text repeats.
+struct ComposerInsertion: Equatable {
+    let id = UUID()
+    let text: String
+}
+
 /// A plain-text `NSTextView` that grows with its content and hands file drops and pastes to `onFiles`.
 struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
@@ -199,6 +208,7 @@ struct ComposerTextView: NSViewRepresentable {
     var onFiles: ([URL]) -> Void
     var onShortcut: (NSEvent) -> Bool = { _ in false }
     var focusRequests = 0
+    var insertion: ComposerInsertion?
 
     static let font = NSFont.preferredFont(forTextStyle: .body)
     private static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
@@ -240,6 +250,11 @@ struct ComposerTextView: NSViewRepresentable {
             context.coordinator.focusRequests = focusRequests
             textView.window?.makeFirstResponder(textView)
         }
+        if let insertion, context.coordinator.insertionID != insertion.id {
+            context.coordinator.insertionID = insertion.id
+            // Past the view update, as the edit writes the text binding.
+            Task { @MainActor in textView.insertBlock(insertion.text) }
+        }
     }
 
     private func update(_ textView: FileTextView, coordinator: Coordinator) {
@@ -274,10 +289,13 @@ struct ComposerTextView: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerTextView
         var focusRequests: Int
+        /// The last insertion done, or the one pending when the view was made, which belongs to an earlier one.
+        var insertionID: UUID?
 
         init(_ parent: ComposerTextView) {
             self.parent = parent
             focusRequests = parent.focusRequests
+            insertionID = parent.insertion?.id
         }
 
         func textDidChange(_ notification: Notification) {
@@ -303,6 +321,20 @@ final class FileTextView: NSTextView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+    }
+
+    /// Inserts `text` at the caret, after any selected text, on lines of its own, as a typed edit that Undo reverts.
+    func insertBlock(_ text: String) {
+        let location = NSMaxRange(selectedRange())
+        insertText(
+            Self.block(text, after: (string as NSString).substring(to: location)),
+            replacementRange: NSRange(location: location, length: 0)
+        )
+    }
+
+    /// `text` with a line break before it unless `before` ends a line, and one after it for what the user types next.
+    static func block(_ text: String, after before: String) -> String {
+        (before.isEmpty || before.hasSuffix("\n") ? "" : "\n") + text + "\n"
     }
 
     override func paste(_ sender: Any?) {

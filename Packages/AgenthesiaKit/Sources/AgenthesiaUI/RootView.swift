@@ -368,7 +368,8 @@ public struct RootView: View {
                 attachmentsEditable: model.composer.editingQueueID == nil,
                 onRecall: recallQueuedPrompt,
                 onStop: { Task { await model.owner?.stop() } },
-                focusRequests: model.composerFocusRequests
+                focusRequests: model.composerFocusRequests,
+                insertion: model.composerInsertion
             )
             composerControls(session)
         }

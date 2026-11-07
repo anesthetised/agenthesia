@@ -596,6 +596,16 @@ Wave 2:
   footer reached `3 of 3 viewed`. Session → Mark Viewed and Go to Next is listed. Not checked: VoiceOver; the hosted
   SwiftUI list exposes no accessibility tree to tests, so the row's button and counts are not asserted there. A renamed file shows counts as a deletion plus an addition (`changeStats` uses
   `--no-renames`), not as the net edit.
+- #215: Ask agent in the review pane (ADR-0041). The footer, the diff's context menu and Session → Ask Agent (⌥⌘A,
+  free among every key equivalent in the app) call `SessionWindowModel.askAgent()`, which quotes the selected diff lines
+  (`DiffTextView.lines(in:lineStarts:)`, pure, then `DiffQuote.make`) at the composer's caret and focuses the composer;
+  nothing is sent. A quote from a held diff carries the earlier-version note. It is disabled, with the reason in its
+  help text, when the session cannot take a prompt. Tests: a selection growing to whole lines, hunk headers left out
+  and a selection across two hunks; insertion at the caret and after selected text, keeping the draft; the hosted
+  window's composer receiving the quote at its caret and first responder; the stale note through the context menu;
+  disabled with help text once the session ended. The footer button and the menu command call the same
+  `askAgent()`, but SwiftUI buttons and menu commands cannot be pressed in a package test, so only the context menu's
+  item is pressed there. Not checked in the running app yet.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

@@ -33,11 +33,13 @@ struct SessionReviewPane: View {
             } else {
                 fileList
                 Divider()
-                SessionReviewDetail(review: review, onEscape: close)
+                SessionReviewDetail(review: review, model: model, onEscape: close)
             }
             Divider()
-            // Ask agent (#215) goes before Merge.
             HStack {
+                Button("Ask Agent", action: model.askAgent)
+                    .disabled(!model.canAskAgent)
+                    .help(model.askAgentHelp)
                 Button("Merge…") { Task { await model.requestMerge() } }
                     .disabled(!model.canMerge)
                     .help(model.mergeHelp ?? "")

@@ -508,8 +508,12 @@ Wave 2:
   actor, so no benchmark was added. Tests: the toggle and the slot in every pane combination at 740, 1000 and
   1400 pt, the hold, Show latest, an unchanged file and streaming leaving the text view, selection and scroll position
   alone, Escape, the merge sheet from `RootView`, the diff's lines and numbers, and the hold logic in Core. Viewed marks
-  and line counts are #214, Ask agent #215. Not checked in the running app, light or dark (the ruler was checked in
-  hosted snapshots in both), nor VoiceOver; the ruler's numbers are not exposed to it.
+  and line counts are #214, Ask agent #215. Running app (scripted, MockAgent, isolated home, dark): ⌃⌘R opened and
+  closed the pane, the list and the numbered diff showed two changed files, and a file changed while text was selected
+  held the diff under `File changed · Show latest`, which then showed the new line. The check found the gutter's edge
+  line drawn through the pane's header and the toolbar, the whole height of the window: the ruler drew past its bounds,
+  which views no longer clip by default. It now clips, with a bitmap test that fails without it. Not checked: light
+  mode, Escape and Merge… from the pane in the app, VoiceOver; the ruler's numbers are not exposed to it.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

@@ -31,6 +31,8 @@ final class DiffTextView: NSTextView {
     /// The document shown; a render of the same document changes nothing.
     private(set) var document: SessionReview.Document?
     var onEscape: () -> Void = {}
+    /// Ask agent in the context menu; nil leaves it out.
+    weak var model: SessionWindowModel?
 
     /// A scroll view with the text view and its line-number ruler.
     static func scrollable() -> NSScrollView {
@@ -120,6 +122,39 @@ final class DiffTextView: NSTextView {
             if lineStarts[middle] <= offset { low = middle } else { high = middle - 1 }
         }
         return low
+    }
+
+    /// The text lines a selection touches, whole: a selection that ends at a line's start leaves that line out.
+    /// Nil when nothing is selected.
+    static func lines(in selection: NSRange, lineStarts: [Int]) -> ClosedRange<Int>? {
+        guard selection.length > 0 else { return nil }
+        let first = line(at: selection.location, lineStarts: lineStarts)
+        return first...line(at: NSMaxRange(selection) - 1, lineStarts: lineStarts)
+    }
+
+    /// The selected lines as an Ask agent quote; `stale` when the file changed since the shown diff (ADR-0041).
+    func quote(stale: Bool) -> String? {
+        guard let document, let range = Self.lines(in: selectedRange(), lineStarts: lineStarts),
+            range.upperBound < lines.count
+        else { return nil }
+        return DiffQuote.make(path: document.path, lines: Array(lines[range]), stale: stale)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event)
+        guard let model, let menu else { return menu }
+        let item = NSMenuItem(title: "Ask Agent", action: #selector(askAgent(_:)), keyEquivalent: "")
+        item.target = self
+        item.toolTip = model.askAgentHelp
+        menu.insertItem(item, at: 0)
+        menu.insertItem(.separator(), at: 1)
+        return menu
+    }
+
+    @objc func askAgent(_ sender: Any?) { model?.askAgent() }
+
+    override func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action == #selector(askAgent(_:)) ? model?.canAskAgent == true : super.validateMenuItem(item)
     }
 
     /// Escape closes the pane unless text is selected (ADR-0041).
@@ -212,9 +247,11 @@ final class DiffGutter: NSRulerView {
     }
 }
 
-/// ``DiffTextView`` for SwiftUI. It reports whether text is selected, which holds the diff while the file changes.
+/// ``DiffTextView`` for SwiftUI. It reports whether text is selected, which holds the diff while the file changes,
+/// and gives the window's model the view to quote for Ask agent.
 struct ReviewDiffView: NSViewRepresentable {
     let diff: RenderedDiff
+    let model: SessionWindowModel
     let onSelection: (Bool) -> Void
     let onEscape: () -> Void
 
@@ -235,6 +272,8 @@ struct ReviewDiffView: NSViewRepresentable {
     private func update(_ textView: DiffTextView, coordinator: Coordinator) {
         coordinator.onSelection = onSelection
         textView.onEscape = onEscape
+        textView.model = model
+        model.reviewDiff = textView
         textView.show(diff)
     }
 

@@ -110,6 +110,38 @@ import Testing
         #expect(textView.topLine != nil)
     }
 
+    @Test func aSelectionGrowsToTheWholeLinesItTouches() {
+        // `@@ -1,3 +1,4 @@`, ` a`, `-b`, `+B`, ` c`, `+d`.
+        let starts = [0, 16, 19, 22, 25, 28]
+        #expect(DiffTextView.lines(in: NSRange(location: 17, length: 1), lineStarts: starts) == 1...1)
+        #expect(DiffTextView.lines(in: NSRange(location: 5, length: 16), lineStarts: starts) == 0...2)
+        // Ending at a line's start leaves that line out; the last line has no line break.
+        #expect(DiffTextView.lines(in: NSRange(location: 16, length: 6), lineStarts: starts) == 1...2)
+        #expect(DiffTextView.lines(in: NSRange(location: 26, length: 4), lineStarts: starts) == 4...5)
+        #expect(DiffTextView.lines(in: NSRange(location: 17, length: 0), lineStarts: starts) == nil)
+    }
+
+    @Test func theSelectionQuotesItsLinesWithoutHunkHeadersAndAcrossHunks() async throws {
+        let (textView, window) = host()
+        defer { window.close() }
+        #expect(textView.quote(stale: false) == nil)
+        let old = (1...30).map { "line \($0)" }.joined(separator: "\n") + "\n"
+        let new = old.replacingOccurrences(of: "line 3\n", with: "three\n")
+            .replacingOccurrences(of: "line 25\n", with: "twenty-five\n")
+        await show(old, new, path: "Sources/App.swift", in: textView)
+        #expect(textView.lines.filter { $0.kind == .hunk }.count == 2)
+        // From inside the first hunk's header to the middle of the second hunk's added line.
+        let added = try #require(textView.lines.firstIndex { $0.text == "twenty-five" })
+        textView.setSelectedRange(NSRange(location: 3, length: textView.lineStarts[added] + 2 - 3))
+        let quote = try #require(textView.quote(stale: false))
+        #expect(quote.hasPrefix("`Sources/App.swift:1-6, 22-25`\n```diff\n line 1\n"))
+        #expect(!quote.contains("@@") && quote.hasSuffix("+twenty-five\n```"))
+        #expect(textView.quote(stale: true) == quote + "\n(from an earlier version; lines may have moved)")
+        // Only a header selected quotes nothing.
+        textView.setSelectedRange(NSRange(location: 0, length: 3))
+        #expect(textView.quote(stale: false) == nil)
+    }
+
     @Test func escapeClosesOnlyWithoutASelection() async {
         let (textView, window) = host()
         defer { window.close() }

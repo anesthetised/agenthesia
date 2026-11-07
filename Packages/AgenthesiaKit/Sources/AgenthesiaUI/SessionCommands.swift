@@ -41,6 +41,10 @@ public struct SessionCommands: Commands {
             Button("Mark Viewed and Go to Next") { model?.markViewedAndAdvance() }
                 .keyboardShortcut("v", modifiers: [.command, .option])
                 .disabled(model?.canMarkViewed != true)
+            Button("Ask Agent") { model?.askAgent() }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .disabled(model?.canAskAgent != true)
+                .help(model?.askAgentHelp ?? "")
             Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
                 .disabled(model?.canMerge != true)
             Divider()

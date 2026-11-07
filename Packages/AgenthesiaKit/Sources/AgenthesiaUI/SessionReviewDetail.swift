@@ -4,6 +4,7 @@ import SwiftUI
 /// The selected file's diff. A new diff replaces the shown one only once it is rendered, so nothing flickers.
 struct SessionReviewDetail: View {
     let review: SessionReview
+    let model: SessionWindowModel
     let onEscape: () -> Void
     @State private var diff: RenderedDiff?
 
@@ -40,7 +41,12 @@ struct SessionReviewDetail: View {
                     ContentUnavailableView("No text changes", systemImage: "doc.text")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ReviewDiffView(diff: diff, onSelection: { review.hasSelection = $0 }, onEscape: onEscape)
+                    ReviewDiffView(
+                        diff: diff,
+                        model: model,
+                        onSelection: { review.hasSelection = $0 },
+                        onEscape: onEscape
+                    )
                 }
             } else {
                 ProgressView("Loading changes…").frame(maxWidth: .infinity, maxHeight: .infinity)

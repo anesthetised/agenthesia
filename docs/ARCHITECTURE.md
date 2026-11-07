@@ -434,7 +434,8 @@ new session whose startup failed before its first prompt was submitted, which re
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
 ⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G, and Jump to Latest ⌥⌘↓. Permission answers keep ⌥⌘1…⌥⌘9. ⌘1…⌘9 (Session → Switch to Session, ADR-0046) select the first nine rows of Needs You and Working in the filtered sidebar, in the order on screen; Settled is not numbered. `SessionSidebar.numberedRows` is the pure mapping, `SessionWindowModel.numberedSessions` pads it to nine items (a number without a row is disabled, titled “No Session”) and the menu lists each row's title. Commands are
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G, and Jump to Latest ⌥⌘↓. The review pane's commands are Review Changes ⌃⌘R, Mark Viewed and Go to Next ⌥⌘V and
+Ask Agent ⌥⌘A. Permission answers keep ⌥⌘1…⌥⌘9. ⌘1…⌘9 (Session → Switch to Session, ADR-0046) select the first nine rows of Needs You and Working in the filtered sidebar, in the order on screen; Settled is not numbered. `SessionSidebar.numberedRows` is the pure mapping, `SessionWindowModel.numberedSessions` pads it to nine items (a number without a row is disabled, titled “No Session”) and the menu lists each row's title. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.
@@ -581,7 +582,21 @@ unviewed file after the selected one, wrapping round. `SessionWindowModel` owns 
 survive closing the pane and reviewing another session in the window; closing the window, a merge or relaunching ends
 them, and they never reach the append-only log. Marks do not affect Merge. The list's counts are
 `SessionWorkspace.changeStats(in:baseRevision:)` with the review snapshot's own merge base, read on each refresh; a
-failure to count leaves the list without counts and does not fail the review. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
+failure to count leaves the list without counts and does not fail the review.
+
+Ask agent (#215). With lines selected in the diff, *Ask Agent* in the footer, at the top of the diff's context menu
+and in the Session menu (⌥⌘A, free among every key equivalent in the app) calls `SessionWindowModel.askAgent()`. Only
+the diff view knows its selection, so `ReviewDiffView` hands the model its `DiffTextView` (`reviewDiff`, weak).
+`DiffTextView.lines(in:lineStarts:)`, a pure function, grows the selection to whole text lines (one that ends at a
+line's start leaves that line out), and `quote(stale:)` passes those lines to `DiffQuote.make`, which drops hunk
+headers and lists one range per hunk. The quote is marked `(from an earlier version; lines may have moved)` while the
+diff is held (`SessionReview.isHolding`). The model stores it as a `ComposerInsertion` (an id and the text) and asks
+for composer focus; `ComposerTextView` inserts each new insertion once with `FileTextView.insertBlock`, at the end of
+the composer's selection so that selected text stays, on lines of its own, as an undoable edit that writes the draft
+binding. A queued message being edited is the composer's text, so the quote goes there. Nothing is sent. Ask agent is
+disabled, with the reason in its help text, while the displayed session cannot take a prompt
+(`promptUnavailableReason`: the composer card is replaced by the Continue card, as for saved history or an ended
+session, or is not shown), and without a selection. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
 `RootView` presents.
 
 > **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds a `Push <base> to <remote>` checkbox to the

@@ -33,11 +33,13 @@ struct SessionReviewPane: View {
             } else {
                 fileList
                 Divider()
-                SessionReviewDetail(review: review, onEscape: close)
+                SessionReviewDetail(review: review, model: model, onEscape: close)
             }
             Divider()
-            // Ask agent (#215) goes before Merge.
             HStack {
+                Button("Ask Agent", action: model.askAgent)
+                    .disabled(!model.canAskAgent)
+                    .help(model.askAgentHelp)
                 Button("Merge…") { Task { await model.requestMerge() } }
                     .disabled(!model.canMerge)
                     .help(model.mergeHelp ?? "")
@@ -65,8 +67,9 @@ struct SessionReviewPane: View {
             }
         }
         .accessibilityLabel("Changed files")
-        // ponytail: estimated row heights; a list of renames is cut a little early, measure rows if that matters.
-        .frame(height: min(CGFloat(review.changes.count) * 36 + 12, height / 3))
+        // ponytail: estimated row heights, plus the list's top and bottom insets; a list of renames is cut a little
+        // early, measure rows if that matters.
+        .frame(height: min(CGFloat(review.changes.count) * 38 + 22, height / 3))
     }
 
     private func close() { model.showingReview = false }

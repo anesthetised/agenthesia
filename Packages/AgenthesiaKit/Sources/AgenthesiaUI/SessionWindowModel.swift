@@ -99,6 +99,42 @@ import SwiftUI
     /// ⌥⌘V: marks the selected file viewed and moves to the next unviewed one.
     func markViewedAndAdvance() { review?.markSelectedViewedAndAdvance() }
 
+    /// The review's diff, which alone knows its selection (ADR-0041); it sets itself here when it is made.
+    @ObservationIgnored weak var reviewDiff: DiffTextView?
+    /// The latest quote Ask agent put at the composer's caret; the composer inserts each one once.
+    var composerInsertion: ComposerInsertion?
+
+    /// Why the displayed session cannot take a prompt, which disables Ask agent; nil while its composer is shown.
+    var promptUnavailableReason: String? {
+        if let session = displayed,
+            let card = ContinueCard.State(
+                status: session.status,
+                isMerging: session.isMerging,
+                outcome: outcome(of: session.session.id),
+                canContinue: canContinue
+            )
+        {
+            return "\(card.title): the session cannot take a prompt"
+        }
+        return canFocusComposer ? nil : "The session cannot take a prompt"
+    }
+
+    /// ⌥⌘A, the review footer and the diff's context menu need lines selected and a composer to put them in.
+    var canAskAgent: Bool { isReviewShown && review?.hasSelection == true && promptUnavailableReason == nil }
+    var askAgentHelp: String {
+        promptUnavailableReason
+            ?? (review?.hasSelection == true
+                ? "Quote the selected lines in the message (⌥⌘A)"
+                : "Select lines in the diff to quote them in the message (⌥⌘A)")
+    }
+
+    /// Ask agent: quotes the selected diff lines at the composer's caret and focuses it; nothing is sent (ADR-0041).
+    func askAgent() {
+        guard canAskAgent, let quote = reviewDiff?.quote(stale: review?.isHolding == true) else { return }
+        composerInsertion = ComposerInsertion(text: quote)
+        focusComposer()
+    }
+
     /// Installed and local agents for the draft; without it, only a custom command (ADR-0036).
     let catalog: AgentCatalog?
 

@@ -328,7 +328,7 @@ extension LiveSessionTests {
             )
             if terminateExternally {
                 #expect(kill(pid, SIGTERM) == 0)
-                while controller.status != .closed { await Task.yield() }
+                while controller.status != .closed, !Task.isCancelled { await Task.yield() }
                 #expect(owner.errorMessage != nil)
             }
             await owner.close()

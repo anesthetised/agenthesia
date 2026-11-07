@@ -655,7 +655,7 @@ extension SessionControllerTests {
         let send = Task { try await controller.send([.init(text: "closing")]) }
         await gate.waitUntilEntered()
         let closing = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         await gate.open()
         await closing.value
         await #expect(throws: (any Error).self) { try await send.value }
@@ -801,7 +801,7 @@ extension SessionControllerTests {
         }
         await gate.waitUntilEntered()
         let closing = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         await gate.open()
         await closing.value
         do {
@@ -878,7 +878,7 @@ extension SessionControllerTests {
         let turn = Task { try await controller.send([.init(text: "hello")]) }
         await gate.waitUntilEntered()
         let closing = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         await gate.open()
         await closing.value
         do {
@@ -1107,7 +1107,7 @@ extension SessionControllerTests {
             try await stop.value
         case "close":
             closing = Task { await controller.close() }
-            while controller.status != .closed { await Task.yield() }
+            while controller.status != .closed, !Task.isCancelled { await Task.yield() }
             await gate.open()
         default:
             request.cancel()
@@ -1510,7 +1510,7 @@ extension SessionControllerTests {
         let change = Task { try await controller.setConfigOption("model", to: .select("large")) }
         await gate.waitUntilEntered()
         let close = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         var secondCloseFinished = false
         let secondClose = Task {
             await controller.close()
@@ -1558,7 +1558,7 @@ extension SessionControllerTests {
         let change = Task { try await controller.setConfigOption("flag", to: .boolean(true)) }
         await gate.waitUntilEntered()
         let close = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         await gate.open()
         _ = try? await change.value
         await close.value
@@ -1647,7 +1647,7 @@ extension SessionControllerTests {
         var closing: Task<Void, Never>?
         if close {
             closing = Task { await controller.close() }
-            while controller.status != .closed { await Task.yield() }
+            while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         } else {
             task.cancel()
         }
@@ -1798,7 +1798,7 @@ extension InputLifecycleTests {
         let task = Task { await controller.requestInput(request) }
         await gate.waitUntilEntered()
         let closing = Task { await controller.close() }
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         let repeated = Task { await controller.close() }
         await gate.open()
         await closing.value

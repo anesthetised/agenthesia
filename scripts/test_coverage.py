@@ -100,6 +100,15 @@ class CoverageTestSchedulingTests(unittest.TestCase):
                 runtime = test.startswith(("AgentRuntimeTests.", "AgentRuntimeTests/"))
                 self.assertEqual(selected, [not hosted and not runtime, runtime, hosted])
 
+    def test_limits_parallel_tests_so_time_limits_count_from_each_test_start(self):
+        with patch.dict(os.environ, clear=False), patch.object(coverage.os, "cpu_count", return_value=3):
+            os.environ.pop("SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH", None)
+            _, _, runs = self.invoke()
+            self.assertEqual({call.args[1]["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] for call in runs}, {"12"})
+            os.environ["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] = "5"
+            _, _, runs = self.invoke()
+            self.assertEqual({call.args[1]["SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH"] for call in runs}, {"5"})
+
     def test_failure_in_any_group_fails_the_run_and_still_checks_all(self):
         for statuses, expected in [((17, 0, 0), 17), ((0, 19, 0), 19), ((0, 0, 23), 23), ((124, 19, 23), 124)]:
             with self.subTest(statuses=statuses):

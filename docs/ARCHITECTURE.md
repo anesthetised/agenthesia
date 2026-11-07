@@ -543,8 +543,9 @@ the two the slot holds, opening a file hides the review, and hiding the review b
 The hidden one keeps its state. The slot keeps the file pane's rules (240 pt minimum, hidden below a 480 pt column, the
 inspector gives way first) with its own remembered width, `reviewWidth`, 560 pt by default. The transcript and the
 composer stay live beside it. The pane shows what is compared (`Changes against <base>`, with `WatchErrorNotice` when
-watching failed), the native file list (at most a third of the pane's height; path, status and rename source), the
-selected file's diff and a footer with Merge…. `SessionWorkspace.review` compares the current working tree with
+watching failed), the native file list (at most a third of the pane's height; `ReviewFileRow`: path, status, rename
+source, line counts and a viewed mark), the selected file's diff and a footer with Merge… and the viewed count
+(`2 of 5 viewed`). `SessionWorkspace.review` compares the current working tree with
 `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)), including staged,
 unstaged and nonignored untracked files. It retains rename sources and reports a missing base branch explicitly.
 Without `baseBranch`, it compares with `baseRevision`, or HEAD for legacy sessions with neither. Paths are relative to
@@ -568,7 +569,19 @@ new number. A new document replaces the text in place once it is rendered, keeps
 the selection; the view's identity depends only on the pane, so transcript frames do not touch it. A 5,000-line file
 rewritten (10,001 diff lines) renders off the main actor in 0.2–0.4 s and shows and draws in 30–50 ms; the first
 scroll to its end lays out the rest in 0.15–0.3 s (`ReviewDiffTests`, on a loaded machine). Session replacement or window
-closure ends the review. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
+closure ends the review.
+
+Viewed marks and line counts (#214). `ViewedMarks` (Core) holds a mark per path with a `Fingerprint` of what was
+viewed: status, and size and modification time from `lstat` of the working file. `SessionReview.refresh` reads the
+fingerprints of the marked files off the main actor and `keep(matching:)` drops every mark whose fingerprint differs or
+whose file left the list (`ViewedMarks.surviving`, a pure function); a `touch` clears a mark too. The row's button
+(`SessionReview.toggleViewed`) and ⌥⌘V (*Mark Viewed and Go to Next* in the Session menu, enabled while the pane is
+shown and a file is selected; `SessionReview.markSelectedViewedAndAdvance`) set marks, and ⌥⌘V then selects the next
+unviewed file after the selected one, wrapping round. `SessionWindowModel` owns one `ViewedMarks` per session, so marks
+survive closing the pane and reviewing another session in the window; closing the window, a merge or relaunching ends
+them, and they never reach the append-only log. Marks do not affect Merge. The list's counts are
+`SessionWorkspace.changeStats(in:baseRevision:)` with the review snapshot's own merge base, read on each refresh; a
+failure to count leaves the list without counts and does not fail the review. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
 `RootView` presents.
 
 > **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds a `Push <base> to <remote>` checkbox to the

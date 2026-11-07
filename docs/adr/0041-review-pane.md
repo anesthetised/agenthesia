@@ -1,6 +1,6 @@
 # 0041. Review as a pane, with Ask agent
 
-- Status: Accepted (#195, 2026-11-06). The pane is implemented in #213; viewed marks and line counts are #214, Ask
+- Status: Accepted (#195, 2026-11-06). The pane is implemented in #213, viewed marks and line counts in #214; Ask
   agent is #215.
 - Date: 2026-11-02
 - Decider: Project owner

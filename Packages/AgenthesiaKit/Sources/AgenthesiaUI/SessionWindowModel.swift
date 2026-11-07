@@ -64,6 +64,9 @@ import SwiftUI
     let files = SessionFiles()
     /// The review of the displayed session; it keeps its state while the review pane is hidden (ADR-0041).
     var review: SessionReview?
+    /// Viewed marks by session. They outlive the review (it is replaced when another session is reviewed) and end
+    /// with the window; they are a reading aid and never reach the log (ADR-0041).
+    private var viewedMarks: [UUID: ViewedMarks] = [:]
     /// Whether the review pane is wanted in the file pane's slot; opening a file hides it again.
     var showingReview = false
 
@@ -82,9 +85,19 @@ import SwiftUI
             return
         }
         guard canReview, let session = displayed?.session, let root = files.root else { return }
-        if review?.id != session.id { review = SessionReview(session: session, root: root) }
+        if review?.id != session.id {
+            let viewed = viewedMarks[session.id] ?? ViewedMarks()
+            viewedMarks[session.id] = viewed
+            review = SessionReview(session: session, root: root, viewed: viewed)
+        }
         showingReview = true
     }
+
+    /// ⌥⌘V needs the review pane and a selected file.
+    var canMarkViewed: Bool { isReviewShown && review?.selectedPath != nil }
+
+    /// ⌥⌘V: marks the selected file viewed and moves to the next unviewed one.
+    func markViewedAndAdvance() { review?.markSelectedViewedAndAdvance() }
 
     /// Installed and local agents for the draft; without it, only a custom command (ADR-0036).
     let catalog: AgentCatalog?
@@ -485,6 +498,7 @@ import SwiftUI
             return
         }
         if merge === request { merge = nil }
+        viewedMarks[id] = nil
         if review?.id == id {
             review = nil
             showingReview = false

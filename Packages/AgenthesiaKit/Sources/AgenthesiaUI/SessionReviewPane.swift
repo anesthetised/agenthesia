@@ -36,12 +36,16 @@ struct SessionReviewPane: View {
                 SessionReviewDetail(review: review, onEscape: close)
             }
             Divider()
-            // Ask agent (#215) goes before Merge, the viewed count (#214) after it.
+            // Ask agent (#215) goes before Merge.
             HStack {
                 Button("Merge…") { Task { await model.requestMerge() } }
                     .disabled(!model.canMerge)
                     .help(model.mergeHelp ?? "")
                 Spacer()
+                if !review.changes.isEmpty {
+                    Text(review.viewedSummary)
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                }
             }.padding(8)
         }
         .onExitCommand(perform: close)
@@ -51,17 +55,13 @@ struct SessionReviewPane: View {
     private var fileList: some View {
         List(selection: $review.selectedPath) {
             ForEach(review.changes) { change in
-                VStack(alignment: .leading) {
-                    Text(change.path).lineLimit(1).truncationMode(.middle)
-                    Text(change.status.rawValue).font(.caption).foregroundStyle(.secondary)
-                    if let previous = change.previousPath {
-                        Text("From \(previous)").font(.caption).foregroundStyle(.secondary)
-                            .lineLimit(1).truncationMode(.middle)
-                    }
-                }
+                ReviewFileRow(
+                    change: change,
+                    lines: review.stats.files[change.path],
+                    isBinary: review.stats.binary.contains(change.path),
+                    isViewed: review.viewed.isViewed(change.path)
+                ) { review.toggleViewed(change.path) }
                 .tag(change.path)
-                .help(change.path)
-                .accessibilityElement(children: .combine)
             }
         }
         .accessibilityLabel("Changed files")

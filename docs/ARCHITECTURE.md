@@ -882,8 +882,9 @@ the terminal; sign-in writes typing in order on a private queue (dropping what a
 within a second) and sets the window size, both refused once the master side is closed. Output observers
 receive the retained bytes, then each chunk as it is read, until the end of output. The master side is read continuously, because a terminal's last close waits for its output
 to be read; raw bytes are retained up to the output limit (1 MiB by default), dropping the oldest in
-batches so that noisy commands append in amortized constant time. A process source reaps the
-command. Both sources run on a private serial queue. The initial sizing slave remains open until the
+batches so that noisy commands append in amortized constant time. The read source runs on a private
+serial queue; the process source that reaps the command has its own, because its blocking `waitpid` can wait for
+the command's last close of the terminal, which waits for the reader (#178). The initial sizing slave remains open until the
 read source is registered and has drained a bounded snapshot of buffered bytes, preventing a quick
 command's output from being discarded while the reader queue starts. Later output must still be read
 promptly because the kernel can discard unread bytes on terminal close or revocation. Exit waits for the end of output, which arrives promptly because the kernel revokes the

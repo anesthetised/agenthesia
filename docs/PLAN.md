@@ -765,6 +765,63 @@ Pitfalls known so far:
 - PLAN's earlier note that the draft cannot offer model or mode, and ARCHITECTURE.md's notes marked `Accepted, not yet implemented`, are
   replaced when the implementation lands.
 
+## M18: First-use feedback (2026-11-08)
+
+The owner installed the app from main (c65b8a1, `/Applications`, the original bundle identifier) on 2026-11-07, used
+it against T3 Code and listed what to change; the decisions were taken the next day. M18 comes **before** M16: it
+reworks the sidebar, the composer and the draft, which M16's transcript and board work builds on. #160 moves to the
+end of M18. First, #261 moved UI behavior out of ADRs into [docs/behavior/](behavior/); the UI decisions below are
+recorded there as *Planned (M18)*.
+
+| Decision | Where | Status |
+|---|---|---|
+| Working as a shelf above Settled with `Working 1m 12s` / `Idle 20m`; Settled always collapsible; `✓ Settle` = End Session from the row | [sidebar.md](behavior/sidebar.md) | Planned |
+| One composer control row: mode popover with the agent's descriptions, toggle pills, `…` overflow, the working line on the card | [composer.md](behavior/composer.md) | Planned |
+| Draft heading `What should we build in <project ▾>?` with a centered composer; effort as a hint applied like the model | [session-start.md](behavior/session-start.md) | Planned |
+| `Sign In…` in the agent row's menu, a button only after the agent asked | [agents-settings.md](behavior/agents-settings.md) | Planned |
+| A quiet transcript row selection: a rounded `.quaternary` background of the column's width, no system band | written to `transcript.md` by its issue | Planned |
+| Worktrees from the fetched upstream (fallback `HEAD`); merge blocked while the local base is behind | [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) | Accepted |
+| Sessions without a project, one `~/.agenthesia/scratch/<words>-<id>` folder each | [ADR-0048](adr/0048-sessions-without-a-project.md) | Accepted |
+
+Not adopted: T3 Code's fixed access levels with icons (principle 8), settled state that keeps the agent running,
+snoozing and pins, automatic removal of merged or inactive worktrees, a worktree folder or branch prefix setting
+(principle 6).
+
+Issues, in order. Within a wave the issues are independent apart from the listed dependencies. Issues without a
+number are opened once this plan is merged.
+
+| Order | Issue | Area | Tier | Depends on |
+|---|---|---|---|---|
+| 1 | Working shelf: footer, turn start time per row, `Working …` / `Idle …`, `Nothing needs you` | Sidebar | `agent:strong` | — |
+| 1 | Quiet transcript row selection; writes `docs/behavior/transcript.md` | Transcript | `agent:light` | — |
+| 1 | Effort hint in the draft (`thought_level` in the cache, applied like the model) | Draft | `agent:light` | — |
+| 1 | Mode popover with the agent's descriptions | Composer | `agent:light` | — |
+| 1 | `Sign In…` only when the agent asked | Settings | `agent:light` | — |
+| 1 | Development builds use their own bundle identifier and data folder | Tooling | `agent:light` | — |
+| 1 | #263 ⌘. in the composer stops an idle session and pauses its queue | Queue | `agent:light` | — |
+| 1 | #264 Manage Agents… opens Settings without switching to the Agents tab | Settings | `agent:light` | — |
+| 1 | #265 A failed start drops the mode and model picked in the draft | Draft | `agent:light` | — |
+| 1 | #266 Remove deletes an installed agent version without confirmation | Settings | `agent:light` | — |
+| 1 | #267 A saved session shows neither its queue nor its settings (owner decides first) | Composer | `agent:light` | — |
+| 2 | Settled collapses with a selected row | Sidebar | `agent:light` | shelf |
+| 2 | Settle from the row (`✓ Settle` on hover, context menu) | Sidebar | `agent:light` | shelf |
+| 2 | One composer control row: toggle pills, `…` overflow, working line above the card | Composer | `agent:strong` | effort hint, mode popover |
+| 2 | Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
+| 3 | Draft heading with the project picker, centered composer moving to the bottom at Send | Draft | `agent:strong` | control row, #265 |
+| 4 | Sessions without a project | Draft, Workspace | `agent:strong` | draft heading |
+| 5 | #160 Verify the redesign in the running app and refresh screenshots | — | `agent:light` | all |
+
+Pitfalls known so far:
+
+- `SessionDraftView` is also changed by #225 (M16, the held first message); whichever lands second adapts the
+  transition of the card to the held message.
+- The upstream start is a safety path in `prepare` and the merge: real-repository tests with a local bare remote,
+  never against this repository.
+- The development bundle identifier must not share `~/Library/Application Support/Agenthesia` with the installed app:
+  `SessionLibrary` and `AgentInstaller` hard-code that path today, so two apps would write one history.
+- Each implementing pull request moves its item from *Planned (M18)* into the behavior document's text and adds a line
+  to its `Changes` log.
+
 ## M16: Multi-agent workflow (2026-11-07)
 
 Tracking issue #220. After M15, the owner reviewed the codebase and the open issues (with Claude Fable, 2026-11-07)

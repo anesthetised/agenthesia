@@ -106,6 +106,12 @@ unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup until the session is merged or discarded, except one whose session never
 got a history record.
 
+> **Accepted, not yet implemented (M18):** [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) fetches the
+> checked-out branch's upstream (20 s limit) and starts the worktree from it, falling back to `HEAD`; the local merge is
+> blocked while `baseBranch` does not contain `baseRevision`. [ADR-0048](adr/0048-sessions-without-a-project.md) adds
+> sessions without a project, each in its own `~/.agenthesia/scratch/<words>-<id>` folder under one *No project*
+> project.
+
 New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
 launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: "What should the agent
 do?" over the composer card, whose chips pick the project, the agent and name the checkout, with the agent's cached mode and model as pills beside Attach. The draft's state lives

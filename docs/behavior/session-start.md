@@ -117,7 +117,26 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; see
 [ADR-0017](../adr/0017-continue-saved-sessions.md).
 
+## Planned (M18)
+
+Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
+moves it into the text above and deletes it here.
+
+- **A heading with the project.** The draft shows, centered, `What should we build in <project>?` in a large title
+  font; the project name is a borderless menu with the Project chip's items, and moves to a second line in a narrow
+  column. The composer card sits directly under it, centered, and the Project chip leaves the card. After Send the card
+  moves to the bottom edge (without animation under Reduce Motion).
+- **Without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)): `or start without a project` under the
+  heading switches the draft to `What should we work on?` and hides the Checkout chip; `in a project` switches back.
+  Per draft, not remembered.
+- **Effort is a hint like the model.** The cache also keeps the `thought_level` option; its pill is applied by default
+  unless another value is picked in this draft, and a value the agent no longer offers returns the draft with the error.
+- **The Checkout label names the upstream** when the branch has one, `New worktree from origin/main`, because the
+  worktree starts from it ([ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)). When the fetch fails, the
+  inspector's Workspace block says the session started from the local branch.
+
 ## Changes
 
+- 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0040 and its amendment of 2026-11-02, ADR-0033's amendment (#176) and
   ADR-0026, checked against main at c65b8a1.

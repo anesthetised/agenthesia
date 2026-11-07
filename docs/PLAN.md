@@ -527,7 +527,10 @@ Wave 2:
   model (which fails without dropping the superseded notification), an unpicked mode left alone, an equal value that
   sends nothing, a refused and a no-longer-offered hint (no row, no worktree, branch gone, cache updated), an agent
   without config options, a change in the session updating the cache, and the cache across a reopened catalog
-  (installed, local and custom agents, undecodable entries). Not checked in the running app.
+  (installed, local and custom agents, undecodable entries). Running app (scripted, MockAgent, isolated home, dark):
+  after Large was picked in one session, the next session from the draft started on `Model: Large` with the mode left
+  at Ask. Not checked: a rejection in the app (a `--reject-config` command is a different agent with no cached hints;
+  tests cover it), light mode.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

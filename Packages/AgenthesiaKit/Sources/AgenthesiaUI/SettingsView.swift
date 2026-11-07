@@ -5,13 +5,14 @@ public import SwiftUI
 /// The app's settings: General, and Agents (ADR-0036).
 public struct SettingsView: View {
     private let catalog: AgentCatalog
+    @AppStorage(SettingsTab.defaultsKey) private var selection = SettingsTab.general
 
     public init(catalog: AgentCatalog) { self.catalog = catalog }
 
     public var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") { GeneralSettings() }
-            Tab("Agents", systemImage: "cpu") {
+        TabView(selection: $selection) {
+            Tab("General", systemImage: "gearshape", value: SettingsTab.general) { GeneralSettings() }
+            Tab("Agents", systemImage: "cpu", value: SettingsTab.agents) {
                 AgentsSettings(catalog: catalog).frame(width: 600, height: 560)
             }
         }
@@ -23,6 +24,32 @@ public struct SettingsView: View {
         appURL: (String) -> URL? = { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
     ) -> [ExternalEditor] {
         ExternalEditor.all.filter { appURL($0.bundleIdentifier) != nil }
+    }
+}
+
+/// The tab Settings shows. It is stored, so that `Manage Agents…` can choose it before the window opens.
+enum SettingsTab: String {
+    case general, agents
+
+    static let defaultsKey = "settingsTab"
+
+    /// The tab stored in `defaults`; `general` when none or an unknown one is stored.
+    static func stored(in defaults: UserDefaults = .standard) -> SettingsTab {
+        defaults.string(forKey: defaultsKey).flatMap(SettingsTab.init) ?? .general
+    }
+
+    func store(in defaults: UserDefaults = .standard) { defaults.set(rawValue, forKey: Self.defaultsKey) }
+}
+
+/// Opens Settings on the Agents tab.
+struct ManageAgentsButton: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button("Manage Agents…") {
+            SettingsTab.agents.store()
+            openSettings()
+        }
     }
 }
 

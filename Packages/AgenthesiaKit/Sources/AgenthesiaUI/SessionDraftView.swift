@@ -25,7 +25,7 @@ struct SessionDraftView: View {
                 if catalogLoaded, model.selectedAgent == nil, model.catalog?.choices.isEmpty == true {
                     HStack {
                         Text("No agent is installed.").foregroundStyle(.secondary)
-                        SettingsLink { Text("Manage Agents…") }
+                        ManageAgentsButton()
                     }
                     .font(.caption)
                 }
@@ -150,7 +150,7 @@ struct SessionDraftView: View {
             }
             if !choices.isEmpty { Divider() }
             Button("Custom Command…") { editingCommand = true }
-            SettingsLink { Text("Manage Agents…") }
+            ManageAgentsButton()
         } label: {
             Label(selected.flatMap(agentName) ?? "Choose Agent", systemImage: "cpu")
         }

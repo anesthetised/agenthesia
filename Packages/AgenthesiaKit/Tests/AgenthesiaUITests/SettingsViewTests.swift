@@ -25,4 +25,20 @@ import Testing
         // Opening Settings does not rewrite a choice whose editor is gone.
         #expect(defaults.string(forKey: EditorHandoff.defaultsKey) == "com.example.Gone")
     }
+
+    @Test func theStoredTabDefaultsToGeneral() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SettingsViewTests-\(UUID())"))
+        #expect(SettingsTab.stored(in: defaults) == .general)
+        defaults.set("unknown", forKey: SettingsTab.defaultsKey)
+        #expect(SettingsTab.stored(in: defaults) == .general)
+    }
+
+    @Test func storingTheAgentsTabSelectsIt() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SettingsViewTests-\(UUID())"))
+        SettingsTab.agents.store(in: defaults)
+        #expect(SettingsTab.stored(in: defaults) == .agents)
+        #expect(defaults.string(forKey: SettingsTab.defaultsKey) == "agents")
+        SettingsTab.general.store(in: defaults)
+        #expect(SettingsTab.stored(in: defaults) == .general)
+    }
 }

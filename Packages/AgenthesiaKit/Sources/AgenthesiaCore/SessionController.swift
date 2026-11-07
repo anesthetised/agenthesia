@@ -43,6 +43,11 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case authenticationRequired
     }
 
+    /// A mode or model hint the agent no longer offers or refused: the start fails and the draft returns (ADR-0040).
+    public struct HintRejected: Error, Equatable, CustomStringConvertible {
+        public let description: String
+    }
+
     public private(set) var isChangingConfig = false
     /// A merge is committing the worktree; no turn starts meanwhile (ADR-0032).
     public private(set) var isMerging = false
@@ -79,6 +84,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Explicit roots for this launch; read-only history never re-enables filesystem access.
     public let additionalDirectories: [String]
     @ObservationIgnored var fileSystem: SessionFileSystem?
+    /// Receives each confirmed list of settings once it is recorded, and the agent's list when a hint fails the
+    /// start, so `AgentCatalog` can keep them as the next draft's hints (ADR-0040).
+    @ObservationIgnored public var onConfigOptions: (([ACP.ConfigOption]) -> Void)?
 
     func fileDidChange() { fileRevision &+= 1 }
 
@@ -99,6 +107,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored private var recording = false
     @ObservationIgnored private var startupUpdates: [(ACP.SessionID, ACP.SessionUpdate, Data)] = []
     @ObservationIgnored private var startupBytes = 0
+    /// Applied after `session/new` and before the record exists (ADR-0040), each with the wanted current value.
+    @ObservationIgnored private let configHints: [ACP.ConfigOption]
+    /// The list the latest hint's response confirmed.
+    @ObservationIgnored private var hintedOptions: [ACP.ConfigOption] = []
     @ObservationIgnored private var inputCloseWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var inputGeneration: UInt64 = 0
     @ObservationIgnored private var inputs: [UUID: Input] = [:]
@@ -107,11 +119,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored var createSession: @Sendable (SessionRecord) async throws -> Void
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
 
-    /// The project and agent install must already exist. The draft session is inserted after session/new succeeds.
-    public init(session: SessionRecord, store: PersistenceStore, additionalDirectories: [String] = []) {
+    /// The project and agent install must already exist. The draft session is inserted after session/new succeeds
+    /// and the `configHints` were applied: the draft's model and a mode picked in it (ADR-0040).
+    public init(
+        session: SessionRecord,
+        store: PersistenceStore,
+        additionalDirectories: [String] = [],
+        configHints: [ACP.ConfigOption] = []
+    ) {
         self.session = session
         self.store = store
         self.additionalDirectories = additionalDirectories
+        self.configHints = configHints
         createSession = { try await store.createSession($0) }
         appendEvents = { try await store.append($0, to: $1) }
     }
@@ -179,6 +198,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             mcpServers: []
         )
         guard status == .starting else { throw SessionError.invalidState }
+        let options = try await applyHints(to: remote.configOptions, in: remote.sessionId, connection: connection)
         session = SessionRecord(
             id: session.id,
             projectID: session.projectID,
@@ -199,7 +219,46 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             throw error
         }
         guard status == .starting else { throw SessionError.invalidState }
-        try await begin([try SessionEvent.started(configOptions: remote.configOptions).storedEvent()])
+        try await begin([try SessionEvent.started(configOptions: options).storedEvent()])
+    }
+
+    /// Sets each hint whose value differs from the agent's, one at a time in the agent's order; each response is the
+    /// complete list the next hint is checked against (ADR-0040). Config notifications buffered before a response
+    /// are superseded by it and not recorded, so the started event holds what the agent confirmed last.
+    private func applyHints(
+        to reported: [ACP.ConfigOption],
+        in agentID: ACP.SessionID,
+        connection: any ACP.AgentConnection
+    ) async throws -> [ACP.ConfigOption] {
+        let order = reported.map(\.id)
+        let hints = configHints.sorted { (order.firstIndex(of: $0.id) ?? .max) < (order.firstIndex(of: $1.id) ?? .max) }
+        var options = reported
+        for hint in hints {
+            guard case .select(let wanted, let choices) = hint.value else { continue }
+            let name = choices.allOptions.first { $0.value == wanted }?.name ?? wanted
+            guard let option = options.first(where: { $0.id == hint.id }),
+                case .select(let current, let offered) = option.value,
+                offered.allOptions.contains(where: { $0.value == wanted })
+            else { throw rejectHint("The agent does not offer “\(name)” any more.", options: options) }
+            guard current != wanted else { continue }
+            do {
+                try await connection.setConfigOption(hint.id, to: .select(wanted), in: agentID) { @MainActor in
+                    self.hintedOptions = $0
+                    self.startupUpdates.removeAll { if case .configOptions = $0.1 { true } else { false } }
+                }
+            } catch let error as RPCError where error.code != RPCError.authRequiredCode && status == .starting {
+                throw rejectHint("The agent did not accept “\(name)”: \(error.message)", options: options)
+            }
+            guard status == .starting else { throw SessionError.invalidState }
+            options = hintedOptions
+        }
+        return options
+    }
+
+    /// The rejected start still confirmed `options`, which become the next draft's hints.
+    private func rejectHint(_ message: String, options: [ACP.ConfigOption]) -> HintRejected {
+        onConfigOptions?(options)
+        return HintRejected(description: message)
     }
 
     private func reopenRemote(_ agentID: ACP.SessionID, connection: any ACP.AgentConnection) async throws {
@@ -990,7 +1049,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 if self.failure == nil { self.failure = error }
                 throw error
             }
+            let options = self.reduced.sequence == 0 ? nil : self.reduced.configOptions
             for event in stored { try self.reduced.apply(event) }
+            if self.reduced.configOptions != options { self.onConfigOptions?(self.reduced.configOptions) }
             if let last = stored.last { self.noteActivity(at: last.event.timestamp) }
             await self.adoptTitle()
             if self.status == .failed || self.status == .closed { self.publishTranscript() }

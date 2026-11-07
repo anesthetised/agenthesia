@@ -14,6 +14,8 @@ import JSONRPC
 //     MockAgent --reopen             echo agent that resumes or loads sessions of earlier processes
 //     MockAgent --no-resume          echo agent without session/resume
 //     MockAgent --no-load            echo agent without session/load
+//     MockAgent --no-config          echo agent without modes or config options
+//     MockAgent --reject-config      echo agent that refuses every mode and config change
 
 // Created only in the agent modes: it starts reading standard input, which `--login` needs for itself.
 func transport() -> FileHandleTransport { FileHandleTransport(reading: .standardInput, writing: .standardOutput) }
@@ -53,5 +55,8 @@ if arguments.contains("--login") {
     options.reopensUnknownSessions = arguments.contains("--reopen")
     options.resumeSession = !arguments.contains("--no-resume")
     options.loadSession = !arguments.contains("--no-load")
+    options.modes = !arguments.contains("--no-config")
+    options.configOptions = !arguments.contains("--no-config")
+    options.rejectsConfigChanges = arguments.contains("--reject-config")
     await EchoAgent(options: options).serve(transport())
 }

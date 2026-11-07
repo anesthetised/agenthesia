@@ -13,7 +13,14 @@ import SwiftUI
     var draft = PromptDraft()
     /// The project and agent picked in the draft; nil uses the defaults.
     var draftDirectory: URL? { didSet { draftError = nil } }
-    var draftAgent: AgentCatalog.Choice? { didSet { draftError = nil } }
+    var draftAgent: AgentCatalog.Choice? {
+        didSet {
+            draftError = nil
+            draftConfig = [:]
+        }
+    }
+    /// Mode and model values picked in this draft, by option id (ADR-0040). Changing the agent or sending clears them.
+    var draftConfig: [ACP.ConfigOptionID: ACP.ConfigValueID] = [:]
     /// Why the last session started from the draft did not start.
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
@@ -529,10 +536,16 @@ import SwiftUI
     @discardableResult func start(
         directory: URL,
         agent: AgentInstallRecord,
-        initialPrompt: PromptDraft? = nil
+        initialPrompt: PromptDraft? = nil,
+        configHints: [ACP.ConfigOption] = []
     ) -> LiveSession? {
         guard canStart else { return nil }
-        let owner = sessions.start(directory: directory, agent: agent, initialPrompt: initialPrompt)
+        let owner = sessions.start(
+            directory: directory,
+            agent: agent,
+            initialPrompt: initialPrompt,
+            configHints: configHints
+        )
         show(owner)
         return owner
     }
@@ -547,6 +560,18 @@ import SwiftUI
     var selectedAgent: AgentCatalog.Choice? {
         if let draftAgent, record(for: draftAgent) != nil { return draftAgent }
         return catalog?.defaultChoice
+    }
+    /// What Send applies before the session record exists (ADR-0040): each cached model, with the value picked for it
+    /// if any, and a cached mode only when one was picked in this draft.
+    var draftHints: [ACP.ConfigOption] {
+        guard let choice = selectedAgent else { return [] }
+        return (catalog?.configHints[choice] ?? []).compactMap { option in
+            guard case .select(_, let choices) = option.value else { return nil }
+            guard let picked = draftConfig[option.id] else { return option.category == .model ? option : nil }
+            var option = option
+            option.value = .select(currentValue: picked, options: choices)
+            return option
+        }
     }
     func record(for choice: AgentCatalog.Choice) -> AgentInstallRecord? {
         if case .custom(let command) = choice { return AgentCatalog.record(custom: command) }
@@ -570,10 +595,10 @@ import SwiftUI
         else { return }
         draftError = nil
         // Only a session that started is remembered: a failed or cancelled start keeps the last agent (ADR-0040).
-        start(directory: directory, agent: agent, initialPrompt: draft)?.onInitialPromptSubmitted = { [catalog] in
-            catalog?.remember(choice)
-        }
+        start(directory: directory, agent: agent, initialPrompt: draft, configHints: draftHints)?
+            .onInitialPromptSubmitted = { [catalog] in catalog?.remember(choice) }
         draft = PromptDraft()
+        draftConfig = [:]
     }
 
     /// The displayed owner was started from the draft and failed or was cancelled before its prompt was submitted.
@@ -654,6 +679,7 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     var terminationReply: (NSApplication) -> Void = { $0.reply(toApplicationShouldTerminate: true) }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        sessions.catalog = catalog
         // Notification Center needs an app bundle, so package tests and the CLI never reach it.
         guard Bundle.main.bundleURL.pathExtension == "app" else { return }
         let system = SystemAttention()

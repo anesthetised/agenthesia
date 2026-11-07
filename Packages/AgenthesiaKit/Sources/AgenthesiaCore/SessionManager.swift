@@ -1,3 +1,4 @@
+public import ACP
 public import Foundation
 import Observation
 public import Persistence
@@ -20,6 +21,8 @@ public final class SessionManager {
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
     // Test seam for a history write failing after the merge commit; production appends to the library.
     @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
+    /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
+    @ObservationIgnored public var catalog: AgentCatalog?
     private let worktreesRoot: URL
 
     /// `worktreesRoot` defaults to `~/.agenthesia/worktrees`.
@@ -28,20 +31,23 @@ public final class SessionManager {
         self.worktreesRoot = worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
     }
 
-    /// Adds an owner that starts in the background and then submits `initialPrompt` (ADR-0040).
+    /// Adds an owner that starts in the background, applies `configHints` before its record exists and then
+    /// submits `initialPrompt` (ADR-0040).
     public func start(
         directory: URL,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = [],
-        initialPrompt: PromptDraft? = nil
+        initialPrompt: PromptDraft? = nil,
+        configHints: [ACP.ConfigOption] = []
     ) -> LiveSession {
         add(
             .new(
                 directory: directory,
                 agent: agent,
                 worktreesRoot: worktreesRoot ?? self.worktreesRoot,
-                additionalDirectories: additionalDirectories
+                additionalDirectories: additionalDirectories,
+                configHints: configHints
             ),
             initialPrompt: initialPrompt
         )
@@ -307,6 +313,7 @@ public final class SessionManager {
     ) -> LiveSession {
         let owner = LiveSession(library: library)
         if let environment { owner.environment = environment }
+        owner.catalog = catalog
         owners.append(owner)
         owner.begin(launch, after: previous, initialPrompt: initialPrompt)
         return owner

@@ -74,7 +74,8 @@ that project selected. Existing session navigation is unchanged.
 
 ## Amendment (2026-11-02): the draft shows the last mode and model as hints
 
-- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, "the pill menus are absent" above describes the code.
+- Status: Accepted by the owner on 2026-11-06 (#195). Applying the hints at start is implemented in #211; the draft's
+  pills are not yet (#212), so until they land "the pill menus are absent" above describes the draft.
 - Related: [0019](0019-session-config-controls.md), [0039](0039-t3-style-window-layout.md),
   [0042](0042-allow-edits-in-this-worktree.md)
 

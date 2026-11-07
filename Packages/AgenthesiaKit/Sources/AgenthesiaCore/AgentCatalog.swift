@@ -47,6 +47,8 @@ public final class AgentCatalog {
     public static let localAgentsKey = "localAgents"
     /// Where the agent of the last session started from the draft is kept.
     public static let lastChoiceKey = "lastAgent"
+    /// Where each agent's last confirmed mode and model are kept, as the draft's hints (ADR-0040).
+    public static let configHintsKey = "configHints"
 
     public private(set) var registry: AgentRegistry.Snapshot?
     /// Why the registry could not be loaded, or a warning about the catalog shown.
@@ -71,6 +73,9 @@ public final class AgentCatalog {
     public private(set) var signIn: AgentSignIn?
     /// The agent the last session was started with from the draft; a default, not a setting (ADR-0040).
     public private(set) var lastChoice: Choice?
+    /// Each agent's mode and model select options as last confirmed, with their choices and names: the draft's
+    /// hints (ADR-0040). Safe to lose; an entry that cannot be decoded is ignored.
+    public private(set) var configHints: [Choice: [ACP.ConfigOption]]
     private var isQuitting = false
 
     @ObservationIgnored private let client: AgentRegistry.Client
@@ -121,6 +126,17 @@ public final class AgentCatalog {
         lastChoice = defaults.data(forKey: Self.lastChoiceKey).flatMap {
             try? JSONDecoder().decode(Choice.self, from: $0)
         }
+        let stored = defaults.dictionary(forKey: Self.configHintsKey) ?? [:]
+        configHints = Dictionary(
+            stored.compactMap { key, value in
+                guard let value = value as? Data,
+                    let choice = try? JSONDecoder().decode(Choice.self, from: Data(key.utf8)),
+                    let options = try? JSONDecoder().decode([ACP.ConfigOption].self, from: value)
+                else { return nil }
+                return (choice, options)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// The newest installed version of each agent, by name: what the draft offers.
@@ -175,6 +191,37 @@ public final class AgentCatalog {
     public func remember(_ choice: Choice) {
         lastChoice = choice
         defaults.set(try? JSONEncoder().encode(choice), forKey: Self.lastChoiceKey)
+    }
+
+    /// Keeps the mode and model select options of a confirmed list as the agent's hints; a list without them removes
+    /// the entry. One JSON value per agent, keyed by the choice's JSON.
+    public func rememberHints(_ options: [ACP.ConfigOption], for choice: Choice) {
+        let hints = options.filter {
+            guard case .select = $0.value else { return false }
+            return $0.category == .mode || $0.category == .model
+        }
+        guard configHints[choice] != (hints.isEmpty ? nil : hints) else { return }
+        configHints[choice] = hints.isEmpty ? nil : hints
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let stored = configHints.compactMap { choice, options -> (String, Data)? in
+            guard let key = try? encoder.encode(choice), let value = try? encoder.encode(options) else { return nil }
+            return (String(decoding: key, as: UTF8.self), value)
+        }
+        defaults.set(Dictionary(stored, uniquingKeysWith: { first, _ in first }), forKey: Self.configHintsKey)
+    }
+
+    /// The same for a session's agent: an installed version counts as its agent, a command as the local agent that
+    /// runs it, else as a custom command. A version that is no longer installed keeps nothing.
+    public func rememberHints(_ options: [ACP.ConfigOption], for agent: AgentInstallRecord) {
+        let choice: Choice?
+        if let id = agent.installationID {
+            choice = installations.first { $0.id == id }.map { .installed(agentID: $0.agentID) }
+        } else {
+            let command = LocalAgent.Command(executable: agent.executable, arguments: agent.arguments)
+            choice = localAgents.first { $0.command == command }.map { .local($0.id) } ?? .custom(command)
+        }
+        if let choice { rememberHints(options, for: choice) }
     }
 
     /// Pins the selected version; an update cannot change the command during sign-in.

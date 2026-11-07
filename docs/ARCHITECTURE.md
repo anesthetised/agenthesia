@@ -126,8 +126,27 @@ A session row's context menu offers New Session in Project (`SessionWindowModel.
 draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
 and offers nothing.
 
-> **Accepted, not yet implemented (#195):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) adds cached mode and model
-> hints to the draft, applied before the session record is created; a mode only when picked in the draft. This section describes the code as it is.
+Mode and model hints (ADR-0040's amendment) are applied at start. `AgentCatalog.configHints` keeps, per
+`AgentCatalog.Choice`, the select options with category `mode` or `model` from the agent's last confirmed list, as
+one JSON value per agent in a `configHints` defaults dictionary keyed by the choice's JSON; an undecodable entry is
+ignored. `SessionController.onConfigOptions` reports each confirmed list once it is recorded (`started`, `reopened`,
+`configOptions`, including the agent's own notifications), and `LiveSession` passes it to
+`AgentCatalog.rememberHints(_:for:)` with its `AgentInstallRecord`, which maps an installed version to its agent and a
+command to its local agent, else to a custom command; `SessionManager.catalog` is set by the app delegate.
+`SessionWindowModel.draftHints` is what Send passes as `configHints`: the cached model options, with any value picked
+in `draftConfig`, and a mode only when one was picked there; changing the agent and Send clear `draftConfig`.
+`SessionController.createRemote` applies them after `session/new` and before the record exists: an equal value sends
+nothing, others go through `setConfigOption` one at a time in the agent's order, each response replaces the list the
+next hint is checked against, and config notifications buffered before a response are dropped, because the response
+supersedes them; the `started` event holds the final list. A hint whose option or value the agent no longer offers, or
+an error response, throws `HintRejected` (`The agent does not offer “Large” any more.`), after reporting the agent's
+list to the catalog; the start fails as any other, so the worktree is removed, nothing is recorded and the draft
+returns with the error.
+
+> **Accepted, not yet implemented (#212):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) shows the cached
+> mode and model as pill menus in the draft, drawn as secondary with the tooltip `Last used with this agent; confirmed
+> when the session starts`; picking one sets `draftConfig`. Until then the draft applies the cached model without
+> showing it.
 
 > **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md) turns the Checkout label into a menu for Git
 > projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default), and

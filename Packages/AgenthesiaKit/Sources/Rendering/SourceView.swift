@@ -22,6 +22,8 @@ public final class SourceView: NSView {
     private(set) var lineStarts = [0]
     /// Counts texts shown, so that colors computed for an earlier text are not applied.
     private var generation = 0
+    /// The latest highlight, from the start to the colors being applied; tests await it instead of polling.
+    private(set) var highlightTask: Task<Void, Never>?
     /// The line last shown by ``showLine(_:)`` and where it was scrolled to, until the text or the scroll position
     /// changes.
     private var shownLine: (range: NSRange, origin: CGPoint)?
@@ -114,6 +116,7 @@ public final class SourceView: NSView {
 
     private func startHighlighting() {
         generation += 1
+        highlightTask = nil
         #if DEBUG
             highlightCompletedAt = nil
         #endif
@@ -121,7 +124,7 @@ public final class SourceView: NSView {
         let generation = generation
         let text = text
         let highlighter = Highlighter(theme: theme)
-        Task {
+        highlightTask = Task {
             // The colored text is created on a background queue and handed over whole, so it is never shared.
             let colored: NSAttributedString = await withCheckedContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {

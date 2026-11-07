@@ -118,10 +118,6 @@ public struct RootView: View {
         ) {
             await model.refresh()
         }
-        // Looking at a finished turn in the key window clears its Done mark.
-        .onChange(of: viewingUnseenResult, initial: true) {
-            if viewingUnseenResult { model.owner?.markSeen() }
-        }
         // Notifications lead back to a session through its URL (ADR-0030).
         .onOpenURL { open($0) }
         .handlesExternalEvents(preferring: [], allowing: ["*"])
@@ -188,10 +184,6 @@ public struct RootView: View {
         let merging: Set<UUID>
     }
 
-    private var viewingUnseenResult: Bool {
-        appearsActive && !model.showingSetup && model.restored == nil && model.owner?.hasUnseenResult == true
-    }
-
     private func open(_ url: URL) {
         guard let opened = WindowTarget(url: url) else { return }
         let windows = NSApp.windows.count { $0.isVisible && $0.canBecomeMain }
@@ -236,7 +228,14 @@ public struct RootView: View {
         )
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
-                LiveTranscript(session: session, pathIndex: pathIndex(for: session), find: model.find) {
+                // A finished turn's Done mark clears once its end was on screen in an active window.
+                LiveTranscript(
+                    session: session,
+                    pathIndex: pathIndex(for: session),
+                    find: model.find,
+                    unseenResult: model.unseenResult(appearsActive: appearsActive),
+                    onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) }
+                ) {
                     openFile($0.path, line: $0.line, for: $1)
                 }
                 .id(session.session.id)

@@ -30,7 +30,7 @@ public final class LiveSession {
     @ObservationIgnored public var onInitialPromptSubmitted: (() -> Void)?
     /// The configured agent's name, once its install is known.
     public var agentName: String? { agent?.name }
-    /// Turns finished when the user last looked at the session in a key window (ADR-0026). In memory only.
+    /// Turns finished when the user last saw a result on screen (ADR-0026's amendment). In memory only.
     private var seenTurns = 0
     @ObservationIgnored private let library: SessionLibrary
     @ObservationIgnored private var process: AgentProcess?
@@ -93,8 +93,16 @@ public final class LiveSession {
     /// A turn ended since the user last looked at the session.
     public var hasUnseenResult: Bool { (controller?.completedTurns ?? 0) > seenTurns }
 
-    /// The user has looked at the session in a key window.
+    /// Where the latest finished turn ends, while the user has not seen it; the transcript watches for it.
+    public var unseenResult: Int64? { hasUnseenResult ? controller?.lastResultItem : nil }
+
+    /// Marks every finished turn seen.
     public func markSeen() { seenTurns = controller?.completedTurns ?? 0 }
+
+    /// The end of `item` was on screen; that sees every finished turn only when it is the latest result.
+    public func markSeen(reaching item: Int64) {
+        if item == controller?.lastResultItem { markSeen() }
+    }
 
     public var sessionID: UUID? { controller?.session.id ?? resuming?.id }
 

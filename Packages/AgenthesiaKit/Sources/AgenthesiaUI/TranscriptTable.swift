@@ -33,6 +33,19 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
     }
     /// Opens a file of the displayed session; without it, path links do nothing.
     var openPath: ((PathLink) -> Void)?
+    /// The item where an unseen result ends (ADR-0026's amendment). The viewport is watched only while it is set.
+    var unseenResult: Int64? {
+        didSet {
+            guard unseenResult != oldValue else { return }
+            if (unseenResult == nil) != (oldValue == nil) { watchViewport(unseenResult != nil) }
+            scheduleResultCheck()
+        }
+    }
+    /// Called once the end of `unseenResult`'s row was on screen; the table stops watching then.
+    var resultShown: ((Int64) -> Void)?
+    /// How many coalesced checks ran, so tests can see that nothing runs without a result to watch for.
+    private(set) var resultChecks = 0
+    private var resultCheckScheduled = false
 
     override init() {
         super.init()
@@ -52,7 +65,10 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
-        table.didLayout = { [weak self] in self?.scheduleFollowEnd() }
+        table.didLayout = { [weak self] in
+            self?.scheduleFollowEnd()
+            self?.scheduleResultCheck()
+        }
         table.willNavigate = { [weak self] in self?.followingBottom = false }
         table.didNavigate = { [weak self] in self?.userDidScroll(nil) }
         scroll.willNavigate = { [weak self] in self?.followingBottom = false }
@@ -83,8 +99,25 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         }.joined(separator: "\n\n")
     }
 
+    private static let bottomTolerance: CGFloat = 24
+
     static func followsBottom(documentHeight: CGFloat, visibleRect: NSRect) -> Bool {
-        documentHeight - visibleRect.maxY <= 24
+        documentHeight - visibleRect.maxY <= bottomTolerance
+    }
+
+    /// A row's end is on screen when its bottom edge is within the visible rect, with `followsBottom`'s tolerance:
+    /// the top of an answer taller than the viewport is not its result yet.
+    static func showsEnd(of row: NSRect, in visibleRect: NSRect) -> Bool {
+        row.maxY >= visibleRect.minY && row.maxY - visibleRect.maxY <= bottomTolerance
+    }
+
+    /// Whether the reader follows the end of the transcript.
+    var followsEnd: Bool { followingBottom }
+
+    /// Scrolls to the end without animation and follows it again.
+    func scrollToEnd() {
+        followingBottom = true
+        followEnd()
     }
 
     func update(_ session: any TranscriptSource) {
@@ -181,6 +214,41 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             scroll.contentView.scroll(to: origin)
             scroll.reflectScrolledClipView(scroll.contentView)
         }
+        scheduleResultCheck()
+    }
+
+    /// Scrolling and a resized clip view, as when the permission card docks, move the viewport.
+    private func watchViewport(_ watching: Bool) {
+        let center = NotificationCenter.default
+        for name in [NSView.boundsDidChangeNotification, NSView.frameDidChangeNotification] {
+            if watching {
+                center.addObserver(self, selector: #selector(viewportDidChange), name: name, object: scroll.contentView)
+            } else {
+                center.removeObserver(self, name: name, object: scroll.contentView)
+            }
+        }
+    }
+
+    @objc private func viewportDidChange(_ notification: Notification) { scheduleResultCheck() }
+
+    /// One check per run-loop turn, however many scrolls, updates and layouts asked for it.
+    private func scheduleResultCheck() {
+        guard unseenResult != nil, !resultCheckScheduled else { return }
+        resultCheckScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.resultCheckScheduled = false
+            self.resultChecks += 1
+            self.checkResult()
+        }
+    }
+
+    private func checkResult() {
+        guard let item = unseenResult, let row = session?.row(ofItem: item), row < table.numberOfRows,
+            Self.showsEnd(of: table.rect(ofRow: row), in: scroll.contentView.bounds)
+        else { return }
+        unseenResult = nil
+        resultShown?(item)
     }
 
     private func highlightVisibleRows() {

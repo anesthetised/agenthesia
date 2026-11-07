@@ -81,7 +81,7 @@ injected seams; the actual system prompts are checked by hand.
 
 ## Amendment (2026-11-02): Done means the result was on screen
 
-- Status: Accepted by the owner on 2026-11-06 (#195); not yet implemented. Until it lands, the *done* mark above describes the code.
+- Status: Accepted by the owner on 2026-11-06 (#195); implemented in #209, `New response below` and ⌥⌘↓ in #210.
 - Related: [0039](0039-t3-style-window-layout.md), [0007](0007-transcript-rendering.md)
 
 ### Context

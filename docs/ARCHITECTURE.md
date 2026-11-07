@@ -390,9 +390,6 @@ The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` wit
 
 **Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable `session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when; `PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of Settled (so out of its header count, and out of the section altogether when nothing else is saved) unless a query is entered: a search lists them in Settled order, the header then counts the matches, and the row's reason is `Archived` (`SidebarReason.saved`, which wins over `Merged` and `Discarded`). Previous and Next Session skip archived rows even while a search shows them. *Archive Session* / *Unarchive Session* (the title follows `archivedAt`) is in the row's context menu of a saved row and in the Session menu; neither asks for confirmation. The Session menu item is disabled unless the displayed session is saved, with the help text `End the session first` for a live one (`SessionWindowModel.canArchive`, `archiveHelp`); live rows have no context-menu item. **Continue** clears `archivedAt` (`SessionWindowModel.continueRestored`): a session the user talks to again is not archived. Every write refreshes the window's history; other windows pick it up at their next refresh.
 
-> **Accepted, not yet implemented (#195):** *Done* clears when the finished result is on screen, not when the window is
-> key ([ADR-0026's amendment](adr/0026-app-wide-session-manager.md)).
-
 > **Accepted, not yet implemented (M16):** [ADR-0046](adr/0046-session-board-and-menu-bar.md) adds an *Overview* row above the sections
 > (⌘0; a board of live-session cards that can answer requests without a diff), a `MenuBarExtra` with the Needs You
 > count and the sessions, and ⌘1…⌘9 for the first nine rows of Needs You and Working.
@@ -402,7 +399,18 @@ The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` wit
 
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
-has seen; a window marks the displayed session seen while it is the key window. A live session is failed
+has seen. It clears when the end of the finished turn was on screen
+([ADR-0026's amendment](adr/0026-app-wide-session-manager.md)), not when the window is key: a turn that ends on its own
+records the transcript's last item (`SessionController.lastResultItem`), and `LiveSession.unseenResult` gives it while
+the turn is unseen. `SessionWindowModel.unseenResult(appearsActive:)` passes it to `LiveTranscript` only while the
+window appears active and shows the live session. The table resolves the item to its row, or to the summary of the
+folded group that holds it (`TranscriptRow.row(showing:in:)`, the row identity find uses), and checks the pure
+`TranscriptTableController.showsEnd(of:in:)`: the row's bottom edge is in the visible rect, with `followsBottom`'s
+24 pt tolerance. The check is coalesced to one per main-queue turn and runs after an update, a table layout, a scroll or
+a clip-view resize (the docked card and the panes resize it); the clip view is observed only while a target is set, and
+without one nothing is scheduled. Once the end was shown, the table reports the item once and stops watching;
+`markSeen(reaching:)` marks every turn seen only when the item is still the latest result. A reader following the end
+clears the mark as the turn ends. A live session is failed
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued, except a

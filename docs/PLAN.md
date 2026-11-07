@@ -547,7 +547,9 @@ Wave 2:
   after a first round at 11–18 ([results](benchmarks/2026-11-07/done-on-screen/README.md)): no cost visible; frame
   percentiles and apply latency are the same on both sides. Running app (scripted, MockAgent, isolated home, dark): a
   result scrolled away kept the row in Needs You with `Finished` while the window was key, and scrolling to its end
-  cleared it. Not checked: a window that is not key, a folded group as the last row, light mode, VoiceOver.
+  cleared it. A second check with #210, dark and light (`-NSRequiresAquaSystemAppearance YES`), showed `Finished` for
+  a slow reply that ended below the viewport and cleared it after Jump to Latest. Not checked: a window that is not
+  key, a folded group as the last row, VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

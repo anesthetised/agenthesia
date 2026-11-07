@@ -153,7 +153,8 @@ import Testing
         for request in controller.pendingPermissions {
             #expect(controller.answerPermission(request.id, with: "allow"))
         }
-        try await waitUntil { controller.status == .idle && scroll.contentView.bounds.height == height }
+        // The card is gone; the baseline may have been taken while the working line still showed, so it is a floor.
+        try await waitUntil { controller.status == .idle && scroll.contentView.bounds.height >= height }
         try await waitUntil(followsEnd)
         #expect(window.firstResponder === composer)
         await fixture.remove()
@@ -192,10 +193,13 @@ import Testing
         }
     }
 
-    private func waitUntil(_ condition: () -> Bool) async throws {
+    private func waitUntil(
+        _ condition: () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws {
         let deadline = ContinuousClock.now + .seconds(10)
         while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out")
+            try #require(ContinuousClock.now < deadline, "Timed out", sourceLocation: sourceLocation)
             try await Task.sleep(for: .milliseconds(10))
         }
     }

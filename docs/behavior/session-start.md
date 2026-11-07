@@ -75,7 +75,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   *Why:* the app cannot tell from a name whether a mode stops asking for permission, so such a mode must never come
   back by itself.
 - A pick changes only this draft. Changing the agent drops the picks; changing the project does not. Send clears the
-  picks, and they are not restored if the start fails.
+  picks; if the start fails or is cancelled they come back with the text and attachments, except a value the agent
+  no longer offers (see *Stale hint*).
 - The agent's confirmed values replace the hints once the session starts; its composer shows them as config controls
   (see [composer.md](composer.md)).
 
@@ -110,7 +111,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   message to that window's draft, replacing the text there.
 - **Stale hint.** If the agent no longer offers a hinted value, or rejects it, the start fails with `The agent does
   not offer “<value>” any more.` or `The agent did not accept “<value>”: <reason>`. The pills then show what the agent
-  just reported, so the next Send works: at most one bounce per stale hint.
+  just reported, and a pick it no longer lists is dropped, so the next Send works: at most one bounce per stale hint.
+  A value the agent still lists but rejected stays picked, so the user can choose another.
   *Why:* a session that silently ran in another mode than its pill showed could write when the user expected
   read-only.
 
@@ -137,6 +139,8 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #265: a failed or cancelled start returns the draft's mode and model picks with the text, except a
+  value the agent no longer offers.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0040 and its amendment of 2026-11-02, ADR-0033's amendment (#176) and
   ADR-0026, checked against main at c65b8a1.

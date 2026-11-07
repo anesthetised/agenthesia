@@ -453,6 +453,48 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func aFailedStartBringsBackThePicksAndDropsOnesTheAgentNoLongerOffers() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let fixture = try Fixture(catalog: catalog)
+        fixture.sessions.catalog = catalog
+        let model = fixture.model
+        let modeID = ACP.V1.AgentConnectionAdapter.modeOptionID
+        let options = [
+            selectOption(modeID, .mode, "ask", ["ask", "code"]),
+            selectOption("model", .model, "large", ["small", "large"]),
+        ]
+        // The executable is missing, so the start fails before any hint is applied and the cache stays as it was.
+        let missing = AgentCatalog.Choice.custom(.init(executable: "/does-not-exist", arguments: []))
+        catalog.rememberHints(options, for: missing)
+        model.draftDirectory = fixture.directory
+        model.draftAgent = missing
+        model.draft = PromptDraft(text: "hello")
+        model.draftConfig = [modeID: "code", "model": "small"]
+        model.startDraft()
+        #expect(model.draftConfig.isEmpty)
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.returnToDraft()
+        #expect(model.draft == PromptDraft(text: "hello"))
+        #expect(model.draftConfig == [modeID: "code", "model": "small"])
+        #expect(model.draftHints.map(\.id) == [modeID, "model"])
+
+        // The agent says it does not offer the picked mode any more: the pick is dropped and the next Send works.
+        let agent = try fixture.mock(["--no-config"])
+        catalog.rememberHints(options, for: agent)
+        model.draftAgent = agent
+        model.draftConfig = [modeID: "code"]
+        model.startDraft()
+        let stale = try #require(model.owner)
+        await stale.startup?.value
+        #expect(stale.errorMessage?.contains("any more") == true)
+        await model.returnToDraft()
+        #expect(model.draftConfig.isEmpty && model.draftHints.isEmpty)
+        #expect(model.draftError?.contains("any more") == true)
+        await fixture.remove()
+    }
+
     @Test func cancellingTheStartAtSignInReturnsTheDraft() async throws {
         let fixture = try Fixture()
         let model = fixture.model

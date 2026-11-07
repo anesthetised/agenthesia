@@ -21,6 +21,9 @@ import SwiftUI
     }
     /// Mode and model values picked in this draft, by option id (ADR-0040). Changing the agent or sending clears them.
     var draftConfig: [ACP.ConfigOptionID: ACP.ConfigValueID] = [:]
+    /// The picks each start from the draft was sent with, until its first prompt is submitted; a failed or cancelled
+    /// start brings them back with the text.
+    private var sentConfig: [ObjectIdentifier: [ACP.ConfigOptionID: ACP.ConfigValueID]] = [:]
     /// Why the last session started from the draft did not start.
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
@@ -668,8 +671,14 @@ import SwiftUI
         else { return }
         draftError = nil
         // Only a session that started is remembered: a failed or cancelled start keeps the last agent (ADR-0040).
-        start(directory: directory, agent: agent, initialPrompt: draft, configHints: draftHints)?
-            .onInitialPromptSubmitted = { [catalog] in catalog?.remember(choice) }
+        if let owner = start(directory: directory, agent: agent, initialPrompt: draft, configHints: draftHints) {
+            let id = ObjectIdentifier(owner)
+            sentConfig[id] = draftConfig
+            owner.onInitialPromptSubmitted = { [weak self, catalog] in
+                catalog?.remember(choice)
+                self?.sentConfig[id] = nil
+            }
+        }
         draft = PromptDraft()
         draftConfig = [:]
     }
@@ -683,9 +692,15 @@ import SwiftUI
     }
 
     /// Returns the draft unchanged, with the error, and ends the owner: the session was not started (ADR-0040).
+    /// A pick the agent no longer offers is dropped, so the next Send works.
     func returnToDraft() async {
         guard let owner = abandonedStart, let prompt = owner.initialPrompt else { return }
         draft = prompt
+        let picks = sentConfig.removeValue(forKey: ObjectIdentifier(owner)) ?? [:]
+        draftConfig = picks
+        draftConfig = picks.filter { pick in
+            draftPills.contains { $0.id == pick.key && draftValue(of: $0) == pick.value }
+        }
         draftError = owner.errorMessage
         self.owner = nil
         showLive()

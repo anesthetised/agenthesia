@@ -34,9 +34,9 @@ import Testing
         }
     }
 
-    /// A MockAgent session with a file to open, shown in a window `width` points wide.
+    /// A MockAgent session in a Git worktree with a new file to open and review, shown in a window `width` points wide.
     private func fixture(width: CGFloat) async throws -> Fixture {
-        let inspector = try await SessionInspectorTests().fixture(git: false)
+        let inspector = try await SessionInspectorTests().fixture(git: true)
         let working = URL(filePath: inspector.record.workingDirectory)
         try "hello\n".write(to: working.appending(path: "notes.txt"), atomically: true, encoding: .utf8)
         _ = NSApplication.shared
@@ -51,13 +51,45 @@ import Testing
         window.contentView = view
         window.orderFront(nil)
         let fixture = Fixture(inspector: inspector, model: inspector.model, view: view, window: window)
+        await inspector.model.files.refresh()
         await settle(fixture)
         return fixture
     }
 
     private func openFilePane(_ fixture: Fixture) async {
+        // As `RootView.openFile` does: the file takes the slot from the review.
+        fixture.model.showingReview = false
         await fixture.model.files.open(path: "notes.txt", in: fixture.inspector.record.id)
         await settle(fixture)
+    }
+
+    /// ⌃⌘R; waits for the diff when the review pane opens and has room.
+    private func toggleReview(_ fixture: Fixture) async {
+        fixture.model.toggleReview()
+        await settle(fixture)
+        await waitUntil(fixture) { !fixture.model.isReviewShown || frames(fixture).review != nil || !slotFits(fixture) }
+        await settle(fixture)
+    }
+
+    private func slotFits(_ fixture: Fixture) -> Bool {
+        guard let transcript = frames(fixture).transcript else { return false }
+        return fixture.window.contentLayoutRect.maxX - transcript.minX
+            >= DetailPanes.transcriptMinWidth + DetailPanes.filePaneMinWidth
+    }
+
+    private func waitUntil(_ fixture: Fixture, _ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition() && ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+            fixture.view.layoutSubtreeIfNeeded()
+        }
+    }
+
+    private func diffView(_ fixture: Fixture) -> DiffTextView? {
+        func find(_ view: NSView) -> DiffTextView? {
+            view as? DiffTextView ?? view.subviews.lazy.compactMap(find).first
+        }
+        return find(fixture.view)
     }
 
     private func closeFilePane(_ fixture: Fixture) async {
@@ -69,11 +101,12 @@ import Testing
     private struct PaneFrames: Equatable {
         var transcript: CGRect?
         var filePane: CGRect?
+        var review: CGRect?
         var inspector: CGRect?
     }
 
-    /// Finds the panes by the AppKit views they contain: the transcript table, the file pane's source view and the
-    /// inspector's tall scroll view. The window's content edge is the right edge of the detail column.
+    /// Finds the panes by the AppKit views they contain: the transcript table, the file pane's source view, the review's
+    /// diff and the inspector's tall scroll view. The window's content edge is the right edge of the detail column.
     private func frames(_ fixture: Fixture) -> PaneFrames {
         var found = PaneFrames()
         func visit(_ view: NSView) {
@@ -82,6 +115,8 @@ import Testing
                 found.transcript = frame
             } else if view is SourceView {
                 found.filePane = frame
+            } else if view is DiffTextView, let scroll = view.enclosingScrollView {
+                found.review = scroll.convert(scroll.bounds, to: nil)
             } else if String(describing: type(of: view)).hasSuffix("HostingScrollView"), frame.height > 300 {
                 found.inspector = frame
             }
@@ -91,15 +126,23 @@ import Testing
         return found
     }
 
+    /// The panes `RootView` asks `DetailPanes` for at the measured column width.
+    private func expectedPanes(_ fixture: Fixture, transcript: CGRect) -> DetailPanes {
+        DetailPanes(
+            width: fixture.window.contentLayoutRect.maxX - transcript.minX,
+            filePane: fixture.model.isReviewShown || fixture.model.files.selectedPath != nil,
+            inspector: fixture.model.showingInspector
+        )
+    }
+
     /// Whether the visible panes are the ones `DetailPanes` shows for the measured column width.
     private func panesMatchTheModel(_ fixture: Fixture, _ found: PaneFrames) -> Bool {
         guard let transcript = found.transcript else { return false }
-        let panes = DetailPanes(
-            width: fixture.window.contentLayoutRect.maxX - transcript.minX,
-            filePane: fixture.model.files.selectedPath != nil,
-            inspector: fixture.model.showingInspector
-        )
-        return (found.filePane != nil) == panes.showsFilePane && (found.inspector != nil) == panes.showsInspector
+        let panes = expectedPanes(fixture, transcript: transcript)
+        let review = fixture.model.isReviewShown
+        return (found.filePane != nil) == (panes.showsFilePane && !review)
+            && (found.review != nil) == (panes.showsFilePane && review)
+            && (found.inspector != nil) == panes.showsInspector
     }
 
     /// Every pane fits: the transcript, file pane and inspector keep their minimum widths, follow each other
@@ -112,19 +155,17 @@ import Testing
             return
         }
         let edge = fixture.window.contentLayoutRect.maxX
-        let panes = DetailPanes(
-            width: edge - transcript.minX,
-            filePane: fixture.model.files.selectedPath != nil,
-            inspector: fixture.model.showingInspector
-        )
-        #expect((found.filePane != nil) == panes.showsFilePane, "file pane visibility \(step)")
+        let panes = expectedPanes(fixture, transcript: transcript)
+        let review = fixture.model.isReviewShown
+        #expect((found.filePane != nil) == (panes.showsFilePane && !review), "file pane visibility \(step)")
+        #expect((found.review != nil) == (panes.showsFilePane && review), "review pane visibility \(step)")
         #expect((found.inspector != nil) == panes.showsInspector, "inspector visibility \(step)")
-        let visible = [found.transcript, found.filePane, found.inspector].compactMap { $0 }
+        let visible = [found.transcript, found.filePane, found.review, found.inspector].compactMap { $0 }
         #expect(
             transcript.width >= DetailPanes.transcriptMinWidth - 0.5,
             "transcript is \(transcript.width) pt \(step)"
         )
-        if let file = found.filePane {
+        if let file = found.filePane ?? found.review {
             #expect(file.width >= DetailPanes.filePaneMinWidth - 0.5, "file pane is \(file.width) pt \(step)")
         }
         if let inspector = found.inspector {
@@ -161,26 +202,41 @@ import Testing
         await settle(fixture)
     }
 
-    /// Visits the four states of (inspector, file pane) along all eight transitions between them.
-    @Test(arguments: [740, 1400])
-    func everyCombinationOfInspectorAndFilePaneLaysOut(width: Double) async throws {
+    /// Visits the six states of (inspector, nothing, file pane or review pane in the slot), with the transitions
+    /// between the file and the review pane in both directions.
+    @Test(arguments: [740, 1000, 1400])
+    func everyCombinationOfInspectorFilePaneAndReviewLaysOut(width: Double) async throws {
         let fixture = try await fixture(width: CGFloat(width))
         defer { fixture.close() }
         expectPanesFit(fixture, "at \(width) pt, inspector shown")
         await openFilePane(fixture)
         expectPanesFit(fixture, "at \(width) pt, inspector and file pane")
+        await toggleReview(fixture)
+        #expect(fixture.model.isReviewShown)
+        expectPanesFit(fixture, "at \(width) pt, inspector and review")
         await setInspector(false, fixture)
+        expectPanesFit(fixture, "at \(width) pt, review only")
+        await toggleReview(fixture)
+        // The file pane the review covered returns.
         expectPanesFit(fixture, "at \(width) pt, file pane only")
         await closeFilePane(fixture)
         expectPanesFit(fixture, "at \(width) pt, neither")
-        await setInspector(true, fixture)
-        expectPanesFit(fixture, "at \(width) pt, inspector only")
-        await setInspector(false, fixture)
+        await toggleReview(fixture)
+        expectPanesFit(fixture, "at \(width) pt, review only again")
         await openFilePane(fixture)
+        #expect(!fixture.model.isReviewShown)
+        expectPanesFit(fixture, "at \(width) pt, file pane replaces the review")
         await setInspector(true, fixture)
         expectPanesFit(fixture, "at \(width) pt, both again")
+        await toggleReview(fixture)
+        expectPanesFit(fixture, "at \(width) pt, review beside the inspector again")
+        await toggleReview(fixture)
         await closeFilePane(fixture)
-        expectPanesFit(fixture, "at \(width) pt, inspector again")
+        expectPanesFit(fixture, "at \(width) pt, inspector only")
+        await setInspector(false, fixture)
+        await toggleReview(fixture)
+        await setInspector(true, fixture)
+        expectPanesFit(fixture, "at \(width) pt, review then inspector")
     }
 
     /// Bug 1: at 1400 pt, an inspector at its maximum width and then a file pane left the inspector off the edge.
@@ -216,6 +272,90 @@ import Testing
         expectPanesFit(fixture, "at 740 pt, inspector \(inspector)")
         await openFilePane(fixture)
         expectPanesFit(fixture, "at 740 pt, inspector \(inspector), file pane")
+    }
+
+    /// ADR-0041: an unchanged file and transcript frames leave the diff's text view, selection and scroll position
+    /// alone; a changed file holds while text is selected, and Show latest applies it.
+    @Test func theReviewDiffKeepsItsSelectionAcrossRefreshesAndStreaming() async throws {
+        let fixture = try await fixture(width: 1400)
+        defer { fixture.close() }
+        let working = URL(filePath: fixture.inspector.record.workingDirectory)
+        let notes = working.appending(path: "notes.txt")
+        let lines = (1...200).map { "line \($0)" }
+        try (lines.joined(separator: "\n") + "\n").write(to: notes, atomically: true, encoding: .utf8)
+        await fixture.model.files.refresh()
+        await toggleReview(fixture)
+        let review = try #require(fixture.model.review)
+        await waitUntil(fixture) { diffView(fixture)?.string.contains("+line 200") == true }
+        let textView = try #require(diffView(fixture))
+        textView.scroll(toLine: 100)
+        let top = try #require(textView.topLine)
+        textView.setSelectedRange(NSRange(location: textView.lineStarts[top], length: 0))
+
+        try "other\n".write(to: working.appending(path: "other.txt"), atomically: true, encoding: .utf8)
+        await fixture.model.files.refresh()
+        await waitUntil(fixture) { review.changes.count == 2 }
+        // The selected file is read again after the list; nothing observable changes, so wait a little.
+        try await Task.sleep(for: .milliseconds(300))
+        await settle(fixture)
+        #expect(diffView(fixture) === textView)
+        #expect(textView.selectedRange() == NSRange(location: textView.lineStarts[top], length: 0))
+        #expect(textView.topLine == top && !review.isHolding)
+
+        textView.setSelectedRange(NSRange(location: textView.lineStarts[top], length: 6))
+        #expect(review.hasSelection)
+        let session = try #require(fixture.model.owner?.controller)
+        let items = session.transcript.items.count
+        #expect(await fixture.model.owner?.submit("slow") == true)
+        await waitUntil(fixture) { session.transcript.items.count > items + 1 }
+        try await Task.sleep(for: .milliseconds(500))
+        await settle(fixture)
+        #expect(session.status == .running)
+        #expect(diffView(fixture) === textView)
+        #expect(textView.selectedRange() == NSRange(location: textView.lineStarts[top], length: 6))
+        await fixture.model.stop()
+
+        try (lines.map { $0 == "line 150" ? "line 150 changed" : $0 }.joined(separator: "\n") + "\n")
+            .write(to: notes, atomically: true, encoding: .utf8)
+        await fixture.model.files.refresh()
+        await waitUntil(fixture) { review.isHolding }
+        #expect(review.isHolding)
+        #expect(diffView(fixture) === textView && !textView.string.contains("changed"))
+        #expect(textView.selectedRange().length == 6)
+        review.showLatest()
+        await waitUntil(fixture) { textView.string.contains("line 150 changed") }
+        #expect(textView.string.contains("line 150 changed"))
+        #expect(textView.selectedRange().length == 0 && !review.hasSelection && !review.isHolding)
+        // The top line stays where it was.
+        #expect(textView.topLine.map { textView.lines[$0].newPosition } == textView.lines[top].newPosition)
+    }
+
+    /// ⌃⌘R and Escape toggle the pane; Merge… in it opens the sheet that `RootView` presents.
+    @Test func theReviewPaneTogglesAndItsMergeSheetComesFromRootView() async throws {
+        let fixture = try await fixture(width: 1000)
+        defer { fixture.close() }
+        await toggleReview(fixture)
+        #expect(fixture.model.isReviewShown)
+        let textView = try #require(diffView(fixture))
+        #expect(fixture.model.canMerge)
+        await fixture.model.requestMerge()
+        await waitUntil(fixture) { fixture.window.attachedSheet != nil }
+        #expect(fixture.window.attachedSheet != nil)
+        fixture.model.merge = nil
+        await waitUntil(fixture) { fixture.window.attachedSheet == nil }
+        #expect(fixture.window.attachedSheet == nil && fixture.model.isReviewShown)
+        textView.setSelectedRange(NSRange(location: 0, length: 3))
+        textView.cancelOperation(nil)
+        #expect(fixture.model.isReviewShown)
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.cancelOperation(nil)
+        #expect(!fixture.model.isReviewShown)
+        await settle(fixture)
+        #expect(diffView(fixture) == nil)
+        await toggleReview(fixture)
+        #expect(diffView(fixture) != nil)
+        await toggleReview(fixture)
+        #expect(diffView(fixture) == nil && fixture.model.review != nil)
     }
 
     @Test(arguments: [740, 1000])

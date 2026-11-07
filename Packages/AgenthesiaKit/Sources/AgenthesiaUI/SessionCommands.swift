@@ -30,7 +30,7 @@ public struct SessionCommands: Commands {
                 }
             }
             .disabled(model?.canDiscard != true)
-            Button("Review Changes", action: { model?.openReview() })
+            Button(model?.isReviewShown == true ? "Hide Review" : "Review Changes") { model?.toggleReview() }
                 .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(model?.canReview != true)
             Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }

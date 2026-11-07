@@ -495,6 +495,25 @@ Wave 2:
   and the returned answer. The check found a double gap between the status and `· Edit`; the record's header now keeps
   them as one phrase, with a hosted test that fails without it. Not checked: the hidden diff inside an expanded group
   in the app (hosted tests cover it), light mode, VoiceOver, a Rendering Lab run (no new row layout).
+- #213: review is a pane of the detail column (ADR-0041). ⌃⌘R and Review in the inspector toggle it in the file pane's
+  slot (`SessionWindowModel.showingReview`, own width `reviewWidth`, 560 pt); opening a file hides it, hiding it brings
+  the file back, and Escape closes it without a selection. `SessionReview` reads the selected file before replacing
+  anything: an equal document changes nothing, and while the diff has text selected a change is held with
+  `File changed · Show latest`. The diff is `DiffTextView`, a TextKit 1 text view on `UnifiedDiff.parse` with a ruler of
+  old and new numbers, replacing `MarkdownPreview` in review; the merge sheet moved to `RootView`. Contiguous layout,
+  because non-contiguous layout and TextKit 2 put far lines at estimated positions, which broke the ruler and the kept
+  top line. Large diff (`ReviewDiffTests`, measured, no benchmark run, load average 28–37 from other runs): a
+  5,000-line file rewritten (10,001 diff lines) renders in 0.16–0.4 s off the main actor, shows and draws in 30–50 ms,
+  and lays out to its end in 0.15–0.27 s on the first scroll there; the old path diffed and rendered the same diff as Markdown in about 0.17 s, also off the main
+  actor, so no benchmark was added. Tests: the toggle and the slot in every pane combination at 740, 1000 and
+  1400 pt, the hold, Show latest, an unchanged file and streaming leaving the text view, selection and scroll position
+  alone, Escape, the merge sheet from `RootView`, the diff's lines and numbers, and the hold logic in Core. Viewed marks
+  and line counts are #214, Ask agent #215. Running app (scripted, MockAgent, isolated home, dark): ⌃⌘R opened and
+  closed the pane, the list and the numbered diff showed two changed files, and a file changed while text was selected
+  held the diff under `File changed · Show latest`, which then showed the new line. The check found the gutter's edge
+  line drawn through the pane's header and the toolbar, the whole height of the window: the ruler drew past its bounds,
+  which views no longer clip by default. It now clips, with a bitmap test that fails without it. Not checked: light
+  mode, Escape and Merge… from the pane in the app, VoiceOver; the ruler's numbers are not exposed to it.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

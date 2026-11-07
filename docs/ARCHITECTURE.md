@@ -491,25 +491,40 @@ and a path restored to its base has no entry. Browsing stops when the displayed 
 its window closes, rather than when the agent process ends; Continue keeps the same session's files
 across its startup.
 
-> **Accepted, not yet implemented (#195):** [ADR-0041](adr/0041-review-pane.md) replaces the sheet below with a pane of the
-> detail column; what review compares does not change.
+*Review Changes* ([ADR-0041](adr/0041-review-pane.md)) is a pane of the detail column: ⌃⌘R in the Session menu
+(*Hide Review* while it is shown) and Review in the inspector toggle it, and Escape closes it while it has focus and no
+text is selected. It takes the file pane's slot in `DetailPanes`: `SessionWindowModel.showingReview` decides which of
+the two the slot holds, opening a file hides the review, and hiding the review brings back the file the user had open.
+The hidden one keeps its state. The slot keeps the file pane's rules (240 pt minimum, hidden below a 480 pt column, the
+inspector gives way first) with its own remembered width, `reviewWidth`, 560 pt by default. The transcript and the
+composer stay live beside it. The pane shows what is compared (`Changes against <base>`, with `WatchErrorNotice` when
+watching failed), the native file list (at most a third of the pane's height; path, status and rename source), the
+selected file's diff and a footer with Merge…. `SessionWorkspace.review` compares the current working tree with
+`merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)), including staged,
+unstaged and nonignored untracked files. It retains rename sources and reports a missing base branch explicitly.
+Without `baseBranch`, it compares with `baseRevision`, or HEAD for legacy sessions with neither. Paths are relative to
+the selected working directory.
 
-*Review Changes* (⌃⌘R in the Session menu, also in the inspector) opens a native sheet with a
-selectable file list and one unified diff. `SessionWorkspace.review` compares the current working tree
-with `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)),
-including staged, unstaged and nonignored untracked files. It retains rename sources and reports a
-missing base branch explicitly. Without `baseBranch`, it compares with `baseRevision`, or HEAD for legacy
-sessions with neither. Paths are relative to the selected working directory.
+Core's window-owned `SessionReview` retains selection while that path still differs. The pane refreshes from
+`SessionFiles.indexRevision`, sharing filesystem, Git metadata, ACP and manual invalidation with the file list. Only
+the selected file is loaded: its immutable base blob is size-checked before reading, and the current side uses
+`SessionFileDocument`. Both sides require UTF-8 without NUL bytes and the same 2 MiB limit; unsupported files show a
+notice. Captured canonical roots cannot broaden through a symlink. A refresh reads the selected file before replacing
+anything: an equal `Document` changes nothing, so neither the selection nor the scroll position moves. While the diff
+view has text selected (`SessionReview.hasSelection`; the view owns the selection itself), a changed or vanished file
+is held (`isHolding`) and the pane shows `File changed · Show latest`; Show latest or clearing the selection applies
+it, and the list keeps updating meanwhile. Selecting another file replaces the diff despite a selection.
 
-Core's window-owned `SessionReview` retains selection while that path still differs. The sheet refreshes
-from `SessionFiles.indexRevision`, sharing filesystem, Git metadata, ACP and manual invalidation with
-the file list. Only the selected file is loaded: its immutable base blob is size-checked before reading,
-and the current side uses `SessionFileDocument`. Both sides require UTF-8 without NUL bytes and the
-same 2 MiB limit; unsupported files show a notice. Captured canonical roots cannot broaden through a
-symlink. `UnifiedDiff` runs off the main actor and the existing native Markdown renderer supplies line
-and word highlights. Session replacement or window closure dismisses review and cancels its view tasks.
-*Merge…* in review and *Merge into <base>…* in the Session menu open the merge sheet, above the review
-when it is shown.
+The diff is `DiffTextView` (`ReviewDiff.swift`), a read-only, selectable TextKit 1 `NSTextView` with contiguous layout,
+so line positions are exact. `RenderedDiff.make` runs `UnifiedDiff.make`, `UnifiedDiff.highlight` (line tints and
+changed words) and `UnifiedDiff.parse` off the main actor; text line `i` is `DiffLine` `i`, and the view keeps each
+line's start offset, so a selection maps to lines (for Ask agent, #215). A `DiffGutter` ruler draws each line's old and
+new number. A new document replaces the text in place once it is rendered, keeps the nearest line at the top and ends
+the selection; the view's identity depends only on the pane, so transcript frames do not touch it. A 5,000-line file
+rewritten (10,001 diff lines) renders off the main actor in 0.2–0.4 s and shows and draws in 30–50 ms; the first
+scroll to its end lays out the rest in 0.15–0.3 s (`ReviewDiffTests`, on a loaded machine). Session replacement or window
+closure ends the review. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
+`RootView` presents.
 
 > **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds a `Push <base> to <remote>` checkbox to the
 > merge sheet (when the base has an upstream; the last choice is remembered) and *Open Pull Request…* through `gh`
@@ -543,10 +558,10 @@ pane of the detail column, after the transcript and the file pane, toggled by a 
 native `.inspector` nor `HSplitView` is used: the first crashed AppKit beside the split view, and the split view
 kept stale divider positions when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures
 the column with a `GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes`.
-Visibility: the transcript (at least 240 pt) always stays, the file pane the user opened (at least 240 pt) needs
-480 pt, and the inspector (220–360 pt) needs 220 pt on top of what is shown, so it is the first to give way and at
-the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state and returns when the window
-widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
+Visibility: the transcript (at least 240 pt) always stays, the file pane the user opened (at least 240 pt; the
+review pane shares its slot) needs 480 pt, and the inspector (220–360 pt) needs 220 pt on top of what is shown, so it
+is the first to give way and at the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state
+and returns when the window widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
 dragged them to (`PaneDivider` on each pane's leading edge, also adjustable with VoiceOver; stored in
 `SessionWindowModel`); when the column is too narrow the transcript gives way first, then the file pane shrinks
 to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's

@@ -7,7 +7,7 @@ import Testing
 @testable import AgenthesiaUI
 @testable import Workspace
 
-@MainActor @Suite(.timeLimit(.minutes(1))) struct SessionReviewViewTests {
+@MainActor @Suite(.timeLimit(.minutes(1))) struct SessionReviewPaneTests {
     @Test(arguments: [false, true]) func fileListSelectionAndBinaryNotice(dark: Bool) async throws {
         let root = ScopedFileAccess(roots: [
             FileManager.default.temporaryDirectory.appending(path: "review-view-\(UUID())")
@@ -31,7 +31,9 @@ import Testing
         await files.attach(session)
         defer { files.close() }
         let model = SessionWindowModel(sessions: SessionManager())
-        let host = NSHostingView(rootView: SessionReviewView(review: review, files: files, model: model))
+        let host = NSHostingView(
+            rootView: SessionReviewPane(review: review, files: files, model: model, height: 500)
+        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 500),
             styleMask: [.titled, .resizable],
@@ -67,21 +69,23 @@ import Testing
         await settle(host) { review.document?.new == "new\n" }
         #expect(review.selectedPath == "text")
         #expect(review.document?.new == "new\n")
-        await settle(host) { descendant(NSTextView.self, in: host)?.string.contains("+new") == true }
-        let text = try #require(descendant(NSTextView.self, in: host))
+        await settle(host) { descendant(DiffTextView.self, in: host)?.string.contains("+new") == true }
+        let text = try #require(descendant(DiffTextView.self, in: host))
         #expect(text.string.contains("+new"))
         #expect(!text.isEditable && text.isSelectable)
         try "watched\n".write(to: root.appending(path: "text"), atomically: true, encoding: .utf8)
-        await settle(host) { review.document?.new == "watched\n" }
+        await settle(host) { text.string.contains("+watched") }
         #expect(review.document?.new == "watched\n")
+        #expect(descendant(DiffTextView.self, in: host) === text)
         #expect(review.selectedPath == "text")
         review.selectedPath = "binary"
         await settle(host) { table.selectedRow == 0 && review.documentError != nil }
         #expect(table.selectedRow == 0)
-        for width in [640.0, 900.0] {
+        // The list takes at most a third of the pane.
+        #expect(try #require(table.enclosingScrollView).frame.height <= 500 / 3 + 1)
+        for width in [260.0, 560.0] {
             window.setContentSize(NSSize(width: width, height: 500))
             host.layoutSubtreeIfNeeded()
-            #expect(table.bounds.width >= 180)
             #expect(host.convert(table.bounds, from: table).maxX <= host.bounds.maxX + 1)
         }
     }
@@ -102,8 +106,8 @@ import Testing
         let model = SessionWindowModel(sessions: sessions)
         defer { model.close() }
         #expect(!model.canReview)
-        model.openReview()
-        #expect(model.review == nil)
+        model.toggleReview()
+        #expect(model.review == nil && !model.isReviewShown)
         await model.showHistory(session)
         await model.files.attach(session)
         #expect(!model.canReview)
@@ -117,8 +121,13 @@ import Testing
         )
         await model.files.refresh()
         #expect(model.canReview)
-        model.openReview()
-        #expect(model.review?.id == session.id)
+        model.toggleReview()
+        #expect(model.review?.id == session.id && model.isReviewShown)
+        let review = model.review
+        model.toggleReview()
+        #expect(!model.isReviewShown && model.review === review)
+        model.toggleReview()
+        #expect(model.isReviewShown && model.review === review)
         model.showingSetup = true
         #expect(!model.canReview)
         model.showingSetup = false

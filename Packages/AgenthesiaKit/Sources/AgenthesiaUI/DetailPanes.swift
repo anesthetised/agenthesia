@@ -4,7 +4,8 @@ import CoreGraphics
 ///
 /// The transcript always stays. The file pane the user opened comes next, and the inspector gives way first, so
 /// at the 740 pt window minimum the inspector is hidden while a file is open. A hidden pane keeps its state and
-/// returns when the window is wide enough.
+/// returns when the window is wide enough. The review pane takes the file pane's slot, with the same rules and its own
+/// remembered width (ADR-0041), so `filePane` stands for whichever of the two is shown.
 struct DetailPanes: Equatable {
     static let transcriptMinWidth: CGFloat = 240
     static let filePaneMinWidth: CGFloat = 240

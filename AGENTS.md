@@ -124,6 +124,9 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
   ```
 
   `CFFIXED_USER_HOME` keeps the history, settings and worktrees of the check out of the owner's home.
+- **`just run` builds the `.dev` identifier** (`io.github.anesthetised.Agenthesia.dev`) with its own data folder,
+  `Application Support/Agenthesia-dev`, so it no longer touches the history, installs or notification settings of the
+  installed app. Worktrees stay in `~/.agenthesia/worktrees`.
 - **Use a fresh bundle identifier for anything gated by a permission.** macOS remembers the first answer,
   and what a bundle asked for at that time (a missing `.badge` hid the Dock badge for good). Build a
   copy: `xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug

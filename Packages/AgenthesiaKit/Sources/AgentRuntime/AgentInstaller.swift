@@ -5,8 +5,7 @@ public import Foundation
 /// Private versioned installations. UI/history integration belongs to the caller, not this store.
 public actor AgentInstaller {
     public static let shared = AgentInstaller(
-        root: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Agenthesia/Agents")
+        root: AppSupport.directory.appending(path: "Agents")
     )
 
     /// Retain for the entire authentication and session lifetime, until all owned processes have exited.

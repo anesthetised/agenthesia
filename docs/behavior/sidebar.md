@@ -138,7 +138,27 @@ The Session menu has the same `Archive Session` / `Unarchive Session` and `Disca
 without shortcuts. Archive is disabled unless the displayed session is saved; for a live one its help text is `End the
 session first`. Each change refreshes the window's history; other windows pick it up at their next refresh.
 
+## Planned (M18)
+
+Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
+moves it into the text above and deletes it here.
+
+- **A Working shelf.** Working leaves the scrolling list for a footer above Settled with the same header form (chevron,
+  `Working`, count), expanded by default, its state kept per window, at most 35 % of the sidebar's height. A shelf row
+  ends with `Working 1m 12s` while a turn runs (counted from the turn's start, seconds below a minute) or `Idle 20m`
+  otherwise, in place of the last-activity time. The scrolling list holds Needs You alone and reads `Nothing needs
+  you`, in secondary text, when it is empty. *Why:* "Working" held idle sessions with nothing on the row to tell them
+  apart; T3 Code's shelf answers that.
+- **Settled collapses whenever asked**, also while one of its rows is selected. The selection and the detail column
+  stay; Previous and Next Session expand it when they move the selection into it; a search still opens it.
+- **Settle from the row.** On hover a live row in Needs You or Working shows `✓ Settle` in place of its trailing text,
+  and its context menu gains `Settle Session`. Settling is End Session: the session is saved and moves to Settled, and
+  Continue brings it back. Not offered while a turn runs or a permission or form waits.
+- **Sessions without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)) show a dashed square instead
+  of initials and `No project` as the project name.
+
 ## Changes
 
+- 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0026 (the Done-mark amendment), ADR-0039 (the Sidebar decision and its
   2026-10-30 and 2026-11-02 amendments), ADR-0044 (Archive) and ADR-0046 (⌘1…⌘9), checked against main at c65b8a1.

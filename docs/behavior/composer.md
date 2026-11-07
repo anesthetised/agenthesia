@@ -131,7 +131,24 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 - Settings are not shown on this card.
 
+## Planned (M18)
+
+Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
+moves it into the text above and deletes it here.
+
+- **One control row in the draft and in a session.** Select options (model, effort, others) stay value-only pills.
+- **The mode opens a popover**: one row per mode with its name and, under it, the description the agent sends with it,
+  the current one checked; arrow keys and Return choose, Escape closes; the pill shows the mode's name. No icons and no
+  fixed access levels. *Why:* the app does not know what an agent's modes mean (VISION principle 8).
+- **Booleans are toggle pills** (for example `Fast mode`): the option's name, filled while on, the description as
+  tooltip, the accessibility of a toggle. The checkbox goes.
+- **Overflow.** Options that do not fit move, from the end, into a `…` pill menu; mode, model and effort move last.
+  No pill is cut by the card's edge.
+- **The status line sits on the card**: `Working for …` and `Waiting for you` move directly above the composer card,
+  aligned with its leading edge, in the transcript column.
+
 ## Changes
 
+- 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0018, ADR-0019 and ADR-0039 (Composer, amendment of 2026-11-02), checked
   against main at c65b8a1.

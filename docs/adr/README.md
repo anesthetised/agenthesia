@@ -47,7 +47,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0029](0029-empty-queue-recovery.md) | Empty queues do not block fresh prompts after recovery | Accepted; UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
 | [0030](0030-notification-activation-and-identity.md) | Notification activation and identity | Accepted |
 | [0031](0031-app-icon-and-dock-tile.md) | App icon and Dock tile | Accepted |
-| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md), implemented in #208; push and pull requests added by [0045](0045-push-and-pull-requests.md) |
+| [0032](0032-worktree-merge-and-discard.md) | Worktree merge and discard | Accepted; branch naming changed by an amendment of [0039](0039-t3-style-window-layout.md), implemented in #208; push and pull requests added by [0045](0045-push-and-pull-requests.md); start from `HEAD` superseded by [0047](0047-worktrees-from-the-fetched-upstream.md) |
 | [0033](0033-agent-sign-in.md) | Agent sign-in | Accepted |
 | [0034](0034-agent-installs-with-user-runtimes.md) | Agent installs with user-provided runtimes | Accepted |
 | [0035](0035-installer-storage-and-script-policy.md) | Installer storage and npm script policy | Accepted |
@@ -62,5 +62,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0044](0044-delete-and-archive-sessions.md) | Delete and archive sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
 | [0045](0045-push-and-pull-requests.md) | Push after merge, and pull requests from a session | Accepted |
 | [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
+| [0047](0047-worktrees-from-the-fetched-upstream.md) | Worktrees start from the fetched upstream | Accepted |
+| [0048](0048-sessions-without-a-project.md) | Sessions without a project | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

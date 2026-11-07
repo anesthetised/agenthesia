@@ -107,7 +107,18 @@ reading the registry. The tab's model is `AgentCatalog`.
   Settings window and quitting the app all stop the sign-in; the sheet shows `Stopping…` until its processes are gone.
   The sheet cannot be dismissed any other way.
 
+## Planned (M18)
+
+Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
+moves it into the text above and deletes it here.
+
+- **`Sign In…` only when the agent asked.** The agent rows keep Remove and move `Sign In…` into the row's `…` menu. It
+  is a button, with `Sign-in needed` under the version, only while the agent's last session start met `auth_required`;
+  `AgentCatalog` remembers that per agent choice and forgets it when a session starts without it or a sign-in succeeds.
+  *Why:* ACP cannot tell whether the user is signed in, so an always-visible button read as a request to sign in.
+
 ## Changes
 
+- 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0036, ADR-0037, ADR-0038 and ADR-0040 (Manage Agents…), with links to ADR-0034
   and ADR-0035, checked against main at c65b8a1.

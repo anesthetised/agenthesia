@@ -439,7 +439,7 @@ private actor QueueGate {
         await connection.rejectTurn()
         await gate.waitUntilEntered()
         let close = closing ? Task { await session.close() } : nil
-        if closing { while session.status != .closed { await Task.yield() } }
+        if closing { while session.status != .closed, !Task.isCancelled { await Task.yield() } }
         await gate.open()
         if let close {
             await close.value

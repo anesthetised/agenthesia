@@ -647,6 +647,27 @@ Wave 2:
   `SessionPaneLayoutTests` fixture they share, pass `drivesDisplayLink: true`: a transparent window on the screen that
   ignores the mouse. The Rendering tests keep their `NSWindow`s: that target cannot see the helper, and the windows are
   never shown. The app was not launched.
+- #256, core tests hitting the time limit on CI (2026-11-07, Xcode 27, the coverage job's core group in one process
+  with `--build-system native` and instrumentation): no single stall. Swift Testing starts all ~600 tests at once and
+  a test's 60-second limit counts from that start, so the whole group shared one 60-second budget. On CI the slowest
+  passing core test was always about as long as the run (32–90 s over 24 runs); the suites finish in the same order as
+  locally, about six times slower. One core run launches about 2,400 `git` processes through the `/usr/bin/git` shim,
+  which takes twice the CPU of the real `git`. CPU burners alone did not reproduce it (10 or 30: slowest test 9–12 s);
+  ten concurrent copies of the group did (load average 19–21 before each batch, 87 right after the previous one; 50–71%
+  RAM free): all ten failed with 16–39 time-limit issues each, tests "passed after 60–65 s" as on CI, and one hung until
+  the watchdog on the loop at `SessionActivityTests.swift:124` that CI's 120-second sample showed. `coverage.py` now sets
+  `SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH` to four tests per core (12 on CI); a waiting test's limit has not
+  started yet, and its "passed after" includes the wait. Same ten copies: 0 of 10 failed at widths 4, 8 and 20 (wall
+  86, 88 and 76 s against 95 s unlimited; at 20 the probe and sign-in tests with their own timeouts still failed 8
+  times). Alone, the core group takes 20.5 s unlimited, 20.5 s at width 20 and 27.7 s at 6; the hosted group 60 s at 12
+  against 62 s. Fifteen loops that wait for an agent to exit (`while … != .closed { await Task.yield() }`) also stop
+  once the test is cancelled: with a condition that never holds, the test ended at its limit (64 s) and was still
+  running after 101 s without the check. The `SessionReviewTests` and `LiveSessionTests` expectations in the issue
+  failed only after the limit had cancelled their tests. `ReviewDiffTests.aNewDiffKeepsTheTopLineAndEndsTheSelection`
+  failed before #251 and did not recur in 100 repetitions or in a hosted run under 10 burners, so it is unchanged.
+  Not verified on CI yet. Also seen under the heaviest load, not addressed: `AgentProbeTests`,
+  `AgentSignInTests.initializeTimeoutCleansUp`, `EndToEndTests` and `ShellTerminalTests` timing, and once, in a plain
+  run at load 50, `UnstartedWorktreeTests` and `ConfigHintTests` found the worktree still there after `close()`.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

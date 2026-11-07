@@ -58,7 +58,7 @@ import Testing
         #expect(manager.resume(session) === original)
         await original.send("exit")
         // The failed owner stays listed with its error until it is ended or continued.
-        while original.controller?.status != .closed { await Task.yield() }
+        while original.controller?.status != .closed, !Task.isCancelled { await Task.yield() }
         #expect(original.errorMessage != nil && !original.isLive)
         #expect(manager.owners.map(\.id) == [original.id])
         #expect(manager.owner(of: session.id) == nil)

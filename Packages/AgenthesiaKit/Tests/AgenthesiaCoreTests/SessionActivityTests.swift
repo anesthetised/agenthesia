@@ -97,7 +97,7 @@ import Testing
         let owner = manager.start(directory: directory, agent: agent)
         await owner.startup?.value
         await owner.send("exit")
-        while owner.controller?.status != .closed { await Task.yield() }
+        while owner.controller?.status != .closed, !Task.isCancelled { await Task.yield() }
         #expect(owner.activity == .failed)
         await manager.closeAll()
         let missing = manager.start(directory: directory, agent: AgentInstallRecord(name: "x", executable: "/nope"))
@@ -121,7 +121,7 @@ import Testing
         for owner in [finished, failed, idle] { await owner.startup?.value }
         await finished.send("hello")
         await failed.send("exit")
-        while failed.controller?.status != .closed { await Task.yield() }
+        while failed.controller?.status != .closed, !Task.isCancelled { await Task.yield() }
         #expect(
             [starting.activity, finished.activity, failed.activity, idle.activity] == [.idle, .done, .failed, .idle]
         )
@@ -323,7 +323,7 @@ import Testing
         #expect(owner.reason == nil)
 
         await owner.send("exit")
-        while controller.status != .closed { await Task.yield() }
+        while controller.status != .closed, !Task.isCancelled { await Task.yield() }
         #expect(owner.reason == "Failed")
         await manager.closeAll()
     }

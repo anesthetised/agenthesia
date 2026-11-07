@@ -77,10 +77,14 @@ def test(package: str) -> int:
     which takes over 4 GB of memory with the tree-sitter grammars and then fails with no details. `report`
     exports what it needs, so instrumentation is enabled by hand and SwiftPM never exports. Only Swift code is
     instrumented: the report covers Swift modules only.
+
+    Swift Testing starts every test at once by default and each test's time limit runs from that start, so on a
+    slow runner the whole group shared one 60-second budget (#256). A width keeps a test's limit for its own run.
     """
     directory = codecov_dir(package)
     os.makedirs(directory, exist_ok=True)
     env = dict(os.environ, LLVM_PROFILE_FILE=os.path.join(directory, "%p.profraw"))
+    env.setdefault("SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH", str(4 * (os.cpu_count() or 1)))
     flags = ["-Xswiftc", "-profile-generate", "-Xswiftc", "-profile-coverage-mapping"]
     print("Building instrumented tests...", flush=True)
     build = subprocess.run(["swift", "build", "--build-tests", "--package-path", package, *flags], env=env)

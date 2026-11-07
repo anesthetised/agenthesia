@@ -155,7 +155,7 @@ import Testing
         let close = Task {
             await fixture.controller.close(); closed = true
         }
-        while fixture.controller.status != .closed { await Task.yield() }
+        while fixture.controller.status != .closed, !Task.isCancelled { await Task.yield() }
         #expect(!closed)
         await #expect(throws: RPCError.self) {
             try await files.writeTextFile(at: path, content: "late", in: "s")

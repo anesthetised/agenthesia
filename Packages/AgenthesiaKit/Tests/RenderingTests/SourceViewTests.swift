@@ -7,15 +7,11 @@ import Testing
 
 @MainActor
 @Suite struct SourceViewTests {
-    /// The text color at the first occurrence of `token`, waiting for background highlighting to replace the plain
-    /// text color.
+    /// The text color at the first occurrence of `token`, once background highlighting has been applied. It waits on
+    /// the highlight itself rather than a deadline, which highlighting a large file under load can outlast.
     private func renderedColor(of token: String, in view: SourceView) async -> NSColor? {
-        let offset = (view.text as NSString).range(of: token).location
-        for _ in 0..<200 {
-            if let color = color(at: offset, in: view), color != view.theme.textColor { return color }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return color(at: offset, in: view)
+        await view.highlightTask?.value
+        return color(at: (view.text as NSString).range(of: token).location, in: view)
     }
 
     private func color(at offset: Int, in view: SourceView) -> NSColor? {
@@ -145,9 +141,10 @@ import Testing
     @Test func replacedTextIsNotHighlightedLate() async {
         let view = SourceView()
         view.setText("let x = 1", language: .swift)
+        let replaced = view.highlightTask
         view.setText("let x = 1", language: nil)
-        // The grammar loads in the background; give it time to arrive for the first text.
-        try? await Task.sleep(for: .milliseconds(300))
+        // The first text's highlight is still running; let it arrive.
+        await replaced?.value
         #expect(!isColored(view))
         #if DEBUG
             #expect(view.highlightCompletedAt == nil)

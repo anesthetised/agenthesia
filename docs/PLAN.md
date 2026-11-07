@@ -623,6 +623,16 @@ Wave 2:
   instrumented hosted-group runs. With the mitigation, `htmlIsShownAsCode` passed 11 of 11 Rendering runs, but
   `SourceViewTests.highlightsALargeFile` timed out in 3 of them, against none of the 23 without it; the main-actor
   suites probably delay its highlighting. The crash's cause stays unproven; no product change was made for it.
+- #253, `SourceViewTests.highlightsALargeFile` timeouts (2026-11-07, Xcode 27, the Rendering tests under 24 CPU
+  burners on a machine already at load 40–60): the main-actor suites were not the cause. The test polled 200 times
+  at 10 ms, a count and not a time; one pass took 17–73 ms under load, so the window was 3.5–15 s, while
+  highlighting 10,000 lines in the background took 4–8 s (1.9–3 s with eight burners). Applying the colors on the
+  main actor took 62–95 ms in all 48 instrumented runs, with or without `@MainActor` on the suites, so nothing
+  queued there. The mitigation even lengthened the window: a busy main actor stretches each pass. Without it 11 of
+  12 runs needed more than 200 passes, with it 3 of 12. Before the fix the real test failed 11 of 12 runs without the
+  mitigation and 7 of 12 with it; after, 12 of 12 passed with it. `SourceView.highlightTask` now holds the latest
+  highlight and the tests await it (`renderedColor` and `replacedTextIsNotHighlightedLate`, whose 300 ms sleep could
+  also pass too early). The mitigation stays unchanged, so the #126 exposure is the same.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

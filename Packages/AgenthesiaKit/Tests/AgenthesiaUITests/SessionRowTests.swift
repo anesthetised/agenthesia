@@ -60,6 +60,29 @@ import Testing
         )
     }
 
+    @Test func aShelfRowNamesItsStateAndTimeInsteadOfTheLastActivity() {
+        #expect(
+            SessionRow.accessibilityLabel(
+                title: "Fix",
+                project: "p",
+                reason: nil,
+                status: .working,
+                lastActivity: nil,
+                shelfTime: "Working 1m 12s"
+            ) == "Fix, p, Working 1m 12s"
+        )
+        #expect(
+            SessionRow.accessibilityLabel(
+                title: "Fix",
+                project: "p",
+                reason: "Queue paused",
+                status: .idle,
+                lastActivity: nil,
+                shelfTime: "Idle 20m"
+            ) == "Fix, p, Queue paused, Idle 20m"
+        )
+    }
+
     @Test func theProjectGivesWayFirstDownToFortyPercent() {
         func widths(_ project: Double, _ reason: Double) -> [Double] {
             let fitted = SubtitleLayout.widths(project: project, reason: reason, available: 200)

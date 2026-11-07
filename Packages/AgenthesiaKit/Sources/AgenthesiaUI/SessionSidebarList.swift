@@ -2,12 +2,12 @@ import AgenthesiaCore
 import Persistence
 import SwiftUI
 
-/// Needs You and Working, the scrolling top of the sidebar (ADR-0039). Settled is `SettledFooter`.
+/// Needs You, the scrolling top of the sidebar (ADR-0039). Working and Settled are `SidebarShelves`.
 struct SessionSidebarList: View {
     let model: SessionWindowModel
 
     var body: some View {
-        ForEach(model.sidebar.sections.filter { $0.kind != .settled }) { section in
+        if let section = model.sidebar.section(.needsYou) {
             Section(section.kind.rawValue) { SessionSidebarRows(model: model, section: section) }
         }
     }

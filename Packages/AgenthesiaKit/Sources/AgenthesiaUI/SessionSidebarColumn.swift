@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The sidebar: Needs You and Working in a list with the search field, Settled pinned below (ADR-0039).
+/// The sidebar: Needs You in a list with the search field, the Working and Settled shelves pinned below (ADR-0039).
 struct SessionSidebarColumn: View {
     let model: SessionWindowModel
     @FocusState private var searchFocused: Bool
@@ -13,9 +13,11 @@ struct SessionSidebarColumn: View {
         .overlay {
             if sidebar.isFiltered && sidebar.rows.isEmpty {
                 ContentUnavailableView.search(text: model.sidebarQuery)
+            } else if sidebar.section(.needsYou) == nil {
+                Text("Nothing needs you").foregroundStyle(.secondary)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { SettledFooter(model: model) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { SidebarShelves(model: model) }
         .searchable(text: Bindable(model).sidebarQuery, placement: .sidebar, prompt: "Search")
         .searchFocused($searchFocused)
         .onChange(of: model.searchFocusRequests) { searchFocused = true }

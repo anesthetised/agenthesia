@@ -1,3 +1,4 @@
+import AgenthesiaCore
 import AppKit
 import Rendering
 import SwiftUI
@@ -17,6 +18,16 @@ struct DemoTranscript: NSViewRepresentable {
     }
 }
 
+/// Where the reader is relative to the end of the transcript (ADR-0026's amendment).
+enum EndPosition: Equatable {
+    /// At the end, or following it as it grows.
+    case following
+    /// Away from the end, which has not changed since the reader left it.
+    case scrolledUp
+    /// Away from the end, which has changed since the reader left it: `New response below`.
+    case newBelow
+}
+
 /// Shared native A′ table. The Rendering Lab keeps its measurement implementation unchanged.
 final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
     let table = TranscriptTableView()
@@ -24,7 +35,21 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
     private weak var session: (any TranscriptSource)?
     private var revision = -1
     private var shownRows: [TranscriptRow] = []
-    private var followingBottom = true
+    private var followingBottom = true {
+        didSet {
+            guard followingBottom != oldValue else { return }
+            // Leaving the end remembers it; coming back to it forgets what changed meanwhile.
+            if followingBottom { endChanged = false } else { endWhenLeft = session?.end }
+            reportPosition()
+        }
+    }
+    /// The transcript's end when the reader left it, and whether it differs now. Only checked while not following.
+    private var endWhenLeft: TranscriptState.End?
+    private var endChanged = false {
+        didSet { if endChanged != oldValue { reportPosition() } }
+    }
+    private var reportedPosition: EndPosition?
+    private var positionReportScheduled = false
     private var adjustingScroll = false
     private var followScheduled = false
     /// What the find bar searches for; rows that show text mark it.
@@ -41,6 +66,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             scheduleResultCheck()
         }
     }
+    /// Told where the reader is relative to the end, on a later main-queue turn and only when it changed.
+    var positionChanged: ((EndPosition) -> Void)?
     /// Called once the end of `unseenResult`'s row was on screen; the table stops watching then.
     var resultShown: ((Int64) -> Void)?
     /// How many coalesced checks ran, so tests can see that nothing runs without a result to watch for.
@@ -113,6 +140,22 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
 
     /// Whether the reader follows the end of the transcript.
     var followsEnd: Bool { followingBottom }
+
+    var position: EndPosition { followingBottom ? .following : endChanged ? .newBelow : .scrolledUp }
+
+    /// Tells `positionChanged` the current position, also the first time, so that a new table resets what a previous
+    /// one reported.
+    func reportPosition() {
+        guard !positionReportScheduled else { return }
+        positionReportScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.positionReportScheduled = false
+            guard self.position != self.reportedPosition else { return }
+            self.reportedPosition = self.position
+            self.positionChanged?(self.position)
+        }
+    }
 
     /// Scrolls to the end without animation and follows it again.
     func scrollToEnd() {
@@ -213,6 +256,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         } else {
             scroll.contentView.scroll(to: origin)
             scroll.reflectScrolledClipView(scroll.contentView)
+            if !endChanged, session.end != endWhenLeft { endChanged = true }
         }
         scheduleResultCheck()
     }

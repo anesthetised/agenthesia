@@ -563,6 +563,24 @@ Wave 2:
   drew them in full colour, because a borderless menu ignores `.foregroundStyle`, so they use `.opacity`. The tooltip
   and the accessibility label carry the note. Not checked: the reset on an agent change (only MockAgent was set up;
   tests cover it), VoiceOver.
+- #210: `New response below` and Session → Jump to Latest (⌥⌘↓), ADR-0026's amendment. ⌥⌘↓ was free among every key
+  equivalent in `SessionCommands`, `RootView`, `FileCommands`, `SessionDraftView`, the sheets, the Debug menu and the
+  composer's own handler (none uses an arrow key). `TranscriptState.End` (last item, content blocks, last block's length,
+  command output bytes) is what the table remembers when `followingBottom` turns false and compares in `update` only
+  while not following, so a following reader's per-update path is unchanged; `EndPosition` (`following`, `scrolledUp`,
+  `newBelow`) is reported to `SessionWindowModel.endPosition` on a later main-queue turn and only on change.
+  `NewResponseButton` is overlaid at the transcript's bottom edge in `RootView`; its click and the menu item call
+  `jumpToLatest()`, answered by `scrollToEnd()`. Tests: the end's identity for a new item and more text, the capsule
+  for a new item and for more text in the last one while scrolled up (and again after returning), not for scrolling
+  alone or an update that leaves the end, not while following, the jump resuming following and clearing a waiting
+  Done, the menu state at the end, scrolled up and in the draft, and a hosted `RootView` with `MockAgent` where a reply
+  while scrolled up reaches `newBelow` and `jumpToLatest()` follows the end. Breaking the end comparison or the jump's
+  `scrollToEnd()` made tests fail. No Rendering Lab run: the following path only gained an `if` on `followingBottom`'s
+  else-branch. Running app (scripted, MockAgent, isolated home, dark and light, the light pass with
+  `-NSRequiresAquaSystemAppearance YES`): with the transcript scrolled up, a slow reply showed the capsule while it
+  streamed and after it ended; ⌥⌘↓ with the composer focused and a click on the capsule, also while the reply streamed,
+  scrolled to the end and removed it. Session → Jump to Latest is listed with ⌥⌘↓. A click sent while the `Working`
+  line disappeared missed, probably because the capsule moved down with it. Not checked: VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

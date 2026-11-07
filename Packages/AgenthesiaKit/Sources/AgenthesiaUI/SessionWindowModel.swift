@@ -136,6 +136,16 @@ import SwiftUI
         guard canFocusComposer else { return }
         composerFocusRequests += 1
     }
+    /// Where the displayed transcript's reader is relative to its end, as its table last reported.
+    var endPosition = EndPosition.following
+    /// Counts the requests (⌥⌘↓, `New response below`) to scroll the transcript to its end.
+    var jumpRequests = 0
+    /// Away from the end; at the end there is nothing to jump to.
+    var canJumpToLatest: Bool { canFind && endPosition != .following }
+    func jumpToLatest() {
+        guard canJumpToLatest else { return }
+        jumpRequests += 1
+    }
     var canFind: Bool { !closed && !inDraft && !isLoadingHistory && displayed != nil }
     func openFind() {
         guard canFind else { return }

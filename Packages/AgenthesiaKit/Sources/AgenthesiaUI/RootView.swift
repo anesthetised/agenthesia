@@ -234,13 +234,18 @@ public struct RootView: View {
                     pathIndex: pathIndex(for: session),
                     find: model.find,
                     unseenResult: model.unseenResult(appearsActive: appearsActive),
-                    onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) }
+                    onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) },
+                    jumpRequests: model.jumpRequests,
+                    onPositionChange: { [weak model] in model?.endPosition = $0 }
                 ) {
                     openFile($0.path, line: $0.line, for: $1)
                 }
                 .id(session.session.id)
                 .overlay(alignment: .topTrailing) {
                     if model.find.isOpen { TranscriptFindBar(model: model) }
+                }
+                .overlay(alignment: .bottom) {
+                    if model.endPosition == .newBelow { NewResponseButton(action: model.jumpToLatest) }
                 }
                 if let startedAt = session.turnStartedAt {
                     WorkingTimeLine(

@@ -41,6 +41,7 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 - `just format` — format the code in place.
 - `just app` — build the app with `xcodebuild`.
 - `just run` — build and launch the app.
+- `just app-check-tools` — compile the Swift helpers of `scripts/app-check/` into `.build/app-check/`.
 - `just bench` — time Markdown rendering and highlighting in a release build (not run in CI).
 
 Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
@@ -75,6 +76,33 @@ the agent so no real agent or tokens are involved.
   prompts and notification banners expose their buttons as accessibility actions of the banner group
   (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. To tap a
   banner use System Events `click at {x, y}`; CGEvent clicks and `AXPress` did not reach the app.
+- **Use the helpers in `scripts/app-check/`** instead of rewriting them. `just app-check-tools` compiles
+  `wintool` (windows of a process, frontmost app, click, right-click, move, wheel scroll) and `axlabels`
+  (described and helped elements with screen positions); `axdump.applescript` dumps the accessibility tree
+  to a depth; `lib.sh`, sourced from bash or zsh, adds `guard`, `shot`, `ax`, `paste`, `key`, `dump` and the
+  draft helpers `pickproject`, `pickagent`, `draftsend`, and `send` for an open session. It reads `APP_CHECK_PID` (the app's process),
+  `APP_CHECK_SHOTS` (an existing screenshot directory), `APP_CHECK_AGENT` (the `MockAgent` executable) and
+  `APP_CHECK_REPO` (the test repository), and aborts with a message when one it needs is missing. The
+  accessibility paths of the draft screen follow the window layout and sit at the top of `lib.sh`; fix them
+  there when the layout changes. A minimal session:
+
+  ```sh
+  just app-check-tools
+  xcodebuild ... -derivedDataPath .build/xcode-demo PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.demotest build  # see below
+  tmp=$(mktemp -d)
+  git init -q "$tmp/agh-demo-check" && git -C "$tmp/agh-demo-check" commit -q --allow-empty -m init
+  swift build --package-path Packages/AgenthesiaKit --product MockAgent
+  CFFIXED_USER_HOME="$tmp" .build/xcode-demo/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia \
+      -NSRequiresAquaSystemAppearance YES &   # the flag gives light appearance; drop it for the system one
+  export APP_CHECK_PID=$! APP_CHECK_SHOTS="$tmp" APP_CHECK_REPO="$tmp/agh-demo-check"
+  export APP_CHECK_AGENT="$(swift build --package-path Packages/AgenthesiaKit --show-bin-path)/MockAgent"
+  pbpaste > "$tmp/clipboard"                 # paste overwrites the clipboard
+  sleep 3; . scripts/app-check/lib.sh
+  pickproject; pickagent; draftsend "hello"; sleep 3; shot sent
+  kill "$APP_CHECK_PID"; pbcopy < "$tmp/clipboard"; rm -rf "$tmp"   # then the cleanup below
+  ```
+
+  `CFFIXED_USER_HOME` keeps the history, settings and worktrees of the check out of the owner's home.
 - **Use a fresh bundle identifier for anything gated by a permission.** macOS remembers the first answer,
   and what a bundle asked for at that time (a missing `.badge` hid the Dock badge for good). Build a
   copy: `xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug

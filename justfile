@@ -120,6 +120,12 @@ mock-chat:
     swift build --quiet --package-path {{package}} --product MockAgent
     swift run --quiet --package-path {{package}} acp-cli chat -- "$(swift build --package-path {{package}} --show-bin-path)/MockAgent"
 
+# Compile the Swift helpers for scripted running-app checks (scripts/app-check) into .build/app-check
+app-check-tools:
+    mkdir -p .build/app-check
+    swiftc -O scripts/app-check/wintool.swift -o .build/app-check/wintool
+    swiftc -O scripts/app-check/axlabels.swift -o .build/app-check/axlabels
+
 # Run everything CI runs
 ci: lint test-scripts coverage app
 

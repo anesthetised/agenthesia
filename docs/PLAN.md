@@ -543,8 +543,11 @@ Wave 2:
   is not active, the latest turn's end against an earlier one, and no check running without a target (a counter).
   Breaking the nil guard, the update hook or the bottom-edge rule made a test fail; in hosted tables the table's own
   layout already runs on every scroll and clip resize, so no test fails without the clip-view observers, which stay
-  as the ADR's explicit watch. Not checked: the running app, light and dark, VoiceOver; Rendering Lab S1, S7 and S9
-  wait for the owner's approval of the workload.
+  as the ADR's explicit watch. Rendering Lab S1, S7 and S9, five interleaved rounds with the owner's approval, load 6–9
+  after a first round at 11–18 ([results](benchmarks/2026-11-07/done-on-screen/README.md)): no cost visible; frame
+  percentiles and apply latency are the same on both sides. Running app (scripted, MockAgent, isolated home, dark): a
+  result scrolled away kept the row in Needs You with `Finished` while the window was key, and scrolling to its end
+  cleared it. Not checked: a window that is not key, a folded group as the last row, light mode, VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

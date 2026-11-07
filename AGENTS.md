@@ -80,7 +80,7 @@ the agent so no real agent or tokens are involved.
   `wintool` (windows of a process, frontmost app, click, right-click, move, wheel scroll) and `axlabels`
   (described and helped elements with screen positions); `axdump.applescript` dumps the accessibility tree
   to a depth; `lib.sh`, sourced from bash or zsh, adds `guard`, `shot`, `ax`, `paste`, `key`, `dump` and the
-  draft helpers `pickproject`, `pickagent`, `draftsend`. It reads `APP_CHECK_PID` (the app's process),
+  draft helpers `pickproject`, `pickagent`, `draftsend`, and `send` for an open session. It reads `APP_CHECK_PID` (the app's process),
   `APP_CHECK_SHOTS` (an existing screenshot directory), `APP_CHECK_AGENT` (the `MockAgent` executable) and
   `APP_CHECK_REPO` (the test repository), and aborts with a message when one it needs is missing. The
   accessibility paths of the draft screen follow the window layout and sit at the top of `lib.sh`; fix them
@@ -96,9 +96,10 @@ the agent so no real agent or tokens are involved.
       -NSRequiresAquaSystemAppearance YES &   # the flag gives light appearance; drop it for the system one
   export APP_CHECK_PID=$! APP_CHECK_SHOTS="$tmp" APP_CHECK_REPO="$tmp/agh-demo-check"
   export APP_CHECK_AGENT="$(swift build --package-path Packages/AgenthesiaKit --show-bin-path)/MockAgent"
+  pbpaste > "$tmp/clipboard"                 # paste overwrites the clipboard
   sleep 3; . scripts/app-check/lib.sh
   pickproject; pickagent; draftsend "hello"; sleep 3; shot sent
-  kill "$APP_CHECK_PID"; rm -rf "$tmp"      # then the cleanup below
+  kill "$APP_CHECK_PID"; pbcopy < "$tmp/clipboard"; rm -rf "$tmp"   # then the cleanup below
   ```
 
   `CFFIXED_USER_HOME` keeps the history, settings and worktrees of the check out of the owner's home.

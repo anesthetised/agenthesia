@@ -16,6 +16,7 @@ AC_DRAFT="group 3 of splitter group 1 of group 1 of window 1"
 AC_PROJECT_MENU="menu button 1 of $AC_DRAFT"
 AC_AGENT_MENU="menu button 2 of $AC_DRAFT"
 AC_DRAFT_TEXT="text area 1 of scroll area 1 of $AC_DRAFT"
+AC_SESSION_TEXT="text area 1 of scroll area 2 of $AC_DRAFT"   # the composer of an open session
 
 # zsh does not word-split unquoted variables and has no BASH_SOURCE: quote everything, resolve the directory
 # per shell.
@@ -100,6 +101,15 @@ pickagent() {
 draftsend() {
     guard
     ax "set focused of $AC_DRAFT_TEXT to true"
+    key 0 "command down"
+    paste "$1"; sleep 0.3
+    key 36
+}
+
+# send <text>: the same in an open session's composer.
+send() {
+    guard
+    ax "set focused of $AC_SESSION_TEXT to true"
     key 0 "command down"
     paste "$1"; sleep 0.3
     key 36

@@ -100,7 +100,8 @@ struct SessionDraftView: View {
                     placeholder: "Default mode",
                     note: Self.hintNote
                 ) { model.draftConfig[option.id] = $0 }
-                .foregroundStyle(.secondary)
+                // A borderless menu draws its title in the control's color whatever the foreground style says.
+                .opacity(0.6)
             }
         }
     }

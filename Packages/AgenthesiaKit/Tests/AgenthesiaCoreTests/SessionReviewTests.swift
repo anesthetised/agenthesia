@@ -161,6 +161,102 @@ import Workspace
         #expect(review.documentError == SessionFileDocument.Failure.notText.localizedDescription)
     }
 
+    @Test func markingUnmarkingAndAdvancingToTheNextUnviewedFile() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("kept\n", "kept")
+        try await fixture.commit()
+        for name in ["a", "b", "c"] { try fixture.write("\(name)\n", name) }
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        #expect(review.selectedPath == "a" && review.viewedCount == 0)
+        review.toggleViewed("b")
+        #expect(review.viewed.isViewed("b") && review.viewedCount == 1)
+        review.toggleViewed("b")
+        #expect(!review.viewed.isViewed("b") && review.viewedCount == 0)
+        review.toggleViewed("missing")
+        #expect(review.viewedCount == 0)
+        review.toggleViewed("b")
+        review.markSelectedViewedAndAdvance()
+        #expect(review.viewed.isViewed("a") && review.selectedPath == "c")
+        review.markSelectedViewedAndAdvance()
+        #expect(review.viewedCount == 3 && review.selectedPath == "c")
+        // Marking again does not unmark.
+        review.markSelectedViewedAndAdvance()
+        #expect(review.viewedCount == 3)
+        review.toggleViewed("a")
+        review.selectedPath = "c"
+        review.markSelectedViewedAndAdvance()
+        #expect(review.selectedPath == "a" && review.viewedCount == 2)
+    }
+
+    @Test func aMarkClearsWhenTheFileChangesAndStaysWhenItDoesNot() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("tracked\n", "tracked")
+        try await fixture.commit()
+        try fixture.write("one\n", "file")
+        try fixture.write("edited\n", "tracked")
+        try fixture.write("other\n", "other")
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        review.toggleViewed("file")
+        review.toggleViewed("tracked")
+        await review.refresh()
+        #expect(review.viewed.isViewed("file") && review.viewed.isViewed("tracked") && review.viewedCount == 2)
+        // A new file elsewhere in the list changes nothing for the viewed ones.
+        try fixture.write("late\n", "late")
+        await review.refresh()
+        #expect(review.viewedCount == 2)
+        try fixture.write("two\n", "file")
+        await review.refresh()
+        #expect(!review.viewed.isViewed("file") && review.viewed.isViewed("tracked") && review.viewedCount == 1)
+        // The file leaves the list, so its mark does not come back with it.
+        review.toggleViewed("file")
+        try FileManager.default.removeItem(at: fixture.root.appending(path: "file"))
+        await review.refresh()
+        try fixture.write("two\n", "file")
+        await review.refresh()
+        #expect(!review.viewed.isViewed("file") && review.viewedCount == 1)
+    }
+
+    @Test func marksOutliveTheReviewThatSetThem() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("kept\n", "kept")
+        try await fixture.commit()
+        try fixture.write("one\n", "file")
+        let marks = ViewedMarks()
+        let first = SessionReview(session: fixture.session, root: fixture.root, viewed: marks)
+        await first.refresh()
+        first.toggleViewed("file")
+        let second = SessionReview(session: fixture.session, root: fixture.root, viewed: marks)
+        await second.refresh()
+        #expect(second.viewedCount == 1)
+    }
+
+    @Test func countsLinesAgainstTheReviewsBase() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("1\n2\n3\n", "edited")
+        try fixture.write("gone\n", "gone")
+        try await fixture.commit()
+        try fixture.write("1\nx\n3\n4\n", "edited")
+        try FileManager.default.removeItem(at: fixture.root.appending(path: "gone"))
+        try fixture.write("a\nb\n", "untracked")
+        try Data([0, 1]).write(to: fixture.root.appending(path: "binary"))
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        #expect(review.stats == ChangeStats())
+        await review.refresh()
+        #expect(review.stats.files["edited"] == ChangeStats.Lines(added: 2, removed: 1))
+        #expect(review.stats.files["gone"] == ChangeStats.Lines(added: 0, removed: 1))
+        #expect(review.stats.files["untracked"] == ChangeStats.Lines(added: 2, removed: 0))
+        #expect(review.stats.binary == ["binary"])
+        try fixture.write("1\nx\n3\n", "edited")
+        await review.refresh()
+        #expect(review.stats.files["edited"] == ChangeStats.Lines(added: 1, removed: 1))
+    }
+
     @Test func rejectsOversizedHistoricalFilesAndOutsideSymlinksAndReplacedRoots() async throws {
         let fixture = try await SessionReviewFixture()
         defer { fixture.remove() }

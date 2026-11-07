@@ -38,6 +38,9 @@ public struct SessionCommands: Commands {
             Button(model?.isReviewShown == true ? "Hide Review" : "Review Changes") { model?.toggleReview() }
                 .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(model?.canReview != true)
+            Button("Mark Viewed and Go to Next") { model?.markViewedAndAdvance() }
+                .keyboardShortcut("v", modifiers: [.command, .option])
+                .disabled(model?.canMarkViewed != true)
             Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
                 .disabled(model?.canMerge != true)
             Divider()

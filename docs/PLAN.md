@@ -581,6 +581,21 @@ Wave 2:
   streamed and after it ended; ⌥⌘↓ with the composer focused and a click on the capsule, also while the reply streamed,
   scrolled to the end and removed it. Session → Jump to Latest is listed with ⌥⌘↓. A click sent while the `Working`
   line disappeared missed, probably because the capsule moved down with it. Not checked: VoiceOver.
+- #214: viewed marks and line counts in the review pane (ADR-0041). `ViewedMarks` keeps a mark per file with a
+  `stat` fingerprint (status, size, modification time); a refresh drops the marks whose file changed or left the list
+  (`ViewedMarks.surviving`, pure and tested), and a `touch` clears one too. The row's button and ⌥⌘V (*Mark Viewed and
+  Go to Next*, free among every key equivalent in the app) set marks, ⌥⌘V then selects the next unviewed file;
+  `SessionWindowModel` keeps the marks per session, so they survive closing the pane and reviewing another session, not
+  closing the window. Rows show `SessionWorkspace.changeStats` counts against the review's own merge base, the footer
+  `2 of 5 viewed`. Tests: marking, unmarking, ⌥⌘V advancing and wrapping, a mark clearing on a changed file and staying
+  on an unchanged one, a file leaving and returning, the counts in real temporary repositories, the footer summary, and
+  the marks outliving the review in `SessionWindowModel`. Running app (scripted, MockAgent, isolated home, dark and
+  light, the light pass with `-NSRequiresAquaSystemAppearance YES`): three changed files showed `+2 −1`, `+3 −0` and
+  `+2 −0` in the list and `0 of 3 viewed`; ⌥⌘V marked the selected file and moved to the next unviewed one, wrapping to
+  the first; a click on a row's circle marked it; rewriting a viewed file cleared its mark and updated its counts; the
+  footer reached `3 of 3 viewed`. Session → Mark Viewed and Go to Next is listed. Not checked: VoiceOver; the hosted
+  SwiftUI list exposes no accessibility tree to tests, so the row's button and counts are not asserted there. A renamed file shows counts as a deletion plus an addition (`changeStats` uses
+  `--no-renames`), not as the net edit.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

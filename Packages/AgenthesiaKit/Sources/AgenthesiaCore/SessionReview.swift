@@ -13,6 +13,10 @@ public import Workspace
     public let baseBranch: String?
     private var snapshot: SessionWorkspace.Review?
     public var changes: [SessionWorkspace.Review.Change] { snapshot?.changes ?? [] }
+    /// Line counts against the review's own merge base; a path without an entry has none to show.
+    public private(set) var stats = ChangeStats()
+    /// Shared with the window, so the marks outlive this review (ADR-0041).
+    public let viewed: ViewedMarks
     public var selectedPath: String?
     public private(set) var document: Document?
     public private(set) var error: String?
@@ -39,8 +43,9 @@ public import Workspace
     }
 
     /// `root` is the canonical directory captured by `SessionFiles` when the session was attached.
-    public init(session: SessionRecord, root: URL) {
+    public init(session: SessionRecord, root: URL, viewed: ViewedMarks = ViewedMarks()) {
         id = session.id
+        self.viewed = viewed
         self.root = root
         baseBranch = session.baseBranch
         baseRevision = session.baseRevision
@@ -58,9 +63,24 @@ public import Workspace
                 baseBranch: baseBranch,
                 baseRevision: baseRevision
             )
+            // Counts are decoration: a failure to count must not hide the review.
+            let counted = (try? await SessionWorkspace.changeStats(in: root, baseRevision: updated.baseRevision))
+            let marked = updated.changes.filter { viewed.isViewed($0.path) }
+            let root = root
+            let current = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(
+                        returning: Dictionary(
+                            uniqueKeysWithValues: marked.map { ($0.path, ViewedMarks.Fingerprint.read($0, in: root)) }
+                        )
+                    )
+                }
+            }
             try await checkRoot()
             guard refreshToken == token else { return }
             snapshot = updated
+            stats = counted ?? ChangeStats()
+            viewed.keep(matching: current)
             error = nil
             // A held diff keeps its path while the file is gone from the list; Show latest moves on.
             if !changes.contains(where: { $0.path == selectedPath }), !holdsShownDocument {
@@ -70,6 +90,7 @@ public import Workspace
         } catch {
             guard refreshToken == token, !Task.isCancelled else { return }
             snapshot = nil
+            stats = ChangeStats()
             selectedPath = nil
             document = nil
             held = nil
@@ -125,6 +146,27 @@ public import Workspace
                 }
             show(nil, error: message)
         }
+    }
+
+    public var viewedCount: Int { viewed.count(in: changes) }
+    /// The footer's `2 of 5 viewed`.
+    public var viewedSummary: String { "\(viewedCount) of \(changes.count) viewed" }
+
+    /// Marks or unmarks a file, remembering what it looks like now.
+    public func toggleViewed(_ path: String) {
+        guard let change = changes.first(where: { $0.path == path }) else { return }
+        if viewed.isViewed(path) {
+            viewed.unmark(path)
+        } else {
+            viewed.mark(path, as: .read(change, in: root))
+        }
+    }
+
+    /// ⌥⌘V: marks the selected file and selects the next unviewed one, if any.
+    public func markSelectedViewedAndAdvance() {
+        guard let path = selectedPath, changes.contains(where: { $0.path == path }) else { return }
+        if !viewed.isViewed(path) { toggleViewed(path) }
+        if let next = viewed.nextUnviewed(after: path, in: changes) { selectedPath = next }
     }
 
     /// Applies a held change; the selected file moves on if the held one left the list.

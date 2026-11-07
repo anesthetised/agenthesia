@@ -294,6 +294,37 @@ import SwiftUI
         }
     }
 
+    /// The displayed session as history has it, when it is saved and not live. Archive applies to it only: a live
+    /// session ends first (ADR-0044).
+    private var displayedSaved: SessionRecord? {
+        guard !closed, !showingSetup, !isLoadingHistory, let id = displayed?.session.id else { return nil }
+        return savedSessions.first { $0.id == id }
+    }
+    var canArchive: Bool { displayedSaved != nil }
+    var archiveCommandTitle: String { Self.archiveTitle(archived: displayedSaved?.archivedAt != nil) }
+    /// Why Archive is disabled for a live session.
+    var archiveHelp: String? {
+        displayed != nil && !showingSetup && displayedSaved == nil ? "End the session first" : nil
+    }
+    static func archiveTitle(archived: Bool) -> String { archived ? "Unarchive Session" : "Archive Session" }
+
+    /// Archives the displayed session, or unarchives it.
+    func toggleArchived() async {
+        guard let record = displayedSaved else { return }
+        await setArchived(record.archivedAt == nil, record)
+    }
+    /// Hides a saved session from Settled, or brings it back. Nothing confirms it, and its log stays as it was.
+    func setArchived(_ archived: Bool, _ record: SessionRecord) async {
+        guard !closed, savedSessions.contains(where: { $0.id == record.id }) else { return }
+        await writeArchived(archived, of: record.id)
+    }
+    private func writeArchived(_ archived: Bool, of id: UUID) async {
+        do { try await library.store().setArchived(archived ? .now : nil, of: id) } catch {
+            showAlert(archived ? "Cannot Archive the Session" : "Cannot Unarchive the Session", error)
+        }
+        await refresh()
+    }
+
     var canResumeQueue: Bool {
         guard !closed, !showingSetup, !isLoadingHistory, restored == nil, let session = owner?.controller else {
             return false
@@ -321,13 +352,14 @@ import SwiftUI
         }
     }
 
-    /// Wraps in exactly the order shown by SessionSidebarList: Needs You, Working, then saved history.
+    /// Wraps in exactly the order shown by SessionSidebarList: Needs You, Working, then saved history. A search can
+    /// list archived sessions, which navigation skips (ADR-0044).
     func navigationTarget(backward: Bool = false, needsInput: Bool = false) -> NavigationTarget? {
         guard !closed else { return nil }
-        let rows = sidebar.rows.map { row in
+        let rows = sidebar.rows.compactMap { row -> NavigationTarget? in
             switch row.source {
-            case .live(let owner): NavigationTarget.live(owner)
-            case .saved(let record): NavigationTarget.saved(record)
+            case .live(let owner): .live(owner)
+            case .saved(let record): record.archivedAt == nil ? .saved(record) : nil
             }
         }
         guard !rows.isEmpty else { return nil }
@@ -563,9 +595,13 @@ import SwiftUI
         await sessions.end(owner)
     }
     /// Continues the displayed session, or shows the owner that already has it live (ADR-0017, ADR-0026).
+    /// A session the user talks to again is not archived: Continue clears `archivedAt` (ADR-0044).
     func continueRestored() {
         guard canContinue, let session = displayed?.session, let owner = sessions.resume(session) else { return }
         show(owner)
+        if history.first(where: { $0.id == session.id })?.archivedAt != nil {
+            Task { await writeArchived(false, of: session.id) }
+        }
     }
     func showHistory(_ record: SessionRecord) async {
         guard !closed else { return }

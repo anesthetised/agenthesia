@@ -38,7 +38,7 @@ struct SessionSidebarRows: View {
         SessionRow(
             title: row.title,
             project: row.project?.name,
-            reason: model.outcomes[record.id]?.label,
+            reason: SidebarReason.saved(archived: record.archivedAt != nil, outcome: model.outcomes[record.id]?.label),
             activity: nil,
             lastActivity: row.lastActivity
         )
@@ -46,6 +46,7 @@ struct SessionSidebarRows: View {
         .contextMenu {
             newSessionButton(row.project)
             windowMenu(.saved(record))
+            archiveButton(record)
             discardButton(record)
         }
     }
@@ -55,6 +56,12 @@ struct SessionSidebarRows: View {
         if let project {
             Button("New Session in Project") { model.newSession(in: project) }
                 .disabled(!model.canStart)
+        }
+    }
+
+    private func archiveButton(_ record: SessionRecord) -> some View {
+        Button(SessionWindowModel.archiveTitle(archived: record.archivedAt != nil)) {
+            Task { await model.setArchived(record.archivedAt == nil, record) }
         }
     }
 

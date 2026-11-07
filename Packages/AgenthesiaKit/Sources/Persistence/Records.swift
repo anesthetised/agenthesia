@@ -59,6 +59,8 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let baseBranch: String?
     /// The session branch as created. Sessions from before it was stored, and non-Git sessions, have none.
     public let branch: String?
+    /// When the user archived the session (ADR-0044); nil for a session that is not archived.
+    public var archivedAt: Date?
     public let createdAt: Date
 
     public init(
@@ -72,6 +74,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         baseRevision: String? = nil,
         baseBranch: String? = nil,
         branch: String? = nil,
+        archivedAt: Date? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -84,6 +87,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         self.baseRevision = baseRevision
         self.baseBranch = baseBranch
         self.branch = branch
+        self.archivedAt = archivedAt
         self.createdAt = createdAt
     }
 }

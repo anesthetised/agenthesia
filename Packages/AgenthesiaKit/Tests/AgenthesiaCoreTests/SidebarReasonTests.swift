@@ -85,4 +85,11 @@ import Testing
         #expect(reason?.count == "Allow? ".count + 120)
         #expect(reason?.contains("second") == false)
     }
+
+    @Test func anArchivedSessionSaysSoAndOtherwiseKeepsItsOutcome() {
+        #expect(SidebarReason.saved(archived: true, outcome: nil) == "Archived")
+        #expect(SidebarReason.saved(archived: true, outcome: "Merged") == "Archived")
+        #expect(SidebarReason.saved(archived: false, outcome: "Merged") == "Merged")
+        #expect(SidebarReason.saved(archived: false, outcome: nil) == nil)
+    }
 }

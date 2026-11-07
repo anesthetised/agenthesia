@@ -1,10 +1,11 @@
 import AgenthesiaCore
-import Rendering
 import SwiftUI
 
+/// The selected file's diff. A new diff replaces the shown one only once it is rendered, so nothing flickers.
 struct SessionReviewDetail: View {
     let review: SessionReview
-    @State private var diff: String?
+    let onEscape: () -> Void
+    @State private var diff: RenderedDiff?
 
     private struct Selection: Equatable {
         let path: String?
@@ -13,8 +14,19 @@ struct SessionReviewDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let path = review.selectedPath {
-                Text(path).font(.headline).lineLimit(2).truncationMode(.middle).padding()
+            if let path = review.document?.path ?? review.selectedPath {
+                HStack {
+                    Text(path).font(.subheadline.weight(.semibold)).lineLimit(1).truncationMode(.middle).help(path)
+                    Spacer(minLength: 8)
+                    if review.isHolding {
+                        HStack(spacing: 4) {
+                            Text("File changed ·").foregroundStyle(.secondary)
+                            Button("Show latest", action: review.showLatest).buttonStyle(.link)
+                        }
+                        .font(.callout).fixedSize()
+                        .help("The diff stays while text is selected in it")
+                    }
+                }.padding(8)
                 Divider()
             }
             if let error = review.documentError {
@@ -24,31 +36,23 @@ struct SessionReviewDetail: View {
                     Text(error).textSelection(.enabled)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let diff {
-                if diff.isEmpty {
+                if diff.lines.isEmpty {
                     ContentUnavailableView("No text changes", systemImage: "doc.text")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    MarkdownPreview(text: diff).accessibilityLabel("File changes")
+                    ReviewDiffView(diff: diff, onSelection: { review.hasSelection = $0 }, onEscape: onEscape)
                 }
             } else {
                 ProgressView("Loading changes…").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: Selection(path: review.selectedPath, revision: review.revision)) { await load() }
+        .task(id: Selection(path: review.selectedPath, revision: review.revision)) { await review.loadSelection() }
+        .task(id: review.document) { await render() }
     }
 
-    private func load() async {
-        diff = nil
-        await review.loadSelection()
-        guard !Task.isCancelled, let document = review.document else { return }
-        let rendered: String = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let hunks = UnifiedDiff.make(old: document.old, new: document.new)
-                continuation.resume(
-                    returning: hunks.isEmpty ? "" : LiveTranscriptSource.fenced(hunks, language: "diff")
-                )
-            }
-        }
+    private func render() async {
+        guard let document = review.document else { return }
+        let rendered = await RenderedDiff.make(document)
         guard !Task.isCancelled else { return }
         diff = rendered
     }

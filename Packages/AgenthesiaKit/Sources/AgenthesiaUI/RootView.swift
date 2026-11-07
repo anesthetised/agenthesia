@@ -139,7 +139,8 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            model.dropStaleQueueEdit(); model.closeFind(); showingQuickOpen = false; fileQuery = ""; model.review = nil
+            model.dropStaleQueueEdit(); model.closeFind(); showingQuickOpen = false; fileQuery = ""
+            model.review = nil; model.showingReview = false
         }
         .onChange(of: model.files.sessionID) {
             if model.review?.id != model.files.sessionID { model.review = nil }
@@ -173,14 +174,10 @@ public struct RootView: View {
                 onDismiss: { showingQuickOpen = false }
             )
         }
-        .sheet(item: $model.review) { review in
-            SessionReviewView(review: review, files: model.files, model: model)
-        }
         .sheet(item: $model.signInTerminal) { terminal in
             SignInTerminalSheet(terminal: terminal) { model.signInTerminal = nil }
         }
-        // Above the review when it is shown, which presents the sheet itself.
-        .sheet(item: model.review == nil ? $model.merge : .constant(nil)) { request in
+        .sheet(item: $model.merge) { request in
             MergeSheet(request: request) { Task { await model.confirmMerge(request) } }
         }
     }
@@ -222,17 +219,21 @@ public struct RootView: View {
         )
     }
 
-    /// The transcript, the file pane and the inspector side by side. Widths are computed from the column's width
-    /// (`DetailPanes`) instead of an `HSplitView`, whose split view kept stale divider positions when a pane
-    /// appeared or the window shrank (ADR-0039, amendment 2026-10-30).
+    /// The transcript, the file pane or the review pane, and the inspector side by side. Widths are computed from
+    /// the column's width (`DetailPanes`) instead of an `HSplitView`, whose split view kept stale divider positions
+    /// when a pane appeared or the window shrank (ADR-0039, amendment 2026-10-30).
     private func panes(_ session: SessionController, size: CGSize) -> some View {
         let width = size.width
+        let review = model.isReviewShown ? model.review : nil
         let panes = DetailPanes(
             width: width,
-            filePane: filesMatchSession && model.files.selectedPath != nil,
+            filePane: review != nil || (filesMatchSession && model.files.selectedPath != nil),
             inspector: model.showingInspector
         )
-        let widths = panes.widths(filePane: model.filePaneWidth, inspector: model.inspectorWidth)
+        let widths = panes.widths(
+            filePane: review != nil ? model.reviewWidth : model.filePaneWidth,
+            inspector: model.inspectorWidth
+        )
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
                 LiveTranscript(session: session, pathIndex: pathIndex(for: session), find: model.find) {
@@ -261,13 +262,20 @@ public struct RootView: View {
                 }
             }.frame(width: widths.transcript)
             if panes.showsFilePane {
-                SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
-                    .frame(width: widths.filePane)
-                    .overlay(alignment: .leading) {
-                        PaneDivider(width: widths.filePane) {
-                            model.filePaneWidth = max($0, DetailPanes.filePaneMinWidth)
-                        }
+                Group {
+                    if let review {
+                        SessionReviewPane(review: review, files: model.files, model: model, height: size.height)
+                    } else {
+                        SessionFilePane(files: model.files) { openFile($0, line: $1, for: $2) }
                     }
+                }
+                .frame(width: widths.filePane)
+                .overlay(alignment: .leading) {
+                    PaneDivider(width: widths.filePane) {
+                        let width = max($0, DetailPanes.filePaneMinWidth)
+                        if review != nil { model.reviewWidth = width } else { model.filePaneWidth = width }
+                    }
+                }
             }
             if panes.showsInspector {
                 SessionInspector(model: model, showingLog: $showingLog) { openFile($0, for: $1) }
@@ -299,6 +307,8 @@ public struct RootView: View {
     private func openFile(_ path: String, line: Int? = nil, for id: UUID?) {
         guard let id, model.displayed?.session.id == id, model.files.sessionID == id else { return }
         showingQuickOpen = false
+        // The file takes the slot; the review keeps its state for ⌃⌘R (ADR-0041).
+        model.showingReview = false
         Task {
             guard model.displayed?.session.id == id, !model.closed else { return }
             await model.files.open(path: path, line: line, in: id)

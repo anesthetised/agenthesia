@@ -76,8 +76,8 @@ import Testing
         )
         #expect(model.canMerge && model.mergeCommandTitle == "Merge into main…")
         await model.files.attach(fixture.record)
-        model.openReview()
-        #expect(model.review != nil)
+        model.toggleReview()
+        #expect(model.isReviewShown)
 
         await model.requestMerge()
         let request = try #require(model.merge)
@@ -89,7 +89,7 @@ import Testing
         request.message = "Add a greeting"
 
         await model.confirmMerge(request)
-        #expect(model.merge == nil && model.review == nil && model.alertMessage == nil)
+        #expect(model.merge == nil && model.review == nil && !model.showingReview && model.alertMessage == nil)
         #expect(model.sessions.owners.isEmpty)
         guard case .merged(let commit, "main") = try #require(model.restored?.transcript.worktreeOutcome) else {
             Issue.record("The merge was not recorded.")

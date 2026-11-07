@@ -118,8 +118,9 @@ struct SessionInspector: View {
     }
 
     @ViewBuilder private func review(prominent: Bool) -> some View {
-        let button = Button("Review", systemImage: "text.badge.checkmark", action: model.openReview)
+        let button = Button("Review", systemImage: "text.badge.checkmark", action: model.toggleReview)
             .disabled(!model.canReview)
+            .help(model.isReviewShown ? "Hide the review (⌃⌘R)" : "Review the changes (⌃⌘R)")
         if prominent { button.buttonStyle(.borderedProminent) } else { button.buttonStyle(.bordered) }
     }
 

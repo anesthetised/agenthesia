@@ -1,5 +1,7 @@
 import Foundation
+import Observation
 import Persistence
+import Synchronization
 import Testing
 import Workspace
 
@@ -43,6 +45,106 @@ import Workspace
         review.selectedPath = "file"
         await review.refresh()
         #expect(review.selectedPath == "binary")
+    }
+
+    /// ADR-0041: a refresh compares before it replaces, so an unchanged file does not touch the shown document.
+    @Test func anUnchangedFileLeavesTheDocumentUntouched() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("kept\n", "kept")
+        try await fixture.commit()
+        try fixture.write("one\n", "file")
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        await review.loadSelection()
+        let shown = try #require(review.document)
+        let touched = Mutex(false)
+        withObservationTracking {
+            _ = review.document
+            _ = review.documentError
+            _ = review.isHolding
+        } onChange: {
+            touched.withLock { $0 = true }
+        }
+        try fixture.write("other\n", "second")
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.changes.map(\.path) == ["file", "second"])
+        #expect(!touched.withLock { $0 })
+        #expect(review.document == shown && !review.isHolding)
+    }
+
+    @Test func aSelectionHoldsAChangedFileUntilShowLatestOrItEnds() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("kept\n", "kept")
+        try await fixture.commit()
+        try fixture.write("one\n", "file")
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        await review.loadSelection()
+        review.hasSelection = true
+        try fixture.write("two\n", "file")
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.document?.new == "one\n" && review.isHolding)
+        review.showLatest()
+        #expect(review.document?.new == "two\n" && !review.isHolding)
+        // Changing back to what is shown is no longer a change.
+        try fixture.write("three\n", "file")
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.isHolding)
+        try fixture.write("two\n", "file")
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.document?.new == "two\n" && !review.isHolding)
+        try fixture.write("four\n", "file")
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.isHolding)
+        review.hasSelection = false
+        #expect(review.document?.new == "four\n" && !review.isHolding)
+    }
+
+    @Test func aHeldFileThatLeavesTheListStaysUntilShowLatest() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("base\n", "file")
+        try await fixture.commit()
+        try fixture.write("changed\n", "file")
+        try fixture.write("other\n", "second")
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        await review.loadSelection()
+        #expect(review.selectedPath == "file")
+        review.hasSelection = true
+        try fixture.write("base\n", "file")
+        await review.refresh()
+        #expect(review.changes.map(\.path) == ["second"])
+        #expect(review.selectedPath == "file")
+        await review.loadSelection()
+        #expect(review.document?.new == "changed\n" && review.isHolding)
+        review.showLatest()
+        #expect(review.selectedPath == "second" && review.document == nil)
+        await review.loadSelection()
+        #expect(review.document?.new == "other\n")
+    }
+
+    @Test func selectingAnotherFileReplacesTheDiffDespiteASelection() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try fixture.write("kept\n", "kept")
+        try await fixture.commit()
+        try fixture.write("one\n", "file")
+        try fixture.write("other\n", "second")
+        let review = SessionReview(session: fixture.session, root: fixture.root)
+        await review.refresh()
+        await review.loadSelection()
+        review.hasSelection = true
+        review.selectedPath = "second"
+        await review.loadSelection()
+        #expect(review.document?.path == "second" && !review.isHolding)
     }
 
     @Test(arguments: [Data([0, 1]), Data([0xFF])])

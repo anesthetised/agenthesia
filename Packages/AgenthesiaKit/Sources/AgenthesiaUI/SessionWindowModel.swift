@@ -18,8 +18,10 @@ import SwiftUI
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
     var showingInspector = true
-    /// The widths the user last chose for the file pane and the inspector; `DetailPanes` fits them to the window.
+    /// The widths the user last chose for the file pane, the review pane and the inspector; `DetailPanes` fits them
+    /// to the window.
     var filePaneWidth: CGFloat = 420
+    var reviewWidth: CGFloat = 560
     var inspectorWidth: CGFloat = 260
     private var selectedHistoryID: UUID?
     var owner: LiveSession?
@@ -34,7 +36,7 @@ import SwiftUI
     var leftoverWorktrees: Set<UUID> = []
     /// The discard waiting for confirmation.
     var pendingDiscard: PendingDiscard?
-    /// The merge sheet; it opens above the review when that is shown.
+    /// The merge sheet, presented by `RootView`.
     var merge: MergeRequest?
     /// A failed lifecycle action, shown in an alert.
     var alertMessage: String?
@@ -53,16 +55,28 @@ import SwiftUI
     private var selection = UUID()
     let sessions: SessionManager
     let files = SessionFiles()
+    /// The review of the displayed session; it keeps its state while the review pane is hidden (ADR-0041).
     var review: SessionReview?
+    /// Whether the review pane is wanted in the file pane's slot; opening a file hides it again.
+    var showingReview = false
 
     var canReview: Bool {
         !closed && !showingSetup && !isLoadingHistory && signIn == nil && files.root != nil && files.isGitRepository
             && files.sessionID == displayed?.session.id
     }
 
-    func openReview() {
+    /// The review pane holds the slot; `DetailPanes` may still hide it in a narrow window.
+    var isReviewShown: Bool { showingReview && canReview && review?.id == displayed?.session.id }
+
+    /// ⌃⌘R and Review in the inspector: shows the review pane, or hides it and the file pane it covered returns.
+    func toggleReview() {
+        if isReviewShown {
+            showingReview = false
+            return
+        }
         guard canReview, let session = displayed?.session, let root = files.root else { return }
-        review = SessionReview(session: session, root: root)
+        if review?.id != session.id { review = SessionReview(session: session, root: root) }
+        showingReview = true
     }
 
     /// Installed and local agents for the draft; without it, only a custom command (ADR-0036).
@@ -393,7 +407,7 @@ import SwiftUI
         }
     }
     /// Merges; failures stay in the sheet so the message is kept for another attempt. After the commit exists the
-    /// sheet and review close, and a window showing the session shows it read-only with the outcome.
+    /// sheet and the review pane close, and a window showing the session shows it read-only with the outcome.
     func confirmMerge(_ request: MergeRequest) async {
         guard request.canMerge else { return }
         request.isMerging = true
@@ -417,7 +431,10 @@ import SwiftUI
             return
         }
         if merge === request { merge = nil }
-        if review?.id == id { review = nil }
+        if review?.id == id {
+            review = nil
+            showingReview = false
+        }
         await refreshShowing(id, shown: shown)
         // After the sheets have gone, so the alert is not lost behind a dismissing sheet.
         if let committed { showAlert("The Merge Did Not Finish", committed) }
@@ -575,7 +592,7 @@ import SwiftUI
     }
     /// Detaches the window; its sessions keep running.
     func close() {
-        closed = true; selection = UUID(); files.close(); review = nil; merge = nil
+        closed = true; selection = UUID(); files.close(); review = nil; showingReview = false; merge = nil
         sessions.setShown(nil, in: self)
     }
 }

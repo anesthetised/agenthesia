@@ -4,6 +4,10 @@ public import Persistence
 public import Workspace
 
 /// A window's read-only review. Reads are lazy, and refreshes keep a still-differing file selected.
+///
+/// A refresh reads the selected file before replacing anything (ADR-0041): an equal document changes nothing, and
+/// while the view has text selected in the shown diff of that file, a change is held until `showLatest()` or the
+/// selection ends.
 @MainActor @Observable public final class SessionReview: Identifiable {
     public let id: UUID
     public let baseBranch: String?
@@ -14,6 +18,13 @@ public import Workspace
     public private(set) var error: String?
     public private(set) var documentError: String?
     public private(set) var isLoading = false
+    /// The diff view has text selected; only the view knows what. Clearing it applies a held change.
+    public var hasSelection = false {
+        didSet { if !hasSelection { showLatest() } }
+    }
+    /// What a refresh read while a selection held the shown diff: `File changed · Show latest`.
+    public var isHolding: Bool { held != nil }
+    private var held: (document: Document?, error: String?)?
     /// A refresh can change contents without changing the selected path or base revision.
     public private(set) var revision = UUID()
     private let root: URL
@@ -22,6 +33,7 @@ public import Workspace
     private var readToken = UUID()
 
     public struct Document: Equatable, Sendable {
+        public let path: String
         public let old: String?
         public let new: String
     }
@@ -50,13 +62,17 @@ public import Workspace
             guard refreshToken == token else { return }
             snapshot = updated
             error = nil
-            if !changes.contains(where: { $0.path == selectedPath }) { selectedPath = changes.first?.path }
+            // A held diff keeps its path while the file is gone from the list; Show latest moves on.
+            if !changes.contains(where: { $0.path == selectedPath }), !holdsShownDocument {
+                selectedPath = changes.first?.path
+            }
             revision = UUID()
         } catch {
             guard refreshToken == token, !Task.isCancelled else { return }
             snapshot = nil
             selectedPath = nil
             document = nil
+            held = nil
             self.error = error.localizedDescription
             revision = UUID()
         }
@@ -65,9 +81,10 @@ public import Workspace
     public func loadSelection() async {
         let token = UUID()
         readToken = token
-        document = nil
-        documentError = nil
-        guard let snapshot, let change = changes.first(where: { $0.path == selectedPath }) else { return }
+        guard let snapshot, let change = changes.first(where: { $0.path == selectedPath }) else {
+            show(nil, error: nil)
+            return
+        }
         let revision = revision
         do {
             try await checkRoot()
@@ -94,18 +111,47 @@ public import Workspace
             }
             try await checkRoot()
             guard readToken == token, selectedPath == change.path, self.revision == revision else { return }
-            document = Document(old: old, new: new)
+            show(Document(path: change.path, old: old, new: new), error: nil)
         } catch {
             guard readToken == token, !Task.isCancelled, selectedPath == change.path, self.revision == revision else {
                 return
             }
-            switch error {
-            case SessionWorkspace.ReviewFailure.tooLarge:
-                documentError = SessionFileDocument.Failure.tooLarge.localizedDescription
-            case SessionWorkspace.ReviewFailure.notRegularFile:
-                documentError = SessionFileDocument.Failure.notRegularFile.localizedDescription
-            default: documentError = error.localizedDescription
-            }
+            let message =
+                switch error {
+                case SessionWorkspace.ReviewFailure.tooLarge: SessionFileDocument.Failure.tooLarge.localizedDescription
+                case SessionWorkspace.ReviewFailure.notRegularFile:
+                    SessionFileDocument.Failure.notRegularFile.localizedDescription
+                default: error.localizedDescription
+                }
+            show(nil, error: message)
+        }
+    }
+
+    /// Applies a held change; the selected file moves on if the held one left the list.
+    public func showLatest() {
+        guard let held else { return }
+        self.held = nil
+        document = held.document
+        documentError = held.error
+        if !changes.contains(where: { $0.path == selectedPath }) { selectedPath = changes.first?.path }
+    }
+
+    /// A selection is in the shown diff of the selected file.
+    private var holdsShownDocument: Bool { hasSelection && document != nil && document?.path == selectedPath }
+
+    /// Replaces what is shown with what was read, unless it is equal or a selection holds the shown diff.
+    private func show(_ document: Document?, error: String?) {
+        guard document != self.document || error != documentError else {
+            // Even an equal assignment would invalidate the views that read it.
+            if held != nil { held = nil }
+            return
+        }
+        if holdsShownDocument {
+            held = (document, error)
+        } else {
+            held = nil
+            self.document = document
+            documentError = error
         }
     }
 

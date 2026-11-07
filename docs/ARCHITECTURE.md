@@ -107,7 +107,7 @@ got a history record.
 
 New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
 launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: "What should the agent
-do?" over the composer card, whose chips pick the project, the agent and name the checkout. The draft's state lives
+do?" over the composer card, whose chips pick the project, the agent and name the checkout, with the agent's cached mode and model as pills beside Attach. The draft's state lives
 in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The Project chip lists
 `ProjectRecord.recent` (by each project's newest session) and Choose Folder…; with nothing picked, the project of
 the newest session is used. The Agent chip lists `AgentCatalog.choices` (the newest installed version of each
@@ -143,10 +143,13 @@ an error response, throws `HintRejected` (`The agent does not offer “Large” 
 list to the catalog; the start fails as any other, so the worktree is removed, nothing is recorded and the draft
 returns with the error.
 
-> **Accepted, not yet implemented (#212):** [ADR-0040's amendment](adr/0040-composer-first-session-start.md) shows the cached
-> mode and model as pill menus in the draft, drawn as secondary with the tooltip `Last used with this agent; confirmed
-> when the session starts`; picking one sets `draftConfig`. Until then the draft applies the cached model without
-> showing it.
+The draft shows the cached options as pills (#212). `SessionWindowModel.draftPills` is the selected agent's
+`configHints` entry and `draftValue(of:)` the value of each: the one picked in `draftConfig`, if the agent offered it
+(else the pick is ignored), or the cached model; a mode nobody picked has none and its pill reads `Default mode`.
+`draftHints` is built from `draftValue(of:)`, so a pill always shows what Send applies. `SessionDraftView` draws them
+in the composer's bottom row after Attach with `ConfigSelectMenu`, the pill menu `SessionConfigControls` also uses,
+as secondary, with the tooltip and accessibility note `Last used with this agent; confirmed when the session starts`;
+a pick sets `draftConfig`, and a change of agent clears it. An agent without a cache entry shows no pills.
 
 > **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md) turns the Checkout label into a menu for Git
 > projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default), and

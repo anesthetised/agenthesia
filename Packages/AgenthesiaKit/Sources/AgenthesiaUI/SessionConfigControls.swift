@@ -27,50 +27,13 @@ struct SessionConfigControls: View {
     @ViewBuilder private func control(_ option: ACP.ConfigOption) -> some View {
         switch option.value {
         case .select(let current, let choices):
-            Menu {
-                switch choices {
-                case .flat(let options):
-                    choiceButtons(options, selected: current, option: option)
-                case .grouped(let groups):
-                    ForEach(groups, id: \.group) { group in
-                        Section(group.name) {
-                            choiceButtons(group.options, selected: current, option: option)
-                        }
-                    }
-                }
-            } label: {
-                Text(choices.allOptions.first { $0.value == current }?.name ?? current)
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
-            .accessibilityLabel(
-                "\(option.name): \(choices.allOptions.first { $0.value == current }?.name ?? current)"
-            )
-            .help(option.description.map { "\(option.name): \($0)" } ?? option.name)
+            ConfigSelectMenu(option: option, choices: choices, selected: current) { change(option.id, to: .select($0)) }
         case .boolean(let current):
             // A transactional binding intentionally keeps the confirmed value until the async write commits.
             Toggle(option.name, isOn: Binding(get: { current }, set: { change(option.id, to: .boolean($0)) }))
                 .toggleStyle(.checkbox).fixedSize().help(option.description ?? option.name)
         case .unknown:
             EmptyView()
-        }
-    }
-
-    private func choiceButtons(
-        _ choices: [ACP.ConfigSelectOption],
-        selected: String,
-        option: ACP.ConfigOption
-    ) -> some View {
-        ForEach(choices, id: \.value) { choice in
-            Button {
-                change(option.id, to: .select(choice.value))
-            } label: {
-                if choice.value == selected {
-                    Label(choice.name, systemImage: "checkmark")
-                } else {
-                    Text(choice.name)
-                }
-            }
-            .help(choice.description ?? choice.name)
         }
     }
 

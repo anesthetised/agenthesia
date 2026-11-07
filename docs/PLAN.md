@@ -550,6 +550,15 @@ Wave 2:
   cleared it. A second check with #210, dark and light (`-NSRequiresAquaSystemAppearance YES`), showed `Finished` for
   a slow reply that ended below the viewport and cleared it after Jump to Latest. Not checked: a window that is not
   key, a folded group as the last row, VoiceOver.
+- #212: the draft shows the cached mode and model as pills (ADR-0040's amendment). `SessionConfigControls`' select menu
+  became `ConfigSelectMenu`, shared with `SessionDraftView`, which draws the pills after Attach as secondary with the
+  tooltip and accessibility note `Last used with this agent; confirmed when the session starts`. `draftValue(of:)` is
+  the one rule for a pill's value, and `draftHints` is built from it, so a pill equals what Send applies: the picked
+  value if the agent offered it (a stale pick is dropped), else the cached model; a mode reads `Default mode` until
+  picked. Changing the agent clears the picks. Tests: pills from the cache and none without, picked values equal the
+  hints, a stale pick, reset on agent change, a hosted `RootView` showing the pill titles (before and after the cache,
+  a pick, an agent change) and the pill's accessibility text. Not checked in the running app, light or dark; the
+  secondary colour of a borderless menu and the tooltip (hosted views expose neither) are untested.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

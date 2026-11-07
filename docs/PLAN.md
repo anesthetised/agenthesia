@@ -787,28 +787,27 @@ Not adopted: T3 Code's fixed access levels with icons (principle 8), settled sta
 snoozing and pins, automatic removal of merged or inactive worktrees, a worktree folder or branch prefix setting
 (principle 6).
 
-Issues, in order. Within a wave the issues are independent apart from the listed dependencies. Issues without a
-number are opened once this plan is merged.
+Issues, in order. Within a wave the issues are independent apart from the listed dependencies.
 
 | Order | Issue | Area | Tier | Depends on |
 |---|---|---|---|---|
-| 1 | Working shelf: footer, turn start time per row, `Working …` / `Idle …`, `Nothing needs you` | Sidebar | `agent:strong` | — |
-| 1 | Quiet transcript row selection; writes `docs/behavior/transcript.md` | Transcript | `agent:light` | — |
-| 1 | Effort hint in the draft (`thought_level` in the cache, applied like the model) | Draft | `agent:light` | — |
-| 1 | Mode popover with the agent's descriptions | Composer | `agent:light` | — |
-| 1 | `Sign In…` only when the agent asked | Settings | `agent:light` | — |
-| 1 | Development builds use their own bundle identifier and data folder | Tooling | `agent:light` | — |
+| 1 | #268 Working shelf: footer, turn start time per row, `Working …` / `Idle …`, `Nothing needs you` | Sidebar | `agent:strong` | — |
+| 1 | #269 Quiet transcript row selection; writes `docs/behavior/transcript.md` | Transcript | `agent:light` | — |
+| 1 | #270 Effort hint in the draft (`thought_level` in the cache, applied like the model) | Draft | `agent:light` | — |
+| 1 | #271 Mode popover with the agent's descriptions | Composer | `agent:light` | — |
+| 1 | #272 `Sign In…` only when the agent asked | Settings | `agent:light` | — |
+| 1 | #273 Development builds use their own bundle identifier and data folder | Tooling | `agent:light` | — |
 | 1 | #263 ⌘. in the composer stops an idle session and pauses its queue | Queue | `agent:light` | — |
 | 1 | #264 Manage Agents… opens Settings without switching to the Agents tab | Settings | `agent:light` | — |
 | 1 | #265 A failed start drops the mode and model picked in the draft | Draft | `agent:light` | — |
 | 1 | #266 Remove deletes an installed agent version without confirmation | Settings | `agent:light` | — |
 | 1 | #267 A saved session shows neither its queue nor its settings (owner decides first) | Composer | `agent:light` | — |
-| 2 | Settled collapses with a selected row | Sidebar | `agent:light` | shelf |
-| 2 | Settle from the row (`✓ Settle` on hover, context menu) | Sidebar | `agent:light` | shelf |
-| 2 | One composer control row: toggle pills, `…` overflow, working line above the card | Composer | `agent:strong` | effort hint, mode popover |
-| 2 | Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
-| 3 | Draft heading with the project picker, centered composer moving to the bottom at Send | Draft | `agent:strong` | control row, #265 |
-| 4 | Sessions without a project | Draft, Workspace | `agent:strong` | draft heading |
+| 2 | #274 Settled collapses with a selected row | Sidebar | `agent:light` | #268 |
+| 2 | #275 Settle from the row (`✓ Settle` on hover, context menu) | Sidebar | `agent:light` | #268 |
+| 2 | #276 One composer control row: toggle pills, `…` overflow, working line above the card | Composer | `agent:strong` | #270, #271 |
+| 2 | #277 Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
+| 3 | #278 Draft heading with the project picker, centered composer moving to the bottom at Send | Draft | `agent:strong` | #276, #265 |
+| 4 | #279 Sessions without a project | Draft, Workspace | `agent:strong` | #278 |
 | 5 | #160 Verify the redesign in the running app and refresh screenshots | — | `agent:light` | all |
 
 Pitfalls known so far:

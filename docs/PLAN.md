@@ -557,8 +557,12 @@ Wave 2:
   value if the agent offered it (a stale pick is dropped), else the cached model; a mode reads `Default mode` until
   picked. Changing the agent clears the picks. Tests: pills from the cache and none without, picked values equal the
   hints, a stale pick, reset on agent change, a hosted `RootView` showing the pill titles (before and after the cache,
-  a pick, an agent change) and the pill's accessibility text. Not checked in the running app, light or dark; the
-  secondary colour of a borderless menu and the tooltip (hosted views expose neither) are untested.
+  a pick, an agent change) and the pill's accessibility text. Running app (scripted, MockAgent, isolated home, dark
+  and light, the light pass with `-NSRequiresAquaSystemAppearance YES`): after one session the draft showed `Default
+  mode` and `Small` dimmer than the project and agent menus, in both appearances and after a relaunch; the first build
+  drew them in full colour, because a borderless menu ignores `.foregroundStyle`, so they use `.opacity`. The tooltip
+  and the accessibility label carry the note. Not checked: the reset on an agent change (only MockAgent was set up;
+  tests cover it), VoiceOver.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

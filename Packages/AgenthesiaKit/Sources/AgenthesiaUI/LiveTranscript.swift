@@ -24,7 +24,7 @@ struct TranscriptMessage {
     var copyText: (() -> String)?
 
     /// How a row presents its role: users get a bubble, agent text no label, thoughts a `Thinking` caption,
-    /// a group of tool calls only a header.
+    /// a group of tool calls, or a folded permission record, only a header.
     enum Kind: Equatable { case card, user, agent, thought, group }
 }
 
@@ -38,12 +38,10 @@ struct ToolCardHeader: Equatable {
     /// The body exceeds its collapsed bound.
     var expandable = false
     var expanded = false
-    /// Titles of the options a pending permission request offers, in the agent's order.
-    var actions: [String] = []
-    /// Whether ⌥⌘1… choose `actions`; only the oldest pending request has shortcuts.
-    var shortcuts = false
     /// The disclosure reads Details instead of Show all.
     var detailsDisclosure = false
+    /// A permission request's one-line record: the status leads and `kind` is the summary after it, truncated.
+    var record = false
 }
 
 protocol TranscriptSource: AnyObject {
@@ -56,14 +54,12 @@ protocol TranscriptSource: AnyObject {
     func toggleExpansion(at row: Int)
     /// How many card rows follow the summary at `row` while it is expanded.
     func cardCount(ofGroupAt row: Int) -> Int
-    func choosePermission(at row: Int, option: Int)
 }
 
 extension TranscriptSource {
     var rows: [TranscriptRow] { (0..<messageCount).map(TranscriptRow.item) }
     func toggleExpansion(at row: Int) {}
     func cardCount(ofGroupAt row: Int) -> Int { 0 }
-    func choosePermission(at row: Int, option: Int) {}
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
@@ -78,7 +74,12 @@ final class LiveTranscriptSource: TranscriptSource {
     var root: URL?
     /// The displayed session's file index, against which inline code in agent text links.
     var pathIndex = TranscriptPathIndex()
-    var pending: [UUID] = []
+    /// The requests the docked card answers, oldest first.
+    var pending: [SessionController.PendingPermission] = [] {
+        didSet { pendingCalls = Set(pending.map(\.toolCall.toolCallId)) }
+    }
+    /// The calls whose tool row leaves its diff to the docked card.
+    private var pendingCalls: Set<ACP.ToolCallID> = []
     private struct Cached {
         var markdown: String
         var text: NSAttributedString
@@ -116,7 +117,7 @@ final class LiveTranscriptSource: TranscriptSource {
         root = URL(filePath: controller.session.workingDirectory)
         state = controller.transcript
         inputDrafts = inputDrafts.filter { id, _ in controller.pendingInputs.contains { $0.id == id } }
-        pending = controller.pendingPermissions.map(\.id)
+        pending = controller.pendingPermissions
         running = controller.status == .running || controller.status == .stopping
         revision += 1
     }
@@ -164,6 +165,23 @@ final class LiveTranscriptSource: TranscriptSource {
         return Self.toolCard(tool, output: item.commandOutput, expanded: true, diff: cachedDiff).markdown
     }
 
+    private func permissionPhase(_ permission: TranscriptState.Permission) -> PermissionPhase {
+        if let id = permission.requestID, pending.contains(where: { $0.id == id }) {
+            .choosing
+        } else if running {
+            .recording
+        } else {
+            .ended
+        }
+    }
+
+    /// A record with its details, whether or not it is folded on screen.
+    private func fullPermissionMarkdown(_ index: Int) -> String {
+        guard let permission = state.items[index].permission else { return "" }
+        return Self.permissionCard(permission, phase: permissionPhase(permission), expanded: true, diff: cachedDiff)
+            .markdown
+    }
+
     private func message(item index: Int) -> TranscriptMessage {
         let item = state.items[index]
         if let input = item.input, case .form(let schema) = input.request.mode {
@@ -185,6 +203,7 @@ final class LiveTranscriptSource: TranscriptSource {
                 tool,
                 output: item.commandOutput,
                 expanded: expanded.contains(item.id),
+                hidingDiffs: pendingCalls.contains(tool.toolCallId),
                 diff: cachedDiff
             )
             var message = render(id: item.id, role: "Tool", markdown: card.markdown, links: links(tool))
@@ -193,27 +212,21 @@ final class LiveTranscriptSource: TranscriptSource {
             return message
         }
         if let permission = item.permission {
-            let phase: PermissionPhase =
-                if let id = permission.requestID, let index = pending.firstIndex(of: id) {
-                    .choosing(shortcuts: index == 0)
-                } else if running {
-                    .recording
-                } else {
-                    .ended
-                }
+            let isExpanded = expanded.contains(item.id)
             let card = Self.permissionCard(
                 permission,
-                phase: phase,
-                expanded: expanded.contains(item.id),
+                phase: permissionPhase(permission),
+                expanded: isExpanded,
                 diff: cachedDiff
             )
-            var message = render(
-                id: item.id,
-                role: "Permission",
-                markdown: card.markdown,
-                links: links(permission.toolCall)
-            )
+            // Folded, a record is only its header, as a group is; Details shows the call.
+            var message =
+                isExpanded
+                ? render(id: item.id, role: "Permission", markdown: card.markdown, links: links(permission.toolCall))
+                : TranscriptMessage(role: "Permission", markdown: "", text: NSAttributedString(string: ""))
             message.tool = card.header
+            if !isExpanded { message.kind = .group }
+            message.copyText = { [weak self] in self?.fullPermissionMarkdown(index) ?? "" }
             return message
         }
         if item.isFailure, let stored = item.notice {
@@ -282,14 +295,6 @@ final class LiveTranscriptSource: TranscriptSource {
             if expandedGroups.remove(id) == nil { expandedGroups.insert(id) }
         }
         revision += 1
-    }
-
-    func choosePermission(at row: Int, option: Int) {
-        guard case .item(let index) = rows[row], let permission = state.items[index].permission,
-            let id = permission.requestID,
-            permission.options.indices.contains(option)
-        else { return }
-        controller?.answerPermission(id, with: permission.options[option].optionId)
     }
 
     private func links(_ tool: ACP.ToolCall) -> [(display: String, link: PathLink)] {
@@ -405,28 +410,37 @@ final class LiveTranscriptSource: TranscriptSource {
         _ tool: ACP.ToolCall,
         output: TranscriptState.CommandOutput? = nil,
         expanded: Bool,
+        hidingDiffs: Bool = false,
         diff: (ACP.Diff) -> String = diff
     ) -> (header: ToolCardHeader, markdown: String) {
         let (symbol, kind) = kind(tool.kind)
         let (status, tone) = status(tool.status)
         var header = ToolCardHeader(symbol: symbol, kind: kind, status: status, tone: tone)
         var sections = [title(tool)]
-        if let body = body(tool, output: output, header: &header, expanded: expanded, diff: diff) {
+        if let body = body(
+            tool,
+            output: output,
+            header: &header,
+            expanded: expanded,
+            hidingDiffs: hidingDiffs,
+            diff: diff
+        ) {
             sections.append(body)
         }
         return (header, sections.joined(separator: "\n\n"))
     }
 
     enum PermissionPhase: Equatable {
-        /// The request awaits the user's choice.
-        case choosing(shortcuts: Bool)
+        /// The request awaits the user's choice, on the docked card.
+        case choosing
         /// The answer is being committed before it reaches the agent.
         case recording
         /// The session ended; no answer can be given any more.
         case ended
     }
 
-    /// States only the recorded response, never an inferred approval or decline.
+    /// The record of a request: a header that reads `Allowed once · Edit · Write note.txt`, and the call with its
+    /// outcome as its details. States only the recorded response, never an inferred approval or decline.
     static func permissionCard(
         _ permission: TranscriptState.Permission,
         phase: PermissionPhase,
@@ -434,23 +448,24 @@ final class LiveTranscriptSource: TranscriptSource {
         diff: (ACP.Diff) -> String = diff
     ) -> (header: ToolCardHeader, markdown: String) {
         let tool = permission.toolCall
-        var header = ToolCardHeader(symbol: "hand.raised", kind: "Permission", status: "", tone: .neutral)
+        var header = ToolCardHeader(
+            symbol: "hand.raised",
+            kind: "· \(kind(tool.kind).label)\(summary(of: tool).map { " · \($0)" } ?? "")",
+            status: "",
+            tone: .neutral,
+            detailsDisclosure: true,
+            record: true
+        )
         var sections = ["\(kind(tool.kind).label) · \(title(tool))"]
         if let body = body(tool, header: &header, expanded: expanded, diff: diff) { sections.append(body) }
+        // Details always has the call and the outcome to show; `body` judged only the bound of its own text.
+        (header.expandable, header.expanded) = (true, expanded)
         let option = permission.selectedOption
         switch permission.outcome {
         case nil:
             switch phase {
-            case .choosing(let shortcuts):
-                var waiting = "Waiting for your answer"
-                if shortcuts {
-                    // ⌥⌘1… answer the oldest request, which the docked card shows (PermissionDock).
-                    let count = min(permission.options.count, 9)
-                    if count > 0 { waiting += " · " + (count > 1 ? "⌥⌘1–⌥⌘\(count)" : "⌥⌘1") }
-                }
-                (header.status, header.tone) = (waiting, .attention)
-                header.actions = permission.options.map(\.name)
-                header.shortcuts = shortcuts
+            case .choosing:
+                (header.status, header.tone) = ("Waiting for you", .attention)
                 var prompt = "The agent asks for permission to run this tool."
                 if permission.options.contains(where: { $0.kind == .allowAlways || $0.kind == .rejectAlways }) {
                     prompt += " “Always” choices are remembered by the agent, not by Agenthesia."
@@ -492,6 +507,13 @@ final class LiveTranscriptSource: TranscriptSource {
         return (header, sections.joined(separator: "\n\n"))
     }
 
+    /// The first line of the title, without code marks, for a one-line record; `nil` when there is none.
+    static func summary(of tool: ACP.ToolCall) -> String? {
+        tool.title.split(whereSeparator: \.isNewline).first.map { $0.replacing("`", with: "") }.flatMap {
+            $0.isEmpty ? nil : String($0)
+        }
+    }
+
     static func title(_ tool: ACP.ToolCall) -> String {
         tool.title.isEmpty ? "_Untitled tool call_" : "**\(tool.title)**"
     }
@@ -502,6 +524,7 @@ final class LiveTranscriptSource: TranscriptSource {
         output: TranscriptState.CommandOutput? = nil,
         header: inout ToolCardHeader,
         expanded: Bool,
+        hidingDiffs: Bool = false,
         diff: (ACP.Diff) -> String = diff
     ) -> String? {
         var details: [String] = []
@@ -511,7 +534,7 @@ final class LiveTranscriptSource: TranscriptSource {
         for content in tool.content ?? [] {
             switch content {
             case .content(let block): details.append(placeholder(block.content))
-            case .diff(let edit): details.append(diff(edit))
+            case .diff(let edit): if !hidingDiffs { details.append(diff(edit)) }
             case .terminal(let terminal):
                 if output == nil { details.append("[Terminal: `\(terminal.terminalId)`]") }
             case .unknown: details.append("[Unsupported content]")

@@ -482,6 +482,19 @@ Wave 2:
   still named by the session id; `Исправь парсер заметок` made `agenthesia/isprav-parser-zametok-2b8dc91e`; Discard
   named the readable branch in its confirmation and removed the branch and the worktree. Not checked: merge with a
   readable branch in the app (covered by repository tests), a session made before the change, light mode.
+- #207: a permission request is a one-line record in the transcript (`Allowed once · Edit · Write note.txt`,
+  `Waiting for you · …` while pending) with a Details disclosure for the call and the outcome; it reuses the folded
+  group's header-only row, so no new row layout was built. The permission buttons and `choosePermission` left
+  `TranscriptTable` and `TranscriptSource`. A tool row whose call has a pending request omits its diff
+  (`toolCard(hidingDiffs:)`) and shows it again after the answer. Row heights change only there. Tests: the
+  record for allowed, rejected and cancelled requests, Details unfolding and folding, `Waiting for you` becoming the
+  answer, no push buttons in any permission row, Copy of a folded and an unfolded record, the tool row hiding and
+  restoring its diff, and follow-bottom and a kept scroll origin across that change. Running app (scripted, MockAgent,
+  isolated home, dark): `writes 3 hello` gave three `Waiting for you · Edit · Write noteN.txt` records without buttons,
+  which turned into green `Allowed once` and red `Rejected once` at ⌥⌘1 and ⌥⌘2, and Details showed the call, its diff
+  and the returned answer. The check found a double gap between the status and `· Edit`; the record's header now keeps
+  them as one phrase, with a hosted test that fails without it. Not checked: the hidden diff inside an expanded group
+  in the app (hosted tests cover it), light mode, VoiceOver, a Rendering Lab run (no new row layout).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

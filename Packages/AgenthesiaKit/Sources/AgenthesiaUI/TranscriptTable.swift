@@ -275,12 +275,6 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         update(session)
     }
 
-    /// The button's tag is the option's index; the controller ignores answers to settled requests.
-    @objc func choosePermission(_ sender: NSButton) {
-        let row = table.row(for: sender)
-        guard let session, row >= 0, row < session.messageCount else { return }
-        session.choosePermission(at: row, option: sender.tag)
-    }
 }
 
 final class TranscriptTableView: NSTableView {
@@ -336,7 +330,6 @@ private final class TranscriptMessageRow: NSTableCellView {
     var bubble: BubbleCell?
     var stack: NSStackView?
     var contentWidth: NSLayoutConstraint?
-    var actions: NSView?
     /// Shown only while the pointer is over the row; Copy stays available as an accessibility action.
     private var copyButton: NSButton?
     private weak var statusLabel: NSTextField?
@@ -406,7 +399,6 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Replaces the row's header and body.
     func show(_ message: TranscriptMessage, streaming: Bool, width: CGFloat, controller: TranscriptTableController) {
         stack?.removeFromSuperview()
-        actions = nil
         bubble = nil
         messageField = nil
         markdown = message.markdown
@@ -474,7 +466,6 @@ private final class TranscriptMessageRow: NSTableCellView {
             stack.addArrangedSubview(label)
             label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        showActions(message, controller: controller)
         if let input = message.input {
             let form = NSHostingView(rootView: InputForm(card: input))
             stack.addArrangedSubview(form)
@@ -555,34 +546,6 @@ private final class TranscriptMessageRow: NSTableCellView {
         stack.insertArrangedSubview(header, at: 0)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         tool = message.tool
-        showActions(message, controller: controller)
-    }
-
-    /// Option buttons stay below the body, so finishing a streamed body does not touch them.
-    private func showActions(_ message: TranscriptMessage, controller: TranscriptTableController) {
-        if let actions {
-            stack?.removeArrangedSubview(actions)
-            actions.removeFromSuperview()
-            self.actions = nil
-        }
-        guard let tool = message.tool, !tool.actions.isEmpty, let stack else { return }
-        let buttons = tool.actions.enumerated().map { index, title in
-            let button = NSButton(
-                title: title,
-                target: controller,
-                action: #selector(TranscriptTableController.choosePermission(_:))
-            )
-            button.tag = index
-            button.bezelStyle = .push
-            if tool.shortcuts, index < 9 { button.toolTip = "⌥⌘\(index + 1)" }
-            return button
-        }
-        let actions = NSStackView(views: buttons)
-        actions.orientation = .vertical
-        actions.alignment = .leading
-        actions.setAccessibilityLabel("Permission options")
-        stack.addArrangedSubview(actions)
-        self.actions = actions
     }
 
     private func makeHeader(_ message: TranscriptMessage, controller: TranscriptTableController) -> NSStackView {
@@ -596,8 +559,8 @@ private final class TranscriptMessageRow: NSTableCellView {
         // Assistive technology uses the row's Copy action while the button is not shown.
         copy.setAccessibilityElement(hovering)
         copyButton = copy
-        if message.kind == .group {
-            // The title of a running call can be any length.
+        if message.kind == .group || message.tool?.record == true {
+            // The title of a running call or a request can be any length.
             role.lineBreakMode = .byTruncatingTail
             role.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
@@ -609,6 +572,8 @@ private final class TranscriptMessageRow: NSTableCellView {
             ]
         )
         header.distribution = .fill
+        // `· kind` follows a record's status as one phrase, so the stack's gap would read as a double space.
+        if message.tool?.record == true, let status = statusLabel { header.setCustomSpacing(3, after: status) }
         return header
     }
 
@@ -644,7 +609,8 @@ private final class TranscriptMessageRow: NSTableCellView {
         status.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         status.textColor = statusColor(tool.tone)
         statusLabel = status
-        return [disclosure, icon, role, status]
+        // A record leads with its outcome, then says what was asked.
+        return tool.record ? [disclosure, icon, status, role] : [disclosure, icon, role, status]
     }
 
     /// The selection's accent color hides a tone's color, the running tone's entirely.
@@ -670,7 +636,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         setMessageField(cell.field, text: message.text)
         if message.kind == .thought { cell.alphaValue = Self.thoughtAlpha }
         contentWidth?.isActive = false
-        // The body follows the header; option buttons, if any, stay after it.
+        // The body follows the header.
         if stack.arrangedSubviews.count > 1 {
             let old = stack.arrangedSubviews[1]
             stack.removeArrangedSubview(old)

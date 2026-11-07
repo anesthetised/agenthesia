@@ -9,12 +9,24 @@ Agenthesia is a native, opinionated macOS client for coding agents built on the 
 
 - [docs/VISION.md](docs/VISION.md) — product principles; they decide what goes in.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules, data flow, concurrency.
-- [docs/adr/](docs/adr/) — accepted decisions. Do not contradict an ADR silently: propose a new one
-  that supersedes it.
+- [docs/adr/](docs/adr/) — decisions that are hard or costly to undo. Do not contradict an ADR silently:
+  propose a new one that supersedes it.
+- [docs/behavior/](docs/behavior/) — how the UI behaves now, one area per file.
 - [docs/PLAN.md](docs/PLAN.md) — the order of upcoming work and known pitfalls; update it when a step
   lands.
 
-Consult the user before implementing architectural decisions. Present alternatives and their trade-offs,
+**ADR or behavior document.** An ADR records what is hard or costly to undo: module boundaries and
+dependency direction, data format and storage (including the append-only history), the ACP protocol, the
+lifecycle of processes and worktrees, security and permissions, new dependencies, and departures from
+VISION.md. Everything one pull request can change without a data migration (layout, panes, shortcuts,
+texts and wording, screen states and transitions, what is shown where) is UI behavior: it lives in
+`docs/behavior/<area>.md`, which the pull request that changes the code edits in place, deleting the old
+behavior and adding a line to the file's `Changes` log. A UI decision that changes stored data or the
+protocol is an ADR, and its UI behavior is described in the behavior document with a link to it. Older ADRs
+also describe UI behavior; where a behavior document exists, it wins.
+
+Consult the user before implementing architectural decisions and noticeable UX changes; a behavior
+document records the outcome, it does not replace the consultation. Present alternatives and their trade-offs,
 recommend an approach, and challenge proposals when there are concrete reasons to disagree. Agents with
 a structured question tool (e.g. `AskUserQuestion`) use it for these consultations, batching the open
 decisions into one call with the recommended option first.

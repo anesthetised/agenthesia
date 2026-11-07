@@ -1,7 +1,8 @@
 # Architecture
 
 This document describes how Agenthesia is built. Decisions and their rationale live in
-[ADRs](adr/); this is the map.
+[ADRs](adr/); this is the map. How the UI behaves for the user (wording, shortcuts, states) is in
+[docs/behavior/](behavior/); this document names the code behind it.
 
 ## Repository layout
 
@@ -116,7 +117,7 @@ Agents…; with nothing picked it uses `AgentCatalog.defaultChoice`, the agent r
 `lastAgent` defaults key while it is still offered, else the first choice. The Checkout label is `DraftCheckout`:
 `SessionWorkspace.worktreeBase` names the checked-out branch, or the short commit of a detached `HEAD`; outside
 Git it is "Project folder". Send with a nonempty `PromptDraft` calls `SessionManager.start(…, initialPrompt:)`,
-remembers the agent and clears the draft. `LiveSession.initialPrompt` holds it in memory (not in the queue,
+clears the draft; the agent is remembered once the initial prompt is submitted. `LiveSession.initialPrompt` holds it in memory (not in the queue,
 which belongs to a session record) until the session is idle for the first time: `connected`, after `session/new`
 or after sign-in, submits it with intent `whenReady` like a typed prompt, and a failed submission fails startup.
 If startup fails or is cancelled (Cancel Startup, End Session at sign-in), the owner is no longer live and still
@@ -261,12 +262,12 @@ The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md))
 Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the session's
 config controls as borderless pill menus that show the value only (the option name is in the tooltip and the
 accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
-Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). There is no status line for editable sessions:
-the transcript shows that a turn runs, the docked permission card shows its ⌥⌘ shortcuts, and the queue header says
-that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
+Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). While a turn runs, `WorkingTimeLine` between the transcript and the
+composer reads `Working for …`, or `Waiting for you` while a permission or form waits; the docked permission card shows
+its ⌥⌘ shortcuts, and the queue header says that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
 merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
-button. The composer has no status text.
+button.
 
 The oldest pending permission request is docked above the composer card (`PermissionDock`,
 [ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), between `Waiting for you` in the status line and the card,
@@ -282,7 +283,7 @@ VoiceOver announces each new request. The card shrinks the table's clip view; th
 which a hosted test covers. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) (deferred) would add a pill while
 edits are allowed.
 
-Composer errors show as a red caption above the card.
+Composer errors show as a `FailureBanner` above the card, with its actions and a Details disclosure.
 
 The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
 lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
@@ -388,7 +389,7 @@ sessions whose activity is needs input, failed or done, in start order), *Workin
 including owners that have no project yet, in start order) and *Settled* (saved sessions that are not live,
 by last activity, newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
 A row (`SessionRow`) shows a project badge (`ProjectBadge.initials`; the tint is a 64-bit FNV-1a hash of the name, since `hashValue` changes per launch), the title, the project and a reason, the status symbol and `RelativeTime.short` of the session's last activity. The second line is `project · reason` ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)). `SidebarReason` (Core, pure) derives the reason from `LiveSession.Activity`, so it never contradicts the symbol: `Sign in`, `Allow? <tool title>` (the oldest pending request, `+n` for more) or `Permission` without a title, `Question`, `Failed`, `Starting`, `Stopping`, `Merging`, `Finished`, `Refused`, `Hit a limit`, `Prompt failed` (the last prompt was rejected: `TranscriptState.lastTurnFailed`) and `Queue paused` (a paused, nonempty queue); a running or plain idle session has none, a saved one only `Archived` (found by a search, see below) or its `Merged` or `Discarded` outcome. A permission request that names its call only by id takes the title the agent reported earlier (`PendingPermission.callTitle`). The title is reduced to its first line and 120 characters. The line never wraps: `SubtitleLayout` shrinks the project first, to 40 % of the line, then cuts the reason at its tail. The tooltip and the accessibility label (`title, project, reason, last active 3m`; the status when there is no reason) hold the whole row. The time is the last activity: `SessionController.lastActivity` for a live session (the minute of the last stored event, set at most once a minute and seeded when history loads), `PersistenceStore.lastEvents()` for a saved one (`SessionLibrary.lastEvents()` returns it with the worktree outcomes, in one query), else `createdAt`. Settled sorts by it; Needs You and Working keep start order.
-Needs You and Working scroll in the sidebar list (`SessionSidebarList`); Settled is a footer pinned to the bottom edge (`SettledFooter`, `safeAreaInset`), hidden when there are no saved sessions. Its header (`Settled · N`, a disclosure button labelled “Settled, N sessions, expanded/collapsed”) is always visible. The footer is collapsed by default and keeps its state in `@SceneStorage`, but stays open while one of its rows is selected; expanded, it grows upward with its own list, at most 45 % of the sidebar's height. History refreshes on its own, so the toolbar has no Refresh button.
+Needs You and Working scroll in the sidebar list (`SessionSidebarList`); Settled is a footer pinned to the bottom edge (`SettledFooter`, `safeAreaInset`), hidden when there are no saved sessions. Its header (a chevron, `Settled` and the count, a disclosure button labelled “Settled, N sessions, expanded/collapsed”) is always visible. The footer is collapsed by default and keeps its state in `@SceneStorage`, but stays open while one of its rows is selected or a search is entered; expanded, it grows upward with its own list, at most 45 % of the sidebar's height. History refreshes on its own, so the toolbar has no Refresh button.
 The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` with the sidebar placement; the text is `SessionWindowModel.sidebarQuery`, not persisted). `SessionSidebar(query:)` is the pure filter: rows whose title or project name `localizedStandardContains` the trimmed query (a starting or untitled session matches as “New Session”), empty sections omitted, `isFiltered` set. The list, `SettledFooter` (open while a query is entered, its count is the number of matches), Previous/Next Session and Next Session Needing Input all read the filtered sidebar, so navigation only visits visible rows. With no match the list shows `ContentUnavailableView.search`. ⌥⌘F (Session → Search Sessions) focuses the field through `searchFocused`.
 
 **Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable `session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when; `PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of Settled (so out of its header count, and out of the section altogether when nothing else is saved) unless a query is entered: a search lists them in Settled order, the header then counts the matches, and the row's reason is `Archived` (`SidebarReason.saved`, which wins over `Merged` and `Discarded`). Previous and Next Session skip archived rows even while a search shows them. *Archive Session* / *Unarchive Session* (the title follows `archivedAt`) is in the row's context menu of a saved row and in the Session menu; neither asks for confirmation. The Session menu item is disabled unless the displayed session is saved, with the help text `End the session first` for a live one (`SessionWindowModel.canArchive`, `archiveHelp`); live rows have no context-menu item. **Continue** clears `archivedAt` (`SessionWindowModel.continueRestored`): a session the user talks to again is not archived. Every write refreshes the window's history; other windows pick it up at their next refresh.

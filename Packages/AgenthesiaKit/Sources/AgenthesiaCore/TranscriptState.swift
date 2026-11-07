@@ -114,6 +114,24 @@ public struct TranscriptState: Equatable, Sendable {
         public var commandOutput: CommandOutput?
     }
 
+    /// What a reader of the transcript's end has seen: the last item and how much text it holds. A different value
+    /// means the end changed, by a new last item or by more text in it (ADR-0026's amendment).
+    public struct End: Equatable, Sendable {
+        public let item: Int64
+        public let size: Int
+    }
+
+    /// `nil` while the transcript is empty. Reading it costs a comparison's worth, so tables may ask on every update.
+    public var end: End? {
+        guard let last = items.last else { return nil }
+        var size = last.commandOutput?.output.bytes.count ?? 0
+        if let content = last.message?.content {
+            size += content.count
+            if case .text(let block)? = content.last { size += block.text.utf8.count }
+        }
+        return End(item: last.id, size: size)
+    }
+
     public private(set) var items: [Item] = []
     public private(set) var sequence: Int64 = 0
     public private(set) var queuedPrompts: [QueuedPrompt] = []

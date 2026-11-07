@@ -56,6 +56,8 @@ protocol TranscriptSource: AnyObject {
     func cardCount(ofGroupAt row: Int) -> Int
     /// The row that shows the item with this identity, once it is displayed.
     func row(ofItem id: Int64) -> Int?
+    /// What the end of the transcript holds, so that the table can tell when it changed.
+    var end: TranscriptState.End? { get }
 }
 
 extension TranscriptSource {
@@ -63,6 +65,7 @@ extension TranscriptSource {
     func toggleExpansion(at row: Int) {}
     func cardCount(ofGroupAt row: Int) -> Int { 0 }
     func row(ofItem id: Int64) -> Int? { nil }
+    var end: TranscriptState.End? { nil }
 }
 
 /// Attributed text is cached only for rows requested by NSTableView.
@@ -282,6 +285,8 @@ final class LiveTranscriptSource: TranscriptSource {
         revision += 1
         return rows.firstIndex(of: .item(index))
     }
+
+    var end: TranscriptState.End? { state.end }
 
     func row(ofItem id: Int64) -> Int? {
         state.items.lastIndex { $0.id == id }.flatMap { TranscriptRow.row(showing: $0, in: rows) }
@@ -660,6 +665,10 @@ struct LiveTranscript: NSViewRepresentable {
     var unseenResult: Int64?
     /// The end of `unseenResult` was on screen.
     var onResultShown: (Int64) -> Void = { _ in }
+    /// Counts the requests to scroll to the end and follow it again.
+    var jumpRequests = 0
+    /// Where the reader is relative to the end, reported when it changes.
+    var onPositionChange: (EndPosition) -> Void = { _ in }
     /// A clicked path link, with the session whose transcript it was in.
     let onOpenPath: (PathLink, UUID) -> Void
 
@@ -669,6 +678,7 @@ struct LiveTranscript: NSViewRepresentable {
         let frames = SessionFrameDriver()
         weak var session: SessionController?
         var revealed: UUID?
+        var jumped = 0
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSScrollView { context.coordinator.table.scroll }
@@ -679,6 +689,10 @@ struct LiveTranscript: NSViewRepresentable {
             let id = session.session.id
             coordinator.table.openPath = { onOpenPath($0, id) }
             coordinator.frames.start(session: session, in: view)
+            coordinator.jumped = jumpRequests
+            coordinator.table.positionChanged = onPositionChange
+            // A new table starts at the end, whatever the previous session's table reported.
+            coordinator.table.reportPosition()
         }
         coordinator.source.pathIndex = pathIndex
         coordinator.source.update(session)
@@ -690,6 +704,11 @@ struct LiveTranscript: NSViewRepresentable {
         coordinator.table.update(coordinator.source)
         coordinator.table.findQuery = find.isOpen ? find.query : ""
         coordinator.table.resultShown = onResultShown
+        coordinator.table.positionChanged = onPositionChange
+        if jumpRequests != coordinator.jumped {
+            coordinator.jumped = jumpRequests
+            coordinator.table.scrollToEnd()
+        }
         coordinator.table.unseenResult = unseenResult
         if let row { coordinator.table.reveal(row: row) }
     }

@@ -69,6 +69,9 @@ public struct SessionCommands: Commands {
             Button("Next Failed Tool Call") { model?.nextFailedToolCall() }
                 .keyboardShortcut("g", modifiers: [.command, .option])
                 .disabled(model?.canFind != true)
+            Button("Jump to Latest") { model?.jumpToLatest() }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(model?.canJumpToLatest != true)
             Divider()
             Menu("Switch to Session") {
                 ForEach(Array(sessions.enumerated()), id: \.offset) { index, row in

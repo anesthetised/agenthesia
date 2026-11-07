@@ -413,7 +413,20 @@ folded group that holds it (`TranscriptRow.row(showing:in:)`, the row identity f
 a clip-view resize (the docked card and the panes resize it); the clip view is observed only while a target is set, and
 without one nothing is scheduled. Once the end was shown, the table reports the item once and stops watching;
 `markSeen(reaching:)` marks every turn seen only when the item is still the latest result. A reader following the end
-clears the mark as the turn ends. A live session is failed
+clears the mark as the turn ends.
+
+`New response below` and Jump to Latest (ADR-0026's amendment): the table keeps `followingBottom`'s intent and, when it
+turns false, remembers `TranscriptState.End` (the last item's identity and how much text it holds: its content blocks,
+the last block's length, a command's output bytes). An update checks `session.end` against it only while the reader is
+not following, so the streaming path pays nothing while the reader follows the end; coming back to the end forgets it.
+`TranscriptTableController.position` is `following`, `scrolledUp` (the end is as the reader left it) or `newBelow`;
+it is reported to `LiveTranscript.onPositionChange` on a later main-queue turn and only when it changed
+(`SessionWindowModel.endPosition`). `RootView` overlays `NewResponseButton`, a capsule centered at the transcript's
+bottom edge above the status line, while the position is `newBelow`; scrolling up alone does not show it. Its click
+and Session → Jump to Latest (⌥⌘↓, disabled while following, `canJumpToLatest`) call `jumpToLatest()`, which counts a
+request (`jumpRequests`, as ⌘L counts `composerFocusRequests`); `LiveTranscript` answers it with
+`TranscriptTableController.scrollToEnd()`, without animation, which resumes following and, through the viewport
+check, clears a waiting Done. ⌘↓ stays with the composer's text view. A live session is failed
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued, except a
@@ -421,7 +434,7 @@ new session whose startup failed before its first prompt was submitted, which re
 The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
 ⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
 ⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G. Permission answers keep ⌥⌘1…⌥⌘9. ⌘1…⌘9 (Session → Switch to Session, ADR-0046) select the first nine rows of Needs You and Working in the filtered sidebar, in the order on screen; Settled is not numbered. `SessionSidebar.numberedRows` is the pure mapping, `SessionWindowModel.numberedSessions` pads it to nine items (a number without a row is disabled, titled “No Session”) and the menu lists each row's title. Commands are
+uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G, and Jump to Latest ⌥⌘↓. Permission answers keep ⌥⌘1…⌥⌘9. ⌘1…⌘9 (Session → Switch to Session, ADR-0046) select the first nine rows of Needs You and Working in the filtered sidebar, in the order on screen; Settled is not numbered. `SessionSidebar.numberedRows` is the pure mapping, `SessionWindowModel.numberedSessions` pads it to nine items (a number without a row is disabled, titled “No Session”) and the menu lists each row's title. Commands are
 disabled without an eligible selection in the focused window. Resume Queue also enables an empty
 paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
 sharing the same row identity with keyboard navigation; the new-session form has no selected row.

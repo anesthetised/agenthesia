@@ -306,6 +306,84 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func jumpToLatestNeedsATranscriptAwayFromItsEnd() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        model.endPosition = .scrolledUp
+        model.jumpToLatest()
+        #expect(!model.canJumpToLatest && model.jumpRequests == 0)
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        // At the end, there is nothing to jump to.
+        model.endPosition = .following
+        #expect(!model.canJumpToLatest)
+        model.jumpToLatest()
+        #expect(model.jumpRequests == 0)
+        for position in [EndPosition.scrolledUp, .newBelow] {
+            model.endPosition = position
+            #expect(model.canJumpToLatest)
+            model.jumpToLatest()
+        }
+        #expect(model.jumpRequests == 2)
+        model.showingSetup = true
+        #expect(!model.canJumpToLatest)
+        await fixture.remove()
+    }
+
+    @Test func aReplyWhileScrolledUpShowsTheCapsuleAndTheJumpFollowsTheEndAgain() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        _ = NSApplication.shared
+        let view = NSHostingView(rootView: RootView(model: model))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 1000, height: 700),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        func table() -> TranscriptTableView? {
+            func find(_ view: NSView) -> TranscriptTableView? {
+                if let table = view as? TranscriptTableView { return table }
+                return view.subviews.lazy.compactMap(find).first
+            }
+            return find(view)
+        }
+        func atEnd() -> Bool {
+            guard let table = table(), let clip = table.enclosingScrollView?.contentView else { return false }
+            return TranscriptTableController.followsBottom(documentHeight: table.frame.height, visibleRect: clip.bounds)
+        }
+        let controller = try #require(first.controller)
+        let long = (1...60).map { "Paragraph \($0)." }.joined(separator: "\n\n")
+        try await controller.submit([.text(.init(text: long))])
+        try await waitUntil { controller.status == .idle && table().map { $0.frame.height > 900 } == true && atEnd() }
+        #expect(model.endPosition == .following && !model.canJumpToLatest)
+
+        // Scrolling up alone leaves the capsule out; the reader may still jump.
+        let scroll = try #require(table()?.enclosingScrollView)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        try await waitUntil { model.endPosition == .scrolledUp }
+        #expect(model.canJumpToLatest)
+
+        // A reply puts the capsule up, and the jump, as ⌥⌘↓ and the capsule's click ask for it, follows the end.
+        let items = controller.transcript.items.count
+        try await controller.submit([.text(.init(text: "another"))])
+        try await waitUntil { controller.transcript.items.count > items && controller.status == .idle }
+        try await waitUntil { model.endPosition == .newBelow }
+        #expect(!atEnd())
+        model.jumpToLatest()
+        try await waitUntil { model.endPosition == .following && atEnd() }
+        #expect(!model.canJumpToLatest)
+        await fixture.remove()
+    }
+
     @Test func focusComposerNeedsTheComposerCardAndCountsRequests() async throws {
         let fixture = try Fixture()
         let model = fixture.model

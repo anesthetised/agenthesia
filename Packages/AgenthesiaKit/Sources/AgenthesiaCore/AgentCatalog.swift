@@ -16,8 +16,13 @@ public final class AgentCatalog {
         ),
         installer: SessionLibrary.shared.installer,
         runtime: NodeRuntime(),
-        sessionCount: { try? await SessionLibrary.shared.sessionCount(usingInstallation: $0) }
+        sessionCount: savedSessionCount
     )
+
+    /// How many saved sessions in the app's history use an installed version; nil when history cannot be read.
+    nonisolated private static func savedSessionCount(_ installationID: UUID) async -> Int? {
+        try? await SessionLibrary.shared.sessionCount(usingInstallation: installationID)
+    }
 
     public enum NodeStatus: Equatable, Sendable {
         case unknown, checking

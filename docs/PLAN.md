@@ -613,6 +613,16 @@ Wave 2:
   diff…”, and after End Session it and Session → Ask Agent are disabled with “Session ended: the session cannot take a
   prompt”. The same check found the review file list cut its last row at the divider; its height estimate now
   includes the list's insets, checked with one and three files. Not checked: VoiceOver, Undo of an insertion.
+- #178, follow-up check (2026-11-07, Xcode 27 under load, eight CPU burners): neither failure recurred on CI since
+  #180 (about 60 runs). Lost terminal output: with the exit source back on the reader's queue, 19 of 19 runs of
+  `keepsTheOutputOfManyConcurrentQuickCommands` and the issue's test failed; with #180's fix 23 of 23 passed.
+  `htmlIsShownAsCode` crash: the CI report shows the stored `.font` value was a null object (`x0` = 0, cast from
+  `AnyObject`) while another thread ran `+[NSFont systemFontOfSize:weight:]`, which fits #126's `insert nil object` in
+  a copied attribute dictionary. Not reproduced: 40,000 racing cold font creations and 3.2 million attribute-dictionary
+  round trips on 16 threads (standalone, no nil), and, without the `@MainActor` mitigation, 23 Rendering runs and 3
+  instrumented hosted-group runs. With the mitigation, `htmlIsShownAsCode` passed 11 of 11 Rendering runs, but
+  `SourceViewTests.highlightsALargeFile` timed out in 3 of them, against none of the 23 without it; the main-actor
+  suites probably delay its highlighting. The crash's cause stays unproven; no product change was made for it.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

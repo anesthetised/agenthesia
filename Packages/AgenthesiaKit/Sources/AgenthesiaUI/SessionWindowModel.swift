@@ -566,15 +566,23 @@ import SwiftUI
         if let draftAgent, record(for: draftAgent) != nil { return draftAgent }
         return catalog?.defaultChoice
     }
-    /// What Send applies before the session record exists (ADR-0040): each cached model, with the value picked for it
-    /// if any, and a cached mode only when one was picked in this draft.
+    /// The cached mode and model options of the selected agent, which the draft shows as pills (ADR-0040).
+    var draftPills: [ACP.ConfigOption] { selectedAgent.flatMap { catalog?.configHints[$0] } ?? [] }
+    /// The value a pill shows and Send applies: the one picked in this draft, if the agent offered it, else the cached
+    /// model; nil for a mode nobody picked. `draftHints` is built from this, so a pill never promises more than Send.
+    func draftValue(of option: ACP.ConfigOption) -> ACP.ConfigValueID? {
+        guard case .select(let cached, let choices) = option.value else { return nil }
+        if let picked = draftConfig[option.id], choices.allOptions.contains(where: { $0.value == picked }) {
+            return picked
+        }
+        return option.category == .model ? cached : nil
+    }
+    /// What Send applies before the session record exists (ADR-0040): each pill that has a value.
     var draftHints: [ACP.ConfigOption] {
-        guard let choice = selectedAgent else { return [] }
-        return (catalog?.configHints[choice] ?? []).compactMap { option in
-            guard case .select(_, let choices) = option.value else { return nil }
-            guard let picked = draftConfig[option.id] else { return option.category == .model ? option : nil }
+        draftPills.compactMap { option in
+            guard case .select(_, let choices) = option.value, let value = draftValue(of: option) else { return nil }
             var option = option
-            option.value = .select(currentValue: picked, options: choices)
+            option.value = .select(currentValue: value, options: choices)
             return option
         }
     }

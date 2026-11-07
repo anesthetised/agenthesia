@@ -459,12 +459,11 @@ import Testing
         await fixture.remove()
     }
 
-    @Test func sendAppliesTheCachedModelAndAModeOnlyWhenPickedInTheDraft() async throws {
+    /// A catalog with no registry and no installed agents, on a throwaway defaults suite.
+    private func isolatedCatalog() throws -> (catalog: AgentCatalog, cleanUp: () -> Void) {
         let suite = "session-draft-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
         let root = FileManager.default.temporaryDirectory.appending(path: suite)
-        defer { try? FileManager.default.removeItem(at: root) }
         let catalog = AgentCatalog(
             registry: AgentRegistry.Client(cacheDirectory: root) { _ in .init(status: 404, data: Data()) },
             installer: AgentInstaller(root: root.appending(path: "Agents"), download: { _, _ in }),
@@ -473,29 +472,42 @@ import Testing
             probe: { _ in throw AgentProbe.Failure.timedOut(seconds: 20) },
             checkNode: { _ in throw NodeRuntime.Failure.missingNode }
         )
+        return (
+            catalog,
+            {
+                defaults.removePersistentDomain(forName: suite)
+                try? FileManager.default.removeItem(at: root)
+            }
+        )
+    }
+
+    private func selectOption(
+        _ id: String,
+        _ category: ACP.ConfigOptionCategory,
+        _ value: String,
+        _ values: [String]
+    ) -> ACP.ConfigOption {
+        .init(
+            id: id,
+            name: id,
+            category: category,
+            value: .select(currentValue: value, options: .flat(values.map { .init(value: $0, name: $0) }))
+        )
+    }
+
+    @Test func sendAppliesTheCachedModelAndAModeOnlyWhenPickedInTheDraft() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
         let fixture = try Fixture(catalog: catalog)
         fixture.sessions.catalog = catalog
         let agent = try fixture.mock()
         let modeID = ACP.V1.AgentConnectionAdapter.modeOptionID
-        func option(
-            _ id: String,
-            _ category: ACP.ConfigOptionCategory,
-            _ value: String,
-            _ values: [String]
-        )
-            -> ACP
-            .ConfigOption
-        {
-            .init(
-                id: id,
-                name: id,
-                category: category,
-                value: .select(currentValue: value, options: .flat(values.map { .init(value: $0, name: $0) }))
-            )
-        }
         // An earlier session ended in code mode with the large model.
         catalog.rememberHints(
-            [option(modeID, .mode, "code", ["ask", "code"]), option("model", .model, "large", ["small", "large"])],
+            [
+                selectOption(modeID, .mode, "code", ["ask", "code"]),
+                selectOption("model", .model, "large", ["small", "large"]),
+            ],
             for: agent
         )
         func send() async throws -> [ACP.ConfigOption] {
@@ -530,6 +542,123 @@ import Testing
         let second = try await send()
         #expect(current(modeID, second) == "code" && current("model", second) == "large")
         await fixture.remove()
+    }
+
+    @Test func pillsComeFromTheCacheAndNeverPromiseMoreThanSendApplies() throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let model = SessionWindowModel(
+            sessions: SessionManager(library: SessionLibrary(databaseURL: URL(filePath: "/dev/null"))),
+            catalog: catalog
+        )
+        let agent = AgentCatalog.Choice.custom(.init(executable: "agent", arguments: []))
+        let other = AgentCatalog.Choice.custom(.init(executable: "other", arguments: []))
+        model.draftAgent = agent
+        // Without a cache there are no pills and nothing to apply.
+        #expect(model.draftPills.isEmpty && model.draftHints.isEmpty)
+
+        let effort = selectOption("effort", .thoughtLevel, "high", ["low", "high"])
+        catalog.rememberHints(
+            [
+                selectOption("mode", .mode, "code", ["ask", "code"]),
+                selectOption("model", .model, "large", ["small", "large"]), effort,
+            ],
+            for: agent
+        )
+        // Mode and model only; the mode reads Default mode and is not applied until picked, the model is.
+        #expect(model.draftPills.map(\.id) == ["mode", "model"])
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
+        #expect(model.draftHints.map(\.id) == ["model"])
+
+        // Each pill's value is what the hints carry.
+        model.draftConfig = ["mode": "ask", "model": "small"]
+        let values = model.draftHints.map { option -> String? in
+            guard case .select(let value, _) = option.value else { return nil }
+            return value
+        }
+        #expect(model.draftHints.map(\.id) == ["mode", "model"] && values == ["ask", "small"])
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == values)
+
+        // A pick the agent does not offer is shown and applied as if never made.
+        model.draftConfig = ["mode": "bypass", "model": "huge"]
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
+        #expect(model.draftHints.map(\.id) == ["model"])
+
+        // Changing the agent resets the picks, and another agent has its own pills.
+        model.draftConfig = ["mode": "ask"]
+        model.draftAgent = other
+        #expect(model.draftConfig.isEmpty && model.draftPills.isEmpty && model.draftHints.isEmpty)
+        model.draftAgent = agent
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
+    }
+
+    @Test func theDraftShowsThePillsFromTheCacheAndAModeReadsDefaultUntilPicked() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let fixture = try Fixture(catalog: catalog)
+        let agent = try fixture.mock()
+        let model = fixture.model
+        model.draftDirectory = fixture.directory
+        model.draftAgent = agent
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: RootView(model: model).frame(width: 900, height: 600))
+        let window = NSWindow(
+            contentRect: .init(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        func titles() async throws -> [String] {
+            try await Task.sleep(for: .milliseconds(100))
+            for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+            return popups(in: host).map { $0.accessibilityLabel() ?? "" }
+        }
+        #expect(model.showingSetup)
+        // Without a cache only the project and the agent are there.
+        #expect(try await titles().count == 2)
+
+        catalog.rememberHints(
+            [
+                selectOption("mode", .mode, "code", ["ask", "code"]),
+                selectOption("model", .model, "large", ["small", "large"]),
+            ],
+            for: agent
+        )
+        let shown = try await titles()
+        #expect(shown.suffix(2) == ["Default mode", "large"])
+        model.draftConfig["mode"] = "ask"
+        #expect(try await titles().suffix(2) == ["ask", "large"])
+        model.draftAgent = agent
+        #expect(try await titles().suffix(2) == ["Default mode", "large"])
+        await fixture.remove()
+    }
+
+    @Test func aPillIsWordedAsAHintAndNamesItsOption() throws {
+        let option = selectOption("mode", .mode, "code", ["ask", "code"])
+        guard case .select(_, let choices) = option.value else {
+            Issue.record("not a select")
+            return
+        }
+        let pill = ConfigSelectMenu(
+            option: option,
+            choices: choices,
+            selected: nil,
+            placeholder: "Default mode",
+            note: SessionDraftView.hintNote
+        ) { _ in }
+        #expect(
+            pill.accessibilityText == "mode: Default mode. Last used with this agent; confirmed when the session starts"
+        )
+        let live = ConfigSelectMenu(option: option, choices: choices, selected: "code") { _ in }
+        #expect(live.accessibilityText == "mode: code")
+    }
+
+    private func popups(in view: NSView) -> [NSPopUpButton] {
+        ((view as? NSPopUpButton).map { [$0] } ?? []) + view.subviews.flatMap(popups)
     }
 
     @Test func theWindowShowsTheDraftAgainAfterAFailedStart() async throws {

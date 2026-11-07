@@ -10,6 +10,9 @@ struct SessionDraftView: View {
     @State private var editingCommand = false
     @State private var catalogLoaded = false
 
+    /// The pills' tooltip and accessibility note: what they show is a cached hint, not a session's confirmed value.
+    static let hintNote = "Last used with this agent; confirmed when the session starts"
+
     var body: some View {
         VStack(spacing: 0) {
             Text("What should the agent do?")
@@ -68,6 +71,7 @@ struct SessionDraftView: View {
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
                     .keyboardShortcut("a", modifiers: [.command, .shift])
                     .help("Attach files or folders (⇧⌘A)")
+                hintPills
                 Spacer(minLength: 0)
                 Button("Send", systemImage: "arrow.up", action: model.startDraft)
                     .labelStyle(.iconOnly).buttonStyle(.borderedProminent).buttonBorderShape(.circle)
@@ -81,6 +85,24 @@ struct SessionDraftView: View {
         .dropDestination(for: URL.self) { urls, _ in
             ComposerInput.add(urls, to: &model.draft.attachments)
             return true
+        }
+    }
+
+    /// The agent's cached mode and model (ADR-0040): hints, so drawn as secondary and worded as such. A mode reads
+    /// `Default mode` until one is picked, because only a picked mode is applied.
+    private var hintPills: some View {
+        ForEach(model.draftPills, id: \.id) { option in
+            if case .select(_, let choices) = option.value {
+                ConfigSelectMenu(
+                    option: option,
+                    choices: choices,
+                    selected: model.draftValue(of: option),
+                    placeholder: "Default mode",
+                    note: Self.hintNote
+                ) { model.draftConfig[option.id] = $0 }
+                // A borderless menu draws its title in the control's color whatever the foreground style says.
+                .opacity(0.6)
+            }
         }
     }
 

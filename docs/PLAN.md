@@ -669,8 +669,10 @@ Pitfalls known so far:
   mode, VoiceOver.
 - #231 (archive) landed: migration `v6-session-archived-at`, `PersistenceStore.setArchived`, the Settled filter and
   the `Archived` search reason, Previous/Next skipping archived rows, the Archive/Unarchive menu items and the Continue
-  reset, with Swift Testing tests (a migration test on a v5 database file, the model, the sidebar). The running-app
-  check with `MockAgent` in light and dark is still open (#234).
+  reset, with Swift Testing tests (a migration test on a v5 database file, the model, the sidebar). Running app
+  (scripted, MockAgent, isolated home, dark): Session → Archive Session on an ended session took it out of Settled, a
+  sidebar search found it with the reason `Archived`, the item turned into Unarchive Session, and unarchiving brought it
+  back to Settled. Not checked: the context-menu items, Continue on an archived session, light mode, VoiceOver.
 
 ## Next steps
 

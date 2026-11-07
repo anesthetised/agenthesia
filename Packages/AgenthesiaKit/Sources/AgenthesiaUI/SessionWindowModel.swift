@@ -328,6 +328,14 @@ import SwiftUI
         return nil
     }
 
+    /// One entry per ⌘1…⌘9 item of Session → Switch to Session; nil for a number without a row.
+    var numberedSessions: [SessionSidebar.Row?] {
+        let rows = closed ? [] : sidebar.numberedRows
+        return (0..<SessionSidebar.numberedCount).map { rows.indices.contains($0) ? rows[$0] : nil }
+    }
+
+    func switchToSession(_ row: SessionSidebar.Row) { sidebarSelection = row.id }
+
     func navigate(backward: Bool = false, needsInput: Bool = false) async {
         guard let row = navigationTarget(backward: backward, needsInput: needsInput) else { return }
         switch row {

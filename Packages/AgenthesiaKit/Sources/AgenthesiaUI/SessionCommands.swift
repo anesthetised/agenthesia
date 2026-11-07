@@ -1,3 +1,4 @@
+import AgenthesiaCore
 public import SwiftUI
 
 extension FocusedValues {
@@ -11,6 +12,8 @@ public struct SessionCommands: Commands {
     public init() {}
 
     public var body: some Commands {
+        // Read in the body, so the menu follows the sidebar.
+        let sessions = model?.numberedSessions ?? Array(repeating: nil, count: SessionSidebar.numberedCount)
         CommandMenu("Session") {
             Button("New Session") { model?.showingSetup = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -62,6 +65,15 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut("g", modifiers: [.command, .option])
                 .disabled(model?.canFind != true)
             Divider()
+            Menu("Switch to Session") {
+                ForEach(Array(sessions.enumerated()), id: \.offset) { index, row in
+                    Button(row?.title ?? "No Session") {
+                        if let row { model?.switchToSession(row) }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                    .disabled(row == nil)
+                }
+            }
             Button("Previous Session") { Task { [model] in await model?.navigate(backward: true) } }
                 .keyboardShortcut("[", modifiers: [.command, .option])
                 .disabled(model?.navigationTarget(backward: true) == nil)

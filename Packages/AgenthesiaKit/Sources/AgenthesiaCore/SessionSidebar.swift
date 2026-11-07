@@ -71,6 +71,15 @@ public import Persistence
     /// All rows in the order the sidebar shows them.
     public var rows: [Row] { sections.flatMap(\.rows) }
 
+    /// How many rows ⌘1…⌘9 reach.
+    public static let numberedCount = 9
+
+    /// The rows ⌘1…⌘9 select (ADR-0046): the first nine of Needs You and Working in the order on screen, after the
+    /// query. Settled is not numbered.
+    public var numberedRows: [Row] {
+        Array(sections.filter { $0.kind != .settled }.flatMap(\.rows).prefix(Self.numberedCount))
+    }
+
     /// - Needs You: live sessions that wait for a permission or input, failed, or finished unseen, in start order.
     /// - Working: the other live sessions, including starting ones, in start order.
     /// - Settled: saved sessions that are not live, by last activity, newest first. `activity` holds the time of each

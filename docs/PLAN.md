@@ -641,6 +641,13 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #226 ⌘1…⌘9 (ADR-0046): Session → Switch to Session lists the first nine rows of Needs You and Working in the filtered
+  sidebar (`SessionSidebar.numberedRows`, `SessionWindowModel.numberedSessions`); ⌘1…⌘9 were free (only ⌥⌘1…⌥⌘9 answer
+  permissions). Tested in Core and on the window model; the menu items themselves have no hosted test. Running app
+  (scripted, MockAgent, isolated home, dark): with two sessions the submenu listed both titles with ⌘1 and ⌘2 and seven
+  disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
+  left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
+  mode, VoiceOver.
 
 ## Next steps
 

@@ -69,10 +69,16 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   the value only; the option's name is in the accessibility label.
 - The cache holds what the agent last confirmed in any session (start, Continue, or a change in a live session), per
   agent across its versions, and per custom command. An agent never run before shows no pills.
+<<<<<<< HEAD
 - The **model** and **effort** pills show the cached value, and Send applies each unless another is picked. A value
   the agent no longer offers, after `session/new` and after the model was set, returns the draft with the error
   (`The agent does not offer “High” any more.`), as for the model; the agent's list becomes the cache.
 - The **mode** pill reads `Default mode` and is applied only when a mode is picked in this draft; otherwise the
+=======
+- The **model** pill shows the cached model, and Send applies it unless another is picked.
+- The **mode** pill opens the mode popover of [composer.md](composer.md), with the agent's descriptions and no mark on
+  a row until one is picked. It reads `Default mode` and is applied only when a mode is picked in this draft; otherwise the
+>>>>>>> f858d63 (feat: a mode popover with the agent's descriptions)
   session keeps the mode the agent starts in.
   *Why:* the app cannot tell from a name whether a mode stops asking for permission, so such a mode must never come
   back by itself.
@@ -139,11 +145,15 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+<<<<<<< HEAD
 - 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab ([agents-settings.md](agents-settings.md)).
 - 2026-11-08, #270: effort is a hint like the model: the cache keeps the `thought_level` option, its pill is applied by
   default.
 - 2026-11-08, #265: a failed or cancelled start returns the draft's mode and model picks with the text, except a
   value the agent no longer offers.
+=======
+- 2026-11-08, #271: the draft's mode pill opens the mode popover.
+>>>>>>> f858d63 (feat: a mode popover with the agent's descriptions)
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0040 and its amendment of 2026-11-02, ADR-0033's amendment (#176) and
   ADR-0026, checked against main at c65b8a1.

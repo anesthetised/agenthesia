@@ -2,7 +2,8 @@ import ACP
 import SwiftUI
 
 /// The pill menu of a select option, shared by a session's controls and the draft's hints (ADR-0040): the label is the
-/// selected value only, and the option's name is in the tooltip and the accessibility label.
+/// selected value only, and the option's name is in the tooltip and the accessibility label. The mode opens a
+/// popover with the agent's descriptions instead of a menu (`ModeChoices`).
 struct ConfigSelectMenu: View {
     let option: ACP.ConfigOption
     let choices: ACP.ConfigSelectOptions
@@ -13,6 +14,7 @@ struct ConfigSelectMenu: View {
     /// Replaces the option's description as the tooltip, and is added to the accessibility label.
     var note: String?
     let onSelect: (ACP.ConfigValueID) -> Void
+    @State private var isPresented = false
 
     private var valueName: String {
         selected.map { value in choices.allOptions.first { $0.value == value }?.name ?? value } ?? placeholder
@@ -23,6 +25,32 @@ struct ConfigSelectMenu: View {
     }
 
     var body: some View {
+        if option.category == .mode { modeButton } else { menu }
+    }
+
+    private var tooltip: String { note ?? option.description.map { "\(option.name): \($0)" } ?? option.name }
+
+    private var modeButton: some View {
+        Button {
+            isPresented = true
+        } label: {
+            HStack(spacing: 3) {
+                Text(valueName)
+                Image(systemName: "chevron.up.chevron.down").imageScale(.small).accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.borderless).fixedSize()
+        .popover(isPresented: $isPresented, arrowEdge: .top) {
+            ModeChoices(choices: choices, selected: selected) { value in
+                isPresented = false
+                onSelect(value)
+            }
+        }
+        .accessibilityLabel(accessibilityText)
+        .help(tooltip)
+    }
+
+    private var menu: some View {
         Menu {
             switch choices {
             case .flat(let options):
@@ -37,7 +65,7 @@ struct ConfigSelectMenu: View {
         }
         .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
         .accessibilityLabel(accessibilityText)
-        .help(note ?? option.description.map { "\(option.name): \($0)" } ?? option.name)
+        .help(tooltip)
     }
 
     private func choiceButtons(_ options: [ACP.ConfigSelectOption]) -> some View {

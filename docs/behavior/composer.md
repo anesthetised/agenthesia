@@ -60,6 +60,14 @@ instead. The draft before a session exists is described in [session-start.md](se
   value's name only; the tooltip is `<option>: <description>` (or the option name), and the accessibility label is
   `<option>: <value>`. The menu lists the agent's choices, in the agent's groups as sections, with a checkmark on the
   current one; each choice's tooltip is its description.
+- The **mode** (the select option categorised as `mode`) is a pill that opens a popover instead of a menu: one row per
+  mode with its name and, under it, the description the agent sends with it (in secondary text; a mode without one
+  shows the name only), in the agent's groups under their headers, with a checkmark on the current one. The pill shows
+  the mode's name and a chevron. The current mode is highlighted when the popover opens; ↑ and ↓ move the highlight,
+  Return or a click chooses (the popover closes and the change goes the way a menu pick does), Escape closes it. A row's
+  accessibility label is `<name>. <description>`, and the current row is marked selected. There are no icons and no
+  fixed access levels: the app does not know what an agent's modes mean (VISION principle 8). The draft's mode hint
+  works the same way (see [session-start.md](session-start.md)).
 - A boolean option is a checkbox labelled with the option name; its tooltip is the description.
 - Options of unknown types are not shown.
 - Settings can be changed only while the session is idle; while a turn runs, all pills are disabled.
@@ -137,9 +145,6 @@ Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. T
 moves it into the text above and deletes it here.
 
 - **One control row in the draft and in a session.** Select options (model, effort, others) stay value-only pills.
-- **The mode opens a popover**: one row per mode with its name and, under it, the description the agent sends with it,
-  the current one checked; arrow keys and Return choose, Escape closes; the pill shows the mode's name. No icons and no
-  fixed access levels. *Why:* the app does not know what an agent's modes mean (VISION principle 8).
 - **Booleans are toggle pills** (for example `Fast mode`): the option's name, filled while on, the description as
   tooltip, the accessibility of a toggle. The checkbox goes.
 - **Overflow.** Options that do not fit move, from the end, into a `…` pill menu; mode, model and effort move last.
@@ -149,6 +154,7 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #271: the mode pill opens a popover with the agent's descriptions instead of a menu.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0018, ADR-0019 and ADR-0039 (Composer, amendment of 2026-11-02), checked
   against main at c65b8a1.

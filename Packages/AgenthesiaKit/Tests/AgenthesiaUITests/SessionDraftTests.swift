@@ -770,12 +770,14 @@ import Testing
             ],
             for: agent
         )
-        let shown = try await titles()
-        #expect(shown.suffix(3) == ["Default mode", "large", "high"])
+        // The mode is a popover button (#271); the model and effort stay menus. The mode pill's value is the draft's.
+        #expect(try await titles().suffix(2) == ["large", "high"])
+        let mode = try #require(model.draftPills.first { $0.category == .mode })
+        #expect(model.draftValue(of: mode) == nil)
         model.draftConfig["mode"] = "ask"
-        #expect(try await titles().suffix(3) == ["ask", "large", "high"])
+        #expect(model.draftValue(of: mode) == "ask")
         model.draftAgent = agent
-        #expect(try await titles().suffix(3) == ["Default mode", "large", "high"])
+        #expect(model.draftValue(of: mode) == nil)
         await fixture.remove()
     }
 

@@ -152,6 +152,35 @@ final class PersistenceStoreTests: Sendable {
         #expect(record.baseBranch == nil)
     }
 
+    @Test func countsTheSessionsOfOneInstalledVersionIncludingArchivedOnes() async throws {
+        let (project, manual, _) = try await seed()
+        let installation = UUID()
+        let installed = AgentInstallRecord(
+            name: "Fixture 1.0.0",
+            executable: "bin/agent",
+            installationID: installation,
+            createdAt: date
+        )
+        try await store.createAgentInstall(installed)
+        #expect(try await store.sessionCount(usingInstallation: installation) == 0)
+        for archivedAt in [nil, date] as [Date?] {
+            try await store.createSession(
+                SessionRecord(
+                    projectID: project.id,
+                    agentInstallID: installed.id,
+                    workingDirectory: "/tmp/x",
+                    archivedAt: archivedAt
+                )
+            )
+        }
+        // Sessions of a manual command or of another version do not count.
+        try await store.createSession(
+            SessionRecord(projectID: project.id, agentInstallID: manual.id, workingDirectory: "/tmp/y")
+        )
+        #expect(try await store.sessionCount(usingInstallation: installation) == 2)
+        #expect(try await store.sessionCount(usingInstallation: UUID()) == 0)
+    }
+
     @Test func installedVersionsKeepTheirInstallationAndLegacyRowsStayManual() async throws {
         let legacy = try DatabaseQueue()
         try Schema.migrator.migrate(legacy, upTo: "v3-session-base-branch")

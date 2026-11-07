@@ -66,6 +66,42 @@ import Testing
         #expect(catalog.installations.isEmpty)
     }
 
+    @Test func removalWaitsForConfirmationAndCancelKeepsTheVersion() async throws {
+        let fixture = try CatalogFixture()
+        defer { fixture.remove() }
+        let catalog = try fixture.catalog(registry: [], sessionCount: { _ in 3 })
+        await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
+        let installation = try #require(catalog.installations.first)
+
+        await catalog.requestRemoval(of: installation)
+        #expect(catalog.removalRequest == .init(installation: installation, sessionCount: 3))
+        // Asking removes nothing, and neither does Cancel.
+        #expect(catalog.installations == [installation])
+        catalog.cancelRemoval()
+        #expect(catalog.removalRequest == nil)
+        #expect(catalog.installations == [installation])
+
+        await catalog.requestRemoval(of: installation)
+        let request = try #require(catalog.removalRequest)
+        // The dialog may cancel the request as it confirms; the removal still happens.
+        catalog.cancelRemoval()
+        await catalog.confirmRemoval(request)
+        #expect(catalog.removalRequest == nil)
+        #expect(catalog.installations.isEmpty)
+        #expect(catalog.failures.isEmpty)
+    }
+
+    @Test func aRemovalRequestWithoutACountStillAsks() async throws {
+        let fixture = try CatalogFixture()
+        defer { fixture.remove() }
+        let catalog = try fixture.catalog(registry: [])
+        await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
+        let installation = try #require(catalog.installations.first)
+        await catalog.requestRemoval(of: installation)
+        #expect(catalog.removalRequest == .init(installation: installation, sessionCount: nil))
+        #expect(catalog.installations == [installation])
+    }
+
     @Test func cancellingAnInstallationLeavesNoVersionAndNoFailure() async throws {
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
@@ -329,21 +365,23 @@ private struct CatalogFixture {
         registry agents: [[String: Any]],
         checks: NodeChecks = NodeChecks(results: []),
         download: (@Sendable (URL, URL) async throws -> Void)? = nil,
-        probe: @escaping @Sendable (AgentCommand) async throws -> ACP.AgentProfile = { _ in throw CancellationError() }
+        probe: @escaping @Sendable (AgentCommand) async throws -> ACP.AgentProfile = { _ in throw CancellationError() },
+        sessionCount: @escaping @Sendable (UUID) async -> Int? = { _ in nil }
     ) throws -> AgentCatalog {
         let data = try JSONSerialization.data(withJSONObject: ["version": "1.0.0", "agents": agents])
         let client = AgentRegistry.Client(cacheDirectory: root.appending(path: "cache-\(UUID())")) { _ in
             .init(status: 200, data: data)
         }
         let installer = download.map { Self.installer(root: root, archive: archive, download: $0) } ?? installer
-        return catalog(client: client, installer: installer, checks: checks, probe: probe)
+        return catalog(client: client, installer: installer, checks: checks, probe: probe, sessionCount: sessionCount)
     }
 
     @MainActor func catalog(
         client: AgentRegistry.Client,
         installer: AgentInstaller? = nil,
         checks: NodeChecks = NodeChecks(results: []),
-        probe: @escaping @Sendable (AgentCommand) async throws -> ACP.AgentProfile = { _ in throw CancellationError() }
+        probe: @escaping @Sendable (AgentCommand) async throws -> ACP.AgentProfile = { _ in throw CancellationError() },
+        sessionCount: @escaping @Sendable (UUID) async -> Int? = { _ in nil }
     ) -> AgentCatalog {
         let bin = self.bin.path(percentEncoded: false)
         return AgentCatalog(
@@ -352,7 +390,8 @@ private struct CatalogFixture {
             defaults: defaults,
             environment: { _ in ["PATH": bin] },
             probe: probe,
-            checkNode: { try await checks.next(refresh: $0) }
+            checkNode: { try await checks.next(refresh: $0) },
+            sessionCount: sessionCount
         )
     }
 

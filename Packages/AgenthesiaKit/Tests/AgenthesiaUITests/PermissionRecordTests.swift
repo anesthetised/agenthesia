@@ -332,13 +332,7 @@ import Testing
     }
 
     private func host(_ controller: TranscriptTableController, width: CGFloat = 600) -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: width, height: 600))
         controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = width
         window.contentView = controller.scroll

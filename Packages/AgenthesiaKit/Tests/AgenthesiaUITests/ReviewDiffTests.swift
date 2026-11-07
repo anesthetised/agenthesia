@@ -9,14 +9,11 @@ import Testing
     private func host(height: CGFloat = 300) -> (DiffTextView, NSWindow) {
         _ = NSApplication.shared
         let scroll = DiffTextView.scrollable()
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 480, height: height),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.contentView = scroll
+        let window = OffscreenWindow(size: .init(width: 480, height: height))
+        // Directly under the title bar a scroll view insets its content; the app's diff sits below the toolbar.
+        window.contentView = NSView()
+        scroll.frame = window.contentLayoutRect
+        window.contentView?.addSubview(scroll)
         scroll.layoutSubtreeIfNeeded()
         guard let textView = scroll.documentView as? DiffTextView else {
             Issue.record("no diff text view")
@@ -59,13 +56,7 @@ import Testing
         let scroll = DiffTextView.scrollable()
         scroll.frame = .init(x: 0, y: 100, width: 480, height: 300)
         container.addSubview(scroll)
-        let window = NSWindow(
-            contentRect: container.frame,
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: container.frame.size)
         window.contentView = container
         defer { window.close() }
         let textView = try #require(scroll.documentView as? DiffTextView)

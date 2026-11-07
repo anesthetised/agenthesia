@@ -100,13 +100,7 @@ import Testing
         await model.refresh()
         await model.showHistory(record)
         let host = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1000, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1000, height: 600))
         window.contentView = host
         window.orderFront(nil)
         defer { model.close(); window.close() }
@@ -120,13 +114,13 @@ import Testing
     private func click(_ card: ContinueCard) async throws {
         let host = NSHostingView(rootView: card)
         host.frame = .init(x: 0, y: 0, width: 400, height: 80)
-        let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: host.frame.size)
         window.contentView = host
         window.orderFront(nil)
         defer { window.close() }
         for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
-        let point = host.convert(NSPoint(x: host.bounds.maxX - 60, y: host.bounds.midY), to: nil)
+        // The card sits below the title bar's safe area.
+        let point = host.convert(NSPoint(x: host.bounds.maxX - 60, y: host.safeAreaRect.midY), to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try #require(
                 NSEvent.mouseEvent(

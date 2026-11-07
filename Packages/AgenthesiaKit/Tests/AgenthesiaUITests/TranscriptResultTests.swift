@@ -364,17 +364,11 @@ import Testing
     }
 
     private func host(_ controller: TranscriptTableController) -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 600),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 600, height: 600))
         // In a container, so that tests can resize the scroll view as the docked card does.
         let container = NSView(frame: window.contentLayoutRect)
         window.contentView = container
-        controller.scroll.frame = container.bounds
+        controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = 600
         container.addSubview(controller.scroll)
         container.layoutSubtreeIfNeeded()

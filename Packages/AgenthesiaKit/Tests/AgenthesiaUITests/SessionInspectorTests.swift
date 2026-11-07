@@ -65,13 +65,7 @@ import Testing
     private func host<V: View>(_ view: V, dark: Bool = false, width: CGFloat = 260) -> (NSHostingView<V>, NSWindow) {
         _ = NSApplication.shared
         let host = NSHostingView(rootView: view)
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: width, height: 900),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: width, height: 900))
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = host
         window.orderFront(nil)
@@ -176,18 +170,20 @@ import Testing
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let files = fixture.model.files
         let (view, window) = host(WatchErrorNotice(files: files))
+        // The title bar's safe area is part of the hosting view's fitting height; the notice's own height is the rest.
+        func noticeHeight() -> CGFloat { view.fittingSize.height - view.safeAreaInsets.top }
         defer { window.close() }
         for _ in 0..<10 { await settle() }
-        #expect(files.watchError == nil && view.fittingSize.height == 0)
+        #expect(files.watchError == nil && noticeHeight() == 0)
         files.close()
         files.watcherFactory = { _, _ in throw CocoaError(.fileReadUnknown) }
         await files.attach(fixture.record)
         for _ in 0..<10 { await settle() }
-        #expect(files.watchError != nil && view.fittingSize.height > 0)
+        #expect(files.watchError != nil && noticeHeight() > 0)
         files.watcherFactory = { try await SessionFileChanges(directory: $0, onChange: $1) }
         await files.refresh()
         for _ in 0..<10 { await settle() }
-        #expect(files.watchError == nil && view.fittingSize.height == 0)
+        #expect(files.watchError == nil && noticeHeight() == 0)
     }
 
     @Test func theRootViewHostsTheInspectorBesideTheLaunchFormAndSessions() async throws {

@@ -170,12 +170,7 @@ import Testing
             )
         )
         let terminal = SignInTerminal(title: "Test", process: process)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
+        let window = OffscreenWindow(size: .init(width: 640, height: 400))
         let host = NSHostingView(rootView: TerminalHost(terminal: terminal).frame(width: 640, height: 400))
         window.contentView = host
         host.layoutSubtreeIfNeeded()

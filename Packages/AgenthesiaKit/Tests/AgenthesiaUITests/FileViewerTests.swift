@@ -116,15 +116,9 @@ import Testing
                 }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             }.frame(minWidth: 740, minHeight: 500)
         )
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 552),
-            styleMask: [.titled, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 900, height: 552))
+        // The hosted content has no SwiftUI toolbar, so give the title bar the height a toolbar adds.
         window.toolbar = NSToolbar(identifier: "FileViewerTestToolbar")
-        window.toolbarStyle = .unified
         window.contentView = host
         defer { window.close() }
         window.orderFront(nil)

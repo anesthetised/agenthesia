@@ -23,13 +23,7 @@ import Testing
 
         _ = NSApplication.shared
         let host = NSHostingView(rootView: RootView(model: model))
-        let window = NSWindow(
-            contentRect: .init(x: 0, y: 0, width: 1200, height: 700),
-            styleMask: [.titled, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
+        let window = OffscreenWindow(size: .init(width: 1200, height: 700))
         window.contentView = host
         window.orderFront(nil)
         defer { window.close() }

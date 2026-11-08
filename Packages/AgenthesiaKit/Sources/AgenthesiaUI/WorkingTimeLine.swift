@@ -1,8 +1,8 @@
 import AgenthesiaCore
 import SwiftUI
 
-/// "Working for 1m 12s" under the transcript while a turn runs, "Waiting for you" while a request is pending
-/// (ADR-0039).
+/// "Working for 1m 12s" directly above the composer card while a turn runs, "Waiting for you" while a request is
+/// pending (ADR-0039).
 struct WorkingTimeLine: View {
     let startedAt: Date
     /// A permission request or an input form blocks the turn.
@@ -22,7 +22,6 @@ struct WorkingTimeLine: View {
             }
             .font(.caption).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.vertical, 6)
             .accessibilityElement(children: .combine)
         }
     }

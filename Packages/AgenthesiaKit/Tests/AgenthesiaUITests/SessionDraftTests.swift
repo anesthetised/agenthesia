@@ -88,6 +88,53 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func theHeadingAsksWhatToBuildInTheProjectOrToChooseOne() {
+        let heading = DraftHeading(project: "agenthesia")
+        #expect(heading.lead == "What should we build in" && heading.menu == "agenthesia" && heading.end == "?")
+        #expect(heading.text == "What should we build in agenthesia?")
+        let none = DraftHeading(project: nil)
+        #expect(none.lead == nil && none.menu == "Choose a project to start" && none.end.isEmpty)
+        #expect(none.text == "Choose a project to start")
+    }
+
+    @Test func theProjectMenuListsRecentProjectsAndMarksTheDrafts() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        // No history and nothing picked: the heading asks for a project.
+        #expect(model.draftProjectName == nil && model.recentProjects.isEmpty)
+        let store = try await fixture.sessions.library.store()
+        let agent = AgentInstallRecord(name: "Test", executable: "unused")
+        try await store.createAgentInstall(agent)
+        var projects: [ProjectRecord] = []
+        for (index, name) in ["Older", "Newer"].enumerated() {
+            let project = ProjectRecord(name: name, rootPath: fixture.directory.appending(path: "dir-\(name)").path)
+            try await store.createProject(project)
+            try await store.createSession(
+                SessionRecord(
+                    projectID: project.id,
+                    agentInstallID: agent.id,
+                    workingDirectory: project.rootPath,
+                    createdAt: Date(timeIntervalSince1970: Double(index))
+                )
+            )
+            projects.append(project)
+        }
+        await model.refresh()
+        // The default is the newest project, named as recorded rather than by its folder.
+        #expect(model.recentProjects.map(\.name) == ["Newer", "Older"])
+        #expect(model.recentProjects.map(model.isDraftProject) == [true, false])
+        #expect(model.draftProjectName == "Newer")
+        // A folder panel's URL has no trailing slash; it still marks the known project.
+        model.draftDirectory = URL(filePath: projects[0].rootPath)
+        #expect(model.recentProjects.map(model.isDraftProject) == [false, true])
+        #expect(model.draftProjectName == "Older")
+        // An unknown folder marks nothing and is named after itself.
+        model.draftDirectory = fixture.directory.appending(path: "elsewhere")
+        #expect(model.recentProjects.map(model.isDraftProject) == [false, false])
+        #expect(model.draftProjectName == "elsewhere")
+        await fixture.remove()
+    }
+
     @Test func newSessionInProjectOpensTheDraftWithThatProject() async throws {
         let fixture = try Fixture()
         let store = try await fixture.sessions.library.store()
@@ -419,9 +466,11 @@ import Testing
         model.draftDirectory = fixture.directory
         model.draftAgent = try fixture.mock()
         model.draft = PromptDraft(text: "hello", attachments: [file])
+        #expect(model.inDraft)
         model.startDraft()
         let owner = try #require(model.owner)
-        #expect(!model.showingSetup && model.draft.isEmpty && model.draftError == nil)
+        // The draft with its centered card gives way to the session, whose composer sits at the bottom edge.
+        #expect(!model.inDraft && !model.showingSetup && model.draft.isEmpty && model.draftError == nil)
         await owner.startup?.value
         let controller = try #require(owner.controller)
         try await waitUntil { controller.status == .idle && controller.transcript.items.count > 1 }
@@ -442,8 +491,10 @@ import Testing
         let owner = try #require(model.owner)
         await owner.startup?.value
         #expect(model.abandonedStart === owner)
+        #expect(!model.inDraft)
         await model.returnToDraft()
-        #expect(model.showingSetup && model.owner == nil)
+        // The draft returns, with its heading and centered card.
+        #expect(model.inDraft && model.showingSetup && model.owner == nil)
         #expect(model.draft == draft)
         #expect(model.draftError?.contains("does-not-exist") == true)
         #expect(model.draftAgent == .custom(.init(executable: "/does-not-exist", arguments: [])))
@@ -553,6 +604,33 @@ import Testing
         #expect(other.draftError == nil)
         other.close()
         await fixture.remove()
+    }
+
+    @Test func withoutAnyAgentTheDraftAsksToAddOneUntilThereIsAChoice() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let fixture = try Fixture(catalog: catalog)
+        let model = fixture.model
+        model.draftDirectory = fixture.directory
+        model.draft.text = "hello"
+        await catalog.reloadInstallations()
+        // Nothing installed or listed: the card offers Add Agent… instead of the editor, and nothing starts.
+        #expect(model.draftNeedsAgent && !model.canStartDraft)
+        // A custom command is a choice of its own.
+        model.draftAgent = try fixture.mock()
+        #expect(!model.draftNeedsAgent && model.canStartDraft)
+        model.draftAgent = nil
+        #expect(model.draftNeedsAgent)
+        // An agent added in Settings brings the editor back as the default choice.
+        catalog.addCustom(name: "Mock", executable: "/usr/bin/true", arguments: [])
+        #expect(!model.draftNeedsAgent && model.selectedAgent != nil)
+        await fixture.remove()
+    }
+
+    /// Without a catalog (tests, a custom command only) there is no list to be empty.
+    @Test func withoutACatalogTheDraftKeepsItsEditor() throws {
+        let fixture = try Fixture()
+        #expect(!fixture.model.draftNeedsAgent)
     }
 
     /// A catalog with no registry and no installed agents, on a throwaway defaults suite.
@@ -759,8 +837,8 @@ import Testing
             return popups(in: host).map { $0.accessibilityLabel() ?? "" }
         }
         #expect(model.showingSetup)
-        // Without a cache only the project and the agent are there.
-        #expect(try await titles().count == 2)
+        // Without a cache only the agent's menu is there; the project's is a button in the heading (#278).
+        #expect(try await titles().count == 1)
 
         catalog.rememberHints(
             [
@@ -770,7 +848,7 @@ import Testing
             ],
             for: agent
         )
-        // The mode is a popover button (#271); the model and effort stay menus. The mode pill's value is the draft's.
+        // The mode is a popover button (#271), the model and the effort stay menus; the mode pill's value is the draft's.
         #expect(try await titles().suffix(2) == ["large", "high"])
         let mode = try #require(model.draftPills.first { $0.category == .mode })
         #expect(model.draftValue(of: mode) == nil)
@@ -778,6 +856,45 @@ import Testing
         #expect(model.draftValue(of: mode) == "ask")
         model.draftAgent = agent
         #expect(model.draftValue(of: mode) == nil)
+        await fixture.remove()
+    }
+
+    /// The draft's hints are the session's control row: narrow, the last of them move into `…`.
+    @Test func theDraftsHintsOverflowLikeASessionsPills() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let fixture = try Fixture(catalog: catalog)
+        let agent = try fixture.mock()
+        let model = fixture.model
+        // A short project name keeps the heading narrow.
+        let project = fixture.directory.appending(path: "p")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        model.draftDirectory = project
+        model.draftAgent = agent
+        catalog.rememberHints(
+            [
+                selectOption("mode", .mode, "code", ["ask", "code"]),
+                selectOption("model", .model, "large", ["small", "large"]),
+                selectOption("effort", .thoughtLevel, "high", ["low", "high"]),
+            ],
+            for: agent
+        )
+        _ = NSApplication.shared
+        func labels(width: CGFloat) async throws -> [String] {
+            let host = NSHostingView(rootView: SessionDraftView(model: model).frame(width: width, height: 400))
+            let window = OffscreenWindow(size: .init(width: 800, height: 400))
+            window.contentView = host
+            window.orderFront(nil)
+            defer { window.close() }
+            try await Task.sleep(for: .milliseconds(100))
+            for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+            return popups(in: host).map { $0.accessibilityLabel() ?? "" }
+        }
+        // The agent's menu comes first; the mode is a popover button.
+        let wide = try await labels(width: 700)
+        #expect(wide.suffix(2) == ["large", "high"])
+        let narrow = try await labels(width: 260)
+        #expect(narrow.last == "…" && narrow.count <= wide.count, "\(narrow)")
         await fixture.remove()
     }
 

@@ -43,10 +43,11 @@ enum SettingsTab: String {
 
 /// Opens Settings on the Agents tab.
 struct ManageAgentsButton: View {
+    var title = "Manage Agents…"
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        Button("Manage Agents…") {
+        Button(title) {
             SettingsTab.agents.store()
             openSettings()
         }

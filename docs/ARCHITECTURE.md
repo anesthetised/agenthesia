@@ -119,11 +119,16 @@ got a history record.
 > project.
 
 New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
-launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: "What should the agent
-do?" over the composer card, whose chips pick the project, the agent and name the checkout, with the agent's cached mode and model as pills beside Attach. The draft's state lives
-in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The Project chip lists
-`ProjectRecord.recent` (by each project's newest session) and Choose Folder…; with nothing picked, the project of
-the newest session is used. The Agent chip lists `AgentCatalog.choices` (the newest installed version of each
+launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: the heading "What should
+we build in <project>?" (`DraftHeading`, the project a menu; a second line through `ViewThatFits` when narrow) over
+the centered composer card, whose chips pick the agent and name the checkout, with the agent's cached mode, model and
+effort as pills beside Attach. Send runs inside `withAnimation`, and `RootView` removes the draft with
+`DraftSendTransition`, which sets the `draftLeaving` environment value so the card moves to the bottom edge as it
+fades. The draft's state lives in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The
+project menu lists `ProjectRecord.recent` (by each project's newest session), marked by `isDraftProject`, and Choose
+Folder…; with nothing picked, the project of the newest session is used, named by `draftProjectName`. While
+`draftNeedsAgent` (no agent choice and no custom command), the card shows `Add Agent…` (`ManageAgentsButton`) in place
+of the text field. The Agent chip lists `AgentCatalog.choices` (the newest installed version of each
 agent, then local agents), Custom Command… (`CustomCommandSheet`, parsed by `RootView.launchCommand`) and Manage
 Agents…; with nothing picked it uses `AgentCatalog.defaultChoice`, the agent remembered by `remember` under the
 `lastAgent` defaults key while it is still offered, else the first choice. The Checkout label is `DraftCheckout`:
@@ -163,7 +168,7 @@ The draft shows the cached options as pills (#212). `SessionWindowModel.draftPil
 `configHints` entry and `draftValue(of:)` the value of each: the one picked in `draftConfig`, if the agent offered it
 (else the pick is ignored), or the cached model or effort; a mode nobody picked has none and its pill reads `Default mode`.
 `draftHints` is built from `draftValue(of:)`, so a pill always shows what Send applies. `SessionDraftView` draws them
-in the composer's bottom row after Attach with `ConfigSelectMenu`, the pill menu `SessionConfigControls` also uses,
+in the composer's bottom row after Attach with `ConfigControlRow`, the control row `SessionConfigControls` also uses,
 as secondary, with the tooltip and accessibility note `Last used with this agent; confirmed when the session starts`;
 a pick sets `draftConfig`, and a change of agent clears it. An agent without a cache entry shows no pills.
 
@@ -235,7 +240,7 @@ use the same table in read-only mode. The demo remains available as a test fixtu
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
 While a turn runs, `SessionController.turnStartedAt` (in memory; set on entering `running`, kept while
 `stopping`, cleared otherwise) drives a "Working for 1m 12s" line (`WorkingTimeLine`,
-`WorkingDuration.format`) between the transcript and the composer, ticking once a second.
+`WorkingDuration.format`) directly above the composer card, ticking once a second.
 
 Transcript rows lay out in the `TranscriptColumn` that the composer card shares: centered, at most 720 pt wide,
 with at least 24 pt on each side (`TranscriptColumn.width(inRowOfWidth:)` also gives the text wrap width). A row's
@@ -275,18 +280,22 @@ benefits and stored events do not change) and a Details disclosure with the full
 
 The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md)) in the transcript column
 (`TranscriptColumn`: at most 720 pt, 16 pt side and 12 pt bottom margins, `.bar` material with a hairline border).
-Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the session's
-config controls as borderless pill menus that show the value only (the option name is in the tooltip and the
-accessibility label), the Send options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
-Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). While a turn runs, `WorkingTimeLine` between the transcript and the
-composer reads `Working for …`, or `Waiting for you` while a permission or form waits; the docked permission card shows
+Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the control row, the Send
+options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
+Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). The control row
+(`ConfigControlRow`), shared by a session's `SessionConfigControls` and the draft's hints, draws select options as
+borderless `ConfigSelectMenu` pills that show the value only (the option name is in the tooltip and the accessibility
+label; the mode opens `ModeChoices` in a popover) and booleans as toggle pills; a `ViewThatFits` over every split of
+`ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu (other options leave
+first, then mode, model and effort). While a turn runs, `WorkingTimeLine` directly above the
+composer card reads `Working for …`, or `Waiting for you` while a permission or form waits; the docked permission card shows
 its ⌥⌘ shortcuts, and the queue header says that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
 merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
 button.
 
 The oldest pending permission request is docked above the composer card (`PermissionDock`,
-[ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), between `Waiting for you` in the status line and the card,
+[ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), above the errors and `Waiting for you` in the status line,
 so it stays on screen whatever the scroll position. `DockedPermission` builds it from
 `SessionController.pendingPermissions`, which carry the tool call as known when the agent asked: the kind and the
 paths (locations, then the diffs' files), the title as secondary text, the first diff with `+n more files` that

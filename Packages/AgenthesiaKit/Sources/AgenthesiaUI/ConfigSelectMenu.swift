@@ -16,8 +16,11 @@ struct ConfigSelectMenu: View {
     let onSelect: (ACP.ConfigValueID) -> Void
     @State private var isPresented = false
 
-    private var valueName: String {
-        selected.map { value in choices.allOptions.first { $0.value == value }?.name ?? value } ?? placeholder
+    private var valueName: String { Self.valueName(of: selected, in: choices) ?? placeholder }
+
+    /// The name of `value` among `choices`, the value itself when the agent does not list it.
+    static func valueName(of value: ACP.ConfigValueID?, in choices: ACP.ConfigSelectOptions) -> String? {
+        value.map { value in choices.allOptions.first { $0.value == value }?.name ?? value }
     }
 
     var accessibilityText: String {
@@ -52,14 +55,7 @@ struct ConfigSelectMenu: View {
 
     private var menu: some View {
         Menu {
-            switch choices {
-            case .flat(let options):
-                choiceButtons(options)
-            case .grouped(let groups):
-                ForEach(groups, id: \.group) { group in
-                    Section(group.name) { choiceButtons(group.options) }
-                }
-            }
+            ConfigChoiceItems(choices: choices, selected: selected, onSelect: onSelect)
         } label: {
             Text(valueName)
         }
@@ -67,8 +63,27 @@ struct ConfigSelectMenu: View {
         .accessibilityLabel(accessibilityText)
         .help(tooltip)
     }
+}
 
-    private func choiceButtons(_ options: [ACP.ConfigSelectOption]) -> some View {
+/// The items of a select option's menu: the agent's choices, in its groups as sections, with a checkmark on the
+/// selected one and each choice's description as its tooltip.
+struct ConfigChoiceItems: View {
+    let choices: ACP.ConfigSelectOptions
+    let selected: ACP.ConfigValueID?
+    let onSelect: (ACP.ConfigValueID) -> Void
+
+    var body: some View {
+        switch choices {
+        case .flat(let options):
+            buttons(options)
+        case .grouped(let groups):
+            ForEach(groups, id: \.group) { group in
+                Section(group.name) { buttons(group.options) }
+            }
+        }
+    }
+
+    private func buttons(_ options: [ACP.ConfigSelectOption]) -> some View {
         ForEach(options, id: \.value) { choice in
             Button {
                 onSelect(choice.value)

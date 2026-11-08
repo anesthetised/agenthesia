@@ -34,6 +34,8 @@ public final class EchoAgent: Sendable {
         public var configOptions = true
         /// Whether sessions also expose an effort (`thought_level`) config option, `medium` to start with.
         public var effort = false
+        /// Whether sessions also expose a boolean `fast` option (`Fast mode`), off to start with.
+        public var fastMode = false
         /// Whether `session/set_mode` and `session/set_config_option` fail with invalid params.
         public var rejectsConfigChanges = false
         /// Whether `session/new` is followed by an `available_commands_update` listing the prompt verbs.
@@ -122,7 +124,7 @@ public final class EchoAgent: Sendable {
                 sessionId: id,
                 modes: options.modes ? Self.modes(current: "ask") : nil,
                 configOptions: options.configOptions
-                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
+                    ? Self.configOptions(options: options) : nil
             )
         }
 
@@ -146,7 +148,7 @@ public final class EchoAgent: Sendable {
             return .init(
                 modes: options.modes ? Self.modes(current: "ask") : nil,
                 configOptions: options.configOptions
-                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
+                    ? Self.configOptions(options: options) : nil
             )
         }
 
@@ -163,7 +165,7 @@ public final class EchoAgent: Sendable {
             return .init(
                 modes: options.modes ? Self.modes(current: "ask") : nil,
                 configOptions: options.configOptions
-                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
+                    ? Self.configOptions(options: options) : nil
             )
         }
 
@@ -190,16 +192,17 @@ public final class EchoAgent: Sendable {
 
         router.on(M.SetConfigOption.self) { request in
             if options.rejectsConfigChanges { throw RPCError.invalidParams("Config changes are disabled") }
-            guard case .select(let value) = request.value,
-                request.configId == "model" || (options.effort && request.configId == "effort")
-            else { throw RPCError.invalidParams("Unknown config option \(request.configId)") }
+            let value: String
+            switch request.value {
+            case .select(let id) where request.configId == "model" || (options.effort && request.configId == "effort"):
+                value = id
+            case .boolean(let on) where options.fastMode && request.configId == "fast":
+                value = String(on)
+            default:
+                throw RPCError.invalidParams("Unknown config option \(request.configId)")
+            }
             let chosen = await state.choose(value, for: request.configId, in: request.sessionId)
-            return .init(
-                configOptions: Self.configOptions(
-                    model: chosen["model"] ?? "small",
-                    effort: options.effort ? chosen["effort"] ?? "medium" : nil
-                )
-            )
+            return .init(configOptions: Self.configOptions(options: options, chosen: chosen))
         }
 
         router.on(M.Cancel.self) { request in
@@ -235,6 +238,25 @@ public final class EchoAgent: Sendable {
             currentModeId: current,
             availableModes: [.init(id: "ask", name: "Ask"), .init(id: "code", name: "Code")]
         )
+    }
+
+    /// The options `options` asks for, with the values chosen so far.
+    static func configOptions(options: Options, chosen: [String: String] = [:]) -> [ACP.ConfigOption] {
+        var configOptions = configOptions(
+            model: chosen["model"] ?? "small",
+            effort: options.effort ? chosen["effort"] ?? "medium" : nil
+        )
+        if options.fastMode {
+            configOptions.append(
+                .init(
+                    id: "fast",
+                    name: "Fast mode",
+                    description: "Answer faster with less reasoning",
+                    value: .boolean(currentValue: chosen["fast"] == "true")
+                )
+            )
+        }
+        return configOptions
     }
 
     static func configOptions(model: String, effort: String?) -> [ACP.ConfigOption] {

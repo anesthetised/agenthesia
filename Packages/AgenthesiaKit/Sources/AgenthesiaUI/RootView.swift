@@ -47,21 +47,24 @@ public struct RootView: View {
                 }
         } detail: {
             VStack(spacing: 0) {
-                if model.inDraft {
-                    SessionDraftView(model: model)
-                } else if model.isLoadingHistory {
-                    ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let session = model.displayed {
-                    GeometryReader { geometry in panes(session, size: geometry.size) }
-                } else {
-                    let starting = model.owner?.isStarting == true
-                    ContentUnavailableView {
-                        Label(
-                            starting ? "Starting session…" : "Start a session",
-                            systemImage: "bubble.left.and.bubble.right"
-                        )
-                    } description: {
-                        if !starting { Text("Choose a project and an installed ACP agent.") }
+                // Stacked, so the draft keeps its size while Send's transition moves its card to the bottom.
+                ZStack {
+                    if model.inDraft {
+                        SessionDraftView(model: model).transition(DraftSendTransition())
+                    } else if model.isLoadingHistory {
+                        ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let session = model.displayed {
+                        GeometryReader { geometry in panes(session, size: geometry.size) }
+                    } else {
+                        let starting = model.owner?.isStarting == true
+                        ContentUnavailableView {
+                            Label(
+                                starting ? "Starting session…" : "Start a session",
+                                systemImage: "bubble.left.and.bubble.right"
+                            )
+                        } description: {
+                            if !starting { Text("Choose a project and an installed ACP agent.") }
+                        }
                     }
                 }
                 if model.restored == nil, let diagnostic = model.owner?.diagnostic {
@@ -257,12 +260,6 @@ public struct RootView: View {
                 .overlay(alignment: .bottom) {
                     if model.endPosition == .newBelow { NewResponseButton(action: model.jumpToLatest) }
                 }
-                if let startedAt = session.turnStartedAt {
-                    WorkingTimeLine(
-                        startedAt: startedAt,
-                        waiting: !session.pendingPermissions.isEmpty || !session.pendingInputs.isEmpty
-                    )
-                }
                 if let signIn = model.signIn {
                     SignInPanel(
                         agentName: model.owner?.agentName ?? "the agent",
@@ -329,12 +326,19 @@ public struct RootView: View {
         }
     }
 
-    /// The docked permission card, failures, and the composer card or the Continue card; `height` is the column's.
+    /// The docked permission card, failures, the status line, and the composer card or the Continue card; `height` is
+    /// the column's.
     private func composer(_ session: SessionController, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             PermissionDock(session: session, maxHeight: 0.4 * height)
             if let error = model.errorMessage ?? configError {
                 FailureBanner(error, offering: failureActions, perform: perform)
+            }
+            if let startedAt = session.turnStartedAt {
+                WorkingTimeLine(
+                    startedAt: startedAt,
+                    waiting: !session.pendingPermissions.isEmpty || !session.pendingInputs.isEmpty
+                )
             }
             if let card = ContinueCard.State(
                 status: session.status,
@@ -415,7 +419,7 @@ public struct RootView: View {
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .help("Attach files or folders (⇧⌘A)").disabled(model.composer.editingQueueID != nil || submitting)
             SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
-            Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
             let turnActive =
                 session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty
             let action = ComposerPrimaryAction(

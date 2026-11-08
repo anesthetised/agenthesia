@@ -2,39 +2,36 @@ import AgenthesiaCore
 import AppKit
 import SwiftUI
 
-/// A window without a session (ADR-0040): an empty transcript area and the composer card, with the project, agent and
-/// checkout above the text. Send starts the session with the draft as its first message.
+/// A window without a session (ADR-0040): the heading with the project's menu and, under it, the composer card with
+/// the agent and checkout above the text. Send starts the session with the draft as its first message.
 struct SessionDraftView: View {
     @Bindable var model: SessionWindowModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Set while the draft leaves after Send: the card moves to the bottom edge, where the session's composer sits.
+    @Environment(\.draftLeaving) private var leaving
     @State private var checkout: DraftCheckout?
     @State private var editingCommand = false
     @State private var catalogLoaded = false
+
+    /// Shown once the catalog has loaded, so the editor does not flicker away while installations are read.
+    private var needsAgent: Bool { catalogLoaded && model.draftNeedsAgent }
 
     /// The pills' tooltip and accessibility note: what they show is a cached hint, not a session's confirmed value.
     static let hintNote = "Last used with this agent; confirmed when the session starts"
 
     var body: some View {
-        VStack(spacing: 0) {
-            Text("What should the agent do?")
-                .font(.title2).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 24) {
+            heading.opacity(leaving ? 0 : 1)
             VStack(alignment: .leading, spacing: 6) {
                 if let error = model.draftError {
                     FailureBanner(error, offering: [.manageAgents], perform: { _ in })
                 }
-                if catalogLoaded, model.selectedAgent == nil, model.catalog?.choices.isEmpty == true {
-                    HStack {
-                        Text("No agent is installed.").foregroundStyle(.secondary)
-                        ManageAgentsButton()
-                    }
-                    .font(.caption)
-                }
                 card
             }
             .frame(maxWidth: TranscriptColumn.maxWidth)
-            .padding(.horizontal, 16).padding(.bottom, 12)
-            .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal, 16).padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: leaving ? .bottom : .center)
         .task {
             await model.catalog?.reloadInstallations()
             catalogLoaded = true
@@ -48,10 +45,29 @@ struct SessionDraftView: View {
         }
     }
 
+    /// `What should we build in <project>?`, the project on a line of its own when the column is too narrow.
+    private var heading: some View {
+        let heading = DraftHeading(project: model.draftProjectName)
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) { headingParts(heading) }
+            VStack(spacing: 4) { headingParts(heading) }
+        }
+        .font(.largeTitle).lineLimit(1)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private func headingParts(_ heading: DraftHeading) -> some View {
+        if let lead = heading.lead { Text(lead) }
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            projectMenu(heading.menu)
+            Text(heading.end)
+        }
+    }
+
     private var card: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                projectMenu
                 agentMenu
                 if let checkout {
                     Label(checkout.title, systemImage: checkout == .folder ? "folder" : "arrow.triangle.branch")
@@ -59,63 +75,73 @@ struct SessionDraftView: View {
                 }
                 Spacer(minLength: 0)
             }
-            ComposerInput(
-                text: $model.draft.text,
-                attachments: $model.draft.attachments,
-                commands: [],
-                isEnabled: true,
-                onSubmit: { _ in model.startDraft() }
-            )
-            HStack(spacing: 8) {
-                Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
-                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
-                    .help("Attach files or folders (⇧⌘A)")
-                hintPills
-                Spacer(minLength: 0)
-                Button("Send", systemImage: "arrow.up", action: model.startDraft)
-                    .labelStyle(.iconOnly).buttonStyle(.borderedProminent).buttonBorderShape(.circle)
-                    .help("Start the session with this message (Return)")
-                    .disabled(!model.canStartDraft)
+            if needsAgent {
+                VStack(spacing: 10) {
+                    Text("Add an agent to start a session.").foregroundStyle(.secondary)
+                    ManageAgentsButton(title: "Add Agent…").buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 12)
+            } else {
+                ComposerInput(
+                    text: $model.draft.text,
+                    attachments: $model.draft.attachments,
+                    commands: [],
+                    isEnabled: true,
+                    onSubmit: { _ in send() }
+                )
+                bottomRow
             }
         }
         .padding(12)
         .background(.bar, in: .rect(cornerRadius: 16))
         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
         .dropDestination(for: URL.self) { urls, _ in
+            guard !needsAgent else { return false }
             ComposerInput.add(urls, to: &model.draft.attachments)
             return true
         }
     }
 
-    /// The agent's cached mode, model and effort (ADR-0040): hints, so drawn as secondary and worded as such. A mode reads
-    /// `Default mode` until one is picked, because only a picked mode is applied.
-    private var hintPills: some View {
-        ForEach(model.draftPills, id: \.id) { option in
-            if case .select(_, let choices) = option.value {
-                ConfigSelectMenu(
-                    option: option,
-                    choices: choices,
-                    selected: model.draftValue(of: option),
-                    placeholder: "Default mode",
-                    note: Self.hintNote
-                ) { model.draftConfig[option.id] = $0 }
-                // A borderless menu draws its title in the control's color whatever the foreground style says.
-                .opacity(0.6)
-            }
+    /// Attach, the hint pills and Send, under the text.
+    private var bottomRow: some View {
+        HStack(spacing: 8) {
+            Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
+                .labelStyle(.iconOnly).buttonStyle(.borderless)
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .help("Attach files or folders (⇧⌘A)")
+            hintPills.frame(maxWidth: .infinity, alignment: .leading)
+            Button("Send", systemImage: "arrow.up", action: send)
+                .labelStyle(.iconOnly).buttonStyle(.borderedProminent).buttonBorderShape(.circle)
+                .help("Start the session with this message (Return)")
+                .disabled(!model.canStartDraft)
         }
     }
 
-    private var projectMenu: some View {
+    /// The agent's cached mode, model and effort (ADR-0040) in the session's control row: hints, so drawn as secondary
+    /// and worded as such. A mode reads `Default mode` until one is picked, because only a picked mode is applied.
+    private var hintPills: some View {
+        ConfigControlRow(
+            options: model.draftPills,
+            selected: model.draftValue(of:),
+            placeholder: "Default mode",
+            note: Self.hintNote
+        ) { id, value in
+            if case .select(let value) = value { model.draftConfig[id] = value }
+        }
+        // A borderless menu draws its title in the control's color whatever the foreground style says.
+        .opacity(0.6)
+    }
+
+    /// The project as a borderless menu in the heading: known projects, most recently used first, and Choose Folder….
+    private func projectMenu(_ title: String) -> some View {
         let selected = model.selectedDirectory
         let projects = model.recentProjects
         return Menu {
             ForEach(projects) { project in
-                let directory = URL(filePath: project.rootPath, directoryHint: .isDirectory)
                 Button {
-                    model.draftDirectory = directory
+                    model.draftDirectory = URL(filePath: project.rootPath, directoryHint: .isDirectory)
                 } label: {
-                    if directory.path() == selected?.path() {
+                    if model.isDraftProject(project) {
                         Label(project.name, systemImage: "checkmark")
                     } else {
                         Text(project.name)
@@ -125,14 +151,14 @@ struct SessionDraftView: View {
             if !projects.isEmpty { Divider() }
             Button("Choose Folder…", action: chooseFolder)
         } label: {
-            Label(
-                projects.first { $0.rootPath == selected?.path(percentEncoded: false) }?.name
-                    ?? selected?.lastPathComponent ?? "Choose Project",
-                systemImage: "folder"
-            )
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).foregroundStyle(.tint).truncationMode(.middle)
+                Image(systemName: "chevron.down").font(.title3).foregroundStyle(.secondary)
+            }
+            .contentShape(.rect)
         }
-        .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
-        .accessibilityLabel("Project: \(selected?.lastPathComponent ?? "none")")
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize(horizontal: false, vertical: true)
+        .accessibilityLabel("Project: \(model.draftProjectName ?? "none")")
         .help(selected?.path(percentEncoded: false) ?? "Choose the project the agent works in")
     }
 
@@ -150,7 +176,8 @@ struct SessionDraftView: View {
             }
             if !choices.isEmpty { Divider() }
             Button("Custom Command…") { editingCommand = true }
-            ManageAgentsButton()
+            // The card's Add Agent… is the way to Settings while there is no agent.
+            if !needsAgent { ManageAgentsButton() }
         } label: {
             Label(selected.flatMap(agentName) ?? "Choose Agent", systemImage: "cpu")
         }
@@ -166,6 +193,11 @@ struct SessionDraftView: View {
     /// The custom command picked so far, so the sheet edits it.
     private var customCommand: LocalAgent.Command? {
         if case .custom(let command) = model.selectedAgent { command } else { nil }
+    }
+
+    /// Send, with the card moving to the bottom edge as the draft gives way to the session (none under Reduce Motion).
+    private func send() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { model.startDraft() }
     }
 
     private func chooseFolder() {

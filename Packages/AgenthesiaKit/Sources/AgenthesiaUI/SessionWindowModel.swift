@@ -648,11 +648,23 @@ import SwiftUI
     var selectedDirectory: URL? {
         draftDirectory ?? recentProjects.first.map { URL(filePath: $0.rootPath, directoryHint: .isDirectory) }
     }
+    /// The name the draft's heading shows: the known project at the selected folder, else the folder's name.
+    var draftProjectName: String? {
+        guard let selected = selectedDirectory else { return nil }
+        return recentProjects.first(where: isDraftProject)?.name ?? selected.lastPathComponent
+    }
+    /// The project menu's checkmark: `project` is the draft's, whether picked with or without a trailing slash.
+    func isDraftProject(_ project: ProjectRecord) -> Bool {
+        guard let selected = selectedDirectory?.path(percentEncoded: false) else { return false }
+        return (selected as NSString).standardizingPath == (project.rootPath as NSString).standardizingPath
+    }
     /// The draft's agent: the one picked while it is still offered, else the catalog's default.
     var selectedAgent: AgentCatalog.Choice? {
         if let draftAgent, record(for: draftAgent) != nil { return draftAgent }
         return catalog?.defaultChoice
     }
+    /// No agent is installed or listed and no custom command is picked: the draft asks to add one instead of a message.
+    var draftNeedsAgent: Bool { selectedAgent == nil && catalog?.choices.isEmpty == true }
     /// The cached mode, model and effort options of the selected agent, which the draft shows as pills (ADR-0040).
     var draftPills: [ACP.ConfigOption] { selectedAgent.flatMap { catalog?.configHints[$0] } ?? [] }
     /// The value a pill shows and Send applies: the one picked in this draft, if the agent offered it, else the cached

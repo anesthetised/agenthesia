@@ -15,9 +15,10 @@ reading the registry. The tab's model is `AgentCatalog`.
 
 - Showing the Agents tab reloads the installed versions, looks for local commands, refreshes the registry and, the
   first time an npm agent matters, checks Node.js and npm.
-- `Manage Agents…` in the draft (the Agent chip's menu, the `No agent is installed.` hint, and the failure banner of a
-  missing or removed agent) opens the Settings window on the Agents tab, also when it was showing General or is already
-  open. Settings (⌘,) opens on the tab last shown, kept across launches.
+- `Manage Agents…` in the draft (the Agent chip's menu and the failure banner of a missing or removed agent) and the
+  draft's `Add Agent…` while no agent is installed ([session-start.md](session-start.md)) open the Settings window on
+  the Agents tab, also when it was showing General or is already open. Settings (⌘,) opens on the tab last shown, kept
+  across launches.
 
 ## Installed
 
@@ -121,6 +122,7 @@ reading the registry. The tab's model is `AgentCatalog`.
 
 ## Changes
 
+- 2026-11-08, #278: the draft's `Add Agent…` replaces the `No agent is installed.` hint as a way here.
 - 2026-11-08, #272: `Sign In…` moves into the row's `…` menu; the button and `Sign-in needed` show only while the
   agent asked for sign-in.
 - 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab; the last shown tab is remembered.

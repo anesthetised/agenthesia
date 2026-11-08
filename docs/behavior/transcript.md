@@ -44,6 +44,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-09, #160: a row fits its content again after the transcript changes width, with no empty band above the
+  text.
 - 2026-11-08, #269: a quiet selection: a rounded `.quaternary` background of the text column's width instead of the
   system band across the window; text keeps its colors; the transcript area written.
 - 2026-11-08, #288: the selection background reaches 8 pt past the text column on each side; the hover `Copy` button is a

@@ -55,6 +55,8 @@ All tasks go through the [`justfile`](justfile). Run `just` to list recipes.
 - `just run` — build and launch the app.
 - `just app-check-tools` — compile the Swift helpers of `scripts/app-check/` into `.build/app-check/`.
 - `just bench` — time Markdown rendering and highlighting in a release build (not run in CI).
+- `just screenshots` — regenerate the README screenshots, light and dark, from a scripted demo session (it drives the
+  app's window, see *Testing the running app*).
 
 Before committing, make sure `just lint` and `just test` pass. New code comes with tests; keep coverage
 above the thresholds in the `justfile`.
@@ -98,7 +100,7 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
   (`perform action` by index); a banner lasts a few seconds, so poll and act in one script. To tap a
   banner use System Events `click at {x, y}`; CGEvent clicks and `AXPress` did not reach the app.
 - **Use the helpers in `scripts/app-check/`** instead of rewriting them. `just app-check-tools` compiles
-  `wintool` (windows of a process, frontmost app, click, right-click, move, wheel scroll) and `axlabels`
+  `wintool` (windows of a process, frontmost app, click, right-click, drag, move, wheel scroll) and `axlabels`
   (described and helped elements with screen positions); `axdump.applescript` dumps the accessibility tree
   to a depth; `lib.sh`, sourced from bash or zsh, adds `guard`, `shot`, `ax`, `paste`, `key`, `dump` and the
   draft helpers `pickproject`, `pickagent`, `draftsend`, and `send` for an open session. It reads `APP_CHECK_PID` (the app's process),

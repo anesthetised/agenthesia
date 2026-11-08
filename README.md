@@ -21,11 +21,12 @@ and accept the result.
 
 > **Status:** early development. Nothing to install yet.
 
-<a href="docs/images/agenthesia.png">
-  <img src="docs/images/agenthesia.png" alt="Agenthesia demo session showing changed files, a tool-call diff, session controls, and a Swift source preview." width="1000">
-</a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/agenthesia-dark.png">
+  <img src="docs/images/agenthesia-light.png" alt="Agenthesia demo session: the agent's answer with links to the files it changed, the rewritten Swift file in the file pane, and the inspector with the changes, Review and Merge." width="1000">
+</picture>
 
-*Current interface with a demo project and illustrative agent output. Click to view the original screenshot.*
+*Current interface with a demo project and illustrative agent output, made with `just screenshots`.*
 
 ## Highlights (planned for 1.0)
 

@@ -1292,6 +1292,40 @@ extension LiveTranscriptTests {
         }
     }
 
+    @Test func rowHeightsFollowTheTableWidth() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        let paragraph = String(repeating: "A sentence that wraps when the transcript is narrow. ", count: 12)
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "## Heading\n\n\(paragraph)"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        func heights(_ controller: TranscriptTableController) -> [CGFloat] {
+            (0..<controller.table.numberOfRows).map { controller.table.rect(ofRow: $0).height }
+        }
+
+        let fresh = TranscriptTableController()
+        let freshWindow = host(fresh, width: 1364)
+        defer { freshWindow.close() }
+        fresh.update(source)
+        freshWindow.contentView?.layoutSubtreeIfNeeded()
+
+        let resized = TranscriptTableController()
+        let window = host(resized, width: 500)
+        defer { window.close() }
+        resized.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let narrow = heights(resized)
+        window.setContentSize(.init(width: 1364, height: 600))
+        // AppKit measures the rows again on a later turn of the main queue.
+        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        #expect(narrow[1] > heights(fresh)[1] + 20)
+        for (row, (height, expected)) in zip(heights(resized), heights(fresh)).enumerated() {
+            #expect(abs(height - expected) <= 1, "row \(row) is \(height) pt, \(expected) pt when built this wide")
+        }
+    }
+
     @Test func aSelectedRowKeepsItsTextColorsAndGetsNoSystemBand() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(tool("a", kind: .read))

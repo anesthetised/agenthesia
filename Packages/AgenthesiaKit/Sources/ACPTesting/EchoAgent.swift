@@ -1,4 +1,5 @@
 public import ACP
+import Foundation
 public import JSONRPC
 
 /// A reactive ACP agent for tests and manual runs. It echoes prompts and understands a few commands:
@@ -15,7 +16,8 @@ public import JSONRPC
 /// - `fail` fails the turn with an internal error.
 /// - `exit` closes the connection without replying, ending MockAgent's process.
 ///
-/// With `announcesCommands`, these verbs are offered as slash commands; `/plan` works like `plan`.
+/// With `announcesCommands`, these verbs are offered as slash commands; `/plan` works like `plan`. With
+/// `demo`, every prompt plays that canned turn instead.
 public final class EchoAgent: Sendable {
     public struct Options: Sendable {
         public var loadSession = true
@@ -42,6 +44,10 @@ public final class EchoAgent: Sendable {
         public var announcesCommands = false
         /// Delay between streamed chunks.
         public var chunkDelay: Duration = .zero
+        /// A canned turn played on every prompt, for screenshots: JSON with `files` (relative path → text) and
+        /// `updates` (session updates). `{cwd}` in it becomes the session's directory; the files are written there
+        /// before the updates are sent.
+        public var demo: String?
 
         public init() {}
     }
@@ -352,6 +358,10 @@ extension EchoAgent {
             sessions.filter { cwd == nil || $0.cwd == cwd }.map { .init(sessionId: $0.id, cwd: $0.cwd, title: "Echo") }
         }
 
+        func cwd(of id: ACP.SessionID) -> String? {
+            sessions.first { $0.id == id }?.cwd
+        }
+
         func cancel(_ id: ACP.SessionID) {
             cancelled.insert(id)
         }
@@ -385,6 +395,7 @@ extension EchoAgent {
                 if case .text(let content) = block { content.text } else { nil }
             }.joined(separator: " ")
             await state.record(.userMessageChunk(.init(content: .init(text: text))), in: sessionID)
+            if let demo = options.demo { return try await play(demo) }
 
             var words = text.split(separator: " ", maxSplits: 2).map(String.init)
             if let first = words.first, first.hasPrefix("/") { words[0].removeFirst() }
@@ -440,6 +451,29 @@ extension EchoAgent {
             }
             if await state.takeCancellation(sessionID) {
                 return .init(stopReason: .cancelled)
+            }
+            return .init(stopReason: .endTurn)
+        }
+
+        private struct Demo: Decodable {
+            var files: [String: String]
+            var updates: [ACP.SessionUpdate]
+        }
+
+        private func play(_ json: String) async throws -> ACP.V1.PromptResponse {
+            let cwd = await state.cwd(of: sessionID) ?? ""
+            let demo = try JSONDecoder().decode(Demo.self, from: Data(json.replacing("{cwd}", with: cwd).utf8))
+            for (path, content) in demo.files {
+                let url = URL(filePath: cwd).appending(path: path)
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try Data(content.utf8).write(to: url)
+            }
+            for update in demo.updates {
+                await send(update)
+                if options.chunkDelay > .zero { try? await Task.sleep(for: options.chunkDelay) }
             }
             return .init(stopReason: .endTurn)
         }

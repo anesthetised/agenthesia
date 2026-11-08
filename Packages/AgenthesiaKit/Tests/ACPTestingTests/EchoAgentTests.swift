@@ -111,6 +111,24 @@ final class EchoClient: Sendable {
         #expect(client.agentText == "Echo: hello world")
     }
 
+    @Test func playsTheDemoTurnInTheSessionDirectory() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var options = EchoAgent.Options()
+        options.demo = #"""
+            {"files": {"Sources/A.swift": "let a = 1\n"},
+             "updates": [{"sessionUpdate": "agent_message_chunk",
+                          "content": {"type": "text", "text": "Edited {cwd}/Sources/A.swift"}}]}
+            """#
+        let client = await EchoClient(options: options)
+        _ = try await client.initialize()
+        let session = try await client.newSession(cwd: directory.path(percentEncoded: false))
+        #expect(try await client.prompt("anything", in: session.sessionId) == .endTurn)
+        let file = directory.appending(path: "Sources/A.swift")
+        #expect(try String(contentsOf: file, encoding: .utf8) == "let a = 1\n")
+        #expect(client.agentText == "Edited \(directory.path(percentEncoded: false))/Sources/A.swift")
+    }
+
     @Test func announcesCommandsThatPromptsMayPrefixWithASlash() async throws {
         var options = EchoAgent.Options()
         options.announcesCommands = true

@@ -832,6 +832,26 @@ Pitfalls known so far:
 - #279 keeps each session without a project in its own folder under `~/.agenthesia/scratch`; nothing removes it yet.
   #230 (delete a saved session) must remove that folder too, after the confirmation names it and its file count
   (ADR-0048), and only a folder directly under the scratch root that the session record names. Archiving keeps it.
+- #160, the M18 verification (2026-11-08, main 342b1dc; scripted, a copy with its own bundle identifier, isolated
+  home, MockAgent; dark and light). Checked: the draft without an agent (`Add Agent…`, the chip offering only Custom
+  Command…), the heading with the project menu and `or start without a project`, Send moving the card to the bottom
+  (`Starting…`, then the session); a turn with tools, a plan and a write; the docked permission answered with ⌥⌘1;
+  review (⌃⌘R) with Ask Agent and Merge…; the merge sheet; Quick Open and the file pane's Markdown preview; the
+  Session menu's items; a session without a project (its `scratch/` folder, dashed badge, `No project`, untracked
+  Changes, no Review or Discard); Settings → Agents installing Claude Agent 0.101.0 from the registry, then Remove
+  asking `Remove Claude Agent 0.101.0?` with `No saved sessions use this version.`, Cancel keeping it and Remove
+  removing it; the Working shelf, `✓ Settle` on hover and the queue and shelves in the two earlier batch checks.
+  Accessibility labels were read from the tree (`axlabels`). Findings are in #301 (the Agent chip described as `CPU
+  chip`, Quick Open's Return from the search field, the hover Copy staying on rows the pointer left, a narrow
+  transcript with review and inspector open, the Remove menu's look). Not checked: VoiceOver itself, the `1 saved
+  session` wording of Remove (it needs a session with a real agent), two installed versions, a fetch failure of
+  #277, Increase Contrast. `scripts/app-check/lib.sh`'s project and agent menu paths follow the new draft heading.
+  The README screenshots are now generated: `just screenshots` runs `scripts/readme-screenshot/readme-screenshot.sh`,
+  which plays a canned turn (`MockAgent --demo`) in a test copy of the app under a temporary home and captures the
+  window with its shadow in light and dark; README picks one with `prefers-color-scheme`, as for the logo. Making them
+  showed transcript rows keeping the height they were measured at when the column widened (opening the file pane or
+  resizing the window): the extra height stretched the row's Copy strip into an empty band. The rows' stacks now hold
+  their own height above AppKit's row height, and a test resizes from 500 to 1364 pt.
 
 ## M16: Multi-agent workflow (2026-11-07)
 

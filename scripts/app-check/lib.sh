@@ -13,8 +13,8 @@
 # Layout-dependent: accessibility paths of the draft screen. They follow the window layout and break when it
 # changes; find the new ones with `dump` and fix them here.
 AC_DRAFT="group 3 of splitter group 1 of group 1 of window 1"
-AC_PROJECT_MENU="menu button 1 of $AC_DRAFT"
-AC_AGENT_MENU="menu button 2 of $AC_DRAFT"
+AC_PROJECT_MENU="menu button 1 of group 1 of $AC_DRAFT"   # the project in the draft heading
+AC_AGENT_MENU="menu button 1 of $AC_DRAFT"
 AC_DRAFT_TEXT="text area 1 of scroll area 1 of $AC_DRAFT"
 AC_SESSION_TEXT="text area 1 of scroll area 2 of $AC_DRAFT"   # the composer of an open session
 

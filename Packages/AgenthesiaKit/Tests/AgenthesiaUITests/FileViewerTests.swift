@@ -44,13 +44,38 @@ import Testing
     }
 
     @Test func previewIsSelectableReadOnlyAndAccessible() {
-        let host = NSHostingView(rootView: MarkdownPreview(text: "# Heading"))
+        let host = NSHostingView(
+            rootView: MarkdownPreview(
+                text: "# Heading",
+                directory: .temporaryDirectory,
+                root: nil,
+                onOpenPath: { _ in }
+            )
+        )
         host.frame = NSRect(x: 0, y: 0, width: 320, height: 400)
         host.layoutSubtreeIfNeeded()
         let text = descendant(of: NSTextView.self, in: host)
         #expect(text?.isEditable == false)
         #expect(text?.isSelectable == true)
         #expect(text?.accessibilityLabel() == "Markdown preview")
+    }
+
+    @Test func previewLinksOpenFilesInsideTheRootAndAreAlwaysHandled() throws {
+        let root = URL.temporaryDirectory.appending(path: "agh-links-\(UUID())")
+        let textView = NSTextView(usingTextLayoutManager: true)
+        let coordinator = MarkdownPreview.Coordinator()
+        var opened: [String] = []
+        coordinator.configure(directory: root.appending(path: "docs"), root: root) { opened.append($0) }
+        #expect(coordinator.textView(textView, clickedOnLink: try #require(URL(string: "adr/0010.md#x")), at: 0))
+        #expect(coordinator.textView(textView, clickedOnLink: "../README.md", at: 0))
+        #expect(opened == ["docs/adr/0010.md", "README.md"])
+        // Outside the root, another scheme and a link without a destination: handled, nothing opens.
+        for link in ["../../secret.md", "ftp://example.com/a", "#top"] {
+            #expect(coordinator.textView(textView, clickedOnLink: try #require(URL(string: link)), at: 0))
+        }
+        coordinator.configure(directory: root, root: nil) { opened.append($0) }
+        #expect(coordinator.textView(textView, clickedOnLink: "a.md", at: 0))
+        #expect(opened.count == 2)
     }
 
     private func descendants<V: NSView>(of type: V.Type, in root: NSView) -> [V] {

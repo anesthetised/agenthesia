@@ -36,7 +36,9 @@ struct SessionFilePane: View {
                 // Fills the pane, as the loading and file views do, so the header stays at the top.
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let document = files.document {
-                FileViewer(document: document, line: files.selectedLine)
+                FileViewer(document: document, line: files.selectedLine, root: files.root) { path in
+                    if let id { onOpen(path, nil, id) }
+                }
             }
         }
         .focusedSceneValue(\.openInEditor, editorAction)

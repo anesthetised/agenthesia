@@ -826,6 +826,8 @@ Pitfalls known so far:
   on Agents; with Settings open on General, the hint and the agent chip's menu item switched the same window to Agents;
   after a relaunch ⌘, opened the last tab (Agents, then General). Not checked: the failure banner's button (same view),
   VoiceOver. Pitfall: `axlabels` reports an element's top-left corner, so click its center.
+- #268 opens both shelves while one of their rows is selected or a search is entered (`SidebarShelves.isOpen`); #274
+  drops the selection rule for Settled only, and Previous/Next Session then has to expand Settled itself.
 
 ## M16: Multi-agent workflow (2026-11-07)
 

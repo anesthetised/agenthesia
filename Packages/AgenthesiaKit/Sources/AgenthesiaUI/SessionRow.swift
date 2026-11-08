@@ -2,7 +2,7 @@ import AgenthesiaCore
 import SwiftUI
 
 /// A sidebar row: project badge, title, `project · reason`, status symbol and the time of the last activity
-/// (ADR-0039).
+/// (ADR-0039); on the Working shelf, the state and its time instead.
 struct SessionRow: View {
     let title: String
     let project: String?
@@ -12,14 +12,31 @@ struct SessionRow: View {
     let activity: LiveSession.Activity?
     /// Nil while a starting session has no record yet.
     let lastActivity: Date?
+    /// A row on the Working shelf ends with `Working 1m 12s` or `Idle 20m` (`SessionSidebar.shelfTime`).
+    var shelf = false
+    /// When the running turn began; only a shelf row shows it.
+    var turnStartedAt: Date?
 
     var body: some View {
-        // Every minute, so that the time and the accessibility label agree.
-        TimelineView(.everyMinute) { context in row(now: context.date) }
+        // A running shelf row counts seconds; the others tick every minute, so that the time and the accessibility
+        // label agree. A `List` builds only the rows on screen, so only those tick.
+        if shelf, let turnStartedAt {
+            TimelineView(.periodic(from: turnStartedAt, by: 1)) { context in row(now: context.date) }
+        } else {
+            TimelineView(.everyMinute) { context in row(now: context.date) }
+        }
     }
 
     private func row(now: Date) -> some View {
-        HStack {
+        let time =
+            shelf
+            ? SessionSidebar.shelfTime(
+                activity: activity ?? .idle,
+                turnStartedAt: turnStartedAt,
+                lastActivity: lastActivity,
+                now: now
+            ) : lastActivity.map { RelativeTime.short(from: $0, to: now) }
+        return HStack {
             ProjectBadgeView(name: project)
             VStack(alignment: .leading) {
                 Text(title).lineLimit(1)
@@ -33,9 +50,8 @@ struct SessionRow: View {
             }
             Spacer()
             if let activity { StatusIcon(activity: activity) }
-            if let lastActivity {
-                Text(RelativeTime.short(from: lastActivity, to: now))
-                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            if let time {
+                Text(time).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }
         .contentShape(.rect)
@@ -47,7 +63,8 @@ struct SessionRow: View {
                 project: project,
                 reason: reason,
                 status: activity,
-                lastActivity: lastActivity,
+                lastActivity: shelf ? nil : lastActivity,
+                shelfTime: shelf ? time : nil,
                 now: now
             )
         )
@@ -64,18 +81,20 @@ struct SessionRow: View {
         [title, subtitle(project: project, reason: reason)].compactMap(\.self).joined(separator: "\n")
     }
 
-    /// `title, project, reason, last active 3m`; a row without a reason names its status instead.
+    /// `title, project, reason, last active 3m`; a row without a reason names its status instead. A shelf row ends
+    /// with its shelf time, which names the state: `title, project, Working 1m 12s`.
     static func accessibilityLabel(
         title: String,
         project: String?,
         reason: String?,
         status: LiveSession.Activity?,
         lastActivity: Date?,
+        shelfTime: String? = nil,
         now: Date = .now
     ) -> String {
         [
-            title, project, reason ?? status.flatMap { $0 == .idle ? nil : $0.rawValue },
-            lastActivity.map { "last active \(RelativeTime.short(from: $0, to: now))" },
+            title, project, reason ?? (shelfTime != nil ? nil : status.flatMap { $0 == .idle ? nil : $0.rawValue }),
+            shelfTime ?? lastActivity.map { "last active \(RelativeTime.short(from: $0, to: now))" },
         ]
         .compactMap(\.self).joined(separator: ", ")
     }

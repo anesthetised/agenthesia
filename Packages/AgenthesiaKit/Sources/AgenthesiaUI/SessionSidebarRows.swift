@@ -24,7 +24,9 @@ struct SessionSidebarRows: View {
             project: row.project?.name,
             reason: owner.reason ?? session.flatMap { model.outcome(of: $0.id) }?.label,
             activity: owner.activity,
-            lastActivity: row.lastActivity
+            lastActivity: row.lastActivity,
+            shelf: section.kind == .working,
+            turnStartedAt: owner.controller?.turnStartedAt
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .contextMenu {

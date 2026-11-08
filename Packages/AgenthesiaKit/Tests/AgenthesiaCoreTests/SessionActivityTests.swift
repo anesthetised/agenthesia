@@ -418,4 +418,66 @@ import Testing
         #expect(sidebar.rows.first?.lastActivity == controller.lastActivity)
         await manager.closeAll()
     }
+
+    @Test func shelfTimeTellsARunningTurnFromAnIdleSession() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        func time(_ activity: Activity, turn: TimeInterval?, last: TimeInterval?) -> String? {
+            SessionSidebar.shelfTime(
+                activity: activity,
+                turnStartedAt: turn.map { now.addingTimeInterval(-$0) },
+                lastActivity: last.map { now.addingTimeInterval(-$0) },
+                now: now
+            )
+        }
+        // A running turn counts from its start, in seconds below a minute, whatever the last activity was.
+        #expect(time(.working, turn: 12, last: 600) == "Working 12s")
+        #expect(time(.working, turn: 72, last: nil) == "Working 1m 12s")
+        #expect(time(.working, turn: 3720, last: 10) == "Working 1h 2m")
+        #expect(time(.idle, turn: nil, last: 1200) == "Idle 20m")
+        #expect(time(.idle, turn: nil, last: 30) == "Idle now")
+        #expect(time(.idle, turn: nil, last: nil) == nil)
+        // A starting session has no turn yet: its spinner and `Starting` say it, not an idle time.
+        #expect(time(.working, turn: nil, last: 1200) == nil)
+    }
+
+    @Test func runningAndIdleSessionsShareTheWorkingSection() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let running = manager.start(directory: directory, agent: agent)
+        let idle = manager.start(directory: directory, agent: agent)
+        for owner in [running, idle] { await owner.startup?.value }
+        let controller = try #require(running.controller)
+        let turn = Task { await running.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+
+        let sidebar = SessionSidebar(projects: [], history: [], owners: [running, idle])
+        #expect(sidebar.section(.needsYou) == nil && sidebar.section(.settled) == nil)
+        let rows = try #require(sidebar.section(.working)?.rows)
+        let ids = try [running, idle].map { AnyHashable(try #require($0.sessionID)) }
+        #expect(rows.map(\.id) == ids)
+        let started = try #require(controller.turnStartedAt)
+        #expect(
+            SessionSidebar.shelfTime(
+                activity: running.activity,
+                turnStartedAt: started,
+                lastActivity: rows[0].lastActivity,
+                now: started.addingTimeInterval(72)
+            ) == "Working 1m 12s"
+        )
+        let idleSince = try #require(rows[1].lastActivity)
+        #expect(
+            SessionSidebar.shelfTime(
+                activity: idle.activity,
+                turnStartedAt: idle.controller?.turnStartedAt,
+                lastActivity: idleSince,
+                now: idleSince.addingTimeInterval(1200)
+            ) == "Idle 20m"
+        )
+
+        // Stopped, the turn has no start any more and the row reads idle.
+        await running.stop()
+        await turn.value
+        #expect(running.activity == .idle && controller.turnStartedAt == nil)
+        await manager.closeAll()
+    }
 }

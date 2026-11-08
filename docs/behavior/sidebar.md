@@ -1,8 +1,9 @@
 # Sidebar
 
-The left column of every window lists the sessions by what they ask of the user: *Needs You* and *Working* scroll
-under a search field, and *Settled* is a footer pinned to the bottom edge. Selecting a row shows that session in the
-window; the draft (new session) has no selected row. The search text and the selection belong to the window.
+The left column of every window lists the sessions by what they ask of the user: *Needs You* scrolls under a search
+field, and *Working* and *Settled* are shelves pinned to the bottom edge, Working above Settled. Selecting a row shows
+that session in the window; the draft (new session) has no selected row. The search text and the selection belong to
+the window.
 
 ## Sections
 
@@ -10,26 +11,34 @@ window; the draft (new session) has no selected row. The search text and the sel
   *failed* (startup or the connection failed), or *done* (a turn finished and its end has not been on screen yet,
   [ADR-0026's amendment](../adr/0026-app-wide-session-manager.md)). In start order.
 - **Working** — every other live session: starting (also before it has a project), running, stopping, or idle. In
-  start order.
+  start order, on the Working shelf.
 - **Settled** — saved sessions that are not live and not archived, by last activity, newest first.
-- Empty sections are hidden. A session moves between sections as its status changes; ending a session moves it to
-  Settled, Continue moves it back up. `Prompt failed` and `Queue paused` do not put a row in Needs You.
+- Empty sections are hidden. The scrolling list holds Needs You alone; without Needs You rows it reads `Nothing needs
+  you` in secondary text, centered. A session moves between sections as its status changes; ending a session moves it
+  to Settled, Continue moves it back up. `Prompt failed` and `Queue paused` do not put a row in Needs You.
 - A *done* row leaves Needs You once the end of the finished turn has been on screen in an active window (scrolled up
   away from the end, it stays).
 
 *Why start order:* Needs You and Working do not re-sort by activity, so rows do not jump while the user aims at them.
 Settled sorts by last activity because a list whose visible times are out of order reads as a bug.
 
-## Settled footer
+## Shelves
 
-- A header row, always visible while Settled has rows: a chevron, `Settled`, and the row count on the trailing edge.
-  VoiceOver reads it as a button, `Settled, 3 sessions, collapsed` (`expanded` when open).
-- Collapsed by default; clicking the header toggles it. Each window remembers the state, also across relaunch.
-- Expanded, the footer grows upward with its own list, sized to its rows and at most 45 % of the sidebar's height;
-  beyond that it scrolls.
-- It is forced open while one of its rows is selected and while a search is entered, so navigation and restored
+Working and Settled are footers pinned to the bottom edge, Working above Settled (`SidebarShelves`).
+
+- Each has a header row, always visible while its section has rows: a chevron, `Working` or `Settled`, and the row
+  count on the trailing edge. VoiceOver reads it as a button, `Settled, 3 sessions, collapsed` (`expanded` when open).
+- Working is expanded by default, Settled collapsed; clicking a header toggles its shelf. Each window remembers both
+  states, also across relaunch.
+- Expanded, a shelf grows upward with its own list, sized to its rows; beyond its cap it scrolls. Working takes at most
+  35 % of the sidebar's height, Settled at most 45 %, less on a short window so that the headers and about two rows of
+  the list above keep their room.
+- A shelf is forced open while one of its rows is selected and while a search is entered, so navigation and restored
   windows never select a hidden row. The header cannot collapse it in those states.
 - History refreshes on its own; there is no Refresh button.
+
+*Why a Working shelf:* Working held idle sessions with nothing on the row to tell them apart from running ones; the
+shelf's rows say which, and for how long (after T3 Code's shelf).
 
 ## Rows
 
@@ -50,8 +59,13 @@ Each row is one line of title over one line of detail, with the status and time 
 - **Time** of the last activity: `now`, `5m`, `3h`, `2d`, `3w`, then a short date such as `12 Oct` from four weeks on.
   It updates every minute. Last activity is the minute of the session's last logged event, or its start without one;
   a starting session with no record yet shows no time.
+- **On the Working shelf**, the state and its time instead: `Working 1m 12s` while a turn runs (stopping included),
+  counted from the turn's start, `Working 45s` below a minute and `Working 1h 2m` from an hour, updated every second
+  while the row is on screen; `Idle 20m` otherwise, since the last activity in the format above (`Idle now` within a
+  minute). A starting session shows no time: its spinner and `Starting` say it.
 - The tooltip holds the full title and second line. The accessibility label is `title, project, reason, last active
-  3m`; without a reason it names the status instead (`Working`, `Done`, …; nothing for idle or saved).
+  3m`; without a reason it names the status instead (`Working`, `Done`, …; nothing for idle or saved). On the Working
+  shelf it ends with the shelf time instead, which names the state: `title, project, Working 1m 12s`.
 
 ### Reasons
 
@@ -87,7 +101,7 @@ its call only by id takes the title the agent reported for that call.
 - A row matches when its title or project name contains the trimmed text, ignoring case and diacritics. An untitled
   session matches as `New Session`. A blank query filters nothing.
 - Empty sections are hidden; with no match at all the list shows the system's *No Results* view for the query.
-- Settled opens while a query is entered, and its header counts the matches.
+- Both shelves open while a query is entered, and their headers count the matches.
 - Archived sessions appear only in search results, in Settled order with the reason `Archived`
   ([ADR-0044](../adr/0044-delete-and-archive-sessions.md)).
 - Navigation and ⌘1…⌘9 use the filtered rows, so they only visit what is on screen.
@@ -105,8 +119,8 @@ All in the Session menu, acting on the focused window:
   screen and after the search filter. Each item shows its row's title; a number without a row reads `No Session` and
   is disabled. Settled is not numbered, and rows do not show their numbers.
 
-*Why Settled is not numbered:* the footer opens and closes, so the numbers would jump; the work is in the upper
-sections ([ADR-0046](../adr/0046-session-board-and-menu-bar.md)).
+*Why Settled is not numbered:* it is collapsed by default and holds finished work; the numbers go to the sessions in
+progress ([ADR-0046](../adr/0046-session-board-and-menu-bar.md)).
 
 ## Row actions
 
@@ -143,12 +157,6 @@ session first`. Each change refreshes the window's history; other windows pick i
 Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
 moves it into the text above and deletes it here.
 
-- **A Working shelf.** Working leaves the scrolling list for a footer above Settled with the same header form (chevron,
-  `Working`, count), expanded by default, its state kept per window, at most 35 % of the sidebar's height. A shelf row
-  ends with `Working 1m 12s` while a turn runs (counted from the turn's start, seconds below a minute) or `Idle 20m`
-  otherwise, in place of the last-activity time. The scrolling list holds Needs You alone and reads `Nothing needs
-  you`, in secondary text, when it is empty. *Why:* "Working" held idle sessions with nothing on the row to tell them
-  apart; T3 Code's shelf answers that.
 - **Settled collapses whenever asked**, also while one of its rows is selected. The selection and the detail column
   stay; Previous and Next Session expand it when they move the selection into it; a search still opens it.
 - **Settle from the row.** On hover a live row in Needs You or Working shows `✓ Settle` in place of its trailing text,
@@ -159,6 +167,8 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #268: Working moved from the scrolling list to a shelf above Settled; its rows show `Working 1m 12s` or
+  `Idle 20m`; the list reads `Nothing needs you` without Needs You rows.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0026 (the Done-mark amendment), ADR-0039 (the Sidebar decision and its
   2026-10-30 and 2026-11-02 amendments), ADR-0044 (Archive) and ADR-0046 (⌘1…⌘9), checked against main at c65b8a1.

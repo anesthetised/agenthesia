@@ -7,11 +7,21 @@ struct FileViewer: View {
     let document: SessionFileDocument
     /// A line from a transcript link. Markdown has lines only in its source.
     let line: Int?
+    /// The session's root and how to open a file of it, for the links of a Markdown preview.
+    let root: URL?
+    let onOpenPath: (String) -> Void
     @State private var showsSource: Bool
 
-    init(document: SessionFileDocument, line: Int? = nil) {
+    init(
+        document: SessionFileDocument,
+        line: Int? = nil,
+        root: URL? = nil,
+        onOpenPath: @escaping (String) -> Void = { _ in }
+    ) {
         self.document = document
         self.line = line
+        self.root = root
+        self.onOpenPath = onOpenPath
         _showsSource = State(initialValue: Self.opensSource(document, line: line))
     }
 
@@ -36,7 +46,12 @@ struct FileViewer: View {
                 Divider()
             }
             if language == .markdown && !showsSource {
-                MarkdownPreview(text: document.text)
+                MarkdownPreview(
+                    text: document.text,
+                    directory: document.url.deletingLastPathComponent(),
+                    root: root,
+                    onOpenPath: onOpenPath
+                )
             } else {
                 SourceViewRepresentable(text: document.text, language: language, line: line)
                     .accessibilityLabel("File source")

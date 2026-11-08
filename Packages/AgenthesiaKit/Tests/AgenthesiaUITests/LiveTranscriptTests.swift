@@ -496,6 +496,26 @@ import Testing
         #expect(opened.count == 1)
     }
 
+    @Test func relativeLinksResolveAgainstTheWorkingDirectoryAndNeverReachAppKit() async throws {
+        let recorded = try await RecordedTranscript()
+        let source = LiveTranscriptSource()
+        source.root = recorded.directory
+        let controller = TranscriptTableController()
+        var opened: [PathLink] = []
+        controller.openPath = { opened.append($0) }
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        #expect(controller.follow(try #require(URL(string: "docs/adr/0010.md#decision"))))
+        #expect(opened == [PathLink(path: "docs/adr/0010.md")])
+        // Outside the working directory and other schemes are consumed without opening anything.
+        #expect(controller.follow(try #require(URL(string: "../outside.md"))))
+        #expect(controller.follow(try #require(URL(string: "ftp://example.com/a"))))
+        #expect(opened.count == 1)
+        // Web links are left to AppKit.
+        #expect(!controller.follow(try #require(URL(string: "https://example.com"))))
+    }
+
     @Test func inlineCodeInAgentTextLinksIndexedFilesAfterEachPublication() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(.userMessageChunk(.init(content: .init(text: "Fix `a.swift`"))))

@@ -25,6 +25,7 @@ Noticeable UX changes are still decided with the owner first (AGENTS.md); the do
 | [sidebar.md](sidebar.md) | Sections, rows, search, navigation between sessions, row actions |
 | [composer.md](composer.md) | The composer card: text, attachments, slash commands, config controls, Send and Stop |
 | [session-start.md](session-start.md) | The draft: project, agent and checkout, hints, Send, starting and failed starts |
+| [file-pane.md](file-pane.md) | The file pane and the links in the Markdown preview and the transcript |
 | [agents-settings.md](agents-settings.md) | Settings → Agents: installed, local and registry agents, runtimes, sign-in from Settings |
 
 Not written yet, each by the first pull request that changes it: transcript, review, inspector, permissions and forms,

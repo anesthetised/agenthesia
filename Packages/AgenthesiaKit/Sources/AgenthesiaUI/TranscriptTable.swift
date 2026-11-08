@@ -373,10 +373,19 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         return rowView
     }
 
-    /// Consumes the transcript's own links, so that they never reach `NSWorkspace`; others are left to AppKit.
+    /// Consumes the transcript's own links and relative ones (against the working directory), so that they never
+    /// reach `NSWorkspace`; web and mail links are left to AppKit.
     func follow(_ url: URL) -> Bool {
-        guard PathLink.claims(url) else { return false }
-        if let link = PathLink(url) { openPath?(link) }
+        if PathLink.claims(url) {
+            if let link = PathLink(url) { openPath?(link) }
+            return true
+        }
+        guard let root = (session as? LiveTranscriptSource)?.root else { return false }
+        switch LinkTarget(url, base: root, root: root) {
+        case .file(let path): openPath?(PathLink(path: path))
+        case .external: return false
+        case .ignored: break
+        }
         return true
     }
 

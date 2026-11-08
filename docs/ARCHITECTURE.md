@@ -131,7 +131,9 @@ holds its prompt; `SessionWindowModel.abandonedStart` reports it, and `RootView`
 the prompt back into the draft with the owner's error and ends the owner, so the sidebar does not list it.
 A session row's context menu offers New Session in Project (`SessionWindowModel.newSession(in:)`), which opens the
 draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
-and offers nothing.
+and offers nothing. A live row also offers Settle Session (`SessionWindowModel.settle(_:)`, #275): End Session for
+that row's own owner, available while `SessionRow.canSettle(owner.activity)` holds (idle, done, failed); on hover the
+row shows the same action as a button.
 
 Mode, model and effort hints (ADR-0040's amendment) are applied at start. `AgentCatalog.configHints` keeps, per
 `AgentCatalog.Choice`, the select options with category `mode`, `model` or `thought_level` (effort) from the agent's

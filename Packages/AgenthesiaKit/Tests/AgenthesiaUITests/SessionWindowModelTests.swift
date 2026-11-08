@@ -501,6 +501,51 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func settlingARowEndsItsSessionAndMovesItToSettled() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-settle-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.refresh()
+        let session = try #require(owner.controller?.session)
+        #expect(model.canSettle(owner))
+        #expect(model.sidebar.section(.settled) == nil)
+        await model.settle(owner)
+        #expect(sessions.owners.isEmpty && !model.canSettle(owner))
+        let settled = try #require(model.sidebar.section(.settled))
+        #expect(settled.rows.map(\.id) == [AnyHashable(session.id)])
+        // A second settle of the same row does nothing.
+        await model.settle(owner)
+        await sessions.closeAll()
+    }
+
+    @Test func aRunningRowCannotBeSettled() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-settle-busy-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.refresh()
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("write \(directory.appending(path: "unwritten.txt").path) text") }
+        while controller.pendingPermissions.isEmpty { await Task.yield() }
+        #expect(owner.activity == .needsInput && !model.canSettle(owner))
+        await model.settle(owner)
+        #expect(sessions.owners.contains { $0 === owner })
+        await model.stop()
+        await turn.value
+        await sessions.closeAll()
+    }
+
     @Test func stopOnAnIdleSessionDoesNotPauseTheQueue() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-idle-stop-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

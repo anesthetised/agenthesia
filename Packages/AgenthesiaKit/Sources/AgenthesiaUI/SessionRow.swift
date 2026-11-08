@@ -16,6 +16,16 @@ struct SessionRow: View {
     var shelf = false
     /// When the running turn began; only a shelf row shows it.
     var turnStartedAt: Date?
+    /// Settles the session; set only when `canSettle` holds. A hovered row shows `✓ Settle` in place of its time.
+    var onSettle: (() -> Void)?
+
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A live session can be settled (ended) from its row unless a turn runs or a permission or form waits.
+    static func canSettle(_ activity: LiveSession.Activity?) -> Bool {
+        activity == .idle || activity == .done || activity == .failed
+    }
 
     var body: some View {
         // A running shelf row counts seconds; the others tick every minute, so that the time and the accessibility
@@ -50,11 +60,21 @@ struct SessionRow: View {
             }
             Spacer()
             if let activity { StatusIcon(activity: activity) }
-            if let time {
+            if hovering, let onSettle {
+                Button("Settle", systemImage: "checkmark", action: onSettle)
+                    .buttonStyle(.borderless).font(.caption)
+                    .transition(.opacity)
+            } else if let time {
                 Text(time).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }
         .contentShape(.rect)
+        .onHover { inside in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) { hovering = inside }
+        }
+        .accessibilityActions {
+            if let onSettle { Button("Settle", action: onSettle) }
+        }
         .help(Self.tooltip(title: title, project: project, reason: reason))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

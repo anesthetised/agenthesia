@@ -18,6 +18,13 @@ import Testing
         #expect(SessionRow.subtitle(project: nil, reason: nil) == nil)
     }
 
+    @Test func aRowCanBeSettledOnlyWhenNothingRunsOrWaits() {
+        for activity: LiveSession.Activity in [.idle, .done, .failed] { #expect(SessionRow.canSettle(activity)) }
+        for activity: LiveSession.Activity in [.working, .needsInput] { #expect(!SessionRow.canSettle(activity)) }
+        // A saved row has no live status.
+        #expect(!SessionRow.canSettle(nil))
+    }
+
     @Test func tooltipHoldsTheWholeRow() {
         #expect(
             SessionRow.tooltip(title: "Fix the build", project: "agenthesia", reason: "Allow? Write a.txt")

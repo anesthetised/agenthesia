@@ -26,8 +26,9 @@ Noticeable UX changes are still decided with the owner first (AGENTS.md); the do
 | [composer.md](composer.md) | The composer card: text, attachments, slash commands, config controls, Send and Stop |
 | [session-start.md](session-start.md) | The draft: project, agent and checkout, hints, Send, starting and failed starts |
 | [agents-settings.md](agents-settings.md) | Settings → Agents: installed, local and registry agents, runtimes, sign-in from Settings |
+| [transcript.md](transcript.md) | The transcript: selecting rows, Copy, keyboard navigation |
 
-Not written yet, each by the first pull request that changes it: transcript, review, inspector, permissions and forms,
+Not written yet, each by the first pull request that changes it: review, inspector, permissions and forms,
 session sign-in, notifications and the Dock, the board and the menu bar.
 
 ## File template

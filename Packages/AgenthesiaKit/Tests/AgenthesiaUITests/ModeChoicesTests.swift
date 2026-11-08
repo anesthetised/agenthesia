@@ -58,8 +58,8 @@ import Testing
         let (host, window) = hosted(ModeChoices(choices: choices, selected: nil) { _ in })
         defer { window.close() }
         try await settle(host)
-        let table = try #require(table(in: host))
-        let content = table.rect(ofRow: table.numberOfRows - 1).maxY + ModeChoices.verticalPadding / 2
+        let list = try #require(table(in: host))
+        let content = list.rect(ofRow: list.numberOfRows - 1).maxY + ModeChoices.verticalPadding / 2
         return ModeChoices.height(of: choices) - content
     }
 

@@ -193,6 +193,18 @@ struct AgentsSettings: View {
         return lines.joined(separator: "\n\n")
     }
 
+    /// What removing a version costs: saved sessions that used it cannot continue until it is installed again.
+    static func removalMessage(for request: AgentCatalog.RemovalRequest) -> String {
+        guard let count = request.sessionCount else {
+            return "Saved sessions that use this version cannot continue until it is installed again."
+        }
+        switch count {
+        case 0: return "No saved sessions use this version."
+        case 1: return "1 saved session uses this version; it cannot continue until it is installed again."
+        default: return "\(count) saved sessions use this version; they cannot continue until it is installed again."
+        }
+    }
+
     /// The command as a shell would show it, quoting words with spaces or quotes.
     static func commandLine(_ command: LocalAgent.Command) -> String {
         ([command.executable] + command.arguments).map { word in
@@ -235,6 +247,10 @@ private struct InstalledAgentRow: View {
     private var available: AgentRegistry.Agent? {
         catalog.registry?.catalog.agents.first { $0.id == newest.agentID && catalog.hasUpdate($0) }
     }
+    /// The confirmation request of this agent, if any.
+    private var removal: AgentCatalog.RemovalRequest? {
+        catalog.removalRequest.flatMap { $0.installation.agentID == newest.agentID ? $0 : nil }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -257,7 +273,7 @@ private struct InstalledAgentRow: View {
                     }
                     Menu("Remove") {
                         ForEach(versions) { version in
-                            Button("Remove \(version.version)") { Task { await catalog.remove(version) } }
+                            Button("Remove \(version.version)") { Task { await catalog.requestRemoval(of: version) } }
                         }
                     }
                     .menuStyle(.button)
@@ -267,6 +283,15 @@ private struct InstalledAgentRow: View {
             if let failure = catalog.failures[newest.agentID] {
                 Text(failure).font(.caption).foregroundStyle(.red)
             }
+        }
+        .confirmationDialog(
+            removal.map { "Remove \($0.installation.name) \($0.installation.version)?" } ?? "",
+            isPresented: Binding(get: { removal != nil }, set: { if !$0 { catalog.cancelRemoval() } }),
+            presenting: removal
+        ) { request in
+            Button("Remove", role: .destructive) { Task { await catalog.confirmRemoval(request) } }
+        } message: { request in
+            Text(AgentsSettings.removalMessage(for: request))
         }
     }
 }

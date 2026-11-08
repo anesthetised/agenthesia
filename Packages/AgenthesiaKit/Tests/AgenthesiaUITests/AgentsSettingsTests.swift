@@ -43,6 +43,31 @@ import Testing
         #expect(AgentsSettings.distribution(of: foreign) == "No distribution for this Mac")
     }
 
+    @Test func removalNamesHowManySavedSessionsUseTheVersion() {
+        let installation = AgentInstallation(
+            id: UUID(),
+            agentID: "example",
+            name: "Example",
+            version: "1.0.0",
+            executable: "bin/agent",
+            arguments: [],
+            environment: [:],
+            source: .binary(archive: URL(filePath: "/agent.tar"), sha256: nil),
+            installedAt: .now
+        )
+        func message(_ count: Int?) -> String {
+            AgentsSettings.removalMessage(for: .init(installation: installation, sessionCount: count))
+        }
+        #expect(message(nil).hasPrefix("Saved sessions that use this version cannot continue"))
+        #expect(message(0) == "No saved sessions use this version.")
+        #expect(
+            message(1) == "1 saved session uses this version; it cannot continue until it is installed again."
+        )
+        #expect(
+            message(3) == "3 saved sessions use this version; they cannot continue until it is installed again."
+        )
+    }
+
     @Test func commandLinesQuoteWordsAShellWouldSplit() {
         #expect(
             AgentsSettings.commandLine(.init(executable: "/opt/homebrew/bin/opencode", arguments: ["acp"]))

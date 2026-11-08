@@ -131,6 +131,20 @@ public final class PersistenceStore: Sendable {
         }
     }
 
+    /// How many sessions, archived ones included, ran with one installed agent version (ADR-0036).
+    public func sessionCount(usingInstallation installationID: UUID) async throws -> Int {
+        try await database.read { db in
+            try Int.fetchOne(
+                db,
+                sql: """
+                    SELECT COUNT(*) FROM session
+                    WHERE agentInstallID IN (SELECT id FROM agent_install WHERE installationID = ?)
+                    """,
+                arguments: [installationID.uuidString]
+            ) ?? 0
+        }
+    }
+
     public func sessions(in projectID: UUID) async throws -> [SessionRecord] {
         try await database.read { db in
             try Row.fetchAll(

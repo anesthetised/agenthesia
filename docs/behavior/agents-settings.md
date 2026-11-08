@@ -27,9 +27,13 @@ reading the registry. The tab's model is `AgentCatalog`.
 - `Update to <version>…` appears when the registry offers a version that is not installed. It opens the same
   confirmation as Install; the older version stays installed and saved sessions keep the version they ran with
   ([ADR-0036](../adr/0036-agent-settings-and-installed-sessions.md)).
-- `Remove` is a menu with `Remove <version>` for each installed version. It removes at once, without a confirmation,
-  and shows `Removing…`. A version a session is running cannot be removed: `This agent version is in use. End its
-  sessions before removing it.`
+- `Remove` is a menu with `Remove <version>` for each installed version. Choosing one opens a confirmation
+  `Remove <name> <version>?` with `Remove` and `Cancel`; Cancel changes nothing. The message says how many saved
+  sessions ran with that version: `3 saved sessions use this version; they cannot continue until it is installed
+  again.` (`1 saved session uses this version; it cannot continue …`, `No saved sessions use this version.`; if the
+  count cannot be read: `Saved sessions that use this version cannot continue until it is installed again.`). Archived
+  sessions count. After `Remove` the row shows `Removing…`. A version a session is running cannot be removed:
+  `This agent version is in use. End its sessions before removing it.`
 - During an install or removal the buttons give way to a spinner and the operation's text. A failed operation leaves
   its message in red under the row until the next operation on that agent.
 
@@ -119,6 +123,7 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #266: Remove asks for confirmation first, naming the version and the saved sessions that use it.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0036, ADR-0037, ADR-0038 and ADR-0040 (Manage Agents…), with links to ADR-0034
   and ADR-0035, checked against main at c65b8a1.

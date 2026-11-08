@@ -44,6 +44,11 @@ public actor SessionLibrary {
         return result.sorted { $0.createdAt > $1.createdAt }
     }
 
+    /// How many saved sessions ran with one installed version; they cannot continue once it is removed.
+    public func sessionCount(usingInstallation installationID: UUID) async throws -> Int {
+        try await store().sessionCount(usingInstallation: installationID)
+    }
+
     /// Sessions whose worktree was merged or discarded; the outcome is always a session's last event (ADR-0032).
     public func worktreeOutcomes() async throws -> [UUID: WorktreeOutcome] {
         try await lastEvents().outcomes

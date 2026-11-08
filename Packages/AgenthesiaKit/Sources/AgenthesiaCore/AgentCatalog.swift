@@ -15,13 +15,25 @@ public final class AgentCatalog {
                 .appending(path: "Agenthesia/Registry")
         ),
         installer: SessionLibrary.shared.installer,
-        runtime: NodeRuntime()
+        runtime: NodeRuntime(),
+        sessionCount: savedSessionCount
     )
+
+    /// How many saved sessions in the app's history use an installed version; nil when history cannot be read.
+    nonisolated private static func savedSessionCount(_ installationID: UUID) async -> Int? {
+        try? await SessionLibrary.shared.sessionCount(usingInstallation: installationID)
+    }
 
     public enum NodeStatus: Equatable, Sendable {
         case unknown, checking
         case ready(NodeRuntime.Toolchain)
         case unavailable(String)
+    }
+
+    /// A removal waiting for the user's confirmation: the version, and how many saved sessions use it when known.
+    public struct RemovalRequest: Equatable, Sendable {
+        public let installation: AgentInstallation
+        public let sessionCount: Int?
     }
 
     public enum Operation: Equatable, Sendable {
@@ -76,6 +88,8 @@ public final class AgentCatalog {
     /// Each agent's mode and model select options as last confirmed, with their choices and names: the draft's
     /// hints (ADR-0040). Safe to lose; an entry that cannot be decoded is ignored.
     public private(set) var configHints: [Choice: [ACP.ConfigOption]]
+    /// The removal the user is asked to confirm; nothing is removed until `confirmRemoval`.
+    public private(set) var removalRequest: RemovalRequest?
     private var isQuitting = false
 
     @ObservationIgnored private let client: AgentRegistry.Client
@@ -85,12 +99,14 @@ public final class AgentCatalog {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let environment: @Sendable (_ refresh: Bool) async -> [String: String]
     @ObservationIgnored private let probe: @Sendable (AgentCommand) async throws -> ACP.AgentProfile
+    @ObservationIgnored private let sessionCount: @Sendable (_ installationID: UUID) async -> Int?
 
     public convenience init(
         registry: AgentRegistry.Client,
         installer: AgentInstaller,
         runtime: NodeRuntime,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        sessionCount: @escaping @Sendable (_ installationID: UUID) async -> Int? = { _ in nil }
     ) {
         self.init(
             registry: registry,
@@ -100,7 +116,8 @@ public final class AgentCatalog {
                 await ($0 ? ShellEnvironment.shared.refresh() : ShellEnvironment.shared.resolve()).environment
             },
             probe: { try await AgentProbe.run($0) },
-            checkNode: { try await runtime.discover(refresh: $0).toolchain }
+            checkNode: { try await runtime.discover(refresh: $0).toolchain },
+            sessionCount: sessionCount
         )
     }
 
@@ -110,9 +127,11 @@ public final class AgentCatalog {
         defaults: UserDefaults,
         environment: @escaping @Sendable (_ refresh: Bool) async -> [String: String],
         probe: @escaping @Sendable (AgentCommand) async throws -> ACP.AgentProfile,
-        checkNode: @escaping @Sendable (_ refresh: Bool) async throws -> NodeRuntime.Toolchain
+        checkNode: @escaping @Sendable (_ refresh: Bool) async throws -> NodeRuntime.Toolchain,
+        sessionCount: @escaping @Sendable (_ installationID: UUID) async -> Int? = { _ in nil }
     ) {
         client = registry
+        self.sessionCount = sessionCount
         self.installer = installer
         self.defaults = defaults
         self.environment = environment
@@ -403,6 +422,24 @@ public final class AgentCatalog {
         await run(.installing(version: agent.version), for: agent.id) {
             _ = try await installer.install(agent)
         }
+    }
+
+    /// Asks to remove a version: counts the saved sessions that use it and waits for `confirmRemoval` or
+    /// `cancelRemoval`.
+    public func requestRemoval(of installation: AgentInstallation) async {
+        let count = await sessionCount(installation.id)
+        removalRequest = RemovalRequest(installation: installation, sessionCount: count)
+    }
+
+    /// Removes the version of a request the user confirmed. The dialog's dismissal may cancel the request first, so
+    /// the removal does not depend on it still being pending.
+    public func confirmRemoval(_ request: RemovalRequest) async {
+        removalRequest = nil
+        await remove(request.installation)
+    }
+
+    public func cancelRemoval() {
+        removalRequest = nil
     }
 
     /// Removes an installed version that no session runs.

@@ -375,8 +375,9 @@ import Testing
         // 240 transcript + 240 file pane fit, the inspector's 220 pt on top do not.
         let narrow = DetailPanes(width: 500, filePane: true, inspector: true)
         #expect(narrow.showsFilePane && !narrow.showsInspector)
-        #expect(DetailPanes(width: 700, filePane: true, inspector: true).showsInspector)
-        #expect(!DetailPanes(width: 699, filePane: true, inspector: true).showsInspector)
+        // Beside both panes the transcript keeps 360 pt: 360 + 240 + 220.
+        #expect(DetailPanes(width: 820, filePane: true, inspector: true).showsInspector)
+        #expect(!DetailPanes(width: 819, filePane: true, inspector: true).showsInspector)
     }
 
     @Test func theFilePaneGivesWayWhenItDoesNotFitBesideTheTranscript() {
@@ -402,18 +403,22 @@ import Testing
         let panes = DetailPanes(width: 1160, filePane: true, inspector: true)
         let widths = panes.widths(filePane: 420, inspector: 360)
         #expect(widths == .init(transcript: 380, filePane: 420, inspector: 360))
-        // A wider file pane than the column allows takes the room the inspector leaves, down to the transcript's minimum.
+        // A wider file pane than the column allows takes the room the inspector leaves, down to the transcript's width
+        // beside both panes.
         let wide = panes.widths(filePane: 2000, inspector: 360)
-        #expect(wide == .init(transcript: 240, filePane: 560, inspector: 360))
+        #expect(wide == .init(transcript: 360, filePane: 440, inspector: 360))
+        // Without the inspector, down to the transcript's minimum.
+        let fileOnly = DetailPanes(width: 1160, filePane: true, inspector: false).widths(filePane: 2000, inspector: 360)
+        #expect(fileOnly == .init(transcript: 240, filePane: 920, inspector: 0))
     }
 
     @Test func shrinkingTheColumnShrinksTheFilePaneBeforeTheInspector() {
         // Bug 2: the file pane was 350 pt wide in a 740 pt window whose column has 500 pt.
         let narrow = DetailPanes(width: 500, filePane: true, inspector: true)
         #expect(narrow.widths(filePane: 350, inspector: 260) == .init(transcript: 240, filePane: 260, inspector: 0))
-        let both = DetailPanes(width: 700, filePane: true, inspector: true)
-        #expect(both.widths(filePane: 420, inspector: 260) == .init(transcript: 240, filePane: 240, inspector: 220))
-        #expect(both.widths(filePane: 420, inspector: 360) == .init(transcript: 240, filePane: 240, inspector: 220))
+        let both = DetailPanes(width: 820, filePane: true, inspector: true)
+        #expect(both.widths(filePane: 420, inspector: 260) == .init(transcript: 360, filePane: 240, inspector: 220))
+        #expect(both.widths(filePane: 420, inspector: 360) == .init(transcript: 360, filePane: 240, inspector: 220))
     }
 
     @Test func widthsAlwaysFillTheColumnAndKeepTheMinimums() {
@@ -427,6 +432,9 @@ import Testing
                             let context = "\(width) pt, file \(file), inspector \(inspector)"
                             #expect(widths.transcript + widths.filePane + widths.inspector == width, "\(context)")
                             #expect(widths.transcript >= DetailPanes.transcriptMinWidth, "\(context)")
+                            if widths.filePane > 0 && widths.inspector > 0 {
+                                #expect(widths.transcript >= DetailPanes.transcriptWidthBesideBothPanes, "\(context)")
+                            }
                             #expect(
                                 widths.filePane == 0 || widths.filePane >= DetailPanes.filePaneMinWidth,
                                 "\(context)"

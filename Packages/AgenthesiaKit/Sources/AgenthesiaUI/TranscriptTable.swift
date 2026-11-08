@@ -488,6 +488,12 @@ private final class TranscriptMessageRow: NSTableCellView {
                 owner: self
             )
         )
+        // A layout that moves the row from under a still pointer sends no exit event, but it updates the tracking
+        // areas: Copy follows where the pointer is now.
+        if let window {
+            let pointer = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            setHovering(window.isKeyWindow && bounds.contains(pointer))
+        }
     }
 
     override func layout() {

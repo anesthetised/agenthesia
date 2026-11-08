@@ -18,7 +18,10 @@ struct QuickOpen: View {
                 .textFieldStyle(.roundedBorder)
                 .accessibilityLabel("Search files")
                 .focused($searchFocused)
-                .onSubmit(openSelection)
+                // Return reaches `onSubmit` only after the field editor has taken it, and in the sheet it never did.
+                .onKeyPress(.return) {
+                    openSelection(); return .handled
+                }
                 .onKeyPress(.downArrow) {
                     move(1); return .handled
                 }

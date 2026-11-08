@@ -721,6 +721,10 @@ extension LiveTranscriptTests {
         #expect(copy.alphaValue == 1 && copy.isAccessibilityElement())
         row.mouseExited(with: enter)
         #expect(copy.alphaValue == 0)
+        // A layout that moves the row from under the pointer sends no exit event; new tracking areas drop Copy.
+        row.mouseEntered(with: enter)
+        row.updateTrackingAreas()
+        #expect(copy.alphaValue == 0 && !copy.isAccessibilityElement())
         // The custom action copies the row's Markdown.
         let action = try #require(row.accessibilityCustomActions()?.first)
         #expect(action.handler?() == true)

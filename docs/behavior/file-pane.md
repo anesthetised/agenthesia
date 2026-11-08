@@ -4,6 +4,15 @@ The file pane sits right of the transcript and shows one file of the session's w
 path, Open in Editor, Reload File and Close File, then the content. A Markdown file opens as a rendered preview, with
 a *Preview* / *Source* switch above it. Links in the preview and in the transcript follow the same rules.
 
+## Width
+
+- The file pane, or the review pane in its slot, and the inspector share the detail column with the transcript. The
+  transcript keeps at least 240 pt; beside both panes it keeps 360 pt, so the inspector gives way first: it hides
+  while the column is narrower than 360 + 240 + 220 pt (about a 1060 pt window with the sidebar) and a file or review
+  is open. A hidden inspector keeps its state and returns when the window widens. This replaces the 240 pt rule of
+  [ADR-0039](../adr/0039-t3-style-window-layout.md)'s amendment 2 for three panes.
+- Quick Open's Return in the search field opens the selected match, the first one unless ↑/↓ moved the selection.
+
 ## Links
 
 - A relative link in the Markdown preview (`adr/0010-prompt-queue-and-steering.md`, `../README.md`) resolves against
@@ -20,5 +29,7 @@ a *Preview* / *Source* switch above it. Links in the preview and in the transcri
 
 ## Changes
 
+- 2026-11-09, #301: the inspector hides while the transcript would get less than 360 pt beside a file or review;
+  Return in Quick Open's search field opens the match.
 - 2026-11-08, #281: links in the Markdown preview and the transcript resolve against the file's directory or the
   working directory, open in the file pane or the system, and never reach `NSWorkspace` as relative URLs.

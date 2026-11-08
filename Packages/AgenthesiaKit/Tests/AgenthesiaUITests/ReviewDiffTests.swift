@@ -87,6 +87,11 @@ import Testing
         let middle = try #require(textView.lines.firstIndex { $0.newNumber == 150 })
         textView.scroll(toLine: middle)
         #expect(textView.topLine == middle)
+        // #256: a clip view snapped to whole pixels can sit half a point above the line's top.
+        let clip = try #require(textView.enclosingScrollView?.contentView)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY - 0.5))
+        #expect(textView.topLine == middle)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + 0.5))
         textView.setSelectedRange(NSRange(location: textView.lineStarts[middle], length: 4))
         // The same document again changes nothing.
         await show(old, spread, in: textView)

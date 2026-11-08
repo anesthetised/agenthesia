@@ -12,8 +12,8 @@ struct SidebarShelves: View {
     /// The sidebar's height below the search field, measured by `heightProbe`.
     @State private var height: CGFloat = 0
 
-    static let workingShare = 0.35
-    static let settledShare = 0.45
+    static let workingShare: CGFloat = 0.35
+    static let settledShare: CGFloat = 0.45
     /// What the shelves leave on a short window: their two headers and about two rows of the list above.
     static let topRoom: CGFloat = 140
     /// A `SessionRow` in a sidebar list and the list's top and bottom padding. A `List` does not report its

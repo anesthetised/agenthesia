@@ -26,19 +26,23 @@ import Testing
         #expect(SidebarShelves.listHeight(rows: 100, cap: 270) == 270)
     }
 
+    private func close(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 0.001 }
+
     @Test func workingTakesItsShareAndSettledLeavesTheTopListRoom() {
         // A tall sidebar: each shelf has its full share.
         let tall = SidebarShelves.listHeights(height: 1000, working: 100, settled: 100)
-        #expect(tall.working == 1000 * SidebarShelves.workingShare)
-        #expect(tall.settled == 1000 * SidebarShelves.settledShare)
+        #expect(close(tall.working, 1000 * SidebarShelves.workingShare))
+        #expect(close(tall.settled, 1000 * SidebarShelves.settledShare))
         // A short one: Settled gives way, so the headers and the list above keep their room.
         let short = SidebarShelves.listHeights(height: 400, working: 100, settled: 100)
-        #expect(short.working == 400 * SidebarShelves.workingShare)
+        #expect(close(short.working, 400 * SidebarShelves.workingShare))
         #expect(abs(400 - short.working - short.settled - SidebarShelves.topRoom) < 0.001)
         // A closed or short Working shelf leaves Settled its share; a closed shelf has no list.
         #expect(
-            SidebarShelves.listHeights(height: 400, working: nil, settled: 100).settled
-                == 400 * SidebarShelves.settledShare
+            close(
+                SidebarShelves.listHeights(height: 400, working: nil, settled: 100).settled,
+                400 * SidebarShelves.settledShare
+            )
         )
         let few = SidebarShelves.listHeights(height: 400, working: 1, settled: nil)
         #expect(few.working == SidebarShelves.rowHeight + SidebarShelves.listPadding && few.settled == 0)

@@ -268,6 +268,29 @@ import Testing
         #expect(keys == [.installed(agentID: installed.agentID), .local(local.id)])
     }
 
+    @Test func signInNeededIsRememberedPerAgentAcrossAReopenedCatalog() async throws {
+        let fixture = try CatalogFixture()
+        defer { fixture.remove() }
+        let catalog = try fixture.catalog(registry: [])
+        await catalog.install(try fixture.agent(fixture.binary("1.0.0")))
+        let installed = try #require(catalog.latest.first)
+        catalog.addCustom(name: "Mine", executable: "/opt/agents/mine", arguments: [])
+        let local = try #require(catalog.localAgents.first)
+        #expect(catalog.signInNeeded.isEmpty)
+        // A version counts as its agent; a command as the local agent that runs it.
+        catalog.setSignInNeeded(true, for: AgentInstallRecord(installation: installed))
+        catalog.setSignInNeeded(true, for: try #require(catalog.record(for: .local(local.id))))
+        catalog.setSignInNeeded(
+            true,
+            for: AgentInstallRecord(name: "Gone", executable: "/gone", installationID: UUID())
+        )
+        let expected: Set<AgentCatalog.Choice> = [.installed(agentID: installed.agentID), .local(local.id)]
+        #expect(catalog.signInNeeded == expected)
+        #expect(try fixture.catalog(registry: []).signInNeeded == expected)
+        catalog.setSignInNeeded(false, for: .local(local.id))
+        #expect(try fixture.catalog(registry: []).signInNeeded == [.installed(agentID: installed.agentID)])
+    }
+
     @Test func checksKeepTheLatestProbeResultPerCommandWithTheLoginShellPath() async throws {
         let fixture = try CatalogFixture()
         defer { fixture.remove() }

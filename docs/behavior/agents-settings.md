@@ -24,7 +24,9 @@ reading the registry. The tab's model is `AgentCatalog`.
 - The section appears once a version is installed, or when the installed versions cannot be read (the reason in red).
 - One row per agent, by name: the name, and under it every installed version, newest installation first
   (`1.4.0, 1.3.2`).
-- `Sign In…` signs in to the newest version (see Sign-in below).
+- `Sign-in needed` shows in secondary text under the versions, with a visible `Sign In…` button, only while the
+  agent's last session start met `auth_required` (see Sign-in below). The row's `…` menu, beside `Remove`, always has
+  `Sign In…`, so a signed-in agent can still switch accounts. Both sign in to the newest version.
 - `Update to <version>…` appears when the registry offers a version that is not installed. It opens the same
   confirmation as Install; the older version stays installed and saved sessions keep the version they ran with
   ([ADR-0036](../adr/0036-agent-settings-and-installed-sessions.md)).
@@ -43,7 +45,8 @@ reading the registry. The tab's model is `AgentCatalog`.
 - The header has `Look Again` (an icon; help `Look again with a fresh login-shell PATH`) and `Add Custom…`.
 - Rows, in order: local agents the user added, known ACP commands found on the login shell's `PATH` that are not added
   yet, and ordinary CLIs that need an adapter. The first two show the name and the command line, selectable.
-- Local agent rows have `Check`, `Sign In…` and `Remove`. `Remove` only takes the agent off the list; its sessions
+- Local agent rows have `Check`, `Remove` and a `…` menu with `Sign In…`; `Sign-in needed` and a visible `Sign In…`
+  button appear as on installed rows. `Remove` only takes the agent off the list; its sessions
   keep their own record of the command ([ADR-0037](../adr/0037-local-agents.md)).
 - Found rows have `Check` and `Add`. Adding records the path where the command was found, not its symlink target.
   *Why:* a package manager upgrade behind the same link keeps working.
@@ -92,6 +95,10 @@ reading the registry. The tab's model is `AgentCatalog`.
 
 ## Sign-in
 
+- ACP cannot tell whether the user is signed in, so the agent rows offer `Sign In…` as a button only when the agent
+  asked: `AgentCatalog` remembers per agent (a version counts as its agent) that a session start met `auth_required`,
+  across launches, and forgets it when a session of that agent starts without it, a sign-in from the session's
+  sign-in panel succeeds, or a sign-in sheet from Settings completes and is closed.
 - `Sign In…` on an installed agent or a local agent opens a sheet `Sign in to <name>` (`<name> <version>` for an
   installed one, pinned to that version even if an update finishes). Only one sign-in exists at a time: every
   `Sign In…` is disabled while a sheet is open or still stopping
@@ -112,18 +119,10 @@ reading the registry. The tab's model is `AgentCatalog`.
   Settings window and quitting the app all stop the sign-in; the sheet shows `Stopping…` until its processes are gone.
   The sheet cannot be dismissed any other way.
 
-## Planned (M18)
-
-Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
-moves it into the text above and deletes it here.
-
-- **`Sign In…` only when the agent asked.** The agent rows keep Remove and move `Sign In…` into the row's `…` menu. It
-  is a button, with `Sign-in needed` under the version, only while the agent's last session start met `auth_required`;
-  `AgentCatalog` remembers that per agent choice and forgets it when a session starts without it or a sign-in succeeds.
-  *Why:* ACP cannot tell whether the user is signed in, so an always-visible button read as a request to sign in.
-
 ## Changes
 
+- 2026-11-08, #272: `Sign In…` moves into the row's `…` menu; the button and `Sign-in needed` show only while the
+  agent asked for sign-in.
 - 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab; the last shown tab is remembered.
 - 2026-11-08, #266: Remove asks for confirmation first, naming the version and the saved sessions that use it.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.

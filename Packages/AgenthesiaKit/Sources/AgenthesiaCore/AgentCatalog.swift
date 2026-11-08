@@ -60,6 +60,8 @@ public final class AgentCatalog {
     public static let lastChoiceKey = "lastAgent"
     /// Where each agent's last confirmed mode and model are kept, as the draft's hints (ADR-0040).
     public static let configHintsKey = "configHints"
+    /// Where the agents whose last session start met `auth_required` are kept, as each choice's JSON.
+    public static let signInNeededKey = "signInNeeded"
 
     public private(set) var registry: AgentRegistry.Snapshot?
     /// Why the registry could not be loaded, or a warning about the catalog shown.
@@ -89,7 +91,12 @@ public final class AgentCatalog {
     public private(set) var configHints: [Choice: [ACP.ConfigOption]]
     /// The removal the user is asked to confirm; nothing is removed until `confirmRemoval`.
     public private(set) var removalRequest: RemovalRequest?
+    /// Agents whose last session start met `auth_required` and that no sign-in or clean start has cleared since: the
+    /// only ones whose row offers Sign In… as a button, because ACP cannot tell whether the user is signed in.
+    public private(set) var signInNeeded: Set<Choice>
     private var isQuitting = false
+    /// The agent the open Settings sign-in belongs to.
+    @ObservationIgnored private var signInChoice: Choice?
 
     @ObservationIgnored private let client: AgentRegistry.Client
     @ObservationIgnored private let installer: AgentInstaller
@@ -154,6 +161,11 @@ public final class AgentCatalog {
                 return (choice, options)
             },
             uniquingKeysWith: { first, _ in first }
+        )
+        signInNeeded = Set(
+            (defaults.stringArray(forKey: Self.signInNeededKey) ?? []).compactMap {
+                try? JSONDecoder().decode(Choice.self, from: Data($0.utf8))
+            }
         )
     }
 
@@ -232,14 +244,31 @@ public final class AgentCatalog {
     /// The same for a session's agent: an installed version counts as its agent, a command as the local agent that
     /// runs it, else as a custom command. A version that is no longer installed keeps nothing.
     public func rememberHints(_ options: [ACP.ConfigOption], for agent: AgentInstallRecord) {
-        let choice: Choice?
+        if let choice = choice(for: agent) { rememberHints(options, for: choice) }
+    }
+
+    private func choice(for agent: AgentInstallRecord) -> Choice? {
         if let id = agent.installationID {
-            choice = installations.first { $0.id == id }.map { .installed(agentID: $0.agentID) }
-        } else {
-            let command = LocalAgent.Command(executable: agent.executable, arguments: agent.arguments)
-            choice = localAgents.first { $0.command == command }.map { .local($0.id) } ?? .custom(command)
+            return installations.first { $0.id == id }.map { .installed(agentID: $0.agentID) }
         }
-        if let choice { rememberHints(options, for: choice) }
+        let command = LocalAgent.Command(executable: agent.executable, arguments: agent.arguments)
+        return localAgents.first { $0.command == command }.map { .local($0.id) } ?? .custom(command)
+    }
+
+    /// Records that a session start of this agent did (`needed`) or did not meet `auth_required`; a sign-in that
+    /// succeeded counts as the latter.
+    public func setSignInNeeded(_ needed: Bool, for choice: Choice) {
+        guard needed != signInNeeded.contains(choice) else { return }
+        if needed { signInNeeded.insert(choice) } else { signInNeeded.remove(choice) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let stored = signInNeeded.compactMap { try? encoder.encode($0) }.map { String(decoding: $0, as: UTF8.self) }
+        defaults.set(stored.sorted(), forKey: Self.signInNeededKey)
+    }
+
+    /// The same for a session's agent, as with its hints.
+    public func setSignInNeeded(_ needed: Bool, for agent: AgentInstallRecord) {
+        if let choice = choice(for: agent) { setSignInNeeded(needed, for: choice) }
     }
 
     /// Pins the selected version; an update cannot change the command during sign-in.
@@ -253,6 +282,7 @@ public final class AgentCatalog {
             return (lease.command, lease)
         }
         signIn = flow
+        signInChoice = .installed(agentID: installation.agentID)
         return flow
     }
 
@@ -269,11 +299,13 @@ public final class AgentCatalog {
             return (command, nil)
         }
         signIn = flow
+        signInChoice = .local(agent.id)
         return flow
     }
 
     /// A late dismissal of an older sheet must not dismiss its successor.
     public func closeSignIn(_ flow: AgentSignIn) async {
+        if flow.state == .completed, signIn === flow, let signInChoice { setSignInNeeded(false, for: signInChoice) }
         await flow.close()
         if signIn === flow { signIn = nil }
     }

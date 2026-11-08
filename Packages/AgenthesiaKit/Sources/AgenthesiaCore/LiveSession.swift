@@ -49,7 +49,8 @@ public final class LiveSession {
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     /// The worktree this owner created for a new session, until it is removed or found to have a record.
     @ObservationIgnored private var created: (id: UUID, worktree: SessionWorkspace.Worktree, baseRevision: String)?
-    /// Keeps the agent's confirmed mode and model as the next draft's hints (ADR-0040); set by `SessionManager`.
+    /// Keeps the agent's confirmed mode and model as the next draft's hints (ADR-0040) and whether its start met
+    /// sign-in; set by `SessionManager`.
     @ObservationIgnored var catalog: AgentCatalog?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment = LiveSession.shellEnvironment
@@ -293,6 +294,7 @@ public final class LiveSession {
 
     private func requireSignIn(again: Bool) {
         guard !isClosed else { return }
+        if let agent { catalog?.setSignInNeeded(true, for: agent) }
         signIn = SignIn(
             methods: controller?.profile?.authMethods ?? [],
             pending: signIn?.pending,
@@ -305,6 +307,7 @@ public final class LiveSession {
     private func connected(_ process: AgentProcess) async throws {
         guard !isClosed else { return }
         signIn = nil
+        if let agent { catalog?.setSignInNeeded(false, for: agent) }
         observeFailure()
         exitTask = Task { [weak self] in
             let status = await process.waitForExit()

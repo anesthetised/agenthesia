@@ -285,13 +285,21 @@ private struct InstalledAgentRow: View {
                     if let available {
                         Button("Update to \(available.version)…") { update(available) }
                     }
-                    Menu("Remove") {
-                        ForEach(versions) { version in
-                            Button("Remove \(version.version)") { Task { await catalog.requestRemoval(of: version) } }
+                    // A menu in a form draws without the button's border, so one version gets a plain button.
+                    if versions.count == 1 {
+                        Button("Remove…") { Task { await catalog.requestRemoval(of: newest) } }
+                            .accessibilityLabel("Remove \(newest.name) \(newest.version)")
+                    } else {
+                        Menu("Remove") {
+                            ForEach(versions) { version in
+                                Button("Remove \(version.version)…") {
+                                    Task { await catalog.requestRemoval(of: version) }
+                                }
+                            }
                         }
+                        .menuStyle(.button)
+                        .fixedSize()
                     }
-                    .menuStyle(.button)
-                    .fixedSize()
                     SignInMenu(name: "\(newest.name) \(newest.version)", disabled: catalog.signIn != nil) {
                         catalog.beginSignIn(newest)
                     }

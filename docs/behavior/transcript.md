@@ -44,6 +44,7 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-09, #301: a row's hover Copy follows the pointer when a layout moves the row from under it.
 - 2026-11-09, #160: a row fits its content again after the transcript changes width, with no empty band above the
   text.
 - 2026-11-08, #269: a quiet selection: a rounded `.quaternary` background of the text column's width instead of the

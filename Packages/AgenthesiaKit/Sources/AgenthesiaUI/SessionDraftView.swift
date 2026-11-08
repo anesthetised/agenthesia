@@ -171,7 +171,8 @@ struct SessionDraftView: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).foregroundStyle(.tint).truncationMode(.middle)
-                Image(systemName: "chevron.down").font(.title3).foregroundStyle(.secondary)
+                // Hidden, or it reads as a second project menu.
+                Image(systemName: "chevron.down").font(.title3).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .contentShape(.rect)
         }
@@ -197,12 +198,19 @@ struct SessionDraftView: View {
             // The card's Add Agent… is the way to Settings while there is no agent.
             if !needsAgent { ManageAgentsButton() }
         } label: {
-            Label(selected.flatMap(agentName) ?? "Choose Agent", systemImage: "cpu")
+            Label {
+                Text(selected.flatMap(agentName) ?? "Choose Agent")
+            } icon: {
+                // The pop-up button takes its description from the symbol's image, which would otherwise say `CPU chip`.
+                Image(nsImage: NSImage(systemSymbolName: "cpu", accessibilityDescription: agentLabel) ?? NSImage())
+            }
         }
         .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
-        .accessibilityLabel("Agent: \(selected.flatMap(agentName) ?? "none")")
+        .accessibilityLabel(agentLabel)
         .help("The agent that starts the session")
     }
+
+    private var agentLabel: String { "Agent: \(model.selectedAgent.flatMap(agentName) ?? "none")" }
 
     private func agentName(_ choice: AgentCatalog.Choice) -> String? {
         model.catalog?.name(of: choice) ?? model.record(for: choice)?.name

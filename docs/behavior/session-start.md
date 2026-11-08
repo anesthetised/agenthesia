@@ -165,6 +165,8 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 
 ## Changes
 
+- 2026-11-09, #301: VoiceOver reads the Agent chip as `Agent: <name>` (not its symbol, `CPU chip`) and the
+  heading's project menu once.
 - 2026-11-08, #279: `or start without a project` under the heading; such a session works in its own folder under
   `~/.agenthesia/scratch` in the project `No project`, without Review, Merge or Discard.
 - 2026-11-08, #278: the draft's heading `What should we build in <project>?` holds the project menu, which leaves the

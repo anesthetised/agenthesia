@@ -31,7 +31,8 @@ reading the registry. The tab's model is `AgentCatalog`.
 - `Update to <version>…` appears when the registry offers a version that is not installed. It opens the same
   confirmation as Install; the older version stays installed and saved sessions keep the version they ran with
   ([ADR-0036](../adr/0036-agent-settings-and-installed-sessions.md)).
-- `Remove` is a menu with `Remove <version>` for each installed version. Choosing one opens a confirmation
+- `Remove…` is a button when one version is installed; with several, `Remove` is a menu with `Remove <version>…`
+  for each (a menu in the form draws without the button's border). Either opens a confirmation
   `Remove <name> <version>?` with `Remove` and `Cancel`; Cancel changes nothing. The message says how many saved
   sessions ran with that version: `3 saved sessions use this version; they cannot continue until it is installed
   again.` (`1 saved session uses this version; it cannot continue …`, `No saved sessions use this version.`; if the
@@ -122,6 +123,7 @@ reading the registry. The tab's model is `AgentCatalog`.
 
 ## Changes
 
+- 2026-11-09, #301: one installed version gets a bordered `Remove…` button instead of a one-item menu.
 - 2026-11-08, #278: the draft's `Add Agent…` replaces the `No agent is installed.` hint as a way here.
 - 2026-11-08, #272: `Sign In…` moves into the row's `…` menu; the button and `Sign-in needed` show only while the
   agent asked for sign-in.

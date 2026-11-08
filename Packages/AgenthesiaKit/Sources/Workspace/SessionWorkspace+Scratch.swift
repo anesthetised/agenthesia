@@ -27,7 +27,8 @@ extension SessionWorkspace {
                 workingDirectory: folder,
                 baseRevision: nil,
                 baseBranch: nil,
-                branch: nil
+                branch: nil,
+                fallbackUpstream: nil
             )
         }
     }

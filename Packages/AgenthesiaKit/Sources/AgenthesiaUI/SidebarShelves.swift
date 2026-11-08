@@ -6,9 +6,8 @@ import SwiftUI
 /// `workingShare` of the sidebar's height and Settled at most `settledShare`, less when the list above would keep less
 /// than `topRoom`.
 struct SidebarShelves: View {
-    let model: SessionWindowModel
-    @SceneStorage("sidebar.workingExpanded") private var workingExpanded = true
-    @SceneStorage("sidebar.settledExpanded") private var settledExpanded = false
+    @Bindable var model: SessionWindowModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The sidebar's height below the search field, measured by `heightProbe`.
     @State private var height: CGFloat = 0
 
@@ -31,6 +30,13 @@ struct SidebarShelves: View {
         return (workingHeight, settled.map { listHeight(rows: $0, cap: settledCap) } ?? 0)
     }
 
+    /// Open when asked to be, or while a search shows its matches. A selected row does not hold a shelf open: the
+    /// selection and the session in the detail column stay when it collapses.
+    static func isOpen(stored: Bool, filtered: Bool) -> Bool { stored || filtered }
+
+    /// The light spring that expands and collapses a shelf; none under Reduce Motion.
+    static func animation(reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .spring(duration: 0.25) }
+
     static func accessibilityLabel(_ kind: SessionSidebar.Kind, count: Int, expanded: Bool) -> String {
         "\(kind.rawValue), \(count) \(count == 1 ? "session" : "sessions"), \(expanded ? "expanded" : "collapsed")"
     }
@@ -39,8 +45,9 @@ struct SidebarShelves: View {
         let sidebar = model.sidebar
         let working = sidebar.section(.working)
         let settled = sidebar.section(.settled)
-        let workingOpen = working.map { isOpen($0, stored: workingExpanded, filtered: sidebar.isFiltered) } ?? false
-        let settledOpen = settled.map { isOpen($0, stored: settledExpanded, filtered: sidebar.isFiltered) } ?? false
+        let filtered = sidebar.isFiltered
+        let workingOpen = working != nil && Self.isOpen(stored: model.workingShelfExpanded, filtered: filtered)
+        let settledOpen = settled != nil && Self.isOpen(stored: model.settledShelfExpanded, filtered: filtered)
         let heights = Self.listHeights(
             height: height,
             working: workingOpen ? working?.rows.count : nil,
@@ -54,7 +61,7 @@ struct SidebarShelves: View {
                         section: working,
                         expanded: workingOpen,
                         listHeight: heights.working,
-                        stored: $workingExpanded
+                        stored: $model.workingShelfExpanded
                     )
                 }
                 if let settled {
@@ -63,19 +70,15 @@ struct SidebarShelves: View {
                         section: settled,
                         expanded: settledOpen,
                         listHeight: heights.settled,
-                        stored: $settledExpanded
+                        stored: $model.settledShelfExpanded
                     )
                 }
             }
+            .clipped()
+            .animation(Self.animation(reduceMotion: reduceMotion), value: [workingOpen, settledOpen])
             .background(.bar)
             .background(heightProbe)
         }
-    }
-
-    /// Open while one of its rows is selected, so keyboard navigation and restored windows never select a hidden
-    /// row, and while a search shows its matches.
-    private func isOpen(_ section: SessionSidebar.Section, stored: Bool, filtered: Bool) -> Bool {
-        stored || filtered || section.rows.contains { $0.id == model.sidebarSelection }
     }
 
     private var heightProbe: some View {
@@ -119,6 +122,7 @@ private struct SidebarShelf: View {
                     SessionSidebarRows(model: model, section: section)
                 }
                 .frame(height: listHeight)
+                .transition(.opacity)
             }
         }
     }

@@ -28,6 +28,10 @@ import SwiftUI
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
     var showingInspector = true
+    /// Whether the Working and Settled shelves are expanded; `RootView` remembers both per window. A search opens
+    /// them without changing these.
+    var workingShelfExpanded = true
+    var settledShelfExpanded = false
     /// The widths the user last chose for the file pane, the review pane and the inspector; `DetailPanes` fits them
     /// to the window.
     var filePaneWidth: CGFloat = 420
@@ -456,8 +460,19 @@ import SwiftUI
 
     func switchToSession(_ row: SessionSidebar.Row) { sidebarSelection = row.id }
 
+    /// Expands the shelf that lists the row, so a selection moved there by the keyboard is visible.
+    func revealShelf(of id: AnyHashable) {
+        let sidebar = sidebar
+        if sidebar.section(.working)?.rows.contains(where: { $0.id == id }) == true {
+            workingShelfExpanded = true
+        } else if sidebar.section(.settled)?.rows.contains(where: { $0.id == id }) == true {
+            settledShelfExpanded = true
+        }
+    }
+
     func navigate(backward: Bool = false, needsInput: Bool = false) async {
         guard let row = navigationTarget(backward: backward, needsInput: needsInput) else { return }
+        revealShelf(of: row.id)
         switch row {
         case .live(let owner): show(owner)
         case .saved(let record): await showHistory(record)

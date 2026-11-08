@@ -26,6 +26,17 @@ import Testing
         #expect(SidebarShelves.listHeight(rows: 100, cap: 270) == 270)
     }
 
+    @Test func aShelfIsOpenWhenAskedOrWhileASearchShowsItsMatches() {
+        #expect(SidebarShelves.isOpen(stored: true, filtered: false))
+        #expect(!SidebarShelves.isOpen(stored: false, filtered: false))
+        #expect(SidebarShelves.isOpen(stored: false, filtered: true))
+    }
+
+    @Test func shelvesAnimateUnlessReduceMotionIsOn() {
+        #expect(SidebarShelves.animation(reduceMotion: false) != nil)
+        #expect(SidebarShelves.animation(reduceMotion: true) == nil)
+    }
+
     private func close(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 0.001 }
 
     @Test func workingTakesItsShareAndSettledLeavesTheTopListRoom() {
@@ -70,9 +81,11 @@ import Testing
         #expect(fixture.bottomInset() > 20 && fixture.bottomInset() < 50)
     }
 
-    @Test func selectingASettledSessionOpensTheFooterWithinItsCap() async throws {
+    @Test func anExpandedSettledShelfStaysWithinItsCap() async throws {
         let fixture = try await Fixture(sessions: 40)
         defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.settledShelfExpanded = true
         await fixture.model.showHistory(fixture.records[0])
         await fixture.settle()
         let tables = fixture.sidebarTables()
@@ -87,6 +100,8 @@ import Testing
     @Test func fewSettledSessionsShrinkTheFooterToTheirRows() async throws {
         let fixture = try await Fixture(sessions: 2)
         defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.settledShelfExpanded = true
         await fixture.model.showHistory(fixture.records[0])
         await fixture.settle()
         let table = try #require(fixture.sidebarTables().last)
@@ -95,6 +110,51 @@ import Testing
         // The estimate holds: the list is about as tall as its rows, so it hardly scrolls and has no empty space.
         #expect(list.frame.height < fixture.host.bounds.height * SidebarShelves.settledShare)
         #expect(abs(list.frame.height - table.frame.height) < 12)
+    }
+
+    @Test func settledCollapsesWhileOneOfItsRowsIsSelected() async throws {
+        let fixture = try await Fixture(sessions: 2)
+        defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.settledShelfExpanded = true
+        await fixture.model.showHistory(fixture.records[0])
+        await fixture.settle()
+        #expect(fixture.sidebarTables().count == 2)
+        fixture.model.settledShelfExpanded = false
+        // The list leaves with the shelf's animation.
+        for _ in 0..<40 where fixture.sidebarTables().count != 1 {
+            try await Task.sleep(for: .milliseconds(50))
+            await fixture.settle()
+        }
+        #expect(fixture.sidebarTables().count == 1)
+        // The selection and the session in the detail column stay.
+        #expect(fixture.model.sidebarSelection == AnyHashable(fixture.records[0].id))
+        #expect(fixture.model.displayed?.session.id == fixture.records[0].id)
+    }
+
+    @Test func nextSessionExpandsTheCollapsedShelfItMovesInto() async throws {
+        let fixture = try await Fixture(sessions: 3)
+        defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.showingSetup = true
+        fixture.model.settledShelfExpanded = false
+        await fixture.model.navigate()
+        #expect(fixture.model.settledShelfExpanded)
+        #expect(fixture.model.sidebarSelection != nil)
+        await fixture.settle()
+        #expect(fixture.sidebarTables().count == 2)
+    }
+
+    @Test func nextSessionExpandsACollapsedWorkingShelfAndLeavesSettledAlone() async throws {
+        let fixture = try await Fixture(sessions: 2, live: 1)
+        defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.showingSetup = true
+        fixture.model.workingShelfExpanded = false
+        await fixture.model.navigate()
+        #expect(fixture.model.workingShelfExpanded)
+        #expect(!fixture.model.settledShelfExpanded)
+        await fixture.manager.closeAll()
     }
 
     @Test func searchOpensTheFooterOnItsMatchesAndEmptyResultsHideIt() async throws {
@@ -113,17 +173,6 @@ import Testing
         #expect(fixture.sidebarTables().count == 1)
         #expect(fixture.bottomInset() < 20)
         fixture.model.sidebarQuery = ""
-        await fixture.settle()
-        #expect(fixture.sidebarTables().count == 1)
-    }
-
-    @Test func footerClosesAgainWhenTheSettledSelectionIsCleared() async throws {
-        let fixture = try await Fixture(sessions: 2)
-        defer { fixture.close() }
-        await fixture.model.showHistory(fixture.records[0])
-        await fixture.settle()
-        #expect(fixture.sidebarTables().count == 2)
-        fixture.model.showingSetup = true
         await fixture.settle()
         #expect(fixture.sidebarTables().count == 1)
     }
@@ -147,6 +196,8 @@ import Testing
     @Test func theWorkingShelfSitsAboveSettled() async throws {
         let fixture = try await Fixture(sessions: 40, live: 1)
         defer { fixture.close() }
+        await fixture.settle()
+        fixture.model.settledShelfExpanded = true
         await fixture.model.showHistory(fixture.records[0])
         await fixture.settle()
         let tables = fixture.sidebarTables()

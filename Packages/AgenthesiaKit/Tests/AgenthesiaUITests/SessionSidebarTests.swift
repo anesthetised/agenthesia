@@ -40,6 +40,9 @@ import Testing
         window.contentView = host
         window.orderFront(nil)
         defer { model.close(); window.close() }
+        // The window applies its remembered shelf states when it appears; Settled is collapsed by default.
+        for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        model.settledShelfExpanded = true
         // The footer list takes a second pass to measure its height cap.
         for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
         // The seeded history is the Settled footer's list of two rows; the top list holds the changed files.
@@ -55,8 +58,7 @@ import Testing
         #expect(model.displayed?.session.id == first.id)
         model.showingSetup = true
         for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
-        // Nothing is selected any more, so the Settled footer closes and its list leaves the window.
-        #expect(table.window == nil)
+        #expect(model.sidebarSelection == nil)
     }
 
     @Test func continueAfterProcessExitUsesHistoryRefreshedAfterStartup() async throws {

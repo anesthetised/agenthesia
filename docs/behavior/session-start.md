@@ -72,8 +72,9 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - The **model** and **effort** pills show the cached value, and Send applies each unless another is picked. A value
   the agent no longer offers, after `session/new` and after the model was set, returns the draft with the error
   (`The agent does not offer “High” any more.`), as for the model; the agent's list becomes the cache.
-- The **mode** pill reads `Default mode` and is applied only when a mode is picked in this draft; otherwise the
-  session keeps the mode the agent starts in.
+- The **mode** pill opens the mode popover of [composer.md](composer.md), with the agent's descriptions and no mark on
+  a row until one is picked. It reads `Default mode` and is applied only when a mode is picked in this draft; otherwise
+  the session keeps the mode the agent starts in.
   *Why:* the app cannot tell from a name whether a mode stops asking for permission, so such a mode must never come
   back by itself.
 - A pick changes only this draft. Changing the agent drops the picks; changing the project does not. Send clears the
@@ -139,6 +140,7 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #271: the draft's mode pill opens the mode popover.
 - 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab ([agents-settings.md](agents-settings.md)).
 - 2026-11-08, #270: effort is a hint like the model: the cache keeps the `thought_level` option, its pill is applied by
   default.

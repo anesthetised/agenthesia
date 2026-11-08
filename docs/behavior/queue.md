@@ -68,7 +68,8 @@ sends the queue ([ADR-0028](../adr/0028-empty-draft-sends-queue.md)):
 
 The queue pauses, and no queued message is sent automatically, when:
 
-- the user stops the turn (Stop, ⌘., or the round button), even if nothing was queued;
+- the user stops the turn (Stop, ⌘. in the composer or the Session menu, or the round button), even if nothing was
+  queued; none of them does anything while Stop is unavailable, such as on an idle session;
 - the turn ends with a refusal;
 - the agent answers the prompt with an error ([ADR-0027](../adr/0027-recoverable-prompt-errors.md));
 - the connection or the agent process fails.
@@ -100,3 +101,5 @@ captioned `not sent`.
 
 - 2026-11-08, #261: summarised from ADR-0010, ADR-0021, ADR-0027, ADR-0028, ADR-0029 and ADR-0039, checked against main
   at c65b8a1.
+- 2026-11-08, #263: ⌘. in the composer and the round button follow Session → Stop: nothing happens while Stop is
+  unavailable, so an idle session's queue is not paused.

@@ -79,8 +79,9 @@ final class DiffTextView: NSTextView {
     var topLine: Int? {
         guard !lines.isEmpty, let layout = layoutManager, let container = textContainer else { return nil }
         let visible = visibleRect.offsetBy(dx: 0, dy: -textContainerOrigin.y)
+        // A point below the edge: a clip view snapped to whole pixels (scale 1) can sit half a point above the line.
         let glyphs = layout.glyphRange(
-            forBoundingRect: NSRect(x: 0, y: visible.minY, width: 1, height: 1),
+            forBoundingRect: NSRect(x: 0, y: visible.minY + 1, width: 1, height: 1),
             in: container
         )
         return Self.line(at: layout.characterIndexForGlyph(at: glyphs.location), lineStarts: lineStarts)

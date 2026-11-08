@@ -668,6 +668,11 @@ Wave 2:
   Not verified on CI yet. Also seen under the heaviest load, not addressed: `AgentProbeTests`,
   `AgentSignInTests.initializeTimeoutCleansUp`, `EndToEndTests` and `ShellTerminalTests` timing, and once, in a plain
   run at load 50, `UnstartedWorktreeTests` and `ConfigHintTests` found the worktree still there after `close()`.
+  2026-11-09: `ReviewDiffTests.aNewDiffKeepsTheTopLineAndEndsTheSelection` failed once more on `main` (3aa01e7: top
+  line 149 for 150) after five clean runs, and passed 300 repetitions under ten burners locally. `DiffTextView.topLine`
+  probed the very top edge of the visible rect, and a clip view snapped to whole pixels on CI's 1x display sits half a
+  point above the line, inside the line before; it now probes 1 pt below the edge, and the test shifts the clip view by
+  half a point (it fails without the fix).
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

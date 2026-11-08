@@ -29,7 +29,7 @@ struct FailureBanner: View {
                         switch action {
                         case .agentLog: Button("Agent Log") { perform(action) }
                         case .newSession: Button("New Session") { perform(action) }
-                        case .manageAgents: SettingsLink { Text("Manage Agents…") }
+                        case .manageAgents: ManageAgentsButton()
                         }
                     }
                 }

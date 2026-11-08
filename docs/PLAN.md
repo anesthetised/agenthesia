@@ -820,6 +820,12 @@ Pitfalls known so far:
   `SessionLibrary` and `AgentInstaller` hard-code that path today, so two apps would write one history.
 - Each implementing pull request moves its item from *Planned (M18)* into the behavior document's text and adds a line
   to its `Changes` log.
+- #264 (Manage Agents… opens the Agents tab) landed: `SettingsView`'s tab is `@AppStorage("settingsTab")` and
+  `ManageAgentsButton` stores `agents` before `openSettings()`. Running app (scripted, copy with its own bundle
+  identifier, isolated home, dark then light): ⌘, opened General; `Manage Agents…` in the draft's hint opened Settings
+  on Agents; with Settings open on General, the hint and the agent chip's menu item switched the same window to Agents;
+  after a relaunch ⌘, opened the last tab (Agents, then General). Not checked: the failure banner's button (same view),
+  VoiceOver. Pitfall: `axlabels` reports an element's top-left corner, so click its center.
 
 ## M16: Multi-agent workflow (2026-11-07)
 

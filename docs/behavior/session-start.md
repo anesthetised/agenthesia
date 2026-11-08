@@ -139,6 +139,7 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab ([agents-settings.md](agents-settings.md)).
 - 2026-11-08, #270: effort is a hint like the model: the cache keeps the `thought_level` option, its pill is applied by
   default.
 - 2026-11-08, #265: a failed or cancelled start returns the draft's mode and model picks with the text, except a

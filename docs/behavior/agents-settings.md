@@ -16,7 +16,8 @@ reading the registry. The tab's model is `AgentCatalog`.
 - Showing the Agents tab reloads the installed versions, looks for local commands, refreshes the registry and, the
   first time an npm agent matters, checks Node.js and npm.
 - `Manage Agents…` in the draft (the Agent chip's menu, the `No agent is installed.` hint, and the failure banner of a
-  missing or removed agent) opens the Settings window. It does not switch to the Agents tab.
+  missing or removed agent) opens the Settings window on the Agents tab, also when it was showing General or is already
+  open. Settings (⌘,) opens on the tab last shown, kept across launches.
 
 ## Installed
 
@@ -123,6 +124,7 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab; the last shown tab is remembered.
 - 2026-11-08, #266: Remove asks for confirmation first, naming the version and the saved sessions that use it.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0036, ADR-0037, ADR-0038 and ADR-0040 (Manage Agents…), with links to ADR-0034

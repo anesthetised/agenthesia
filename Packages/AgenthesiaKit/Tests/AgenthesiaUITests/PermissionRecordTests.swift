@@ -344,5 +344,8 @@ import Testing
         ((view as? View).map { [$0] } ?? []) + view.subviews.flatMap { views(type, in: $0) }
     }
 
-    private func labels(in view: NSView) -> [String] { views(NSTextField.self, in: view).map(\.stringValue) }
+    /// The row's text labels; the title a bordered button draws is not one.
+    private func labels(in view: NSView) -> [String] {
+        views(NSTextField.self, in: view).filter { !($0.superview is NSButton) }.map(\.stringValue)
+    }
 }

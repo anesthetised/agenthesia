@@ -133,15 +133,16 @@ A session row's context menu offers New Session in Project (`SessionWindowModel.
 draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
 and offers nothing.
 
-Mode and model hints (ADR-0040's amendment) are applied at start. `AgentCatalog.configHints` keeps, per
-`AgentCatalog.Choice`, the select options with category `mode` or `model` from the agent's last confirmed list, as
-one JSON value per agent in a `configHints` defaults dictionary keyed by the choice's JSON; an undecodable entry is
-ignored. `SessionController.onConfigOptions` reports each confirmed list once it is recorded (`started`, `reopened`,
+Mode, model and effort hints (ADR-0040's amendment) are applied at start. `AgentCatalog.configHints` keeps, per
+`AgentCatalog.Choice`, the select options with category `mode`, `model` or `thought_level` (effort) from the agent's
+last confirmed list, as one JSON value per agent in a `configHints` defaults dictionary keyed by the choice's JSON; an
+undecodable entry is ignored. `SessionController.onConfigOptions` reports each confirmed list once it is recorded (`started`, `reopened`,
 `configOptions`, including the agent's own notifications), and `LiveSession` passes it to
 `AgentCatalog.rememberHints(_:for:)` with its `AgentInstallRecord`, which maps an installed version to its agent and a
 command to its local agent, else to a custom command; `SessionManager.catalog` is set by the app delegate.
-`SessionWindowModel.draftHints` is what Send passes as `configHints`: the cached model options, with any value picked
-in `draftConfig`, and a mode only when one was picked there; changing the agent and Send clear `draftConfig`.
+`SessionWindowModel.draftHints` is what Send passes as `configHints`: the cached model and effort options, with any
+value picked in `draftConfig`, and a mode only when one was picked there; changing the agent and Send clear
+`draftConfig`.
 `SessionController.createRemote` applies them after `session/new` and before the record exists: an equal value sends
 nothing, others go through `setConfigOption` one at a time in the agent's order, each response replaces the list the
 next hint is checked against, and config notifications buffered before a response are dropped, because the response
@@ -152,7 +153,7 @@ returns with the error.
 
 The draft shows the cached options as pills (#212). `SessionWindowModel.draftPills` is the selected agent's
 `configHints` entry and `draftValue(of:)` the value of each: the one picked in `draftConfig`, if the agent offered it
-(else the pick is ignored), or the cached model; a mode nobody picked has none and its pill reads `Default mode`.
+(else the pick is ignored), or the cached model or effort; a mode nobody picked has none and its pill reads `Default mode`.
 `draftHints` is built from `draftValue(of:)`, so a pill always shows what Send applies. `SessionDraftView` draws them
 in the composer's bottom row after Attach with `ConfigSelectMenu`, the pill menu `SessionConfigControls` also uses,
 as secondary, with the tooltip and accessibility note `Last used with this agent; confirmed when the session starts`;

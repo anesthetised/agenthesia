@@ -793,7 +793,7 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 |---|---|---|---|---|
 | 1 | #268 Working shelf: footer, turn start time per row, `Working …` / `Idle …`, `Nothing needs you` | Sidebar | `agent:strong` | — |
 | 1 | #269 Quiet transcript row selection; writes `docs/behavior/transcript.md` | Transcript | `agent:light` | — |
-| 1 | #270 Effort hint in the draft (`thought_level` in the cache, applied like the model) | Draft | `agent:light` | — |
+| 1 | #270 Effort hint in the draft (`thought_level` in the cache, applied like the model; done) | Draft | `agent:light` | — |
 | 1 | #271 Mode popover with the agent's descriptions | Composer | `agent:light` | — |
 | 1 | #272 `Sign In…` only when the agent asked | Settings | `agent:light` | — |
 | 1 | #273 Development builds use their own bundle identifier and data folder | Tooling | `agent:light` | — |

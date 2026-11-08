@@ -88,7 +88,7 @@ struct SessionDraftView: View {
         }
     }
 
-    /// The agent's cached mode and model (ADR-0040): hints, so drawn as secondary and worded as such. A mode reads
+    /// The agent's cached mode, model and effort (ADR-0040): hints, so drawn as secondary and worded as such. A mode reads
     /// `Default mode` until one is picked, because only a picked mode is applied.
     private var hintPills: some View {
         ForEach(model.draftPills, id: \.id) { option in

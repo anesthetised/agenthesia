@@ -122,7 +122,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
 
     /// The project and agent install must already exist. The draft session is inserted after session/new succeeds
-    /// and the `configHints` were applied: the draft's model and a mode picked in it (ADR-0040).
+    /// and the `configHints` were applied: the draft's model and effort and a mode picked in it (ADR-0040).
     public init(
         session: SessionRecord,
         store: PersistenceStore,

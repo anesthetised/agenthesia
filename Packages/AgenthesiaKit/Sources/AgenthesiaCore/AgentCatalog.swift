@@ -211,12 +211,12 @@ public final class AgentCatalog {
         defaults.set(try? JSONEncoder().encode(choice), forKey: Self.lastChoiceKey)
     }
 
-    /// Keeps the mode and model select options of a confirmed list as the agent's hints; a list without them removes
-    /// the entry. One JSON value per agent, keyed by the choice's JSON.
+    /// Keeps the mode, model and effort select options of a confirmed list as the agent's hints; a list without them
+    /// removes the entry. One JSON value per agent, keyed by the choice's JSON.
     public func rememberHints(_ options: [ACP.ConfigOption], for choice: Choice) {
         let hints = options.filter {
             guard case .select = $0.value else { return false }
-            return $0.category == .mode || $0.category == .model
+            return $0.category == .mode || $0.category == .model || $0.category == .thoughtLevel
         }
         guard configHints[choice] != (hints.isEmpty ? nil : hints) else { return }
         configHints[choice] = hints.isEmpty ? nil : hints

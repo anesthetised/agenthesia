@@ -661,31 +661,82 @@ import Testing
             ],
             for: agent
         )
-        // Mode and model only; the mode reads Default mode and is not applied until picked, the model is.
-        #expect(model.draftPills.map(\.id) == ["mode", "model"])
-        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
-        #expect(model.draftHints.map(\.id) == ["model"])
+        // The mode reads Default mode and is not applied until picked; the model and the effort are.
+        #expect(model.draftPills.map(\.id) == ["mode", "model", "effort"])
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large", "high"])
+        #expect(model.draftHints.map(\.id) == ["model", "effort"])
 
         // Each pill's value is what the hints carry.
-        model.draftConfig = ["mode": "ask", "model": "small"]
+        model.draftConfig = ["mode": "ask", "model": "small", "effort": "low"]
         let values = model.draftHints.map { option -> String? in
             guard case .select(let value, _) = option.value else { return nil }
             return value
         }
-        #expect(model.draftHints.map(\.id) == ["mode", "model"] && values == ["ask", "small"])
+        #expect(model.draftHints.map(\.id) == ["mode", "model", "effort"] && values == ["ask", "small", "low"])
         #expect(model.draftPills.map { model.draftValue(of: $0) } == values)
 
         // A pick the agent does not offer is shown and applied as if never made.
-        model.draftConfig = ["mode": "bypass", "model": "huge"]
-        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
-        #expect(model.draftHints.map(\.id) == ["model"])
+        model.draftConfig = ["mode": "bypass", "model": "huge", "effort": "max"]
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large", "high"])
+        #expect(model.draftHints.map(\.id) == ["model", "effort"])
+
+        // Another model keeps the cached effort, and an effort picked beside the cached model wins.
+        model.draftConfig = ["model": "small"]
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "small", "high"])
+        model.draftConfig = ["effort": "low"]
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large", "low"])
 
         // Changing the agent resets the picks, and another agent has its own pills.
         model.draftConfig = ["mode": "ask"]
         model.draftAgent = other
         #expect(model.draftConfig.isEmpty && model.draftPills.isEmpty && model.draftHints.isEmpty)
         model.draftAgent = agent
-        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large"])
+        #expect(model.draftPills.map { model.draftValue(of: $0) } == [nil, "large", "high"])
+    }
+
+    @Test func sendAppliesTheCachedEffortUnlessAnotherIsPickedAlsoWithAnotherModel() async throws {
+        let (catalog, cleanUp) = try isolatedCatalog()
+        defer { cleanUp() }
+        let fixture = try Fixture(catalog: catalog)
+        fixture.sessions.catalog = catalog
+        let agent = try fixture.mock(["--effort"])
+        // An earlier session ended with the large model and high effort.
+        catalog.rememberHints(
+            [
+                selectOption("model", .model, "large", ["small", "large"]),
+                selectOption("effort", .thoughtLevel, "high", ["low", "medium", "high"]),
+            ],
+            for: agent
+        )
+        func send() async throws -> [ACP.ConfigOption] {
+            let model = fixture.model
+            model.draftDirectory = fixture.directory
+            model.draft = PromptDraft(text: "hello")
+            model.startDraft()
+            let owner = try #require(model.owner)
+            await owner.startup?.value
+            #expect(owner.errorMessage == nil)
+            return try #require(owner.controller).transcript.configOptions
+        }
+        func current(_ id: String, _ options: [ACP.ConfigOption]) -> String? {
+            guard case .select(let value, _) = options.first(where: { $0.id == id })?.value else { return nil }
+            return value
+        }
+        let model = fixture.model
+        model.draftAgent = agent
+        // Another model than the cached one; the cached effort is still applied after it.
+        model.draftConfig["model"] = "small"
+        #expect(model.draftHints.map(\.id) == ["model", "effort"])
+        let first = try await send()
+        #expect(current("model", first) == "small" && current("effort", first) == "high")
+
+        // The first session confirmed small and high, so they are the cache now; a picked effort wins over it.
+        model.showingSetup = true
+        model.draftAgent = agent
+        model.draftConfig["effort"] = "low"
+        let second = try await send()
+        #expect(current("model", second) == "small" && current("effort", second) == "low")
+        await fixture.remove()
     }
 
     @Test func theDraftShowsThePillsFromTheCacheAndAModeReadsDefaultUntilPicked() async throws {
@@ -715,15 +766,16 @@ import Testing
             [
                 selectOption("mode", .mode, "code", ["ask", "code"]),
                 selectOption("model", .model, "large", ["small", "large"]),
+                selectOption("effort", .thoughtLevel, "high", ["low", "high"]),
             ],
             for: agent
         )
         let shown = try await titles()
-        #expect(shown.suffix(2) == ["Default mode", "large"])
+        #expect(shown.suffix(3) == ["Default mode", "large", "high"])
         model.draftConfig["mode"] = "ask"
-        #expect(try await titles().suffix(2) == ["ask", "large"])
+        #expect(try await titles().suffix(3) == ["ask", "large", "high"])
         model.draftAgent = agent
-        #expect(try await titles().suffix(2) == ["Default mode", "large"])
+        #expect(try await titles().suffix(3) == ["Default mode", "large", "high"])
         await fixture.remove()
     }
 

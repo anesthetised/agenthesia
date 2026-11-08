@@ -204,7 +204,7 @@ import Testing
         #expect(reopened.name(of: .custom(custom)) == "custom")
     }
 
-    @Test func configHintsKeepModeAndModelPerAgentAcrossAReopenedCatalog() async throws {
+    @Test func configHintsKeepModeModelAndEffortPerAgentAcrossAReopenedCatalog() async throws {
         let fixture = try CatalogFixture()
         defer { fixture.remove() }
         let catalog = try fixture.catalog(registry: [])
@@ -238,7 +238,7 @@ import Testing
             value: .select(currentValue: "fast", options: .flat([.init(value: "fast", name: "Fast")]))
         )
         let fast = ACP.ConfigOption(id: "fast", name: "Fast", category: .model, value: .boolean(currentValue: true))
-        // Only select options with category mode or model are hints; a version counts as its agent.
+        // Only select options with category mode, model or thought_level are hints; a version counts as its agent.
         catalog.rememberHints([mode, effort, unnamed, fast, model], for: AgentInstallRecord(installation: installed))
         catalog.rememberHints([model], for: try #require(catalog.record(for: .local(local.id))))
         catalog.rememberHints([mode], for: AgentCatalog.record(custom: custom))
@@ -247,7 +247,7 @@ import Testing
             for: AgentInstallRecord(name: "Gone", executable: "/gone", installationID: UUID())
         )
         let expected: [AgentCatalog.Choice: [ACP.ConfigOption]] = [
-            .installed(agentID: installed.agentID): [mode, model],
+            .installed(agentID: installed.agentID): [mode, effort, model],
             .local(local.id): [model],
             .custom(custom): [mode],
         ]
@@ -255,8 +255,8 @@ import Testing
 
         let reopened = try fixture.catalog(registry: [])
         #expect(reopened.configHints == expected)
-        // A list without mode or model removes the entry; an undecodable entry is ignored.
-        reopened.rememberHints([effort], for: .custom(custom))
+        // A list without a hint removes the entry; an undecodable entry is ignored.
+        reopened.rememberHints([unnamed], for: .custom(custom))
         var stored = try #require(fixture.defaults.dictionary(forKey: AgentCatalog.configHintsKey))
         #expect(stored.count == 2)
         stored["not a choice"] = Data("[]".utf8)

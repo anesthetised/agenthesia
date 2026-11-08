@@ -484,6 +484,15 @@ import SwiftUI
         await sessions.end(owner)
         await refresh()
     }
+    /// Settling a row is End Session for that row's owner, whichever session the window shows.
+    func canSettle(_ owner: LiveSession) -> Bool {
+        !closed && SessionRow.canSettle(owner.activity) && sessions.owners.contains { $0 === owner }
+    }
+    func settle(_ owner: LiveSession) async {
+        guard canSettle(owner) else { return }
+        await sessions.end(owner)
+        await refresh()
+    }
     func stop() async {
         guard canStop, let owner else { return }
         await owner.stop()

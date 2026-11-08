@@ -134,6 +134,7 @@ Right-click on a row:
 |---|---|---|
 | `New Session in Project` | yes | yes |
 | `Open in New Window` | yes | yes |
+| `Settle Session` | yes | — |
 | `Archive Session` / `Unarchive Session` | — | yes |
 | `Discard Worktree…` | yes | yes |
 
@@ -141,6 +142,12 @@ Right-click on a row:
   Absent while the row has no project.
 - `Open in New Window` shows the session in its own window, or brings forward the window that already shows it.
   Absent for a starting session that has no identity yet.
+- `Settle Session` is End Session for the row's own session, whichever session the window shows: the agent stops, the
+  session is saved and moves to Settled, and Continue brings it back. Enabled for an idle, done or failed session;
+  disabled while a turn runs (starting, running, stopping) or a permission or form waits. On hover a live row shows a
+  small borderless `✓ Settle` button in place of its time (the shelf time on Working), faded in over 0.12 s (at once
+  under Reduce Motion); the same action is an accessibility action of the row. End Session in the Session menu keeps
+  its own rules.
 - `Archive Session` hides a saved session from Settled (and its count) without touching its log; `Unarchive Session`
   (the title when it is archived) brings it back. Neither asks for confirmation. Live rows have no such item: a session
   is ended before it can be archived. Continue on an archived session unarchives it. Storage and the reasons are in
@@ -161,14 +168,12 @@ session first`. Each change refreshes the window's history; other windows pick i
 Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
 moves it into the text above and deletes it here.
 
-- **Settle from the row.** On hover a live row in Needs You or Working shows `✓ Settle` in place of its trailing text,
-  and its context menu gains `Settle Session`. Settling is End Session: the session is saved and moves to Settled, and
-  Continue brings it back. Not offered while a turn runs or a permission or form waits.
 - **Sessions without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)) show a dashed square instead
   of initials and `No project` as the project name.
 
 ## Changes
 
+- 2026-11-08, #275: a live row settles (ends) from a hover button and `Settle Session` in its context menu.
 - 2026-11-08, #274: shelves collapse whenever asked, also with a selected row; Previous and Next Session expand the
   shelf they move into; expanding and collapsing animate (none under Reduce Motion).
 - 2026-11-08, #268: Working moved from the scrolling list to a shelf above Settled; its rows show `Working 1m 12s` or

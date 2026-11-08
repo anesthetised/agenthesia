@@ -26,12 +26,15 @@ struct SessionSidebarRows: View {
             activity: owner.activity,
             lastActivity: row.lastActivity,
             shelf: section.kind == .working,
-            turnStartedAt: owner.controller?.turnStartedAt
+            turnStartedAt: owner.controller?.turnStartedAt,
+            onSettle: model.canSettle(owner) ? { Task { await model.settle(owner) } } : nil
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .contextMenu {
             newSessionButton(row.project)
             windowMenu(.live(owner))
+            Button("Settle Session") { Task { await model.settle(owner) } }
+                .disabled(!model.canSettle(owner))
             if let session { discardButton(session) }
         }
     }

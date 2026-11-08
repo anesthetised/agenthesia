@@ -673,6 +673,8 @@ Wave 2:
   probed the very top edge of the visible rect, and a clip view snapped to whole pixels on CI's 1x display sits half a
   point above the line, inside the line before; it now probes 1 pt below the edge, and the test shifts the clip view by
   half a point (it fails without the fix).
+  Result: the coverage job then passed six times in a row on `main` (342b1dc, 39555ee, 3b23f5b and three attempts
+  of eb2978d, 2026-11-08/09); #256 is closed.
 
 Unless an entry says otherwise, these were not seen in the running app: only automated and hosted-view tests ran, no
 screenshots were taken and VoiceOver was not checked. #160 checks the finished design with `MockAgent`.

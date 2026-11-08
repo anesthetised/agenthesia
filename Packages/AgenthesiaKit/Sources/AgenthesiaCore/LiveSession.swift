@@ -49,6 +49,9 @@ public final class LiveSession {
     @ObservationIgnored private var checkout: (checkout: URL, worktree: URL)?
     /// The worktree this owner created for a new session, until it is removed or found to have a record.
     @ObservationIgnored private var created: (id: UUID, worktree: SessionWorkspace.Worktree, baseRevision: String)?
+    /// The folder this owner created for a new session without a project (ADR-0048), until it is removed or found to
+    /// have a record.
+    @ObservationIgnored private var createdScratch: (id: UUID, folder: URL)?
     /// Keeps the agent's confirmed mode and model as the next draft's hints (ADR-0040) and whether its start met
     /// sign-in; set by `SessionManager`.
     @ObservationIgnored var catalog: AgentCatalog?
@@ -114,10 +117,12 @@ public final class LiveSession {
                 || controller.map { [.idle, .running, .stopping].contains($0.status) } == true)
     }
 
+    /// A nil `directory` starts without a project, in a new folder under `scratchRoot` (ADR-0048).
     public func start(
-        directory: URL,
+        directory: URL?,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
+        scratchRoot: URL? = nil,
         additionalDirectories: [URL] = [],
         initialPrompt: PromptDraft? = nil,
         configHints: [ACP.ConfigOption] = []
@@ -127,6 +132,7 @@ public final class LiveSession {
                 directory: directory,
                 agent: agent,
                 worktreesRoot: worktreesRoot,
+                scratchRoot: scratchRoot,
                 additionalDirectories: additionalDirectories,
                 configHints: configHints
             ),
@@ -142,10 +148,12 @@ public final class LiveSession {
     }
 
     enum Launch {
+        /// A nil `directory` is a session without a project.
         case new(
-            directory: URL,
+            directory: URL?,
             agent: AgentInstallRecord,
             worktreesRoot: URL?,
+            scratchRoot: URL? = nil,
             additionalDirectories: [URL],
             configHints: [ACP.ConfigOption] = []
         )
@@ -171,7 +179,7 @@ public final class LiveSession {
             guard !isClosed else { return }
             let agent: AgentInstallRecord
             switch launch {
-            case .new(_, let new, _, _, _): agent = new
+            case .new(_, let new, _, _, _, _): agent = new
             case .saved(let session):
                 guard let install = try await library.install(id: session.agentInstallID) else {
                     throw LaunchError(message: "The agent of this session is no longer configured.")
@@ -198,11 +206,12 @@ public final class LiveSession {
             guard !isClosed else { return }
             let controller: SessionController
             switch launch {
-            case .new(let directory, _, let worktreesRoot, let additionalDirectories, let configHints):
+            case .new(let directory, _, let worktreesRoot, let scratchRoot, let additionalDirectories, let configHints):
                 controller = try await create(
                     directory: directory,
                     agent: agent,
                     worktreesRoot: worktreesRoot,
+                    scratchRoot: scratchRoot,
                     additionalDirectories: additionalDirectories,
                     configHints: configHints,
                     store: store
@@ -342,11 +351,18 @@ public final class LiveSession {
         await removeUnstartedWorktree()
     }
 
-    /// Removes the worktree and branch this owner created when no history record refers to them, since a start
-    /// that failed or was cancelled never happened (ADR-0040). The record is written once the agent accepts
-    /// `session/new`, so the store decides. Anything unexpected leaves the files in place; the user is only
-    /// cancelling a start.
+    /// Removes the worktree and branch, or the empty folder of a session without a project, this owner created when
+    /// no history record refers to them, since a start that failed or was cancelled never happened (ADR-0040,
+    /// ADR-0048). The record is written once the agent accepts `session/new`, so the store decides. Anything
+    /// unexpected leaves the files in place; the user is only cancelling a start.
     private func removeUnstartedWorktree() async {
+        if let (id, folder) = createdScratch {
+            createdScratch = nil
+            do {
+                guard try await library.store().session(id: id) == nil else { return }
+                if try await SessionWorkspace.removeEmptyScratch(folder) { workingDirectory = nil }
+            } catch {}
+        }
         guard let (id, worktree, baseRevision) = created else { return }
         created = nil
         do {
@@ -462,23 +478,35 @@ public final class LiveSession {
     }
 
     private func create(
-        directory: URL,
+        directory: URL?,
         agent: AgentInstallRecord,
         worktreesRoot: URL?,
+        scratchRoot: URL?,
         additionalDirectories: [URL],
         configHints: [ACP.ConfigOption],
         store: PersistenceStore
     ) async throws -> SessionController {
         let id = UUID()
         let worktreesRoot = worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
-        let workspace = try await SessionWorkspace.prepare(
-            directory: directory,
-            id: id,
-            topic: initialPrompt.flatMap { SessionTitle.fromPrompt($0.text) },
-            worktreesRoot: worktreesRoot,
-            // The agent's login-shell environment, resolved once for this launch.
-            environment: agentCommand?.environment
-        )
+        let topic = initialPrompt.flatMap { SessionTitle.fromPrompt($0.text) }
+        let workspace: SessionWorkspace
+        if let directory {
+            workspace = try await SessionWorkspace.prepare(
+                directory: directory,
+                id: id,
+                topic: topic,
+                worktreesRoot: worktreesRoot,
+                // The agent's login-shell environment, resolved once for this launch.
+                environment: agentCommand?.environment
+            )
+        } else {
+            workspace = try await SessionWorkspace.prepareScratch(
+                id: id,
+                topic: topic,
+                scratchRoot: scratchRoot ?? SessionWorkspace.defaultScratchRoot
+            )
+            createdScratch = (id, workspace.workingDirectory)
+        }
         workingDirectory = workspace.workingDirectory
         if let baseRevision = workspace.baseRevision,
             let worktree = SessionWorkspace.Worktree(
@@ -492,7 +520,10 @@ public final class LiveSession {
             created = (id, worktree, baseRevision)
         }
         guard !isClosed else { throw CancellationError() }
-        let project = try await library.project(directory: workspace.projectDirectory)
+        let project = try await library.project(
+            directory: workspace.projectDirectory,
+            name: directory == nil ? ProjectRecord.scratchName : nil
+        )
         let install = try await library.install(agent)
         guard !isClosed else { throw CancellationError() }
         return SessionController(

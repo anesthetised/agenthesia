@@ -21,9 +21,12 @@ import SwiftUI
     }
     /// Mode and model values picked in this draft, by option id (ADR-0040). Changing the agent or sending clears them.
     var draftConfig: [ACP.ConfigOptionID: ACP.ConfigValueID] = [:]
+    /// The draft starts without a project, in a folder of its own (ADR-0048). Per draft: Send clears it.
+    var draftWithoutProject = false { didSet { draftError = nil } }
     /// The picks each start from the draft was sent with, until its first prompt is submitted; a failed or cancelled
     /// start brings them back with the text.
-    private var sentConfig: [ObjectIdentifier: [ACP.ConfigOptionID: ACP.ConfigValueID]] = [:]
+    private var sentConfig:
+        [ObjectIdentifier: (config: [ACP.ConfigOptionID: ACP.ConfigValueID], withoutProject: Bool)] = [:]
     /// Why the last session started from the draft did not start.
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
@@ -79,7 +82,18 @@ import SwiftUI
 
     var canReview: Bool {
         !closed && !showingSetup && !isLoadingHistory && signIn == nil && files.root != nil && files.isGitRepository
-            && files.sessionID == displayed?.session.id
+            && files.sessionID == displayed?.session.id && !displaysSessionWithoutProject
+    }
+
+    /// Whether `project` is the one sessions without a project belong to (ADR-0048).
+    func isScratch(_ project: ProjectRecord?) -> Bool {
+        project?.isScratch(scratchPath: sessions.scratchPath) == true
+    }
+
+    /// The displayed session has no project: its changes are not tracked and nothing can be reviewed (ADR-0048).
+    var displaysSessionWithoutProject: Bool {
+        guard let session = displayed?.session else { return false }
+        return isScratch(projects.first { $0.id == session.projectID })
     }
 
     /// The review pane holds the slot; `DetailPanes` may still hide it in a narrow window.
@@ -625,8 +639,9 @@ import SwiftUI
             agent: AgentCatalog.record(custom: .init(executable: executable, arguments: arguments))
         )
     }
+    /// A nil `directory` starts without a project (ADR-0048).
     @discardableResult func start(
-        directory: URL,
+        directory: URL?,
         agent: AgentInstallRecord,
         initialPrompt: PromptDraft? = nil,
         configHints: [ACP.ConfigOption] = []
@@ -643,7 +658,9 @@ import SwiftUI
     }
 
     /// Known projects, most recently used first; the first is the draft's default (ADR-0040).
-    var recentProjects: [ProjectRecord] { ProjectRecord.recent(projects, history: history) }
+    var recentProjects: [ProjectRecord] {
+        ProjectRecord.recent(projects, history: history, scratchPath: sessions.scratchPath)
+    }
     /// The draft's project: the one picked, else the project of the newest session.
     var selectedDirectory: URL? {
         draftDirectory ?? recentProjects.first.map { URL(filePath: $0.rootPath, directoryHint: .isDirectory) }
@@ -691,26 +708,31 @@ import SwiftUI
         return catalog?.record(for: choice)
     }
     var canStartDraft: Bool {
-        canStart && showingSetup && !draft.isEmpty && selectedDirectory != nil
+        canStart && showingSetup && !draft.isEmpty && (draftWithoutProject || selectedDirectory != nil)
             && selectedAgent.flatMap(record(for:)) != nil
     }
 
-    /// Opens the draft with `project` selected; the typed message and agent stay (ADR-0040).
+    /// Opens the draft with `project` selected; the typed message and agent stay (ADR-0040). The project of sessions
+    /// without a project opens a draft without one (ADR-0048).
     func newSession(in project: ProjectRecord) {
-        draftDirectory = URL(filePath: project.rootPath, directoryHint: .isDirectory)
+        if isScratch(project) {
+            draftWithoutProject = true
+        } else {
+            draftDirectory = URL(filePath: project.rootPath, directoryHint: .isDirectory)
+            draftWithoutProject = false
+        }
         showingSetup = true
     }
 
     /// Send in the draft: starts the session with the draft as its initial prompt. An empty draft starts nothing.
     func startDraft() {
-        guard canStartDraft, let directory = selectedDirectory, let choice = selectedAgent,
-            let agent = record(for: choice)
-        else { return }
+        guard canStartDraft, let choice = selectedAgent, let agent = record(for: choice) else { return }
         draftError = nil
+        let directory = draftWithoutProject ? nil : selectedDirectory
         // Only a session that started is remembered: a failed or cancelled start keeps the last agent (ADR-0040).
         if let owner = start(directory: directory, agent: agent, initialPrompt: draft, configHints: draftHints) {
             let id = ObjectIdentifier(owner)
-            sentConfig[id] = draftConfig
+            sentConfig[id] = (draftConfig, draftWithoutProject)
             owner.onInitialPromptSubmitted = { [weak self, catalog] in
                 catalog?.remember(choice)
                 self?.sentConfig[id] = nil
@@ -718,6 +740,7 @@ import SwiftUI
         }
         draft = PromptDraft()
         draftConfig = [:]
+        draftWithoutProject = false
     }
 
     /// The displayed owner was started from the draft and failed or was cancelled before its prompt was submitted.
@@ -733,7 +756,9 @@ import SwiftUI
     func returnToDraft() async {
         guard let owner = abandonedStart, let prompt = owner.initialPrompt else { return }
         draft = prompt
-        let picks = sentConfig.removeValue(forKey: ObjectIdentifier(owner)) ?? [:]
+        let sent = sentConfig.removeValue(forKey: ObjectIdentifier(owner))
+        let picks = sent?.config ?? [:]
+        draftWithoutProject = sent?.withoutProject ?? false
         draftConfig = picks
         draftConfig = picks.filter { pick in
             draftPills.contains { $0.id == pick.key && draftValue(of: $0) == pick.value }

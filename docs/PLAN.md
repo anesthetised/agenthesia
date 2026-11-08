@@ -781,7 +781,7 @@ recorded there as *Planned (M18)*.
 | `Sign In…` in the agent row's menu, a button only after the agent asked | [agents-settings.md](behavior/agents-settings.md) | Planned |
 | A quiet transcript row selection: a rounded `.quaternary` background of the column's width, no system band | written to `transcript.md` by its issue | Planned |
 | Worktrees from the fetched upstream (fallback `HEAD`); merge blocked while the local base is behind | [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) | Done (#277) |
-| Sessions without a project, one `~/.agenthesia/scratch/<words>-<id>` folder each | [ADR-0048](adr/0048-sessions-without-a-project.md) | Accepted |
+| Sessions without a project, one `~/.agenthesia/scratch/<words>-<id>` folder each | [ADR-0048](adr/0048-sessions-without-a-project.md) | Implemented (#279) |
 
 Not adopted: T3 Code's fixed access levels with icons (principle 8), settled state that keeps the agent running,
 snoozing and pins, automatic removal of merged or inactive worktrees, a worktree folder or branch prefix setting
@@ -807,7 +807,7 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 2 | #276 One composer control row: toggle pills, `…` overflow, working line above the card (done; hosted tests at narrow and wide widths, not yet checked in the running app) | Composer | `agent:strong` | #270, #271 |
 | 2 | #277 Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
 | 3 | #278 Draft heading with the project picker, centered composer moving to the bottom at Send (done; heading text, project menu and the draft state around Send tested; the layout, the narrow heading and the Send animation not yet checked in the running app) | Draft | `agent:strong` | #276, #265 |
-| 4 | #279 Sessions without a project | Draft, Workspace | `agent:strong` | #278 |
+| 4 | #279 Sessions without a project (done; prepare, the project record, recent projects, the draft switch, the badge and the failed start tested; the draft, the row and the inspector not yet checked in the running app) | Draft, Workspace | `agent:strong` | #278 |
 | 5 | #160 Verify the redesign in the running app and refresh screenshots | — | `agent:light` | all |
 
 Pitfalls known so far:
@@ -829,6 +829,9 @@ Pitfalls known so far:
   VoiceOver. Pitfall: `axlabels` reports an element's top-left corner, so click its center.
 - #274 (landed): neither shelf is held open by a selected row any more; `SidebarShelves.isOpen` is the stored state or a
   search, and Previous/Next Session expand the shelf they move into (`SessionWindowModel.revealShelf`).
+- #279 keeps each session without a project in its own folder under `~/.agenthesia/scratch`; nothing removes it yet.
+  #230 (delete a saved session) must remove that folder too, after the confirmation names it and its file count
+  (ADR-0048), and only a folder directly under the scratch root that the session record names. Archiving keeps it.
 
 ## M16: Multi-agent workflow (2026-11-07)
 
@@ -876,6 +879,7 @@ Pitfalls known so far:
   remote for pushes, and a fake `gh` on PATH; never run these checks against this repository.
 - #230 is the first operation that removes events; the store needs cascade or explicit deletes for every table that
   references a session, and a test that lists the tables so a new one cannot be forgotten.
+  A session without a project (#279, ADR-0048) also loses its `~/.agenthesia/scratch/<words>-<id>` folder.
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.

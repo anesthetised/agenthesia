@@ -20,7 +20,8 @@ import Testing
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sessions = SessionManager(
                 library: SessionLibrary(databaseURL: directory.appending(path: "history.sqlite")),
-                worktreesRoot: directory.appending(path: "trees")
+                worktreesRoot: directory.appending(path: "trees"),
+                scratchRoot: directory.appending(path: "scratch")
             )
             sessions.environment = { (ProcessInfo.processInfo.environment, nil) }
             model = SessionWindowModel(sessions: sessions, catalog: catalog)
@@ -95,6 +96,69 @@ import Testing
         let none = DraftHeading(project: nil)
         #expect(none.lead == nil && none.menu == "Choose a project to start" && none.end.isEmpty)
         #expect(none.text == "Choose a project to start")
+    }
+
+    @Test func aDraftWithoutAProjectAsksWhatToWorkOnAndOffersTheWayBack() {
+        let heading = DraftHeading(project: "agenthesia", withoutProject: true)
+        #expect(heading.lead == "What should we work on?" && heading.menu == nil && heading.end.isEmpty)
+        #expect(heading.text == "What should we work on?" && heading.alternative == "in a project")
+        #expect(DraftHeading(project: "agenthesia").alternative == "or start without a project")
+        #expect(DraftHeading(project: nil).alternative == "or start without a project")
+    }
+
+    @Test func startingWithoutAProjectNeedsNoProjectAndIsPerDraft() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        model.draftAgent = try fixture.mock()
+        model.draft = PromptDraft(text: "Plan a trip")
+        // No project in history and none picked.
+        #expect(model.selectedDirectory == nil && !model.canStartDraft)
+        model.draftWithoutProject = true
+        #expect(model.canStartDraft)
+        model.draftWithoutProject = false
+        #expect(!model.canStartDraft)
+        model.draftWithoutProject = true
+        model.startDraft()
+        // Send clears the choice with the text: the next draft is in a project again.
+        #expect(!model.draftWithoutProject && model.draft.isEmpty)
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        let session = try #require(owner.controller?.session)
+        let scratch = fixture.sessions.scratchPath
+        #expect(session.workingDirectory.hasPrefix(scratch + "/plan-a-trip-"))
+        #expect(session.baseRevision == nil && session.branch == nil)
+        await model.refresh()
+        let project = try #require(model.projects.first { $0.id == session.projectID })
+        #expect(project.name == "No project" && model.isScratch(project))
+        // The project menu never offers it, so it is not the next draft's default either.
+        #expect(model.recentProjects.isEmpty && model.selectedDirectory == nil)
+        let row = try #require(model.sidebar.rows.first { $0.project?.id == project.id })
+        #expect(model.isScratch(row.project))
+        model.sidebarQuery = "no proj"
+        #expect(model.sidebar.rows.count == 1)
+        model.sidebarQuery = ""
+        // Nothing to review in a session without a project.
+        #expect(model.displaysSessionWithoutProject && !model.canReview && !model.canDiscard && !model.canMerge)
+        // New Session in Project on its row opens a draft without a project.
+        model.newSession(in: project)
+        #expect(model.showingSetup && model.draftWithoutProject)
+        await fixture.remove()
+    }
+
+    @Test func aFailedStartWithoutAProjectReturnsToADraftWithoutOne() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        model.draftAgent = .custom(.init(executable: "/does-not-exist", arguments: []))
+        model.draft = PromptDraft(text: "hello")
+        model.draftWithoutProject = true
+        model.startDraft()
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.returnToDraft()
+        #expect(model.inDraft && model.draftWithoutProject && model.draftError != nil)
+        // The executable was checked first, so no folder was made.
+        #expect(!FileManager.default.fileExists(atPath: fixture.directory.appending(path: "scratch").path))
+        await fixture.remove()
     }
 
     @Test func theProjectMenuListsRecentProjectsAndMarksTheDrafts() async throws {

@@ -16,4 +16,11 @@ struct ProjectBadgeTests {
         #expect(ProjectBadge.hash("a") == 0xaf63_dc4c_8601_ec8c)
         #expect(ProjectBadge.hash("foobar") == 0x8594_4171_f739_67e8)
     }
+
+    @Test func theProjectOfSessionsWithoutAProjectShowsADashedSquare() {
+        #expect(ProjectBadge.mark(name: "No project", isScratch: true) == .dashed)
+        #expect(ProjectBadge.mark(name: "No project", isScratch: false) == .initials("NP"))
+        #expect(ProjectBadge.mark(name: "agenthesia", isScratch: false) == .initials("AG"))
+        #expect(ProjectBadge.mark(name: nil, isScratch: false) == .empty)
+    }
 }

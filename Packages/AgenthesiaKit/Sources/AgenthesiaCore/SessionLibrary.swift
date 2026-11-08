@@ -70,10 +70,11 @@ public actor SessionLibrary {
         try await store().agentInstalls().first { $0.id == id }
     }
 
-    func project(directory: URL) async throws -> ProjectRecord {
+    /// The project at `directory`, created on first use with `name`, else the folder's name.
+    func project(directory: URL, name: String? = nil) async throws -> ProjectRecord {
         let store = try await store()
         if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) { return existing }
-        let project = ProjectRecord(name: directory.lastPathComponent, rootPath: directory.path)
+        let project = ProjectRecord(name: name ?? directory.lastPathComponent, rootPath: directory.path)
         do { try await store.createProject(project) } catch {
             // Another session may have inserted the same canonical directory during the write.
             if let existing = try await store.projects().first(where: { $0.rootPath == directory.path }) {

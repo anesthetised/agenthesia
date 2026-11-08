@@ -172,7 +172,7 @@ public struct ScopedFileAccess: Sendable {
         return EIO
     }
 
-    private static func canonicalURL(_ url: URL) -> URL {
+    static func canonicalURL(_ url: URL) -> URL {
         // Foundation keeps aliases such as /var in resolved URLs on macOS. O_NOFOLLOW_ANY needs
         // the kernel's spelling (/private/var). Resolve the existing prefix even for a new file.
         var prefix = url.standardizedFileURL.resolvingSymlinksInPath()

@@ -24,17 +24,22 @@ public final class SessionManager {
     /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
     @ObservationIgnored public var catalog: AgentCatalog?
     private let worktreesRoot: URL
+    private let scratchRoot: URL
+    /// The root of the project that sessions without a project belong to (ADR-0048), for `ProjectRecord.isScratch`.
+    public let scratchPath: String
 
-    /// `worktreesRoot` defaults to `~/.agenthesia/worktrees`.
-    public init(library: SessionLibrary = .shared, worktreesRoot: URL? = nil) {
+    /// `worktreesRoot` defaults to `~/.agenthesia/worktrees`, `scratchRoot` to `~/.agenthesia/scratch`.
+    public init(library: SessionLibrary = .shared, worktreesRoot: URL? = nil, scratchRoot: URL? = nil) {
         self.library = library
         self.worktreesRoot = worktreesRoot ?? SessionWorkspace.defaultWorktreesRoot
+        self.scratchRoot = scratchRoot ?? SessionWorkspace.defaultScratchRoot
+        scratchPath = SessionWorkspace.scratchProjectPath(self.scratchRoot)
     }
 
     /// Adds an owner that starts in the background, applies `configHints` before its record exists and then
-    /// submits `initialPrompt` (ADR-0040).
+    /// submits `initialPrompt` (ADR-0040). A nil `directory` starts without a project (ADR-0048).
     public func start(
-        directory: URL,
+        directory: URL?,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = [],
@@ -46,6 +51,7 @@ public final class SessionManager {
                 directory: directory,
                 agent: agent,
                 worktreesRoot: worktreesRoot ?? self.worktreesRoot,
+                scratchRoot: scratchRoot,
                 additionalDirectories: additionalDirectories,
                 configHints: configHints
             ),

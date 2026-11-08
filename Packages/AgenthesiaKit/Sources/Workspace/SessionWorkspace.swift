@@ -12,23 +12,31 @@ public struct SessionWorkspace: Sendable {
     public let baseBranch: String?
     /// The session branch the worktree was created on; nil outside Git.
     public let branch: String?
+    /// The upstream of `baseBranch` that could not be fetched, e.g. `origin/main`, so the worktree started from the
+    /// local `HEAD` instead (ADR-0047). Nil when it started from the upstream, or the branch has none.
+    public let fallbackUpstream: String?
 
-    /// `topic` names the branch (`branchName`): the first line of the initial prompt.
+    /// `topic` names the branch (`branchName`): the first line of the initial prompt. When the checked-out branch
+    /// has an upstream, the worktree starts from it, fetched with `environment` (the login shell's, so credentials
+    /// apply) and stopped after `fetchTimeout` (ADR-0047).
     public static func prepare(
         directory: URL,
         id: UUID,
         topic: String? = nil,
-        worktreesRoot: URL = defaultWorktreesRoot
+        worktreesRoot: URL = defaultWorktreesRoot,
+        environment: [String: String]? = nil,
+        fetchTimeout: Duration = .seconds(20)
     ) async throws -> SessionWorkspace {
         // Git can run for seconds on large checkouts; keep the blocking calls off the cooperative pool.
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    with: Result {
-                        try prepareBlocking(directory: directory, id: id, topic: topic, worktreesRoot: worktreesRoot)
-                    }
-                )
-            }
+        try await blocking {
+            try prepareBlocking(
+                directory: directory,
+                id: id,
+                topic: topic,
+                worktreesRoot: worktreesRoot,
+                environment: environment,
+                fetchTimeout: fetchTimeout
+            )
         }
     }
 
@@ -36,7 +44,9 @@ public struct SessionWorkspace: Sendable {
         directory: URL,
         id: UUID,
         topic: String?,
-        worktreesRoot: URL
+        worktreesRoot: URL,
+        environment: [String: String]?,
+        fetchTimeout: Duration
     ) throws -> SessionWorkspace {
         let directory = directory.resolvingSymlinksInPath().standardizedFileURL
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
@@ -53,7 +63,8 @@ public struct SessionWorkspace: Sendable {
                 workingDirectory: directory,
                 baseRevision: nil,
                 baseBranch: nil,
-                branch: nil
+                branch: nil,
+                fallbackUpstream: nil
             )
         }
         let root: URL
@@ -84,32 +95,51 @@ public struct SessionWorkspace: Sendable {
         if (try? git(["rev-parse", "--verify", "--quiet", "refs/heads/\(sessionBranch)"], in: root)) != nil {
             sessionBranch = legacyBranchName(for: id)
         }
-        try git(["worktree", "add", "--quiet", "-b", sessionBranch, destination.path, "HEAD"], in: root)
+        // Fresh code for the agent: the fetched upstream, or `HEAD` without one or when the fetch fails (ADR-0047).
+        var start = (revision: "HEAD", name: "HEAD")
+        var fallbackUpstream: String?
+        if let branch, let upstream = upstream(of: branch, in: root) {
+            if fetch(upstream, in: root, environment: environment, timeout: fetchTimeout),
+                let commit = try? git(
+                    ["rev-parse", "--verify", "--end-of-options", "\(upstream.ref)^{commit}"],
+                    in: root
+                )
+            {
+                start = (commit, upstream.name)
+            } else {
+                fallbackUpstream = upstream.name
+            }
+        }
+        try git(["worktree", "add", "--quiet", "-b", sessionBranch, destination.path, start.revision], in: root)
         let worktree = destination.resolvingSymlinksInPath().standardizedFileURL
         let working = (prefix.isEmpty ? worktree : worktree.appending(path: prefix))
             .resolvingSymlinksInPath().standardizedFileURL
         guard working.path == worktree.path || working.path.hasPrefix(worktree.path + "/") else {
-            throw WorkspaceError(message: "The selected directory resolves outside the session worktree at HEAD.")
+            throw WorkspaceError(
+                message: "The selected directory resolves outside the session worktree at \(start.name)."
+            )
         }
         guard (try? working.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
-            throw WorkspaceError(message: "The selected path is not a committed directory at HEAD.")
+            throw WorkspaceError(message: "The selected path is not a committed directory at \(start.name).")
         }
         return SessionWorkspace(
             projectDirectory: root,
             workingDirectory: working,
             baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: worktree),
             baseBranch: branch,
-            branch: sessionBranch
+            branch: sessionBranch,
+            fallbackUpstream: fallbackUpstream
         )
     }
 
-    /// What `prepare` would start a worktree from: the branch checked out in `directory`, or the short commit of a
-    /// detached `HEAD`. Nil outside Git, where the session works in the directory itself.
+    /// What `prepare` would start a worktree from: the upstream of the branch checked out in `directory`
+    /// (`origin/main`), the branch itself without one, or the short commit of a detached `HEAD`. Nil outside Git,
+    /// where the session works in the directory itself.
     public static func worktreeBase(of directory: URL) async -> String? {
         let directory = directory.resolvingSymlinksInPath().standardizedFileURL
         guard hasGitEntry(atOrAbove: directory) else { return nil }
         if let branch = try? await git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory), !branch.isEmpty {
-            return branch
+            return (try? await blocking { upstream(of: branch, in: directory) })?.name ?? branch
         }
         return (try? await git(["rev-parse", "--short", "HEAD"], in: directory)) ?? "HEAD"
     }
@@ -187,22 +217,9 @@ public struct SessionWorkspace: Sendable {
     static func gitOutput(
         _ arguments: [String],
         in directory: URL,
-        environment base: [String: String]? = nil
+        environment: [String: String]? = nil
     ) throws -> Data {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/git")
-        process.arguments = ["-C", directory.path] + arguments
-        var environment = base ?? ProcessInfo.processInfo.environment
-        for key in [
-            "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        ] {
-            environment.removeValue(forKey: key)
-        }
-        // Read-only scans must not refresh the index and trigger their own filesystem watcher.
-        environment["GIT_OPTIONAL_LOCKS"] = "0"
-        process.environment = environment
-        process.standardInput = FileHandle.nullDevice
+        let process = gitProcess(arguments, in: directory, environment: environment)
         let output = Pipe()
         let errorURL = FileManager.default.temporaryDirectory.appending(path: "agenthesia-git-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: errorURL.path, contents: nil) else {
@@ -221,5 +238,24 @@ public struct SessionWorkspace: Sendable {
             throw WorkspaceError(message: "Git: \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
         return data
+    }
+
+    /// A Git process in `directory` that ignores the repository variables of the app's own environment.
+    static func gitProcess(_ arguments: [String], in directory: URL, environment base: [String: String]?) -> Process {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/git")
+        process.arguments = ["-C", directory.path] + arguments
+        var environment = base ?? ProcessInfo.processInfo.environment
+        for key in [
+            "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        ] {
+            environment.removeValue(forKey: key)
+        }
+        // Read-only scans must not refresh the index and trigger their own filesystem watcher.
+        environment["GIT_OPTIONAL_LOCKS"] = "0"
+        process.environment = environment
+        process.standardInput = FileHandle.nullDevice
+        return process
     }
 }

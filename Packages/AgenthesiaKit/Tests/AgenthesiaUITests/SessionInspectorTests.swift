@@ -102,6 +102,27 @@ import Testing
         #expect(SessionInspector.branchName(of: legacy) == "agenthesia/\(legacy.id.uuidString.lowercased())")
     }
 
+    @Test func theStartNamesTheLocalBranchWhenTheUpstreamCouldNotBeFetched() {
+        let directory = "/tmp"
+        let plain = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: directory)
+        #expect(SessionInspector.start(of: plain) == nil)
+        let fetched = SessionRecord(
+            projectID: UUID(),
+            agentInstallID: UUID(),
+            workingDirectory: directory,
+            baseBranch: "main"
+        )
+        #expect(SessionInspector.start(of: fetched) == "from main")
+        let fallback = SessionRecord(
+            projectID: UUID(),
+            agentInstallID: UUID(),
+            workingDirectory: directory,
+            baseBranch: "main",
+            fallbackUpstream: "origin/main"
+        )
+        #expect(SessionInspector.start(of: fallback) == "Started from local main: could not fetch origin/main")
+    }
+
     @Test func countsReadAsAddedAndRemoved() {
         #expect(ChangeCounts.label(.init(added: 2, removed: 1)) == "2 added, 1 removed")
         #expect(ChangeCounts.label(.init(added: 0, removed: 0)) == "0 added, 0 removed")

@@ -99,16 +99,22 @@ word is cut at 40), or `session` without any. When a branch of that name already
 `agenthesia/<session id>` instead and never touches the existing branch. The name is stored in the session's nullable
 `branch` column and never renamed; sessions created before it have none and keep the derived legacy name.
 After resolving symlinks, that path must be a directory inside the new worktree. Dirty and untracked files are not copied.
-The new worktree's actual initial HEAD is retained as the session's `baseRevision` before launching
-the agent. The branch checked out in the selected checkout at that moment is retained as `baseBranch`
-(ADR-0032); a detached `HEAD` records none, and such a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
+When the checked-out branch has an upstream (`git for-each-ref` reads its remote, remote branch and tracking ref, so a
+never-fetched upstream still counts), `prepare` first runs `git fetch --quiet <remote> <branch>` with the login shell's
+environment (`LiveSession` passes the agent command's, resolved once per launch; `GIT_TERMINAL_PROMPT=0`) and a 20-second
+limit, then creates the worktree from the tracking ref instead of `HEAD`
+([ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md)). Without an upstream it starts from `HEAD`; when the fetch
+fails or is stopped, it starts from `HEAD` and stores the upstream's name in the session's nullable `fallbackUpstream`
+column (migration `v7-session-fallback-upstream`), which the inspector shows. The draft's Checkout label names the
+upstream (`SessionWorkspace.worktreeBase`). The new worktree's actual initial HEAD is retained as the session's
+`baseRevision` before launching the agent. The branch checked out in the selected checkout at that moment is retained
+as `baseBranch` (ADR-0032), even when the worktree started from its upstream; a detached `HEAD` records none, and such
+a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
 unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup until the session is merged or discarded, except one whose session never
 got a history record.
 
-> **Accepted, not yet implemented (M18):** [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) fetches the
-> checked-out branch's upstream (20 s limit) and starts the worktree from it, falling back to `HEAD`; the local merge is
-> blocked while `baseBranch` does not contain `baseRevision`. [ADR-0048](adr/0048-sessions-without-a-project.md) adds
+> **Accepted, not yet implemented (M18):** [ADR-0048](adr/0048-sessions-without-a-project.md) adds
 > sessions without a project, each in its own `~/.agenthesia/scratch/<words>-<id>` folder under one *No project*
 > project.
 
@@ -199,7 +205,8 @@ session branch since `baseRevision`.
 
 Merge (ADR-0032) goes through `SessionManager.merge` and squashes the session into `baseBranch` in the
 project checkout. `SessionWorkspace.mergeCheck` reports blockers without writing: no base branch, a
-missing base branch, a checkout on another branch, with tracked changes or with a merge, cherry-pick,
+missing base branch, a base branch that does not contain `baseRevision` yet (`git merge-base --is-ancestor`, a session
+started from a fetched upstream the user has not pulled; ADR-0047), a checkout on another branch, with tracked changes or with a merge, cherry-pick,
 revert or rebase in progress, a worktree that is missing, off its branch or has unresolved conflicts, and
 nothing to merge; otherwise it counts files changed from the merge base and the session's commits.
 `SessionWorkspace.merge` repeats the check, commits uncommitted work in the worktree (no hooks at all,
@@ -559,7 +566,8 @@ source, line counts and a viewed mark), the selected file's diff and a footer wi
 (`2 of 5 viewed`). `SessionWorkspace.review` compares the current working tree with
 `merge-base refs/heads/<baseBranch> HEAD` ([ADR-0032](adr/0032-worktree-merge-and-discard.md)), including staged,
 unstaged and nonignored untracked files. It retains rename sources and reports a missing base branch explicitly.
-Without `baseBranch`, it compares with `baseRevision`, or HEAD for legacy sessions with neither. Paths are relative to
+Without `baseBranch`, or while `baseBranch` does not contain `baseRevision` (ADR-0047), it compares with
+`baseRevision`, or HEAD for legacy sessions with neither. Paths are relative to
 the selected working directory.
 
 Core's window-owned `SessionReview` retains selection while that path still differs. The pane refreshes from

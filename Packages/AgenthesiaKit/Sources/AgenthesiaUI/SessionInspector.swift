@@ -30,7 +30,7 @@ struct SessionInspector: View {
             if let session, let name = Self.branchName(of: session) {
                 VStack(alignment: .leading) {
                     Label(name, systemImage: "arrow.triangle.branch")
-                    if let base = session.baseBranch { Text("from \(base)").foregroundStyle(.secondary) }
+                    if let start = Self.start(of: session) { Text(start).foregroundStyle(.secondary) }
                 }.textSelection(.enabled)
             }
             Label(directory.path, systemImage: "folder").textSelection(.enabled)
@@ -57,6 +57,14 @@ struct SessionInspector: View {
     /// the session id. Sessions without a base have none.
     static func branchName(of session: SessionRecord) -> String? {
         session.baseRevision == nil ? nil : session.branch ?? SessionWorkspace.legacyBranchName(for: session.id)
+    }
+
+    /// Where the worktree started: `from main`, or the local branch when its upstream could not be fetched
+    /// (ADR-0047). Sessions without a base branch have none.
+    static func start(of session: SessionRecord) -> String? {
+        guard let base = session.baseBranch else { return nil }
+        guard let upstream = session.fallbackUpstream else { return "from \(base)" }
+        return "Started from local \(base): could not fetch \(upstream)"
     }
 
     private func changes(_ session: SessionRecord) -> some View {

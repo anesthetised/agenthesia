@@ -475,7 +475,9 @@ public final class LiveSession {
             directory: directory,
             id: id,
             topic: initialPrompt.flatMap { SessionTitle.fromPrompt($0.text) },
-            worktreesRoot: worktreesRoot
+            worktreesRoot: worktreesRoot,
+            // The agent's login-shell environment, resolved once for this launch.
+            environment: agentCommand?.environment
         )
         workingDirectory = workspace.workingDirectory
         if let baseRevision = workspace.baseRevision,
@@ -501,7 +503,8 @@ public final class LiveSession {
                 workingDirectory: workspace.workingDirectory.path,
                 baseRevision: workspace.baseRevision,
                 baseBranch: workspace.baseBranch,
-                branch: workspace.branch
+                branch: workspace.branch,
+                fallbackUpstream: workspace.fallbackUpstream
             ),
             store: store,
             additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) },

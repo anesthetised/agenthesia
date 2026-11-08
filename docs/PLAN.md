@@ -780,7 +780,7 @@ recorded there as *Planned (M18)*.
 | Draft heading `What should we build in <project ▾>?` with a centered composer; effort as a hint applied like the model | [session-start.md](behavior/session-start.md) | Planned |
 | `Sign In…` in the agent row's menu, a button only after the agent asked | [agents-settings.md](behavior/agents-settings.md) | Planned |
 | A quiet transcript row selection: a rounded `.quaternary` background of the column's width, no system band | written to `transcript.md` by its issue | Planned |
-| Worktrees from the fetched upstream (fallback `HEAD`); merge blocked while the local base is behind | [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) | Accepted |
+| Worktrees from the fetched upstream (fallback `HEAD`); merge blocked while the local base is behind | [ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md) | Done (#277) |
 | Sessions without a project, one `~/.agenthesia/scratch/<words>-<id>` folder each | [ADR-0048](adr/0048-sessions-without-a-project.md) | Accepted |
 
 Not adopted: T3 Code's fixed access levels with icons (principle 8), settled state that keeps the agent running,

@@ -19,8 +19,9 @@ extension SessionWorkspace {
 
     public enum ReviewFailure: Error { case tooLarge, notRegularFile }
 
-    /// The net working-tree changes from the base branch's merge base, or the saved initial revision.
-    /// Legacy sessions without either compare with HEAD. Paths stay relative to the selected directory.
+    /// The net working-tree changes from the base branch's merge base, or the saved initial revision when there is no
+    /// base branch or it does not contain that revision yet. Legacy sessions without either compare with HEAD. Paths
+    /// stay relative to the selected directory.
     public static func review(in directory: URL, baseBranch: String?, baseRevision: String?) async throws -> Review {
         try Task.checkCancellation()
         let review: Review = try await withCheckedThrowingContinuation { continuation in
@@ -34,7 +35,16 @@ extension SessionWorkspace {
                             else {
                                 throw WorkspaceError(message: "The base branch “\(baseBranch)” no longer exists.")
                             }
-                            revision = try git(["merge-base", ref, "HEAD"], in: directory)
+                            if let baseRevision, !contains(ref, baseRevision, in: directory) {
+                                // Started ahead of the local branch (ADR-0047): the merge base would show the
+                                // upstream's commits as the session's.
+                                revision = try git(
+                                    ["rev-parse", "--verify", "--end-of-options", "\(baseRevision)^{commit}"],
+                                    in: directory
+                                )
+                            } else {
+                                revision = try git(["merge-base", ref, "HEAD"], in: directory)
+                            }
                         } else {
                             revision = try git(
                                 ["rev-parse", "--verify", "--end-of-options", "\(baseRevision ?? "HEAD")^{commit}"],

@@ -51,11 +51,20 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 
 ## Checkout label
 
-- Not a menu. For a Git project it reads `New worktree from <branch>`, the branch checked out in the project, or the
-  short commit when `HEAD` is detached; tooltip `The session works in a new Git worktree of the committed files.
+- Not a menu. For a Git project it reads `New worktree from <base>`: the upstream of the branch checked out in the
+  project when it has one (`New worktree from origin/main`), the branch itself without one, or the short commit when
+  `HEAD` is detached; tooltip `The session works in a new Git worktree of the committed files.
   Uncommitted and untracked files are not copied.` Every Git session gets its own worktree and branch
   ([ADR-0006](../adr/0006-worktree-isolation.md), [ADR-0032](../adr/0032-worktree-merge-and-discard.md)); the branch
   is named after the first line of the message.
+- With an upstream, Send fetches that one branch (at most 20 seconds) and the worktree starts from it, so the agent
+  works on the latest code even when the local branch was not pulled
+  ([ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)). The local branch is never moved. When the fetch
+  fails or takes longer, the session starts from the local branch, and the Workspace block of the inspector reads
+  `Started from local main: could not fetch origin/main` under the session branch instead of `from main`.
+- Merge into the local branch waits until that branch contains the commit the session started from: until then Merge
+  explains `The session started from a newer origin/main than “main” contains. Pull origin/main into “main” first,
+  then merge.`, and Review compares with the session's start rather than the merge base.
 - Outside Git it reads `Project folder`, tooltip `Not a Git repository: the session works in the folder itself.`
 - The label appears once the project has been checked, and is absent without a project.
 
@@ -134,12 +143,11 @@ moves it into the text above and deletes it here.
 - **Without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)): `or start without a project` under the
   heading switches the draft to `What should we work on?` and hides the Checkout chip; `in a project` switches back.
   Per draft, not remembered.
-- **The Checkout label names the upstream** when the branch has one, `New worktree from origin/main`, because the
-  worktree starts from it ([ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)). When the fetch fails, the
-  inspector's Workspace block says the session started from the local branch.
 
 ## Changes
 
+- 2026-11-08, #277: the Checkout label names the upstream; the start falls back to the local branch with a line in
+  the inspector; Merge waits for the local branch to contain the session's start (ADR-0047).
 - 2026-11-08, #271: the draft's mode pill opens the mode popover.
 - 2026-11-08, #264: Manage Agents… opens Settings on the Agents tab ([agents-settings.md](agents-settings.md)).
 - 2026-11-08, #270: effort is a hint like the model: the cache keeps the `thought_level` option, its pill is applied by

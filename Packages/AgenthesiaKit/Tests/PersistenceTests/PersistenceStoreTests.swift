@@ -79,7 +79,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(
             try await database.read { try Schema.migrator.appliedMigrations($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
-                "v5-session-branch", "v6-session-archived-at",
+                "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream",
             ]
         )
     }
@@ -254,6 +254,39 @@ final class PersistenceStoreTests: Sendable {
         let reopened = try PersistenceStore(databaseURL: url)
         #expect(try await reopened.session(id: session)?.archivedAt == date)
         #expect(try await reopened.session(id: new.id) == new)
+    }
+
+    @Test func upgradingFromV6LeavesSessionsWithoutAFallbackAndStoresNewOnes() async throws {
+        let legacy = try DatabaseQueue()
+        try Schema.migrator.migrate(legacy, upTo: "v6-session-archived-at")
+        let (project, agent, session) = (UUID().uuidString, UUID().uuidString, UUID())
+        try await legacy.write { db in
+            try db.execute(sql: "INSERT INTO project VALUES (?, 'P', '/tmp/p', 0)", arguments: [project])
+            try db.execute(
+                sql: "INSERT INTO agent_install VALUES (?, 'Agent', 'agent', CAST('[]' AS BLOB), 0, NULL)",
+                arguments: [agent]
+            )
+            try db.execute(
+                sql: """
+                    INSERT INTO session (id, projectID, agentInstallID, protocolVersion, workingDirectory, createdAt,
+                    baseBranch) VALUES (?, ?, ?, 1, '/tmp/tree', 0, 'main')
+                    """,
+                arguments: [session.uuidString, project, agent]
+            )
+        }
+        let store = try PersistenceStore(database: legacy)
+        let record = try #require(await store.session(id: session))
+        #expect(record.fallbackUpstream == nil && record.baseBranch == "main")
+        let new = SessionRecord(
+            projectID: record.projectID,
+            agentInstallID: record.agentInstallID,
+            workingDirectory: "/tmp/new",
+            baseBranch: "main",
+            fallbackUpstream: "origin/main",
+            createdAt: date
+        )
+        try await store.createSession(new)
+        #expect(try await store.session(id: new.id) == new)
     }
 
     @Test func archivesAndUnarchivesOneSessionWithoutTouchingItsLogOrTheOthers() async throws {
@@ -513,7 +546,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(
             try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
-                "v5-session-branch", "v6-session-archived-at",
+                "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream",
                 "future-version",
             ]
         )

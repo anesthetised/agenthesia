@@ -59,6 +59,10 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let baseBranch: String?
     /// The session branch as created. Sessions from before it was stored, and non-Git sessions, have none.
     public let branch: String?
+    /// The upstream of `baseBranch` that could not be fetched at start, e.g. `origin/main`, so the worktree started
+    /// from the local branch instead (ADR-0047). Nil when it started from the upstream, the branch has none, or the
+    /// session predates fetching.
+    public let fallbackUpstream: String?
     /// When the user archived the session (ADR-0044); nil for a session that is not archived.
     public var archivedAt: Date?
     public let createdAt: Date
@@ -74,6 +78,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         baseRevision: String? = nil,
         baseBranch: String? = nil,
         branch: String? = nil,
+        fallbackUpstream: String? = nil,
         archivedAt: Date? = nil,
         createdAt: Date = .now
     ) {
@@ -87,6 +92,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         self.baseRevision = baseRevision
         self.baseBranch = baseBranch
         self.branch = branch
+        self.fallbackUpstream = fallbackUpstream
         self.archivedAt = archivedAt
         self.createdAt = createdAt
     }

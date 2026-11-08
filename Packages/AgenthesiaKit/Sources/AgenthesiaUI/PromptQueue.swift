@@ -6,15 +6,16 @@ import SwiftUI
 struct PromptQueue: View {
     let session: SessionController
     let editable: Bool
+    /// Replaces the header's text, as for a saved session's queue, which only Continue sends.
+    var caption: String?
     let onEdit: (QueuedPrompt) -> Void
     let onError: (any Error) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(session.queuePaused ? "Queue paused" : "Queued messages").font(.caption).foregroundStyle(
-                    .secondary
-                )
+                Text(caption ?? (session.queuePaused ? "Queue paused" : "Queued messages")).font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 if session.queuePaused, editable {
                     Button("Resume Queue", systemImage: "play.fill", action: resume)

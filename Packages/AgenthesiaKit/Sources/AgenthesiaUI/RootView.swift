@@ -15,6 +15,10 @@ public struct RootView: View {
     @State private var showingLog = false
     /// The window's remembered inspector visibility; `SessionWindowModel.showingInspector` is the working copy.
     @SceneStorage("showingInspector") private var storedInspector = true
+    /// The window's remembered shelf states; `SessionWindowModel.workingShelfExpanded` and `settledShelfExpanded` are
+    /// the working copies.
+    @SceneStorage("sidebar.workingExpanded") private var storedWorkingShelf = true
+    @SceneStorage("sidebar.settledExpanded") private var storedSettledShelf = false
     @State private var showingQuickOpen = false
     @State private var fileQuery = ""
 
@@ -123,8 +127,14 @@ public struct RootView: View {
         .handlesExternalEvents(preferring: [], allowing: ["*"])
         // A session in front of the user needs no notification (ADR-0026).
         .onChange(of: shownSessionID, initial: true) { model.sessions.setShown(shownSessionID, in: model) }
-        .onAppear { model.showingInspector = storedInspector }
+        .onAppear {
+            model.showingInspector = storedInspector
+            model.workingShelfExpanded = storedWorkingShelf
+            model.settledShelfExpanded = storedSettledShelf
+        }
         .onChange(of: model.showingInspector) { storedInspector = model.showingInspector }
+        .onChange(of: model.workingShelfExpanded) { storedWorkingShelf = model.workingShelfExpanded }
+        .onChange(of: model.settledShelfExpanded) { storedSettledShelf = model.settledShelfExpanded }
         .task {
             await model.restore(target)
             target = model.target

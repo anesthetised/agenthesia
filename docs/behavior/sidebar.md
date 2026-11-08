@@ -33,8 +33,12 @@ Working and Settled are footers pinned to the bottom edge, Working above Settled
 - Expanded, a shelf grows upward with its own list, sized to its rows; beyond its cap it scrolls. Working takes at most
   35 % of the sidebar's height, Settled at most 45 %, less on a short window so that the headers and about two rows of
   the list above keep their room.
-- A shelf is forced open while one of its rows is selected and while a search is entered, so navigation and restored
-  windows never select a hidden row. The header cannot collapse it in those states.
+- The chevron collapses a shelf whenever asked, also while one of its rows is selected: the selection and the session
+  in the detail column stay, the row just is not on screen. Previous and Next Session expand a collapsed shelf when
+  they move the selection into one of its rows. A search opens both shelves while a query is entered; the header cannot
+  collapse a shelf then.
+- Expanding and collapsing a shelf animates: a light spring of about 0.25 s on the height of its list and the
+  chevron's rotation. Under Reduce Motion the shelf changes at once.
 - History refreshes on its own; there is no Refresh button.
 
 *Why a Working shelf:* Working held idle sessions with nothing on the row to tell them apart from running ones; the
@@ -157,8 +161,6 @@ session first`. Each change refreshes the window's history; other windows pick i
 Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
 moves it into the text above and deletes it here.
 
-- **Settled collapses whenever asked**, also while one of its rows is selected. The selection and the detail column
-  stay; Previous and Next Session expand it when they move the selection into it; a search still opens it.
 - **Settle from the row.** On hover a live row in Needs You or Working shows `✓ Settle` in place of its trailing text,
   and its context menu gains `Settle Session`. Settling is End Session: the session is saved and moves to Settled, and
   Continue brings it back. Not offered while a turn runs or a permission or form waits.
@@ -167,6 +169,8 @@ moves it into the text above and deletes it here.
 
 ## Changes
 
+- 2026-11-08, #274: shelves collapse whenever asked, also with a selected row; Previous and Next Session expand the
+  shelf they move into; expanding and collapsing animate (none under Reduce Motion).
 - 2026-11-08, #268: Working moved from the scrolling list to a shelf above Settled; its rows show `Working 1m 12s` or
   `Idle 20m`; the list reads `Nothing needs you` without Needs You rows.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.

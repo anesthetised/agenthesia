@@ -6,7 +6,7 @@ let args = CommandLine.arguments
 func usage() -> Never {
     FileHandle.standardError.write(
         Data(
-            "usage: wintool winid <pid> | front | click|rclick <x> <y> | move <x> <y> | scroll <x> <y> <dy>\n"
+            "usage: wintool winid <pid> | front | click|rclick <x> <y> | drag <x> <y> <x2> <y2> | move <x> <y> | scroll <x> <y> <dy>\n"
                 .utf8))
     exit(1)
 }
@@ -60,6 +60,20 @@ case "click", "rclick":
         CGEvent(
             mouseEventSource: nil, mouseType: left ? .leftMouseUp : .rightMouseUp,
             mouseCursorPosition: point, mouseButton: button))
+case "drag":
+    let from = CGPoint(x: number(2), y: number(3))
+    let to = CGPoint(x: number(4), y: number(5))
+    moveMouse(to: from)
+    usleep(80_000)
+    post(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: from, mouseButton: .left))
+    for step in 1...20 {
+        usleep(15_000)
+        let t = Double(step) / 20
+        let point = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+        post(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: .left))
+    }
+    usleep(50_000)
+    post(CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: to, mouseButton: .left))
 case "move":
     moveMouse(to: CGPoint(x: number(2), y: number(3)))
 case "scroll":

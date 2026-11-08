@@ -18,6 +18,8 @@ import JSONRPC
 //     MockAgent --effort             echo agent that also offers an effort (thought_level) config option
 //     MockAgent --fast               echo agent that also offers a boolean `Fast mode` config option
 //     MockAgent --reject-config      echo agent that refuses every mode and config change
+//     MockAgent --demo <file>        echo agent that plays the canned turn in <file> on every prompt (see
+//                                    EchoAgent.Options.demo); scripts/readme-screenshot.sh uses it
 
 // Created only in the agent modes: it starts reading standard input, which `--login` needs for itself.
 func transport() -> FileHandleTransport { FileHandleTransport(reading: .standardInput, writing: .standardOutput) }
@@ -62,5 +64,8 @@ if arguments.contains("--login") {
     options.effort = arguments.contains("--effort") && !arguments.contains("--no-config")
     options.fastMode = arguments.contains("--fast") && !arguments.contains("--no-config")
     options.rejectsConfigChanges = arguments.contains("--reject-config")
+    if let index = arguments.firstIndex(of: "--demo"), arguments.indices.contains(index + 1) {
+        options.demo = try String(contentsOfFile: arguments[index + 1], encoding: .utf8)
+    }
     await EchoAgent(options: options).serve(transport())
 }

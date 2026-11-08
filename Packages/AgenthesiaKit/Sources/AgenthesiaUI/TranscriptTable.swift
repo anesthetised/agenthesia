@@ -441,6 +441,10 @@ final class TranscriptScrollView: NSScrollView {
     }
 }
 
+/// How firmly a row's content keeps its own height: above the height AppKit gives a row (priority 500), so a row last
+/// measured at another width shrinks to its content instead of stretching it.
+private let rowContentHugging = NSLayoutConstraint.Priority(501)
+
 private final class TranscriptMessageRow: NSTableCellView {
     static let id = NSUserInterfaceItemIdentifier("DemoMessage")
     var markdown: String
@@ -592,8 +596,10 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Thoughts read as secondary text; dimming keeps the code colors of their Markdown.
     private static let thoughtAlpha: CGFloat = 0.65
 
-    /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins.
-    private func columnConstraints(for view: NSView) -> [NSLayoutConstraint] {
+    /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins, and keeps
+    /// the row as tall as its content.
+    private func columnConstraints(for view: NSStackView) -> [NSLayoutConstraint] {
+        view.setHuggingPriority(rowContentHugging, for: .vertical)
         let fill = view.widthAnchor.constraint(equalTo: widthAnchor, constant: -2 * TranscriptColumn.minMargin)
         // Below AppKit's width for the cell (priority 500): above it, a wide row shrinks to fit the column's maximum
         // and the column loses its center.
@@ -691,6 +697,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             ]
         )
         header.distribution = .fill
+        header.setHuggingPriority(rowContentHugging, for: .vertical)
         // `· kind` follows a record's status as one phrase, so the stack's gap would read as a double space.
         if message.tool?.record == true, let status = statusLabel { header.setCustomSpacing(3, after: status) }
         return header

@@ -132,6 +132,11 @@ app-check-tools:
 # Run everything CI runs
 ci: lint test-scripts coverage app
 
+# Regenerate the README screenshots in light and dark (docs/images/agenthesia-*.png) with a demo session of a test
+# copy of the app; it drives the app's window, so leave the machine alone for about two minutes
+screenshots: app-check-tools
+    scripts/readme-screenshot/readme-screenshot.sh
+
 # Remove build artifacts
 clean:
     rm -rf {{package}}/.build {{derived_data}} .build/xcode-lab

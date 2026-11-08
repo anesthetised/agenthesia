@@ -845,8 +845,13 @@ Pitfalls known so far:
   chip`, Quick Open's Return from the search field, the hover Copy staying on rows the pointer left, a narrow
   transcript with review and inspector open, the Remove menu's look). Not checked: VoiceOver itself, the `1 saved
   session` wording of Remove (it needs a session with a real agent), two installed versions, a fetch failure of
-  #277, Increase Contrast. The README screenshot was left unchanged (owner's decision). `scripts/app-check/lib.sh`'s
-  project and agent menu paths follow the new draft heading.
+  #277, Increase Contrast. `scripts/app-check/lib.sh`'s project and agent menu paths follow the new draft heading.
+  The README screenshots are now generated: `just screenshots` runs `scripts/readme-screenshot/readme-screenshot.sh`,
+  which plays a canned turn (`MockAgent --demo`) in a test copy of the app under a temporary home and captures the
+  window with its shadow in light and dark; README picks one with `prefers-color-scheme`, as for the logo. Making them
+  showed transcript rows keeping the height they were measured at when the column widened (opening the file pane or
+  resizing the window): the extra height stretched the row's Copy strip into an empty band. The rows' stacks now hold
+  their own height above AppKit's row height, and a test resizes from 500 to 1364 pt.
 
 ## M16: Multi-agent workflow (2026-11-07)
 

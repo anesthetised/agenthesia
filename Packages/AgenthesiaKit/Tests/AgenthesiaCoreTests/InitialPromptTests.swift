@@ -153,6 +153,7 @@ import Testing
         #expect(await DraftCheckout.of(fixture.project) == .folder)
         #expect(DraftCheckout.folder.title == "Project folder")
         #expect(DraftCheckout.worktree(from: "main").title == "New worktree from main")
+        #expect(DraftCheckout.worktree(from: "origin/main").title == "New worktree from origin/main")
         #expect(DraftCheckout.worktree(from: "main").help.contains("Uncommitted and untracked files are not copied"))
         #expect(!DraftCheckout.folder.help.isEmpty)
     }

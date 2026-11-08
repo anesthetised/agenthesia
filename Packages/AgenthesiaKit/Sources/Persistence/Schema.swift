@@ -73,6 +73,9 @@ enum Schema {
         migrator.registerMigration("v6-session-archived-at") { db in
             try db.execute(sql: "ALTER TABLE session ADD COLUMN archivedAt REAL")
         }
+        migrator.registerMigration("v7-session-fallback-upstream") { db in
+            try db.execute(sql: "ALTER TABLE session ADD COLUMN fallbackUpstream TEXT")
+        }
         return migrator
     }
 }

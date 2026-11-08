@@ -5,6 +5,9 @@ extension SessionWorkspace {
     public enum MergeBlocker: Equatable, Sendable {
         case noBaseBranch
         case baseBranchMissing(String)
+        /// The session started from a commit the local base branch does not contain yet, such as its fetched
+        /// upstream (ADR-0047). A squash from the older merge base would bring the upstream's commits in twice.
+        case baseBranchBehind(base: String, upstream: String?)
         case checkoutOnOtherBranch(base: String, current: String?)
         case checkoutHasChanges
         case worktreeUnavailable
@@ -19,6 +22,11 @@ extension SessionWorkspace {
                 "The session started from a detached HEAD or before Agenthesia recorded branches, so it has no branch "
                     + "to merge into. It can only be discarded."
             case .baseBranchMissing(let base): "The base branch “\(base)” no longer exists."
+            case .baseBranchBehind(let base, let upstream?):
+                "The session started from a newer \(upstream) than “\(base)” contains. Pull \(upstream) into "
+                    + "“\(base)” first, then merge."
+            case .baseBranchBehind(let base, nil):
+                "The session started from a commit that “\(base)” does not contain. Update “\(base)” first, then merge."
             case .checkoutOnOtherBranch(let base, let current):
                 "The project checkout is on \(current.map { "“\($0)”" } ?? "a detached HEAD"), not “\(base)”. "
                     + "Switch it to “\(base)” to merge."
@@ -51,10 +59,15 @@ extension SessionWorkspace {
         case notRestored(String)
     }
 
-    /// What blocks merging the session into `baseBranch`, or what the merge would bring. Read-only.
-    public static func mergeCheck(of worktree: Worktree, into baseBranch: String?) async throws -> MergeCheck {
+    /// What blocks merging the session into `baseBranch`, or what the merge would bring. Read-only. `baseRevision`
+    /// is where the session started; nil for legacy sessions.
+    public static func mergeCheck(
+        of worktree: Worktree,
+        into baseBranch: String?,
+        baseRevision: String? = nil
+    ) async throws -> MergeCheck {
         guard let baseBranch else { return .blocked(.noBaseBranch) }
-        return try await blocking { try check(worktree, baseBranch) }
+        return try await blocking { try check(worktree, baseBranch, baseRevision) }
     }
 
     /// Squash-merges the session branch with its uncommitted work into `baseBranch` in the project checkout and
@@ -63,12 +76,15 @@ extension SessionWorkspace {
     public static func merge(
         _ worktree: Worktree,
         into baseBranch: String?,
+        baseRevision: String? = nil,
         message: String,
         environment: [String: String]? = nil
     ) async throws -> String {
         guard let baseBranch else { throw MergeFailure.blocked(.noBaseBranch) }
         return try await blocking {
-            if case .blocked(let blocker) = try check(worktree, baseBranch) { throw MergeFailure.blocked(blocker) }
+            if case .blocked(let blocker) = try check(worktree, baseBranch, baseRevision) {
+                throw MergeFailure.blocked(blocker)
+            }
             let project = worktree.projectDirectory
             // Written before anything changes, so a failed write cannot strand a squash in the checkout.
             let file = FileManager.default.temporaryDirectory.appending(path: "agenthesia-merge-\(UUID().uuidString)")
@@ -118,12 +134,15 @@ extension SessionWorkspace {
         }
     }
 
-    private static func check(_ worktree: Worktree, _ base: String) throws -> MergeCheck {
+    private static func check(_ worktree: Worktree, _ base: String, _ baseRevision: String?) throws -> MergeCheck {
         let project = worktree.projectDirectory
         let ref = "refs/heads/\(base)"
         let branch = "refs/heads/\(worktree.branch)"
         guard (try? git(["rev-parse", "--verify", "--quiet", "--end-of-options", ref], in: project)) != nil else {
             return .blocked(.baseBranchMissing(base))
+        }
+        if let baseRevision, !contains(ref, baseRevision, in: project) {
+            return .blocked(.baseBranchBehind(base: base, upstream: upstream(of: base, in: project)?.name))
         }
         let current = try? git(["symbolic-ref", "--quiet", "HEAD"], in: project)
         guard current == ref else {
@@ -151,5 +170,10 @@ extension SessionWorkspace {
         guard files > 0 else { return .blocked(.nothingToMerge) }
         let commits = Int(try git(["rev-list", "--count", "\(ref)..\(branch)"], in: project)) ?? 0
         return .ready(files: files, commits: commits)
+    }
+
+    /// Whether `ref` contains `revision`; false for an unknown revision too. Blocks the calling thread.
+    static func contains(_ ref: String, _ revision: String, in directory: URL) -> Bool {
+        (try? git(["merge-base", "--is-ancestor", "--end-of-options", revision, ref], in: directory)) != nil
     }
 }

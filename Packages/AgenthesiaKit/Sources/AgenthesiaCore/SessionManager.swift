@@ -213,7 +213,7 @@ public final class SessionManager {
         guard canBeginMerge(session.id) else { return .blocked(MergeError.busyExplanation) }
         let (worktree, outcome) = try await removableWorktree(session)
         guard outcome == nil else { throw DiscardError.alreadyRemoved }
-        switch try await SessionWorkspace.mergeCheck(of: worktree, into: base) {
+        switch try await SessionWorkspace.mergeCheck(of: worktree, into: base, baseRevision: session.baseRevision) {
         case .ready(let files, let commits): return .ready(baseBranch: base, files: files, commits: commits)
         case .blocked(let blocker): return .blocked(blocker.explanation)
         }
@@ -239,6 +239,7 @@ public final class SessionManager {
                 commit = try await SessionWorkspace.merge(
                     worktree,
                     into: base,
+                    baseRevision: session.baseRevision,
                     message: message,
                     environment: await resolve().values
                 )

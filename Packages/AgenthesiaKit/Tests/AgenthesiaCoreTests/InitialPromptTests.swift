@@ -178,8 +178,14 @@ import Testing
                 createdAt: Date(timeIntervalSince1970: time)
             )
         }
-        let history = [session(old, 1), session(new, 2), session(old, 0)]
-        #expect(ProjectRecord.recent([unused, old, new], history: history).map(\.name) == ["New", "Old", "Unused"])
-        #expect(ProjectRecord.recent([unused, old], history: []).map(\.name) == ["Unused", "Old"])
+        let scratch = ProjectRecord(name: "No project", rootPath: "/scratch")
+        let history = [session(old, 1), session(new, 2), session(old, 0), session(scratch, 3)]
+        #expect(
+            ProjectRecord.recent([unused, old, new, scratch], history: history, scratchPath: "/scratch").map(\.name)
+                == ["New", "Old", "Unused"]
+        )
+        #expect(
+            ProjectRecord.recent([unused, old], history: [], scratchPath: "/scratch").map(\.name) == ["Unused", "Old"]
+        )
     }
 }

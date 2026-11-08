@@ -114,9 +114,24 @@ unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup until the session is merged or discarded, except one whose session never
 got a history record.
 
-> **Accepted, not yet implemented (M18):** [ADR-0048](adr/0048-sessions-without-a-project.md) adds
-> sessions without a project, each in its own `~/.agenthesia/scratch/<words>-<id>` folder under one *No project*
-> project.
+Sessions without a project ([ADR-0048](adr/0048-sessions-without-a-project.md)) start with a nil directory:
+`SessionManager.start(directory: nil, …)` passes its `scratchRoot` (default `SessionWorkspace.defaultScratchRoot`,
+`~/.agenthesia/scratch`, injectable like the worktrees root) to `LiveSession`, whose `create` calls
+`SessionWorkspace.prepareScratch` instead of `prepare`. It creates the root, canonicalizes it with
+`ScopedFileAccess.canonicalURL` (so the file pane's `isCanonical` check holds), and creates
+`<root>/<words>-<8 hex digits>` (`readableName`, the session branch without its `agenthesia/` prefix) without
+intermediate directories, so an existing folder fails the start. The result is a non-Git workspace: the canonical root
+as project directory, the folder as working directory, no base revision or branch. The working directory stays the
+only filesystem root of `SessionFileSystem`; the project root is never added. `SessionLibrary.project(directory:name:)`
+creates the project row once, named `ProjectRecord.scratchName` (`No project`). No column marks it: the project is
+recognised by its well-known root, `ProjectRecord.isScratch(scratchPath:)` against `SessionManager.scratchPath`
+(`SessionWorkspace.scratchProjectPath`), so no migration was needed. `ProjectRecord.recent` skips it, so the draft's
+project menu and default never offer it; `SessionWindowModel.isScratch` drives `ProjectBadge.mark` (`.dashed`, drawn as
+`square.dashed`), hides Discard Worktree… and Review, and the inspector's Changes text. Merge and Discard are refused
+anyway, since such a session has no base revision and no `Worktree`. The draft's switch is
+`SessionWindowModel.draftWithoutProject`; Send clears it, and a failed start brings it back with the picks.
+`LiveSession.removeUnstartedWorktree` also removes the folder of a start that failed before its record existed, through
+`SessionWorkspace.removeEmptyScratch`, and only while the folder is empty.
 
 New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
 launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: the heading "What should
@@ -954,7 +969,7 @@ Persistence's manual command records; windows and history adopt installations in
 bundle identifier and when there is none (tests, the CLI), `Agenthesia-<suffix>` for `….Agenthesia.<suffix>`. `just app`
 builds the `.dev` identifier, so a development build keeps its history, installs and registry cache apart from the
 installed app's. `AgentInstaller`, `AgentCatalog` and `SessionLibrary` all take their paths from it; worktrees stay in
-`~/.agenthesia/worktrees`.
+`~/.agenthesia/worktrees`, and the folders of sessions without a project in `~/.agenthesia/scratch`.
 
 Operations stage beneath the owned root and publish by an exclusive, same-volume rename after validation.
 Cancellation or failure removes that operation's staging files and preserves existing versions. Updates

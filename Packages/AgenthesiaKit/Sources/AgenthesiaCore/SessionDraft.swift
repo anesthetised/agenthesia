@@ -44,13 +44,25 @@ public enum DraftCheckout: Equatable, Sendable {
 }
 
 extension ProjectRecord {
+    /// The name of the one project that sessions without a project belong to (ADR-0048).
+    public static let scratchName = "No project"
+
+    /// Whether this is the project of sessions without a project, whose root is the scratch root (ADR-0048).
+    /// `scratchPath` is `SessionWorkspace.scratchProjectPath(_:)`.
+    public func isScratch(scratchPath: String) -> Bool { rootPath == scratchPath }
+
     /// Most recently used first, by each project's newest session; projects without sessions follow in the given
-    /// order.
-    public static func recent(_ projects: [ProjectRecord], history: [SessionRecord]) -> [ProjectRecord] {
+    /// order. The project of sessions without a project is never offered (ADR-0048).
+    public static func recent(
+        _ projects: [ProjectRecord],
+        history: [SessionRecord],
+        scratchPath: String
+    ) -> [ProjectRecord] {
         var latest: [UUID: Date] = [:]
         for session in history {
             latest[session.projectID] = max(latest[session.projectID] ?? .distantPast, session.createdAt)
         }
+        let projects = projects.filter { !$0.isScratch(scratchPath: scratchPath) }
         return projects.enumerated().sorted { first, second in
             let (a, b) = (latest[first.element.id], latest[second.element.id])
             if a != b { return (a ?? .distantPast) > (b ?? .distantPast) }

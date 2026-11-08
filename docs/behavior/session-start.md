@@ -24,6 +24,7 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - Centered in the column: the heading `What should we build in <project>?` in the large title font, regular weight,
   the project name a borderless menu (see *Project menu*). When the line does not fit the column, the project moves
   to a second line, `<project>?`. Without a project the heading is the menu alone: `Choose a project to start`.
+- Under the heading, in secondary text, `or start without a project` (see *Without a project*).
 - The composer card sits directly under the heading, centered with it, as wide as a session's composer at most. It has
   the Agent and Checkout chips on top, the text field, and a bottom row with Attach (⇧⌘A, tooltip `Attach files or
   folders (⇧⌘A)`), the hint pills and Send.
@@ -46,6 +47,23 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - Default: the project of the newest session in history, so the last project is remembered across launches. With no
   history the heading reads `Choose a project to start`. Its tooltip is the selected path, else `Choose the project
   the agent works in`; its accessibility label is `Project: <name>`.
+
+## Without a project
+
+[ADR-0048](../adr/0048-sessions-without-a-project.md) stores and removes such sessions.
+
+- `or start without a project` under the heading switches the draft: the heading reads `What should we work on?`
+  with no project menu, the Checkout label is hidden, and the line under the heading reads `in a project`, which
+  switches back. The agent, the text, the attachments and the hint pills stay.
+- Per draft, not remembered: Send switches the next draft back to a project, and a new window starts in one. A failed
+  or cancelled start returns the draft without a project, as it was sent.
+- At Send the session gets a new, empty folder `~/.agenthesia/scratch/<words>-<8 hex digits>`, named like a session
+  branch from the first line of the message, and works there: no worktree, no Git. The folder is the agent's only
+  filesystem root. A folder of that name that already exists fails the start rather than being shared.
+- All such sessions belong to the project `No project`, which the project menu never offers and which is never the
+  draft's default. `New Session in Project` on such a row opens a draft without a project.
+- The session has no Review, Merge or Discard; the inspector's Changes read `Not tracked: this session has no
+  project`. Show in Finder and Open in Editor open its folder, and Continue runs there again.
 
 ## Agent chip
 
@@ -108,8 +126,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 ## Send
 
 - Send (the arrow button or Return, tooltip `Start the session with this message (Return)`) needs a message with
-  non-whitespace text or an attachment, a project and an agent; otherwise the button is disabled and Return does
-  nothing.
+  non-whitespace text or an attachment, a project (or a draft without one) and an agent; otherwise the button is
+  disabled and Return does nothing.
 - Send starts the session with the selected project, agent and hints, holds the message as its first prompt, and
   clears the draft at once. The window switches to the starting session.
 - The first message is submitted like a typed prompt (when ready) as soon as the session is idle for the first time.
@@ -131,7 +149,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   cancellation). The banner offers `Manage Agents…` for a missing executable or agent version, and `Details` with the
   raw text when it shortens the error. The error clears on Send or when the project or agent changes.
 - A start that never reached a history record leaves nothing behind: its worktree and branch are removed unless they
-  hold work, and the sidebar does not list it ([ADR-0033's amendment](../adr/0033-agent-sign-in.md)).
+  hold work, the folder of a session without a project is removed while it is empty, and the sidebar does not list
+  it ([ADR-0033's amendment](../adr/0033-agent-sign-in.md)).
 - A start that fails while the window shows something else stays in the sidebar as failed; selecting it returns its
   message to that window's draft, replacing the text there.
 - **Stale hint.** If the agent no longer offers a hinted value, or rejects it, the start fails with `The agent does
@@ -144,17 +163,10 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; see
 [ADR-0017](../adr/0017-continue-saved-sessions.md).
 
-## Planned (M18)
-
-Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
-moves it into the text above and deletes it here.
-
-- **Without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)): `or start without a project` under the
-  heading switches the draft to `What should we work on?` and hides the Checkout chip; `in a project` switches back.
-  Per draft, not remembered.
-
 ## Changes
 
+- 2026-11-08, #279: `or start without a project` under the heading; such a session works in its own folder under
+  `~/.agenthesia/scratch` in the project `No project`, without Review, Merge or Discard.
 - 2026-11-08, #278: the draft's heading `What should we build in <project>?` holds the project menu, which leaves the
   card; the card sits centered under it and moves to the bottom edge on Send. Without an agent the card offers
   `Add Agent…` instead of the text field, replacing the `No agent is installed.` line.

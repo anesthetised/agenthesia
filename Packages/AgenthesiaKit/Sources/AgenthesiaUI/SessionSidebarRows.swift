@@ -22,6 +22,7 @@ struct SessionSidebarRows: View {
         return SessionRow(
             title: row.title,
             project: row.project?.name,
+            isScratch: model.isScratch(row.project),
             reason: owner.reason ?? session.flatMap { model.outcome(of: $0.id) }?.label,
             activity: owner.activity,
             lastActivity: row.lastActivity,
@@ -35,7 +36,7 @@ struct SessionSidebarRows: View {
             windowMenu(.live(owner))
             Button("Settle Session") { Task { await model.settle(owner) } }
                 .disabled(!model.canSettle(owner))
-            if let session { discardButton(session) }
+            if let session, !model.isScratch(row.project) { discardButton(session) }
         }
     }
 
@@ -43,6 +44,7 @@ struct SessionSidebarRows: View {
         SessionRow(
             title: row.title,
             project: row.project?.name,
+            isScratch: model.isScratch(row.project),
             reason: SidebarReason.saved(archived: record.archivedAt != nil, outcome: model.outcomes[record.id]?.label),
             activity: nil,
             lastActivity: row.lastActivity
@@ -52,7 +54,8 @@ struct SessionSidebarRows: View {
             newSessionButton(row.project)
             windowMenu(.saved(record))
             archiveButton(record)
-            discardButton(record)
+            // A session without a project has no worktree (ADR-0048).
+            if !model.isScratch(row.project) { discardButton(record) }
         }
     }
 

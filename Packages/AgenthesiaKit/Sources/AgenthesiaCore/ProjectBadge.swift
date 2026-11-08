@@ -1,5 +1,19 @@
 /// What a sidebar row's project badge shows, derived from the project name alone (ADR-0039).
 public enum ProjectBadge {
+    public enum Mark: Equatable, Sendable {
+        case initials(String)
+        /// A dashed square: the project of sessions without a project (ADR-0048).
+        case dashed
+        /// An empty grey square: no project yet.
+        case empty
+    }
+
+    /// What the badge of a row in `name`'s project shows.
+    public static func mark(name: String?, isScratch: Bool) -> Mark {
+        if isScratch { return .dashed }
+        return name.map { .initials(initials(of: $0)) } ?? .empty
+    }
+
     /// The first letters of the first two words (split on space, `-`, `_` and `.`), uppercased; one word gives
     /// its first two letters.
     public static func initials(of name: String) -> String {

@@ -6,6 +6,8 @@ import SwiftUI
 struct SessionRow: View {
     let title: String
     let project: String?
+    /// The row's project is the one of sessions without a project (ADR-0048): a dashed badge.
+    var isScratch = false
     /// What the session waits for, or how it finished; nil when the symbol says it.
     let reason: String?
     /// Nil for saved sessions, which have no live status.
@@ -47,7 +49,7 @@ struct SessionRow: View {
                 now: now
             ) : lastActivity.map { RelativeTime.short(from: $0, to: now) }
         return HStack {
-            ProjectBadgeView(name: project)
+            ProjectBadgeView(name: project, isScratch: isScratch)
             VStack(alignment: .leading) {
                 Text(title).lineLimit(1)
                 if project != nil || reason != nil {

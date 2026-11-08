@@ -51,8 +51,10 @@ Each row is one line of title over one line of detail, with the status and time 
 
 - **Project badge** — the project's initials on a tinted rounded square: the first letters of the first two words of
   the name (words split on space, `-`, `_`, `.`), or the first two letters of a single word, uppercased. The tint is
-  one of eight colors chosen by a stable hash of the name, the same in every launch. A row without a project shows an
-  empty grey square.
+  one of eight colors chosen by a stable hash of the name, the same in every launch. A row without a project yet
+  (starting) shows an empty grey square; a session without a project
+  ([ADR-0048](../adr/0048-sessions-without-a-project.md)) shows a dashed square (`square.dashed`) and `No project` as
+  its project name, which search matches like any other.
 - **Title** — the session title (the agent's title, else the first line of the first prompt), or `New Session`
   without one. One line, cut at its tail.
 - **Second line** — `project · reason`; the project alone without a reason, the reason alone without a project. It
@@ -139,7 +141,8 @@ Right-click on a row:
 | `Discard Worktree…` | yes | yes |
 
 - `New Session in Project` opens the draft with the row's project selected; the typed message and the agent stay.
-  Absent while the row has no project.
+  Absent while the row has no project. On a `No project` row it opens a draft without a project
+  ([session-start.md](session-start.md)).
 - `Open in New Window` shows the session in its own window, or brings forward the window that already shows it.
   Absent for a starting session that has no identity yet.
 - `Settle Session` is End Session for the row's own session, whichever session the window shows: the agent stops, the
@@ -153,26 +156,19 @@ Right-click on a row:
   is ended before it can be archived. Continue on an archived session unarchives it. Storage and the reasons are in
   [ADR-0044](../adr/0044-delete-and-archive-sessions.md). A failed write shows `Cannot Archive the Session` /
   `Cannot Unarchive the Session`.
-- `Discard Worktree…` is enabled when the session has a worktree Agenthesia created and no outcome yet (or a merge left
-  its worktree behind), and it is not starting, merging or being discarded. It asks first: `Discard the worktree of
-  “<title>”?` with what will be lost (`2 uncommitted files and 1 commit on <branch> will be deleted. This cannot be
-  undone.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
+- `Discard Worktree…` is absent on a `No project` row. It is enabled when the session has a worktree Agenthesia
+  created and no outcome yet (or a merge left its worktree behind), and it is not starting, merging or being
+  discarded. It asks first: `Discard the worktree of “<title>”?` with what will be lost (`2 uncommitted files and 1
+  commit on <branch> will be deleted. This cannot be undone.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
   `Discarded` ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)).
 
 The Session menu has the same `Archive Session` / `Unarchive Session` and `Discard Worktree…` for the displayed session,
 without shortcuts. Archive is disabled unless the displayed session is saved; for a live one its help text is `End the
 session first`. Each change refreshes the window's history; other windows pick it up at their next refresh.
 
-## Planned (M18)
-
-Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
-moves it into the text above and deletes it here.
-
-- **Sessions without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)) show a dashed square instead
-  of initials and `No project` as the project name.
-
 ## Changes
 
+- 2026-11-08, #279: sessions without a project show a dashed square and `No project`.
 - 2026-11-08, #275: a live row settles (ends) from a hover button and `Settle Session` in its context menu.
 - 2026-11-08, #274: shelves collapse whenever asked, also with a selected row; Previous and Next Session expand the
   shelf they move into; expanding and collapsing animate (none under Reduce Motion).

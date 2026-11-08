@@ -8,6 +8,12 @@ extension SessionWorkspace {
     /// to Latin and reduced to at most 40 characters of `[a-z0-9-]`, cut at a word boundary; `session` without
     /// usable characters. Valid for `git check-ref-format` by construction.
     public static func branchName(for id: UUID, topic: String?) -> String {
+        "\(branchPrefix)\(readableName(for: id, topic: topic))"
+    }
+
+    /// `<words>-<first 8 hex digits of the session id>`: a session branch without its prefix, and the folder of a
+    /// session without a project (ADR-0048).
+    static func readableName(for id: UUID, topic: String?) -> String {
         let latin = (topic ?? "").applyingTransform(StringTransform("Any-Latin; Latin-ASCII; Lower"), reverse: false)
         let scalars = (latin ?? "").unicodeScalars.map {
             ("a"..."z").contains($0) || ("0"..."9").contains($0) ? $0 : "-"
@@ -18,7 +24,7 @@ extension SessionWorkspace {
             guard slug.count + 1 + word.count <= maxTopicLength else { break }
             slug += "-" + word
         }
-        return "\(branchPrefix)\(slug)-\(id.uuidString.lowercased().prefix(8))"
+        return "\(slug)-\(id.uuidString.lowercased().prefix(8))"
     }
 
     /// The branch of sessions created before names were stored, and of a session whose readable name was taken.

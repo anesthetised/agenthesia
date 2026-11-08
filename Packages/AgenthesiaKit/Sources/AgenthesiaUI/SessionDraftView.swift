@@ -2,8 +2,9 @@ import AgenthesiaCore
 import AppKit
 import SwiftUI
 
-/// A window without a session (ADR-0040): the heading with the project's menu and, under it, the composer card with
-/// the agent and checkout above the text. Send starts the session with the draft as its first message.
+/// A window without a session (ADR-0040): the heading with the project's menu, the switch to a draft without a project
+/// (ADR-0048) and, under them, the composer card with the agent and checkout above the text. Send starts the session
+/// with the draft as its first message.
 struct SessionDraftView: View {
     @Bindable var model: SessionWindowModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -21,7 +22,11 @@ struct SessionDraftView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            heading.opacity(leaving ? 0 : 1)
+            VStack(spacing: 6) {
+                heading
+                projectSwitch
+            }
+            .opacity(leaving ? 0 : 1)
             VStack(alignment: .leading, spacing: 6) {
                 if let error = model.draftError {
                     FailureBanner(error, offering: [.manageAgents], perform: { _ in })
@@ -47,7 +52,7 @@ struct SessionDraftView: View {
 
     /// `What should we build in <project>?`, the project on a line of its own when the column is too narrow.
     private var heading: some View {
-        let heading = DraftHeading(project: model.draftProjectName)
+        let heading = DraftHeading(project: model.draftProjectName, withoutProject: model.draftWithoutProject)
         return ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 10) { headingParts(heading) }
             VStack(spacing: 4) { headingParts(heading) }
@@ -59,17 +64,30 @@ struct SessionDraftView: View {
 
     @ViewBuilder private func headingParts(_ heading: DraftHeading) -> some View {
         if let lead = heading.lead { Text(lead) }
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            projectMenu(heading.menu)
-            Text(heading.end)
+        if let menu = heading.menu {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                projectMenu(menu)
+                Text(heading.end)
+            }
         }
+    }
+
+    /// `or start without a project`, or `in a project` back; per draft (ADR-0048).
+    private var projectSwitch: some View {
+        let heading = DraftHeading(project: model.draftProjectName, withoutProject: model.draftWithoutProject)
+        return Button(heading.alternative, action: toggleProject)
+            .buttonStyle(.plain).foregroundStyle(.secondary).pointerStyle(.link)
+    }
+
+    private func toggleProject() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { model.draftWithoutProject.toggle() }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 agentMenu
-                if let checkout {
+                if let checkout, !model.draftWithoutProject {
                     Label(checkout.title, systemImage: checkout == .folder ? "folder" : "arrow.triangle.branch")
                         .foregroundStyle(.secondary).lineLimit(1).help(checkout.help)
                 }

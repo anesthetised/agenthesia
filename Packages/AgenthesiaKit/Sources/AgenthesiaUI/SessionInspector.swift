@@ -34,7 +34,8 @@ struct SessionInspector: View {
                 }.textSelection(.enabled)
             }
             Label(directory.path, systemImage: "folder").textSelection(.enabled)
-            if let session {
+            // A session without a project has no worktree to discard (ADR-0048).
+            if let session, !model.displaysSessionWithoutProject {
                 Button("Discard Worktree…", systemImage: "trash") { Task { await model.requestDiscard(session) } }
                     .buttonStyle(.borderless)
                     .disabled(!model.canDiscard)
@@ -70,36 +71,41 @@ struct SessionInspector: View {
     private func changes(_ session: SessionRecord) -> some View {
         let files = model.files
         return Section("Changes") {
-            if let error = files.changesError {
-                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
-            } else if files.isLoadingIndex {
-                ProgressView("Checking files…").controlSize(.small)
-            } else if !files.isGitRepository {
-                Text("Change tracking requires Git.").font(.caption).foregroundStyle(.secondary)
-            } else if files.changedPaths.isEmpty {
-                Text("No changed files").font(.caption).foregroundStyle(.secondary)
+            if model.displaysSessionWithoutProject {
+                // Not a project: nothing is tracked, reviewed or merged (ADR-0048).
+                Text("Not tracked: this session has no project").font(.caption).foregroundStyle(.secondary)
             } else {
-                HStack {
-                    ChangeCounts(lines: files.changeStats.total)
-                    Text("· ^[\(files.changedPaths.count) file](inflect: true)").foregroundStyle(.secondary)
-                }
-            }
-            actions
-            WatchErrorNotice(files: files)
-            ForEach(files.changedPaths, id: \.self) { path in
-                Button {
-                    onOpen(path, session.id)
-                } label: {
+                if let error = files.changesError {
+                    Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                } else if files.isLoadingIndex {
+                    ProgressView("Checking files…").controlSize(.small)
+                } else if !files.isGitRepository {
+                    Text("Change tracking requires Git.").font(.caption).foregroundStyle(.secondary)
+                } else if files.changedPaths.isEmpty {
+                    Text("No changed files").font(.caption).foregroundStyle(.secondary)
+                } else {
                     HStack {
-                        Label(path, systemImage: "doc.text").lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 8)
-                        if files.changeStats.binary.contains(path) {
-                            Text("binary").font(.caption).foregroundStyle(.secondary)
-                        } else if let lines = files.changeStats.files[path] {
-                            ChangeCounts(lines: lines).font(.caption)
-                        }
-                    }.contentShape(.rect)
-                }.buttonStyle(.plain).help(path)
+                        ChangeCounts(lines: files.changeStats.total)
+                        Text("· ^[\(files.changedPaths.count) file](inflect: true)").foregroundStyle(.secondary)
+                    }
+                }
+                actions
+                WatchErrorNotice(files: files)
+                ForEach(files.changedPaths, id: \.self) { path in
+                    Button {
+                        onOpen(path, session.id)
+                    } label: {
+                        HStack {
+                            Label(path, systemImage: "doc.text").lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            if files.changeStats.binary.contains(path) {
+                                Text("binary").font(.caption).foregroundStyle(.secondary)
+                            } else if let lines = files.changeStats.files[path] {
+                                ChangeCounts(lines: lines).font(.caption)
+                            }
+                        }.contentShape(.rect)
+                    }.buttonStyle(.plain).help(path)
+                }
             }
         }
     }

@@ -1267,34 +1267,91 @@ extension LiveTranscriptTests {
         }
     }
 
-    @Test func aSelectedRowsStatusStaysReadableOnTheAccentColor() async throws {
+    @Test func aSelectedRowKeepsItsTextColorsAndGetsNoSystemBand() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(tool("a", kind: .read))
         try await recorded.apply(tool("b", status: .failed))
         let source = LiveTranscriptSource()
         publish(recorded, to: source)
         let controller = TranscriptTableController()
+        let window = host(controller, width: 1200)
+        defer { window.close() }
+        controller.update(source)
+        controller.table.selectRowIndexes([0], byExtendingSelection: false)
+
+        let rowView = try #require(controller.table.rowView(atRow: 0, makeIfNecessary: true) as? TranscriptRowView)
+        #expect(rowView.isSelected)
+        // AppKit gives a selected row's cell the emphasized style in a key window, which turns its text white.
+        #expect(rowView.interiorBackgroundStyle == .normal)
+        let cell = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
+        #expect(cell.backgroundStyle == .normal)
+        let status = try #require(views(NSTextField.self, in: cell).first { $0.stringValue == "· 1 failed" })
+        #expect(status.textColor == .systemRed)
+
+        // Nothing is drawn across the window outside of the column: the system's band is gone.
+        rowView.frame.size.width = 1200
+        rowView.layoutSubtreeIfNeeded()
+        let image = try #require(rowView.bitmapImageRepForCachingDisplay(in: rowView.bounds))
+        rowView.cacheDisplay(in: rowView.bounds, to: image)
+        let outside = try #require(image.colorAt(x: 2, y: Int(rowView.bounds.midY)))
+        #expect(outside.alphaComponent == 0)
+    }
+
+    @Test func aSelectedRowsQuietBackgroundIsAsWideAsTheTextColumn() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.apply(tool("a", kind: .read))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller, width: 1200)
+        defer { window.close() }
+        controller.update(source)
+        let rowView = try #require(controller.table.rowView(atRow: 0, makeIfNecessary: true) as? TranscriptRowView)
+        #expect(rowView.selectionBackground.alphaValue == 0)
+
+        controller.table.selectRowIndexes([0], byExtendingSelection: false)
+        rowView.layoutSubtreeIfNeeded()
+        #expect(rowView.selectionBackground.alphaValue == 1)
+        #expect(rowView.selectionBackground.frame.width == TranscriptColumn.maxWidth)
+        #expect(rowView.selectionBackground.frame.width < controller.table.bounds.width)
+        #expect(rowView.selectionBackground.frame.minX == TranscriptColumn.minX(inRowOfWidth: rowView.bounds.width))
+        #expect(rowView.selectionBackground.frame.height == rowView.bounds.height)
+        #expect(rowView.selectionBackground.layer?.cornerRadius == TranscriptRowView.selectionRadius)
+        // The quiet background sits behind the content.
+        #expect(rowView.subviews.first === rowView.selectionBackground)
+
+        // A narrow window leaves the column its margins.
+        rowView.frame.size.width = 300
+        rowView.layoutSubtreeIfNeeded()
+        #expect(rowView.selectionBackground.frame.width == 300 - 2 * TranscriptColumn.minMargin)
+    }
+
+    @Test func theQuietBackgroundFollowsTheSelectionAndCopyStillTakesWholeRows() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "hello")]).storedEvent())
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Reply"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(source)
-        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
-        let status = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 1 failed" })
-        #expect(status.textColor == .systemRed)
+        let rows = try (0..<2).map {
+            try #require(controller.table.rowView(atRow: $0, makeIfNecessary: true) as? TranscriptRowView)
+        }
 
-        // AppKit sets this on a selected row in a key window, which a hosted test does not have.
-        let cell = try #require(row as? NSTableCellView)
-        cell.backgroundStyle = .emphasized
-        #expect(status.textColor == .alternateSelectedControlTextColor)
+        controller.table.selectRowIndexes([0, 1], byExtendingSelection: false)
+        #expect(rows[0].isSelected && rows[1].isSelected)
+        #expect(
+            controller.selectedMarkdown == (0..<2).map { source.message(at: $0).markdown }.joined(separator: "\n\n")
+        )
 
-        // A header rebuilt while the row stays selected keeps the readable color.
-        try await recorded.apply(tool("c", status: .failed))
-        publish(recorded, to: source)
-        controller.update(source)
-        let rebuilt = try #require(views(NSTextField.self, in: row).first { $0.stringValue == "· 2 failed" })
-        #expect(rebuilt.textColor == .alternateSelectedControlTextColor)
-
-        cell.backgroundStyle = .normal
-        #expect(rebuilt.textColor == .systemRed)
+        controller.table.selectRowIndexes([1], byExtendingSelection: false)
+        #expect(!rows[0].isSelected)
+        #expect(rows[1].isSelected)
+        #expect(rows[0].selectionBackground.alphaValue == 0)
+        #expect(rows[1].selectionBackground.alphaValue == 1)
+        #expect(controller.selectedMarkdown == source.message(at: 1).markdown)
     }
 
     @Test func aCardAndItsOwnExpansionAreKeptApartFromItsGroupsExpansion() async throws {

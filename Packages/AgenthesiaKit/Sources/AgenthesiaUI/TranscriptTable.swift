@@ -360,6 +360,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
 
     func numberOfRows(in tableView: NSTableView) -> Int { session?.messageCount ?? 0 }
 
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { TranscriptRowView() }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let session else { return nil }
         let rowView = TranscriptMessageRow(markdown: "")
@@ -478,13 +480,6 @@ private final class TranscriptMessageRow: NSTableCellView {
     override func layout() {
         super.layout()
         bubble?.fit(columnWidth: TranscriptColumn.width(inRowOfWidth: bounds.width))
-    }
-
-    override var backgroundStyle: NSView.BackgroundStyle {
-        didSet {
-            guard let tool else { return }
-            statusLabel?.textColor = statusColor(tool.tone)
-        }
     }
 
     override func mouseEntered(with event: NSEvent) { setHovering(true) }
@@ -725,10 +720,8 @@ private final class TranscriptMessageRow: NSTableCellView {
         return tool.record ? [disclosure, icon, status, role] : [disclosure, icon, role, status]
     }
 
-    /// The selection's accent color hides a tone's color, the running tone's entirely.
     private func statusColor(_ tone: ToolCardHeader.Tone) -> NSColor {
-        guard backgroundStyle != .emphasized else { return .alternateSelectedControlTextColor }
-        return switch tone {
+        switch tone {
         case .neutral: .secondaryLabelColor
         case .running: .controlAccentColor
         case .attention: .systemOrange
@@ -811,6 +804,83 @@ private final class TextCell: NSView {
         super.layout()
         if bounds.width > 0, field.preferredMaxLayoutWidth != bounds.width {
             field.preferredMaxLayoutWidth = bounds.width
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+/// A transcript row without the system's selection band: a selected row gets a quiet rounded background as wide as
+/// the text column, behind its content, and its text keeps its colors.
+final class TranscriptRowView: NSTableRowView {
+    static let selectionRadius: CGFloat = 10
+    static let selectionFade: TimeInterval = 0.12
+
+    let selectionBackground = SelectionBackground()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        selectionBackground.alphaValue = 0
+        addSubview(selectionBackground, positioned: .below, relativeTo: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The rect of the quiet background in a row of `bounds`.
+    var selectionFrame: NSRect {
+        NSRect(
+            x: TranscriptColumn.minX(inRowOfWidth: bounds.width),
+            y: 0,
+            width: TranscriptColumn.width(inRowOfWidth: bounds.width),
+            height: bounds.height
+        )
+    }
+
+    override var isSelected: Bool {
+        didSet {
+            guard isSelected != oldValue else { return }
+            let alpha: CGFloat = isSelected ? 1 : 0
+            guard window != nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+                selectionBackground.alphaValue = alpha
+                return
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Self.selectionFade
+                selectionBackground.animator().alphaValue = alpha
+            }
+        }
+    }
+
+    /// Text on a selected row stays in its normal colors, as on an unselected one.
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
+
+    override func drawSelection(in dirtyRect: NSRect) {}
+
+    override func layout() {
+        super.layout()
+        selectionBackground.frame = selectionFrame
+    }
+}
+
+final class SelectionBackground: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = TranscriptRowView.selectionRadius
+        setAccessibilityElement(false)
+    }
+
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.quaternarySystemFill.cgColor
         }
     }
 

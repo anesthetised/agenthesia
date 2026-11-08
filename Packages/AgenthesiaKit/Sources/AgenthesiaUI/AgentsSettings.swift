@@ -60,11 +60,19 @@ struct AgentsSettings: View {
     private var localSection: some View {
         Section {
             ForEach(catalog.localAgents) { agent in
-                LocalAgentRow(catalog: catalog, name: agent.name, command: agent.command) {
-                    Button("Sign In…") { catalog.beginSignIn(agent) }
-                        .disabled(catalog.signIn != nil)
-                        .accessibilityLabel("Sign in to \(agent.name)")
+                LocalAgentRow(
+                    catalog: catalog,
+                    name: agent.name,
+                    command: agent.command,
+                    signInNeeded: catalog.signInNeeded.contains(.local(agent.id))
+                ) {
+                    if catalog.signInNeeded.contains(.local(agent.id)) {
+                        Button("Sign In…") { catalog.beginSignIn(agent) }
+                            .disabled(catalog.signIn != nil)
+                            .accessibilityLabel("Sign in to \(agent.name)")
+                    }
                     Button("Remove") { catalog.remove(agent) }
+                    SignInMenu(name: agent.name, disabled: catalog.signIn != nil) { catalog.beginSignIn(agent) }
                 }
             }
             ForEach(catalog.addable) { found in
@@ -244,6 +252,7 @@ private struct InstalledAgentRow: View {
     let update: (AgentRegistry.Agent) -> Void
 
     private var versions: [AgentInstallation] { catalog.versions(of: newest.agentID) }
+    private var signInNeeded: Bool { catalog.signInNeeded.contains(.installed(agentID: newest.agentID)) }
     private var available: AgentRegistry.Agent? {
         catalog.registry?.catalog.agents.first { $0.id == newest.agentID && catalog.hasUpdate($0) }
     }
@@ -260,14 +269,19 @@ private struct InstalledAgentRow: View {
                     Text(versions.map(\.version).joined(separator: ", "))
                         .font(.caption).foregroundStyle(.secondary)
                         .accessibilityLabel("Installed versions: \(versions.map(\.version).joined(separator: ", "))")
+                    if signInNeeded {
+                        Text("Sign-in needed").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if let operation = catalog.operations[newest.agentID] {
                     OperationProgress(catalog: catalog, agentID: newest.agentID, operation: operation)
                 } else {
-                    Button("Sign In…") { catalog.beginSignIn(newest) }
-                        .disabled(catalog.signIn != nil)
-                        .accessibilityLabel("Sign in to \(newest.name) \(newest.version)")
+                    if signInNeeded {
+                        Button("Sign In…") { catalog.beginSignIn(newest) }
+                            .disabled(catalog.signIn != nil)
+                            .accessibilityLabel("Sign in to \(newest.name) \(newest.version)")
+                    }
                     if let available {
                         Button("Update to \(available.version)…") { update(available) }
                     }
@@ -278,6 +292,9 @@ private struct InstalledAgentRow: View {
                     }
                     .menuStyle(.button)
                     .fixedSize()
+                    SignInMenu(name: "\(newest.name) \(newest.version)", disabled: catalog.signIn != nil) {
+                        catalog.beginSignIn(newest)
+                    }
                 }
             }
             if let failure = catalog.failures[newest.agentID] {
@@ -341,6 +358,24 @@ private struct RegistryAgentRow: View {
     }
 }
 
+/// The row's `…` menu: Sign In… stays reachable for switching accounts even when the agent did not ask.
+private struct SignInMenu: View {
+    let name: String
+    let disabled: Bool
+    let signIn: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Sign In…", action: signIn).disabled(disabled)
+        } label: {
+            Label("More actions for \(name)", systemImage: "ellipsis").labelStyle(.iconOnly)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+}
+
 private struct OperationProgress: View {
     let catalog: AgentCatalog
     let agentID: String
@@ -365,6 +400,7 @@ private struct LocalAgentRow<Actions: View>: View {
     let catalog: AgentCatalog
     let name: String
     let command: LocalAgent.Command
+    var signInNeeded = false
     @ViewBuilder let actions: Actions
 
     private var check: AgentCatalog.Check? { catalog.checks[command] }
@@ -378,6 +414,9 @@ private struct LocalAgentRow<Actions: View>: View {
                         .font(.caption.monospaced()).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                         .textSelection(.enabled)
+                    if signInNeeded {
+                        Text("Sign-in needed").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if check == .checking {

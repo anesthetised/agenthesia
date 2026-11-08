@@ -35,6 +35,29 @@ import Testing
         #expect(catalog.signIn == nil)
     }
 
+    @Test func aCompletedSettingsSignInForgetsThatTheAgentAsked() async throws {
+        let fixture = try InstalledMockFixture()
+        let suite = "agh-sign-in-catalog-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { fixture.remove(); defaults.removePersistentDomain(forName: suite) }
+        let installation = try await fixture.installer.install(fixture.agent(version: "1.0.0"))
+        let catalog = catalog(root: fixture.root, installer: fixture.installer, defaults: defaults)
+        await catalog.reloadInstallations()
+        let choice = AgentCatalog.Choice.installed(agentID: installation.agentID)
+        catalog.setSignInNeeded(true, for: choice)
+        // Closing without a successful sign-in keeps the flag.
+        let cancelled = try #require(catalog.beginSignIn(installation))
+        await cancelled.prepare()
+        await catalog.closeSignIn(cancelled)
+        #expect(catalog.signInNeeded == [choice])
+        let flow = try #require(catalog.beginSignIn(installation))
+        await flow.prepare()
+        await flow.signIn(with: "mock-login")
+        #expect(flow.state == .completed)
+        await catalog.closeSignIn(flow)
+        #expect(catalog.signInNeeded.isEmpty)
+    }
+
     @Test func localSignInUsesTheCapturedEnvironmentAndAStaleCloseCannotDismissANewerFlow() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "agh-local-sign-in-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

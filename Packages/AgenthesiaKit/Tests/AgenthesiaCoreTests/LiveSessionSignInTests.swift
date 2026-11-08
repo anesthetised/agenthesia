@@ -3,6 +3,7 @@ import Foundation
 import Persistence
 import Testing
 
+@testable import AgentRuntime
 @testable import AgenthesiaCore
 
 /// Signing in to a real MockAgent process from a session that waits for it (ADR-0033).
@@ -72,6 +73,40 @@ import Testing
         }
         terminal.write(Data("\(answer)\n".utf8))
         await signingIn.value
+    }
+
+    @Test func theCatalogRemembersTheSignInRequestUntilASessionStartsWithoutIt() async throws {
+        let fixture = try Fixture()
+        let suite = "live-sign-in-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { fixture.remove(); defaults.removePersistentDomain(forName: suite) }
+        let catalog = AgentCatalog(
+            registry: AgentRegistry.Client(cacheDirectory: fixture.directory) { _ in .init(status: 404, data: Data()) },
+            installer: AgentInstaller(root: fixture.directory.appending(path: "Agents"), download: { _, _ in }),
+            defaults: defaults,
+            environment: { _ in [:] },
+            probe: { _ in throw CancellationError() },
+            checkNode: { _ in throw NodeRuntime.Failure.missingNode }
+        )
+        let agent = try fixture.agent()
+        let choice = AgentCatalog.Choice.custom(.init(executable: agent.executable, arguments: agent.arguments))
+        let owner = fixture.owner()
+        owner.catalog = catalog
+        await owner.start(directory: fixture.project, agent: agent)
+        #expect(owner.signIn != nil)
+        #expect(catalog.signInNeeded == [choice])
+        try await signInOnTerminal(owner, answer: "yes")
+        #expect(owner.signIn == nil)
+        #expect(catalog.signInNeeded.isEmpty)
+        await owner.close()
+        // The agent is signed in now (the terminal method leaves a credential behind): a later start is clean and forgets a flag that is still set.
+        catalog.setSignInNeeded(true, for: choice)
+        let next = fixture.owner()
+        next.catalog = catalog
+        await next.start(directory: fixture.project, agent: agent)
+        #expect(next.signIn == nil)
+        #expect(catalog.signInNeeded.isEmpty)
+        await next.close()
     }
 
     @Test func agentMethodSignsInOnTheSameConnection() async throws {

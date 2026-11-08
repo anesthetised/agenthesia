@@ -5,8 +5,7 @@ public import Persistence
 /// One database per app. Opening and migrations never block the main actor.
 public actor SessionLibrary {
     public static let shared = SessionLibrary(
-        databaseURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "Agenthesia/history.sqlite")
+        databaseURL: AppSupport.directory.appending(path: "history.sqlite")
     )
     private let databaseURL: URL
     /// Installed agent versions that sessions launch through leases (ADR-0036).

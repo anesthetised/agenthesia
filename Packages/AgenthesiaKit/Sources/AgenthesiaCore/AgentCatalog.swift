@@ -11,8 +11,7 @@ public import Persistence
 public final class AgentCatalog {
     public static let shared = AgentCatalog(
         registry: AgentRegistry.Client(
-            cacheDirectory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appending(path: "Agenthesia/Registry")
+            cacheDirectory: AppSupport.directory.appending(path: "Registry")
         ),
         installer: SessionLibrary.shared.installer,
         runtime: NodeRuntime(),

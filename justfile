@@ -40,10 +40,13 @@ lint:
 format:
     swift format format --in-place --recursive --parallel {{sources}}
 
-# Build the app with xcodebuild; SwiftTerm's build tool plugin needs -skipPackagePluginValidation (ADR-0033)
+# Build the app with xcodebuild; SwiftTerm's build tool plugin needs -skipPackagePluginValidation (ADR-0033).
+# Debug builds use the .dev bundle identifier, which keeps notifications, Launch Services and the data folder apart
+# from the installed app; Release keeps the original.
 app configuration="Debug":
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration {{configuration}} \
-        -destination 'platform=macOS' -derivedDataPath {{derived_data}} -skipPackagePluginValidation build
+        -destination 'platform=macOS' -derivedDataPath {{derived_data}} -skipPackagePluginValidation \
+        {{ if configuration == "Debug" { "PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.dev" } else { "" } }} build
 
 # Build and launch the app
 run: app

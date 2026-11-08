@@ -930,6 +930,11 @@ marker, a lease file and `installation.json` with format version 1, a unique ins
 identity, command, declared environment, source, timestamp and (for npm) the checked toolchain and engine
 requirements. It never persists the captured login-shell environment. This store is separate from
 Persistence's manual command records; windows and history adopt installations in #36.
+`AppSupport.directory` (AgentRuntime) is the app's folder in `Application Support`: `Agenthesia` for the original
+bundle identifier and when there is none (tests, the CLI), `Agenthesia-<suffix>` for `….Agenthesia.<suffix>`. `just app`
+builds the `.dev` identifier, so a development build keeps its history, installs and registry cache apart from the
+installed app's. `AgentInstaller`, `AgentCatalog` and `SessionLibrary` all take their paths from it; worktrees stay in
+`~/.agenthesia/worktrees`.
 
 Operations stage beneath the owned root and publish by an exclusive, same-volume rename after validation.
 Cancellation or failure removes that operation's staging files and preserves existing versions. Updates

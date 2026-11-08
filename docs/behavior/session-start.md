@@ -59,17 +59,19 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - Outside Git it reads `Project folder`, tooltip `Not a Git repository: the session works in the folder itself.`
 - The label appears once the project has been checked, and is absent without a project.
 
-## Mode and model hints
+## Mode, model and effort hints
 
-- If the app has seen the selected agent's config options before, the bottom row shows its **mode** and **model** as
-  pill menus after Attach, drawn as secondary. Only select options the agent categorises as `mode` or `model` become
-  pills; effort and other options wait for the session
+- If the app has seen the selected agent's config options before, the bottom row shows its **mode**, **model** and
+  **effort** as pill menus after Attach, in the agent's order, drawn as secondary. Only select options the agent
+  categorises as `mode`, `model` or `thought_level` become pills; other options wait for the session
   ([ADR-0040's amendment of 2026-11-02](../adr/0040-composer-first-session-start.md)).
 - Tooltip and accessibility note: `Last used with this agent; confirmed when the session starts`. A pill's label is
   the value only; the option's name is in the accessibility label.
 - The cache holds what the agent last confirmed in any session (start, Continue, or a change in a live session), per
   agent across its versions, and per custom command. An agent never run before shows no pills.
-- The **model** pill shows the cached model, and Send applies it unless another is picked.
+- The **model** and **effort** pills show the cached value, and Send applies each unless another is picked. A value
+  the agent no longer offers, after `session/new` and after the model was set, returns the draft with the error
+  (`The agent does not offer “High” any more.`), as for the model; the agent's list becomes the cache.
 - The **mode** pill reads `Default mode` and is applied only when a mode is picked in this draft; otherwise the
   session keeps the mode the agent starts in.
   *Why:* the app cannot tell from a name whether a mode stops asking for permission, so such a mode must never come
@@ -131,14 +133,14 @@ moves it into the text above and deletes it here.
 - **Without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)): `or start without a project` under the
   heading switches the draft to `What should we work on?` and hides the Checkout chip; `in a project` switches back.
   Per draft, not remembered.
-- **Effort is a hint like the model.** The cache also keeps the `thought_level` option; its pill is applied by default
-  unless another value is picked in this draft, and a value the agent no longer offers returns the draft with the error.
 - **The Checkout label names the upstream** when the branch has one, `New worktree from origin/main`, because the
   worktree starts from it ([ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)). When the fetch fails, the
   inspector's Workspace block says the session started from the local branch.
 
 ## Changes
 
+- 2026-11-08, #270: effort is a hint like the model: the cache keeps the `thought_level` option, its pill is applied by
+  default.
 - 2026-11-08, #265: a failed or cancelled start returns the draft's mode and model picks with the text, except a
   value the agent no longer offers.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.

@@ -106,6 +106,17 @@ import Testing
         )
     }
 
+    /// MockAgent's effort option (`--effort`; `low`, `medium`, `high`) with `value` as the hint; `max` is not offered.
+    private func effort(_ value: String) -> ACP.ConfigOption {
+        let choices = ["low", "medium", "high", "max"].map { ACP.ConfigSelectOption(value: $0, name: $0.capitalized) }
+        return .init(
+            id: "effort",
+            name: "Effort",
+            category: .thoughtLevel,
+            value: .select(currentValue: value, options: .flat(choices))
+        )
+    }
+
     private func current(_ id: ACP.ConfigOptionID, in options: [ACP.ConfigOption]) -> String? {
         guard case .select(let value, _) = options.first(where: { $0.id == id })?.value else { return nil }
         return value
@@ -134,6 +145,39 @@ import Testing
         let cached = try #require(fixture.catalog.configHints[fixture.choice(agent)])
         #expect(current("model", in: cached) == "large")
         #expect(cached.count == 2)
+        await owner.close()
+    }
+
+    @Test func theEffortHintIsAppliedWithTheModelAndCached() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        let agent = try fixture.mock(["--effort"])
+        // Both are changed, one at a time: the model's response lists the old effort, and the effort's the new model.
+        let owner = await fixture.start(agent, hints: [model("large"), effort("high")])
+        let controller = try #require(owner.controller)
+        #expect(owner.errorMessage == nil)
+        let cached = try #require(fixture.catalog.configHints[fixture.choice(agent)])
+        for options in [controller.transcript.configOptions, try await fixture.history(of: owner), cached] {
+            #expect(current("model", in: options) == "large")
+            #expect(current("effort", in: options) == "high")
+        }
+        #expect(cached.count == 3)
+        await owner.close()
+    }
+
+    @Test func anEffortTheAgentNoLongerOffersFailsTheStart() async throws {
+        let fixture = try await Fixture()
+        defer { fixture.remove() }
+        let agent = try fixture.mock(["--effort"])
+        let owner = await fixture.start(agent, hints: [model("large"), effort("max")])
+        #expect(owner.errorMessage == "The agent does not offer “Max” any more.")
+        #expect(owner.initialPrompt == PromptDraft(text: "hello"))
+        let id = try #require(owner.controller?.session.id)
+        #expect(try await fixture.library.store().session(id: id) == nil)
+        try await fixture.expectNoSessionWorktree(owner)
+        // The agent's list becomes the hint, with the model it confirmed before the effort was refused.
+        let cached = try #require(fixture.catalog.configHints[fixture.choice(agent)])
+        #expect(current("model", in: cached) == "large" && current("effort", in: cached) == "medium")
         await owner.close()
     }
 

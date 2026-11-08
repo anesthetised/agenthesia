@@ -32,6 +32,8 @@ public final class EchoAgent: Sendable {
         public var modes = true
         /// Whether sessions expose a model config option.
         public var configOptions = true
+        /// Whether sessions also expose an effort (`thought_level`) config option, `medium` to start with.
+        public var effort = false
         /// Whether `session/set_mode` and `session/set_config_option` fail with invalid params.
         public var rejectsConfigChanges = false
         /// Whether `session/new` is followed by an `available_commands_update` listing the prompt verbs.
@@ -119,7 +121,8 @@ public final class EchoAgent: Sendable {
             return .init(
                 sessionId: id,
                 modes: options.modes ? Self.modes(current: "ask") : nil,
-                configOptions: options.configOptions ? Self.configOptions(model: "small") : nil
+                configOptions: options.configOptions
+                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
             )
         }
 
@@ -142,7 +145,8 @@ public final class EchoAgent: Sendable {
             }
             return .init(
                 modes: options.modes ? Self.modes(current: "ask") : nil,
-                configOptions: options.configOptions ? Self.configOptions(model: "small") : nil
+                configOptions: options.configOptions
+                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
             )
         }
 
@@ -158,7 +162,8 @@ public final class EchoAgent: Sendable {
             }
             return .init(
                 modes: options.modes ? Self.modes(current: "ask") : nil,
-                configOptions: options.configOptions ? Self.configOptions(model: "small") : nil
+                configOptions: options.configOptions
+                    ? Self.configOptions(model: "small", effort: options.effort ? "medium" : nil) : nil
             )
         }
 
@@ -185,10 +190,16 @@ public final class EchoAgent: Sendable {
 
         router.on(M.SetConfigOption.self) { request in
             if options.rejectsConfigChanges { throw RPCError.invalidParams("Config changes are disabled") }
-            guard request.configId == "model", case .select(let model) = request.value else {
-                throw RPCError.invalidParams("Unknown config option \(request.configId)")
-            }
-            return .init(configOptions: Self.configOptions(model: model))
+            guard case .select(let value) = request.value,
+                request.configId == "model" || (options.effort && request.configId == "effort")
+            else { throw RPCError.invalidParams("Unknown config option \(request.configId)") }
+            let chosen = await state.choose(value, for: request.configId, in: request.sessionId)
+            return .init(
+                configOptions: Self.configOptions(
+                    model: chosen["model"] ?? "small",
+                    effort: options.effort ? chosen["effort"] ?? "medium" : nil
+                )
+            )
         }
 
         router.on(M.Cancel.self) { request in
@@ -226,8 +237,8 @@ public final class EchoAgent: Sendable {
         )
     }
 
-    static func configOptions(model: String) -> [ACP.ConfigOption] {
-        [
+    static func configOptions(model: String, effort: String?) -> [ACP.ConfigOption] {
+        var options: [ACP.ConfigOption] = [
             .init(
                 id: "model",
                 name: "Model",
@@ -238,6 +249,25 @@ public final class EchoAgent: Sendable {
                 )
             )
         ]
+        if let effort {
+            options.append(
+                .init(
+                    id: "effort",
+                    name: "Effort",
+                    category: .thoughtLevel,
+                    value: .select(
+                        currentValue: effort,
+                        options: .flat(
+                            [
+                                .init(value: "low", name: "Low"), .init(value: "medium", name: "Medium"),
+                                .init(value: "high", name: "High"),
+                            ]
+                        )
+                    )
+                )
+            )
+        }
+        return options
     }
 }
 
@@ -250,6 +280,7 @@ extension EchoAgent {
         private var sessions: [(id: ACP.SessionID, cwd: String, history: [ACP.SessionUpdate])] = []
         private var cancelled: Set<ACP.SessionID> = []
         private var nextSession = 1
+        private var chosen: [ACP.SessionID: [String: String]] = [:]
 
         var capabilities: ACP.V1.ClientCapabilities { clientCapabilities }
 
@@ -266,6 +297,12 @@ extension EchoAgent {
             nextSession += 1
             sessions.append((id, cwd, []))
             return id
+        }
+
+        /// Remembers a picked config value and returns everything picked in the session so far.
+        func choose(_ value: String, for option: String, in id: ACP.SessionID) -> [String: String] {
+            chosen[id, default: [:]][option] = value
+            return chosen[id] ?? [:]
         }
 
         func deleteSession(_ id: ACP.SessionID) {

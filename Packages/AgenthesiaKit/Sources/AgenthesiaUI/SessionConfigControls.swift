@@ -9,35 +9,15 @@ struct SessionConfigControls: View {
     var onError: (String?) -> Void = { _ in }
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 2) {
-                ForEach(session.transcript.configOptions, id: \.id) { option in
-                    control(option)
-                }
-                if session.isChangingConfig {
-                    ProgressView().controlSize(.small).accessibilityLabel("Changing session settings")
-                }
-            }
-            .disabled(session.status != .idle || session.isChangingConfig)
-        }
-        .scrollIndicators(.never)
-        .fixedSize(horizontal: false, vertical: true)
+        ConfigControlRow(
+            options: session.transcript.configOptions,
+            isChanging: session.isChangingConfig,
+            onChange: change
+        )
+        .disabled(session.status != .idle || session.isChangingConfig)
     }
 
-    @ViewBuilder private func control(_ option: ACP.ConfigOption) -> some View {
-        switch option.value {
-        case .select(let current, let choices):
-            ConfigSelectMenu(option: option, choices: choices, selected: current) { change(option.id, to: .select($0)) }
-        case .boolean(let current):
-            // A transactional binding intentionally keeps the confirmed value until the async write commits.
-            Toggle(option.name, isOn: Binding(get: { current }, set: { change(option.id, to: .boolean($0)) }))
-                .toggleStyle(.checkbox).fixedSize().help(option.description ?? option.name)
-        case .unknown:
-            EmptyView()
-        }
-    }
-
-    private func change(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) {
+    func change(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) {
         onError(nil)
         Task {
             do { try await session.setConfigOption(id, to: value) } catch {

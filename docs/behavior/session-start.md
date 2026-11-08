@@ -1,7 +1,8 @@
 # Session start
 
 A new session starts from the draft (`SessionDraftView`), which fills the detail column of a window that shows no
-session: the project, agent and checkout chips above the first message, and Send. The agent starts only with that
+session: a heading that names the project, and under it the composer card with the agent and checkout chips above the
+first message, and Send. The agent starts only with that
 first message; there is no way to start one without it ([ADR-0040](../adr/0040-composer-first-session-start.md), which
 replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md)).
 
@@ -20,27 +21,38 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 
 ## Layout
 
-- The empty transcript area holds the line `What should the agent do?`. The composer card below it has the chips on
-  top, the text field, and a bottom row with Attach (⇧⌘A, tooltip `Attach files or folders (⇧⌘A)`), the hint pills
-  and Send.
+- Centered in the column: the heading `What should we build in <project>?` in the large title font, regular weight,
+  the project name a borderless menu (see *Project menu*). When the line does not fit the column, the project moves
+  to a second line, `<project>?`. Without a project the heading is the menu alone: `Choose a project to start`.
+- The composer card sits directly under the heading, centered with it, as wide as a session's composer at most. It has
+  the Agent and Checkout chips on top, the text field, and a bottom row with Attach (⇧⌘A, tooltip `Attach files or
+  folders (⇧⌘A)`), the hint pills and Send.
+- On Send the heading fades and the card moves to the bottom edge, where the session's composer sits, fading as it goes
+  (0.3 s; none under Reduce Motion). A failed or cancelled start returns the draft with the heading and the centered
+  card at once.
 - Text editing, attachments (Attach, drop, paste) and Return work as in a live session's composer, see
   [composer.md](composer.md). The draft has no slash commands and no config controls other than the hint pills.
-- When no agent is installed or listed (and no custom command is picked), a line above the card reads
-  `No agent is installed.` with a `Manage Agents…` link to Settings → Agents ([agents-settings.md](agents-settings.md)).
+- **No agent.** Once the installed agents are read, if none is installed or listed and no custom command is picked,
+  the card shows, in place of the text field and its bottom row (Attach, hint pills, Send), the secondary line `Add an
+  agent to start a session.` and a prominent `Add Agent…` button that opens Settings → Agents
+  ([agents-settings.md](agents-settings.md)). Nothing can be typed, attached or sent until there is an agent; a custom
+  command or an agent added in Settings brings the text field back, with the text typed before.
 
-## Project chip
+## Project menu
 
-- A menu of known projects, most recently used first (by each project's newest session), then `Choose Folder…`, which
-  opens a folder panel. The selected project has a checkmark.
+- The project name in the heading, in the accent color with a chevron. A menu of known projects, most recently used
+  first (by each project's newest session), then `Choose Folder…`, which opens a folder panel. The selected project
+  has a checkmark.
 - Default: the project of the newest session in history, so the last project is remembered across launches. With no
-  history the chip reads `Choose Project`. Its tooltip is the selected path, else `Choose the project the agent works
-  in`.
+  history the heading reads `Choose a project to start`. Its tooltip is the selected path, else `Choose the project
+  the agent works in`; its accessibility label is `Project: <name>`.
 
 ## Agent chip
 
 - A menu of installed agents (the newest version of each, named `<name> <version>`), then
   local agents from Settings → Agents, then `Custom Command…` and `Manage Agents…` (opens Settings → Agents). Tooltip:
-  `The agent that starts the session`. With nothing to pick it reads `Choose Agent`.
+  `The agent that starts the session`. With nothing to pick it reads `Choose Agent` and offers only `Custom Command…`,
+  since the card's `Add Agent…` leads to Settings.
 - Default: the agent of the last session that started, kept across launches while that agent is still offered, else
   the first in the list. An agent is remembered only once its session's first message was submitted, so a failed or
   cancelled start keeps the previous default.
@@ -71,7 +83,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 ## Mode, model and effort hints
 
 - If the app has seen the selected agent's config options before, the bottom row shows its **mode**, **model** and
-  **effort** as pill menus after Attach, in the agent's order, drawn as secondary. Only select options the agent
+  **effort** as pill menus after Attach, in the agent's order, drawn as secondary. They are the session's control row
+  of [composer.md](composer.md): when they do not fit, they move from the end into the `…` menu. Only select options the agent
   categorises as `mode`, `model` or `thought_level` become pills; other options wait for the session
   ([ADR-0040's amendment of 2026-11-02](../adr/0040-composer-first-session-start.md)).
 - Tooltip and accessibility note: `Last used with this agent; confirmed when the session starts`. A pill's label is
@@ -136,16 +149,16 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
 moves it into the text above and deletes it here.
 
-- **A heading with the project.** The draft shows, centered, `What should we build in <project>?` in a large title
-  font; the project name is a borderless menu with the Project chip's items, and moves to a second line in a narrow
-  column. The composer card sits directly under it, centered, and the Project chip leaves the card. After Send the card
-  moves to the bottom edge (without animation under Reduce Motion).
 - **Without a project** ([ADR-0048](../adr/0048-sessions-without-a-project.md)): `or start without a project` under the
   heading switches the draft to `What should we work on?` and hides the Checkout chip; `in a project` switches back.
   Per draft, not remembered.
 
 ## Changes
 
+- 2026-11-08, #278: the draft's heading `What should we build in <project>?` holds the project menu, which leaves the
+  card; the card sits centered under it and moves to the bottom edge on Send. Without an agent the card offers
+  `Add Agent…` instead of the text field, replacing the `No agent is installed.` line.
+- 2026-11-08, #276: the hints are the session's control row and overflow into its `…` menu.
 - 2026-11-08, #277: the Checkout label names the upstream; the start falls back to the local branch with a line in
   the inspector; Merge waits for the local branch to contain the session's start (ADR-0047).
 - 2026-11-08, #271: the draft's mode pill opens the mode popover.
@@ -154,6 +167,7 @@ moves it into the text above and deletes it here.
   default.
 - 2026-11-08, #265: a failed or cancelled start returns the draft's mode and model picks with the text, except a
   value the agent no longer offers.
+- 2026-11-08, #271: the draft's mode pill opens the mode popover.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0040 and its amendment of 2026-11-02, ADR-0033's amendment (#176) and
   ADR-0026, checked against main at c65b8a1.

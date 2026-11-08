@@ -16,6 +16,7 @@ import JSONRPC
 //     MockAgent --no-load            echo agent without session/load
 //     MockAgent --no-config          echo agent without modes or config options
 //     MockAgent --effort             echo agent that also offers an effort (thought_level) config option
+//     MockAgent --fast               echo agent that also offers a boolean `Fast mode` config option
 //     MockAgent --reject-config      echo agent that refuses every mode and config change
 
 // Created only in the agent modes: it starts reading standard input, which `--login` needs for itself.
@@ -59,6 +60,7 @@ if arguments.contains("--login") {
     options.modes = !arguments.contains("--no-config")
     options.configOptions = !arguments.contains("--no-config")
     options.effort = arguments.contains("--effort") && !arguments.contains("--no-config")
+    options.fastMode = arguments.contains("--fast") && !arguments.contains("--no-config")
     options.rejectsConfigChanges = arguments.contains("--reject-config")
     await EchoAgent(options: options).serve(transport())
 }

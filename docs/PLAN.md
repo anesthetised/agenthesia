@@ -804,16 +804,17 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 1 | #267 A saved session shows neither its queue nor its settings (owner decides first) | Composer | `agent:light` | — |
 | 2 | #274 Settled collapses with a selected row | Sidebar | `agent:light` | #268 |
 | 2 | #275 Settle from the row (`✓ Settle` on hover, context menu) | Sidebar | `agent:light` | #268 |
-| 2 | #276 One composer control row: toggle pills, `…` overflow, working line above the card | Composer | `agent:strong` | #270, #271 |
+| 2 | #276 One composer control row: toggle pills, `…` overflow, working line above the card (done; hosted tests at narrow and wide widths, not yet checked in the running app) | Composer | `agent:strong` | #270, #271 |
 | 2 | #277 Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
-| 3 | #278 Draft heading with the project picker, centered composer moving to the bottom at Send | Draft | `agent:strong` | #276, #265 |
+| 3 | #278 Draft heading with the project picker, centered composer moving to the bottom at Send (done; heading text, project menu and the draft state around Send tested; the layout, the narrow heading and the Send animation not yet checked in the running app) | Draft | `agent:strong` | #276, #265 |
 | 4 | #279 Sessions without a project | Draft, Workspace | `agent:strong` | #278 |
 | 5 | #160 Verify the redesign in the running app and refresh screenshots | — | `agent:light` | all |
 
 Pitfalls known so far:
 
 - `SessionDraftView` is also changed by #225 (M16, the held first message); whichever lands second adapts the
-  transition of the card to the held message.
+  transition of the card to the held message. Since #278 Send's motion is `DraftSendTransition`, the draft's removal
+  transition in `RootView`; #225 replaces it if the held message keeps the card on screen.
 - The upstream start is a safety path in `prepare` and the merge: real-repository tests with a local bare remote,
   never against this repository.
 - The development bundle identifier must not share `~/Library/Application Support/Agenthesia` with the installed app:

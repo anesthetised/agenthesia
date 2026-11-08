@@ -1,20 +1,21 @@
 # Composer
 
 The composer is the card at the bottom of a live session's transcript column, where the user writes the next message,
-attaches files, picks an agent command, changes the session's settings and sends or stops. Above it sit the status
-line, the docked permission request and errors. A session that cannot take a prompt shows a compact card with Continue
+attaches files, picks an agent command, changes the session's settings and sends or stops. Above it sit the docked
+permission request, errors and the status line. A session that cannot take a prompt shows a compact card with Continue
 instead. The draft before a session exists is described in [session-start.md](session-start.md), and the prompt queue
 (Send or Queue, steering, pause, editing queued messages) in [queue.md](queue.md).
 
 ## Layout
 
-- From the top of the transcript pane down: the transcript, the status line, the docked permission request, errors,
-  and the composer card. The dock, errors and card share the transcript column (at most 720 pt wide, 16 pt side and
-  12 pt bottom margins); the card has rounded corners, bar material and a hairline border.
+- From the top of the transcript pane down: the transcript, the docked permission request, errors, the status line,
+  and the composer card. The dock, errors, status line and card share the transcript column (at most 720 pt wide,
+  16 pt side and 12 pt bottom margins); the card has rounded corners, bar material and a hairline border.
 - Inside the card, top to bottom: the queue and its editing hint ([queue.md](queue.md)), the command list, the
   attachment chips, the text, and the bottom row.
-- The bottom row, left to right: Attach (paperclip), the session's settings as pill menus, then on the trailing edge
-  the Send options menu (chevron) and the round primary button.
+- The bottom row, left to right: Attach (paperclip), the control row with the session's settings, then on the
+  trailing edge the Send options menu (chevron) and the round primary button. The draft's card has the same row
+  ([session-start.md](session-start.md)).
 - While the agent asks the user to sign in, the sign-in panel takes the place of the dock, errors and card.
 
 ## Text
@@ -55,8 +56,8 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 ## Session settings
 
-- The agent's config options appear as pills in the bottom row, in the agent's order
-  ([ADR-0019](../adr/0019-session-config-controls.md)). A select option is a borderless menu whose label is the current
+- The agent's config options appear as pills in the control row of the bottom row, in the agent's order
+  ([ADR-0019](../adr/0019-session-config-controls.md)). The draft shows its hints in the same row. A select option is a borderless menu whose label is the current
   value's name only; the tooltip is `<option>: <description>` (or the option name), and the accessibility label is
   `<option>: <value>`. The menu lists the agent's choices, in the agent's groups as sections, with a checkmark on the
   current one; each choice's tooltip is its description.
@@ -68,7 +69,16 @@ instead. The draft before a session exists is described in [session-start.md](se
   accessibility label is `<name>. <description>`, and the current row is marked selected. There are no icons and no
   fixed access levels: the app does not know what an agent's modes mean (VISION principle 8). The draft's mode hint
   works the same way (see [session-start.md](session-start.md)).
-- A boolean option is a checkbox labelled with the option name; its tooltip is the description.
+- A boolean option (for example `Fast mode`) is a toggle pill: the option's name, in the accent color on a filled
+  capsule while on and plain while off; its tooltip is the description, and VoiceOver reads it as a toggle with its
+  value (`On`, `Off`). A click asks the agent for the other value, as a menu pick does.
+- **Overflow.** When the pills do not fit beside Attach and the Send buttons, options move, from the end, into a `…`
+  pill menu (accessibility label and tooltip `More settings`): first the options other than mode, model and effort,
+  then those three, also from the end. The menu lists them in the agent's order: a select option as a submenu
+  `<option>: <value>` with its choices, a boolean as a checkable item. No pill is ever cut by the card's edge; at the
+  narrowest only `…` is left. Widening the window brings the pills back.
+- Pills that appear or disappear (another agent, the agent's new list) fade in and out in about 0.2 s; under Reduce
+  Motion they change at once.
 - Options of unknown types are not shown.
 - Settings can be changed only while the session is idle; while a turn runs, all pills are disabled.
 - A pick shows nothing as accepted at first: the pill keeps the confirmed value, a small spinner (`Changing session
@@ -95,8 +105,9 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 ## Status line
 
-- While a turn runs or stops, a caption under the transcript, above the docked request and the card, reads
-  `Working for 12s` (`1m 12s`, `1h 2m`) with a small spinner, ticking once a second.
+- While a turn runs or stops, a caption directly above the composer card, aligned with its leading edge in the
+  transcript column (under the docked request and errors), reads `Working for 12s` (`1m 12s`, `1h 2m`) with a small
+  spinner, ticking once a second.
 - While a permission request or an input form is pending, it reads `Waiting for you` with an orange symbol instead.
 - There is no status line while the session is idle.
 
@@ -143,21 +154,10 @@ instead. The draft before a session exists is described in [session-start.md](se
 - When the session has retained queued entries, they show above the card, read-only, as in
   [queue.md](queue.md#recovery).
 
-## Planned (M18)
-
-Accepted by the owner on 2026-11-08 (first-use feedback); not implemented yet. The pull request that implements an item
-moves it into the text above and deletes it here.
-
-- **One control row in the draft and in a session.** Select options (model, effort, others) stay value-only pills.
-- **Booleans are toggle pills** (for example `Fast mode`): the option's name, filled while on, the description as
-  tooltip, the accessibility of a toggle. The checkbox goes.
-- **Overflow.** Options that do not fit move, from the end, into a `…` pill menu; mode, model and effort move last.
-  No pill is cut by the card's edge.
-- **The status line sits on the card**: `Working for …` and `Waiting for you` move directly above the composer card,
-  aligned with its leading edge, in the transcript column.
-
 ## Changes
 
+- 2026-11-08, #276: one control row in the draft and the session; booleans are toggle pills instead of checkboxes;
+  options that do not fit move into a `…` menu; the status line sits directly above the card.
 - 2026-11-08, #271: the mode pill opens a popover with the agent's descriptions instead of a menu.
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0018, ADR-0019 and ADR-0039 (Composer, amendment of 2026-11-02), checked

@@ -66,7 +66,8 @@ instead. The draft before a session exists is described in [session-start.md](se
   shows the name only), in the agent's groups under their headers, with a checkmark on the current one. The pill shows
   the mode's name and a chevron. The current mode is highlighted when the popover opens; ↑ and ↓ move the highlight,
   Return or a click chooses (the popover closes and the change goes the way a menu pick does), Escape closes it. A row's
-  accessibility label is `<name>. <description>`, and the current row is marked selected. There are no icons and no
+  accessibility label is `<name>. <description>`, and the current row is marked selected. The popover is as tall as its
+  rows (up to 360 pt, then it scrolls). There are no icons and no
   fixed access levels: the app does not know what an agent's modes mean (VISION principle 8). The draft's mode hint
   works the same way (see [session-start.md](session-start.md)).
 - A boolean option (for example `Fast mode`) is a toggle pill: the option's name, in the accent color on a filled
@@ -162,4 +163,6 @@ instead. The draft before a session exists is described in [session-start.md](se
 - 2026-11-08, M18: planned changes added from the owner's first-use feedback.
 - 2026-11-08, #261: summarised from ADR-0018, ADR-0019 and ADR-0039 (Composer, amendment of 2026-11-02), checked
   against main at c65b8a1.
+- 2026-11-08, #288: the mode popover is as tall as its rows (a described row is taller than a plain one), up to 360 pt,
+  so two modes leave no empty space under them.
 - 2026-11-08, #267: the Continue card shows the last confirmed settings and the retained queue above it.

@@ -10,7 +10,8 @@ is not summarised here yet.
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
   table. Several rows can be selected at once.
 - A selected row gets a quiet background: the color of `.quaternary` fills (`NSColor.quaternarySystemFill`), in
-  a rounded rectangle (10 pt radius) as wide as the text column and as high as the row, behind its content. There is
+  a rounded rectangle (10 pt radius) as high as the row, behind its content, and 8 pt wider than the text column on each
+  side so the text does not touch its edge (the column's margin keeps it inside the window). There is
   no system selection band across the window, whether or not the window is key.
 - The text of a selected row keeps its normal colors: status labels such as `1 failed` stay red, the running status
   keeps the accent color. Nothing turns white.
@@ -31,7 +32,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 - A tool call row copies its output, and a folded summary of several calls copies what its cards hold. When a summary
   and some of its expanded cards are both selected, the cards are copied once.
 - Pointing at a row shows a `Copy` button in its header (tooltip `Copy message as Markdown`) that copies that one
-  row; VoiceOver gets the same action as a custom action `Copy` on the row.
+  row; VoiceOver gets the same action as a custom action `Copy` on the row. It is a small bordered button in the
+  system's label colors, readable on the selection in light, dark and Increase Contrast.
 
 ## Keyboard navigation
 
@@ -44,3 +46,5 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 - 2026-11-08, #269: a quiet selection: a rounded `.quaternary` background of the text column's width instead of the
   system band across the window; text keeps its colors; the transcript area written.
+- 2026-11-08, #288: the selection background reaches 8 pt past the text column on each side; the hover `Copy` button is a
+  small bordered button instead of the inline one, whose light text vanished on the selection in light mode.

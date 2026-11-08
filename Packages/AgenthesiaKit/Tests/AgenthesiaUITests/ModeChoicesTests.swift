@@ -49,6 +49,43 @@ import Testing
         #expect(popups(in: modelHost).count == 1)
     }
 
+    private func table(in view: NSView) -> NSTableView? {
+        (view as? NSTableView) ?? view.subviews.lazy.compactMap(table).first
+    }
+
+    /// How far the list's height is from its rows' extent plus the list's padding.
+    private func slack(_ choices: ACP.ConfigSelectOptions) async throws -> CGFloat {
+        let (host, window) = hosted(ModeChoices(choices: choices, selected: nil) { _ in })
+        defer { window.close() }
+        try await settle(host)
+        let list = try #require(table(in: host))
+        let content = list.rect(ofRow: list.numberOfRows - 1).maxY + ModeChoices.verticalPadding / 2
+        return ModeChoices.height(of: choices) - content
+    }
+
+    @Test func twoShortRowsLeaveNoGapUnderThem() async throws {
+        let two = ACP.ConfigSelectOptions.flat(Array(choices.allOptions.prefix(2)))
+        #expect(ModeChoices.height(of: two) == 2 * ModeChoices.describedRowHeight + ModeChoices.verticalPadding)
+        #expect(abs(try await slack(two)) <= 1)
+        #expect(abs(try await slack(choices)) <= 1)
+    }
+
+    @Test func groupedChoicesAddAHeaderPerGroupAndALongListIsCapped() async throws {
+        let grouped = ACP.ConfigSelectOptions.grouped([
+            .init(group: "a", name: "A", options: Array(choices.allOptions.prefix(2))),
+            .init(group: "b", name: "B", options: [choices.allOptions[2]]),
+        ])
+        #expect(
+            ModeChoices.height(of: grouped)
+                == 2 * ModeChoices.describedRowHeight + ModeChoices.plainRowHeight
+                + 2 * ModeChoices.sectionHeaderHeight + ModeChoices.verticalPadding
+        )
+        #expect(abs(try await slack(grouped)) <= 1)
+
+        let many = ACP.ConfigSelectOptions.flat((0..<30).map { .init(value: .init("m\($0)"), name: "Mode \($0)") })
+        #expect(ModeChoices.height(of: many) == ModeChoices.maxHeight)
+    }
+
     private func popups(in view: NSView) -> [NSPopUpButton] {
         ((view as? NSPopUpButton).map { [$0] } ?? []) + view.subviews.flatMap(popups)
     }

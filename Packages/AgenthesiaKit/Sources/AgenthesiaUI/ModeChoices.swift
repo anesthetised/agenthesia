@@ -14,11 +14,22 @@ struct ModeChoices: View {
         [choice.name, choice.description].compactMap(\.self).joined(separator: ". ")
     }
 
-    private var height: CGFloat {
+    static let width: CGFloat = 320
+    static let maxHeight: CGFloat = 360
+
+    /// The list's height: each row at its own height (a description makes it taller), a header per group and the
+    /// list's padding, at most `maxHeight`; a longer list scrolls.
+    static func height(of choices: ACP.ConfigSelectOptions) -> CGFloat {
         var sections = 0
         if case .grouped(let groups) = choices { sections = groups.count }
-        return min(CGFloat(choices.allOptions.count) * 48 + CGFloat(sections) * 28 + 16, 360)
+        let rows = choices.allOptions.reduce(0) { $0 + ($1.description == nil ? plainRowHeight : describedRowHeight) }
+        return min(rows + CGFloat(sections) * sectionHeaderHeight + verticalPadding, maxHeight)
     }
+
+    static let plainRowHeight: CGFloat = 24
+    static let describedRowHeight: CGFloat = 39
+    static let sectionHeaderHeight: CGFloat = 38
+    static let verticalPadding: CGFloat = 20
 
     var body: some View {
         List(selection: $highlighted) {
@@ -32,7 +43,7 @@ struct ModeChoices: View {
             }
         }
         .accessibilityLabel("Modes")
-        .frame(width: 320, height: height)
+        .frame(width: Self.width, height: Self.height(of: choices))
         .onAppear { highlighted = selected }
         .onKeyPress(.return) {
             guard let highlighted else { return .ignored }

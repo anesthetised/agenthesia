@@ -669,7 +669,10 @@ private final class TranscriptMessageRow: NSTableCellView {
         role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         role.textColor = .secondaryLabelColor
         let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
-        copy.bezelStyle = .inline
+        // The inline bezel draws light text on a light fill, unreadable on the selection in light mode; the textured
+        // one is a proper control that keeps the label color in light, dark and Increase Contrast.
+        copy.bezelStyle = .texturedRounded
+        copy.controlSize = .small
         copy.toolTip = "Copy message as Markdown"
         copy.alphaValue = hovering ? 1 : 0
         // Assistive technology uses the row's Copy action while the button is not shown.
@@ -823,9 +826,12 @@ private final class TextCell: NSView {
 }
 
 /// A transcript row without the system's selection band: a selected row gets a quiet rounded background as wide as
-/// the text column, behind its content, and its text keeps its colors.
+/// the text column plus a small outset, behind its content, and its text keeps its colors.
 final class TranscriptRowView: NSTableRowView {
     static let selectionRadius: CGFloat = 10
+    /// How far the background reaches past the text column on each side; less than `TranscriptColumn.minMargin`, so
+    /// it stays inside the row.
+    static let selectionOutset: CGFloat = 8
     static let selectionFade: TimeInterval = 0.12
 
     let selectionBackground = SelectionBackground()
@@ -844,9 +850,9 @@ final class TranscriptRowView: NSTableRowView {
     /// The rect of the quiet background in a row of `bounds`.
     var selectionFrame: NSRect {
         NSRect(
-            x: TranscriptColumn.minX(inRowOfWidth: bounds.width),
+            x: TranscriptColumn.minX(inRowOfWidth: bounds.width) - Self.selectionOutset,
             y: 0,
-            width: TranscriptColumn.width(inRowOfWidth: bounds.width),
+            width: TranscriptColumn.width(inRowOfWidth: bounds.width) + 2 * Self.selectionOutset,
             height: bounds.height
         )
     }

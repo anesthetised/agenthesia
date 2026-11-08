@@ -588,7 +588,10 @@ import Testing
         ((view as? View).map { [$0] } ?? []) + view.subviews.flatMap { views(type, in: $0) }
     }
 
-    private func labels(in view: NSView) -> [String] { views(NSTextField.self, in: view).map(\.stringValue) }
+    /// The row's text labels; the title a bordered button draws is not one.
+    private func labels(in view: NSView) -> [String] {
+        views(NSTextField.self, in: view).filter { !($0.superview is NSButton) }.map(\.stringValue)
+    }
 }
 
 /// Builds transcript state from stored events, exactly as live sessions and replay do.
@@ -698,6 +701,8 @@ extension LiveTranscriptTests {
 
         let copy = try #require(views(NSButton.self, in: row).first { $0.title == "Copy" })
         #expect(copy.alphaValue == 0 && !copy.isAccessibilityElement())
+        // Not the inline bezel: its light text vanishes on the quiet selection in light mode.
+        #expect(copy.bezelStyle != .inline && copy.isBordered)
         #expect(row.accessibilityCustomActions()?.map(\.name) == ["Copy"])
         let enter = try #require(
             NSEvent.enterExitEvent(
@@ -1332,18 +1337,24 @@ extension LiveTranscriptTests {
         controller.table.selectRowIndexes([0], byExtendingSelection: false)
         rowView.layoutSubtreeIfNeeded()
         #expect(rowView.selectionBackground.alphaValue == 1)
-        #expect(rowView.selectionBackground.frame.width == TranscriptColumn.maxWidth)
+        let outset = TranscriptRowView.selectionOutset
+        #expect(outset == 8)
+        #expect(rowView.selectionBackground.frame.width == TranscriptColumn.maxWidth + 2 * outset)
         #expect(rowView.selectionBackground.frame.width < controller.table.bounds.width)
-        #expect(rowView.selectionBackground.frame.minX == TranscriptColumn.minX(inRowOfWidth: rowView.bounds.width))
+        #expect(
+            rowView.selectionBackground.frame.minX == TranscriptColumn.minX(inRowOfWidth: rowView.bounds.width) - outset
+        )
         #expect(rowView.selectionBackground.frame.height == rowView.bounds.height)
         #expect(rowView.selectionBackground.layer?.cornerRadius == TranscriptRowView.selectionRadius)
         // The quiet background sits behind the content.
         #expect(rowView.subviews.first === rowView.selectionBackground)
 
-        // A narrow window leaves the column its margins.
+        // A narrow window leaves the background inside the row, short of its edges.
         rowView.frame.size.width = 300
         rowView.layoutSubtreeIfNeeded()
-        #expect(rowView.selectionBackground.frame.width == 300 - 2 * TranscriptColumn.minMargin)
+        #expect(rowView.selectionBackground.frame.width == 300 - 2 * (TranscriptColumn.minMargin - outset))
+        #expect(rowView.selectionBackground.frame.minX > 0)
+        #expect(rowView.selectionBackground.frame.maxX < 300)
     }
 
     @Test func theQuietBackgroundFollowsTheSelectionAndCopyStillTakesWholeRows() async throws {

@@ -422,6 +422,7 @@ public struct RootView: View {
                 .help("Attach files or folders (⇧⌘A)").disabled(model.composer.editingQueueID != nil || submitting)
             SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let usage = ContextUsage(session.transcript.usage) { ContextRing(usage: usage) }
             let turnActive =
                 session.status == .running || session.status == .stopping || !session.pendingInputs.isEmpty
             let action = ComposerPrimaryAction(

@@ -938,6 +938,11 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #222 (context usage) landed: `ContextUsage` (Core) gives the inspector's Agent rows `Context 84k of 200k · 42 %` and
+  `Cost` (system currency format) and the composer's `ContextRing`, a fixed slot before Send options that takes no room
+  below 70 %, orange from 90 %, the percentage rounded down so a threshold is never claimed early.
+  `scripts/app-check/demos/usage.json` rises to 42 %, 75 % and 92 % with a cost. Running-app check deferred with
+  #221's.
 - #221 (plan) landed: `PlanProgress` (Core) feeds the working line (`· 3 of 7 · Writing tests`), the Working row's
   reason (a turn's ADR-0049 origin outranks it, owner's choice) and the inspector's `PlanSection`, open while the turn
   runs and collapsed to `Plan · 3 of 7` after it (a hosted test checks that `Section(isExpanded:)` collapses in the

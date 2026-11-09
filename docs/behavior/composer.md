@@ -14,7 +14,7 @@ instead. The draft before a session exists is described in [session-start.md](se
 - Inside the card, top to bottom: the queue and its editing hint ([queue.md](queue.md)), the command list, the
   attachment chips, the text, and the bottom row.
 - The bottom row, left to right: Attach (paperclip), the control row with the session's settings, then on the
-  trailing edge the Send options menu (chevron) and the round primary button. The draft's card has the same row
+  trailing edge the context ring (from 70 %, see below), the Send options menu (chevron) and the round primary button. The draft's card has the same row
   ([session-start.md](session-start.md)).
 - While the agent asks the user to sign in, the sign-in panel takes the place of the dock, errors and card.
 
@@ -73,7 +73,13 @@ instead. The draft before a session exists is described in [session-start.md](se
 - A boolean option (for example `Fast mode`) is a toggle pill: the option's name, in the accent color on a filled
   capsule while on and plain while off; its tooltip is the description, and VoiceOver reads it as a toggle with its
   value (`On`, `Off`). A click asks the agent for the other value, as a menu pick does.
-- **Overflow.** When the pills do not fit beside Attach and the Send buttons, options move, from the end, into a `…`
+- **Context ring.** From 70 % of the agent's context window ([ADR-0039's
+  amendment](../adr/0039-t3-style-window-layout.md), `usage_update`), a small ring with the percentage, `75 %`, sits in
+  a fixed slot before the Send options menu: secondary below 90 %, orange from 90 %. Its tooltip and accessibility label
+  carry the numbers, `Context 150k of 200k · 75 %`, and the cost when the agent reports one. The percentage is rounded
+  down. Below 70 % it takes no room. Its width comes out of the pills' room and it never moves into `…`. The draft has
+  no ring.
+- **Overflow.** When the pills do not fit beside Attach, the context ring and the Send buttons, options move, from the end, into a `…`
   pill menu (accessibility label and tooltip `More settings`): first the options other than mode, model and effort,
   then those three, also from the end. The menu lists them in the agent's order: a select option as a submenu
   `<option>: <value>` with its choices, a boolean as a checkable item. No pill is ever cut by the card's edge; at the
@@ -159,6 +165,7 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 ## Changes
 
+- 2026-11-09, #222: the context ring before the Send options, from 70 % of the context window.
 - 2026-11-09, #221: the status line counts the plan's completed entries and names the one in progress.
 - 2026-11-08, #276: one control row in the draft and the session; booleans are toggle pills instead of checkboxes;
   options that do not fit move into a `…` menu; the status line sits directly above the card.

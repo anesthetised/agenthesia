@@ -273,9 +273,8 @@ dimmed. Tool, permission and input rows keep their headers. `role` stays in the 
 Markdown without it.
 
 > **Accepted, not yet implemented (M16):** [ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md) collapses thoughts into
-> one disclosure row (`Thinking… <last line>`, then `Thought for 12s`, consecutive thoughts folded), adds context usage
-> to the inspector and a context ring to the composer from 70 %. This section describes the code as it is. The plan
-> (#221) has landed: see the inspector below.
+> one disclosure row (`Thinking… <last line>`, then `Thought for 12s`, consecutive thoughts folded). This section
+> describes the code as it is. The plan (#221) and context usage (#222) have landed: see the inspector below.
 
 The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
 `TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
@@ -304,7 +303,11 @@ Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Sa
 borderless `ConfigSelectMenu` pills that show the value only (the option name is in the tooltip and the accessibility
 label; the mode opens `ModeChoices` in a popover) and booleans as toggle pills; a `ViewThatFits` over every split of
 `ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu (other options leave
-first, then mode, model and effort). While a turn runs, `WorkingTimeLine` directly above the
+first, then mode, model and effort). `ContextRing` follows the control row in a fixed slot before the Send options
+menu, so its width comes out of the pills' room and it never overflows: `ContextUsage` (Core, pure) turns the last
+`usage_update` into the ring's state (hidden below 70 %, attention from 90 %, the percentage rounded down) and the
+inspector's *Context* and *Cost* rows (`84k of 200k · 42 %`, the cost formatted by the system in the agent's
+currency). While a turn runs, `WorkingTimeLine` directly above the
 composer card reads `Working for …`, or `Waiting for you` while a permission or form waits; the docked permission card shows
 its ⌥⌘ shortcuts, and the queue header says that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
 shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
@@ -443,11 +446,9 @@ The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` wit
 **Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable `session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when; `PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of Settled (so out of its header count, and out of the section altogether when nothing else is saved) unless a query is entered: a search lists them in Settled order, the header then counts the matches, and the row's reason is `Archived` (`SidebarReason.saved`, which wins over `Merged` and `Discarded`). Previous and Next Session skip archived rows even while a search shows them. *Archive Session* / *Unarchive Session* (the title follows `archivedAt`) is in the row's context menu of a saved row and in the Session menu; neither asks for confirmation. The Session menu item is disabled unless the displayed session is saved, with the help text `End the session first` for a live one (`SessionWindowModel.canArchive`, `archiveHelp`); live rows have no context-menu item. **Continue** clears `archivedAt` (`SessionWindowModel.continueRestored`): a session the user talks to again is not archived. Every write refreshes the window's history; other windows pick it up at their next refresh.
 
 > **Accepted, not yet implemented (M16):** [ADR-0046](adr/0046-session-board-and-menu-bar.md) adds an *Overview* row above the sections
-> (⌘0; a board of live-session cards that can answer requests without a diff), a `MenuBarExtra` with the Needs You
-> count and the sessions, and ⌘1…⌘9 for the first nine rows of Needs You and Working.
-> [ADR-0044](adr/0044-delete-and-archive-sessions.md) adds Delete Session… for saved sessions (Archive Session is
-> implemented, see below). A Working row's reason becomes the plan's in-progress step
-> ([ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md)).
+> (⌘0; a board of live-session cards that can answer requests without a diff) and a `MenuBarExtra` with the Needs You
+> count and the sessions. [ADR-0044](adr/0044-delete-and-archive-sessions.md) adds Delete Session… for saved sessions
+> (Archive Session is implemented, see below).
 
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
@@ -725,7 +726,8 @@ session branch (the stored name, or `agenthesia/<session id>` for older sessions
 sessions in an Agenthesia worktree, and the working directory, as
 selectable text that wraps; Show in Finder and Open in Editor, through `EditorHandoff` with an empty path, are icon
 buttons with tooltips in its header; Discard Worktree… is a plain borderless button at its end); and *Agent* (agent
-name and the Agent Log toggle, live sessions only). Merge is disabled with the help text `No changes to merge` when
+name, Context and Cost from `ContextUsage` once the agent reported usage, and the Agent Log toggle, live sessions
+only). Merge is disabled with the help text `No changes to merge` when
 `SessionFiles.hasNoChanges` (the list is current, without an error, and empty), also in the Session menu and the
 review pane; while the list loads or failed, the merge sheet decides, as before. Refresh Files shows only with
 `SessionFiles.watchError` (`WatchErrorNotice`, beside its message in the inspector and in the review pane's footer).

@@ -992,6 +992,13 @@ Pitfalls known so far:
   reads it a byte at a time so the first JSON-RPC line is never consumed with it.
 - The app target embeds the helper through an *Embed Helpers* copy phase (`Contents/Helpers`, *Code Sign On Copy*) that
   references the package product, plus a target dependency on it; the copy is signed with the app's identity.
+- #56, running app (2026-11-09, scripted without UI input, Debug `.dev` build, `CFFIXED_USER_HOME` in a temporary
+  folder): the app made `$TMPDIR/agenthesia-<hash>.sock` with mode `srw-------`; the bundled helper with an unknown token
+  was disconnected and exited in 0.05 s with its stdin still open; a second instance with the same data folder logged
+  `Cannot listen for agenthesia-mcp: … Address already in use` and the first kept answering; after SIGTERM the socket
+  file stayed, and the next launch replaced it and listened. `codesign --verify --deep --strict` passed, and the helper
+  links only system libraries. Not checked: a quit through the menu (the socket is not closed on quit either, which is
+  harmless since the next launch replaces it), and a connection with a live token, which needs #71.
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with

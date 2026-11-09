@@ -1,6 +1,7 @@
 # 0012. Defer cross-agent memory until after the MVP
 
-- Status: Accepted
+- Status: Accepted; the built-in MCP server scheduled by [0049](0049-built-in-agenthesia-mcp-server.md), memory
+  still deferred
 - Date: 2026-10-06
 - Supersedes: [0011](0011-cross-agent-memory.md)
 - Restores the original MCP scope of [0009](0009-tools-and-mcp.md)

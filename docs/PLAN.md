@@ -945,6 +945,57 @@ Pitfalls known so far:
   sidebar search found it with the reason `Archived`, the item turned into Unarchive Session, and unarchiving brought it
   back to Settled. Not checked: the context-menu items, Continue on an archived session, light mode, VoiceOver.
 
+## M13: Agenthesia tools (2026-11-09)
+
+Tracking issue #307. The owner compared T3 Code's MCP tools (`apps/server/src/mcp/toolkits` in the T3 Code source) with
+#56–#60 and #71 and chose what to port and how; the decisions are [ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md).
+#56 and #71 moved here from M9, whose memory stays deferred.
+
+Issues, in order. Within a wave the issues are independent apart from the listed dependencies.
+
+| Order | Issue | Tier | Depends on |
+|---|---|---|---|
+| 0 | #308 Spike with Claude, Codex and Gemini: instructions, tool-call reports, sandbox, working-directory change, subagents, timeouts, images, start latency | `agent:strong` | the owner's consent |
+| 1 | #309 `MCP` module: wire types, server dispatch, minimal client | `agent:light` | — |
+| 1 | #56 `agenthesia-mcp` helper, the app socket, session tokens | `agent:strong` | — |
+| 1 | #71 The server in every `session/new`, `load` and `resume`; the running-turn gate; MockAgent's `mcp` verb | `agent:light` | #56, #309 |
+| 1 | #310 Instructions and `environment` | `agent:light` | #71 |
+| 1 | #311 Turn origins in the event log, labels in the transcript and sidebar | `agent:strong` | — |
+| 1 | #312 Cards for tool calls; creates `docs/behavior/tools.md` | `agent:strong` | #71, #308 |
+| 1 | #313 Prompt prefix for agents that do not read instructions | `agent:light` | #308, #310 |
+| 2 | #57 `show` | `agent:light` | #312 |
+| 2 | #59 `ready_for_review` | `agent:light` | #312 |
+| 2 | #58 `screenshot` of Simulators | `agent:light` | #312 |
+| 2 | #314 `screenshot` of windows (owner decides on an in-app confirmation first) | `agent:strong` | #58 |
+| 2 | #315 `html_render` | `agent:strong` | #312 |
+| 2 | #316 `request_secret` | `agent:strong` | #312 |
+| 3 | #60 `delegate`, `delegate_status`, `delegate_cancel`; parent link on sessions | `agent:strong` | #310, #311, #312 |
+| 3 | #317 Delivery, `wait`, Stop depth first, restarts | `agent:strong` | #60 |
+| 3 | #318 `session_list`, `session_read`, `session_send` | `agent:strong` | #311, #312 |
+| 3 | #319 `worktree_handoff` | `agent:strong` | #308, #312 |
+| 3 | #320 `task_run`, `task_output`, `task_stop` | `agent:strong` | #311, #317 |
+| 4 | #321 Verify in the running app | `agent:light` | all |
+
+Pitfalls known so far:
+
+- The spike (#308) ran on 2026-11-09 with `claude-agent-acp` 0.101.0 (Claude Haiku 5.5) and `codex-acp` 2.5.0
+  (`codex` 0.165.0), six prompts each, through `acp-cli` on a throwaway branch; Gemini was not installed. The answers
+  are in #308 and in ADR-0049's *Spike* section. For the issues: the prefix goes to Codex and Gemini, not Claude
+  (#313); rows match cards by the `toolCallId` in `tools/call`'s `_meta`, and a Codex subagent's calls have no row
+  (#312); `session/resume` takes the worktree as the new working directory (#319); `wait` stops at 240 s (#317); a
+  token may open several connections, one per Codex subagent (#56, #71). Neither agent asked permission for our tools
+  in its auto mode, so the shape of that request is still unseen; #321 checks it with a supervised mode.
+- MockAgent's `mcp` verb (#71) is what lets every tool be tested without a real agent; land it before the tools.
+- The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
+  the `.dev` build, the installed app and a check build must never share a socket.
+- Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with
+  no limit on chains (ADR-0049), Stop is the only brake, so #317 tests Stop depth first carefully.
+- New event kinds and a migration of the sessions table (#60); older builds skip unknown kinds, and the migration gets a
+  test on the previous schema file, as #231 did.
+- `html_render` (#315) must not put a web view in the transcript table; the streaming benchmarks are the gate, run with
+  the owner's approval of the workload.
+- Screen Recording (#314) and the secret card (#316) are checked with a fresh bundle identifier (AGENTS.md).
+
 ## Next steps
 
 The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI

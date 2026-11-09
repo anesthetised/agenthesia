@@ -155,6 +155,8 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var unsupportedEvents = 0
     /// Set once the session's worktree was merged or discarded; such a session cannot continue.
     public private(set) var worktreeOutcome: WorktreeOutcome?
+    /// The pull request opened from the session's branch (ADR-0045); the session stays live.
+    public private(set) var pullRequest: PullRequest?
     private var toolIndices: [ACP.ToolCallID: Int] = [:]
     private var inputIndices: [UUID: Int] = [:]
     private var permissionIndices: [UUID: Int] = [:]
@@ -196,6 +198,10 @@ public struct TranscriptState: Equatable, Sendable {
         } else if event.event.kind == SessionEvent.kind {
             let local = try JSONDecoder().decode(SessionEvent.self, from: event.event.payload)
             apply(local, sequence: event.sequence, timestamp: event.event.timestamp)
+        } else if event.event.kind == PullRequest.kind {
+            let opened = try JSONDecoder().decode(PullRequest.self, from: event.event.payload)
+            pullRequest = opened
+            items.append(Item(id: event.sequence, notice: opened.notice))
         } else if event.event.kind == SessionEvent.updateKind {
             let notification = try ACP.RecordedSessionUpdate(rawNotification: event.event.payload)
             apply(notification.update, sequence: event.sequence)

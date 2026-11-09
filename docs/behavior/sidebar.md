@@ -170,7 +170,8 @@ Right-click on a row:
 - `Discard Worktree…` is absent on a `No project` row. It is enabled when the session has a worktree Agenthesia
   created and no outcome yet (or a merge left its worktree behind), and it is not starting, merging or being
   discarded. It asks first: `Discard the worktree of “<title>”?` with what will be lost (`2 uncommitted files and 1
-  commit on <branch> will be deleted. This cannot be undone.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
+  commit on <branch> will be deleted. This cannot be undone.`, then, when the branch was pushed, `The remote branch
+  origin/<branch> and any pull request from it are not touched.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
   `Discarded` ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)).
 
 The Session menu has the same `Archive Session` / `Unarchive Session`, `Delete Session…` and `Discard Worktree…` for the
@@ -184,6 +185,7 @@ their next refresh, and a finished deletion triggers one in every window.
 - 2026-11-09, #221: a running session's reason is the plan entry in progress; a turn's origin outranks it.
 - 2026-11-09, #311: a session running a turn that the user did not send names where it came from.
 - 2026-11-08, #279: sessions without a project show a dashed square and `No project`.
+- 2026-11-09, #233: Discard's confirmation says that a pushed branch and its pull request are not touched.
 - 2026-11-08, #275: a live row settles (ends) from a hover button and `Settle Session` in its context menu.
 - 2026-11-08, #274: shelves collapse whenever asked, also with a selected row; Previous and Next Session expand the
   shelf they move into; expanding and collapsing animate (none under Reduce Motion).

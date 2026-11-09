@@ -64,6 +64,11 @@ public actor SessionLibrary {
         _ = try await store().append([SessionEvent.worktreeRemoved(outcome).storedEvent()], to: sessionID)
     }
 
+    /// Appends a pull request to a session without a live owner, like `record(_:for:)` (ADR-0045).
+    func record(_ pullRequest: PullRequest, for sessionID: UUID) async throws {
+        _ = try await store().append([pullRequest.storedEvent()], to: sessionID)
+    }
+
     func project(id: UUID) async throws -> ProjectRecord? { try await store().projects().first { $0.id == id } }
 
     func install(id: UUID) async throws -> AgentInstallRecord? {

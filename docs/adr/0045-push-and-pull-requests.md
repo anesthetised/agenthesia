@@ -72,6 +72,21 @@ disabled: the app does not install or explain `gh`, and projects without GitHub 
 - The failure is shown in an alert after the sheet closes, like the merge's other after-commit failures, rather than
   in the sheet itself: the merge is done, so the sheet has nothing left to act on.
 
+### Implementation notes (2026-11-09, #233)
+
+- `pullRequestOpened` is stored as an event kind of its own, `session.pullRequestOpened`, not as a case of the
+  `session.event` payload: older builds skip unknown kinds, but fail to decode an unknown case of a known kind.
+- The pull request's base is the base branch's upstream name on the remote (`main` for `origin/main`), and the session
+  branch goes to that upstream's remote. Push sends it to the branch's own upstream, which `push -u` set.
+- Push is shown while the worktree has uncommitted changes too, not only commits ahead of the upstream: agents often
+  leave their work uncommitted, and Push commits it first.
+- Create and Push refuse a busy session (a turn running, queued prompts waiting), like Merge, so the intermediate commit
+  never catches an agent mid-edit; merge and discard refuse a session being pushed.
+- A signed-in `gh` is remembered for the launch; a negative answer is asked again, so signing in later needs no
+  relaunch.
+- Discard's confirmation names the remote branch only when the session branch has a remote upstream, read from Git, so
+  sidebar rows of saved sessions need no replay.
+
 ## Alternatives
 
 - **Push only, no pull request.** No `gh`, works with every host; but the common GitHub flow then still ends in a

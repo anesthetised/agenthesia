@@ -95,6 +95,7 @@ struct SessionInspector: View {
                     }
                 }
                 actions
+                if let pullRequest = model.displayedPullRequest { self.pullRequest(pullRequest) }
                 WatchErrorNotice(files: files)
                 ForEach(files.changedPaths, id: \.self) { path in
                     Button {
@@ -115,23 +116,42 @@ struct SessionInspector: View {
         }
     }
 
-    /// Review leads while there are changes; the buttons wrap onto two rows when the pane is narrow.
+    /// Review leads while there are changes; the buttons wrap onto rows of their own when the pane is narrow.
     private var actions: some View {
-        let prominent = !model.files.changedPaths.isEmpty
-        let merge = Button(model.mergeCommandTitle, systemImage: "arrow.triangle.merge") {
-            Task { await model.requestMerge() }
+        ViewThatFits(in: .horizontal) {
+            HStack { actionButtons }
+            VStack(alignment: .leading) { actionButtons }
         }
-        .buttonStyle(.bordered)
-        .disabled(!model.canMerge)
-        .help(model.mergeHelp ?? "")
-        return ViewThatFits(in: .horizontal) {
-            HStack {
-                review(prominent: prominent)
-                merge
-            }
-            VStack(alignment: .leading) {
-                review(prominent: prominent)
-                merge
+    }
+
+    @ViewBuilder private var actionButtons: some View {
+        review(prominent: !model.files.changedPaths.isEmpty)
+        // A session with a pull request integrates through it, not a local merge (ADR-0045).
+        if model.showsMerge {
+            Button(model.mergeCommandTitle, systemImage: "arrow.triangle.merge") { Task { await model.requestMerge() } }
+                .buttonStyle(.bordered)
+                .disabled(!model.canMerge)
+                .help(model.mergeHelp ?? "")
+        }
+        if model.showsOpenPullRequest {
+            Button("Open Pull Request…", systemImage: "arrow.triangle.pull", action: model.requestPullRequest)
+                .buttonStyle(.bordered)
+                .disabled(!model.canOpenPullRequest)
+        }
+    }
+
+    /// The pull request opened from the session, with Push while the worktree has work it lacks (ADR-0045).
+    private func pullRequest(_ pullRequest: PullRequest) -> some View {
+        HStack {
+            Link("Pull request #\(pullRequest.number)", destination: pullRequest.url)
+                .help(pullRequest.url.absoluteString)
+            Spacer(minLength: 8)
+            if model.isPushing {
+                ProgressView().controlSize(.small)
+            } else if model.showsPush {
+                Button("Push", systemImage: "arrow.up") { Task { await model.pushPullRequestBranch() } }
+                    .buttonStyle(.bordered)
+                    .help("Push the new work to the pull request")
             }
         }
     }

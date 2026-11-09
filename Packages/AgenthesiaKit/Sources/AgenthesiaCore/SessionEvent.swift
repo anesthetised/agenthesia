@@ -72,3 +72,22 @@ public enum WorktreeOutcome: Codable, Equatable, Sendable {
         }
     }
 }
+
+/// A pull request opened from the session's branch (ADR-0045), recorded once `gh` returned. A kind of its own rather
+/// than a `SessionEvent` case: builds that do not know it skip it, where a new case would fail their replay.
+public struct PullRequest: Codable, Equatable, Sendable {
+    public let url: URL
+    public let number: Int
+
+    public init(url: URL, number: Int) {
+        self.url = url
+        self.number = number
+    }
+
+    static let kind = "session.pullRequestOpened"
+
+    func storedEvent() throws -> NewEvent { NewEvent(kind: Self.kind, payload: try JSONEncoder().encode(self)) }
+
+    /// The transcript text.
+    public var notice: String { "Opened pull request #\(number): \(url.absoluteString)" }
+}

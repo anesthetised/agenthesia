@@ -524,6 +524,15 @@ The Dock tile follows [ADR-0031](adr/0031-app-icon-and-dock-tile.md): `Attention
 reaches `SystemAttention`, which draws `AppIcon` (UI) into the tile while sessions are live, one star each, and
 removes it otherwise. The app icon itself is the layered
 `App/AppIcon.icon`, which the system composes for each icon style.
+The menu bar item ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior](behavior/menu-bar.md)) is a
+`MenuBarExtra` scene in `App/` holding two UI views, `SessionMenuBarLabel` and `SessionMenuBarContent`, which read
+`SessionManager` and rebuild when it changes. `SessionMenu` derives the entries from `SessionSidebar`'s Needs You and
+Working sections (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
+its `WindowTarget` URL as a notification does, and an option answers through `SessionController.answerPermission`.
+`PermissionChoice` (Core, pure) is the Open-first rule: a request that edits files offers Open before the agent's
+options; the session board will reuse it. `WindowPresence` counts the visible main-capable windows from AppKit's
+window notifications, so that Open Agenthesia shows only when none is open. Hosted views cannot test a `MenuBarExtra`:
+the views are tested by their size and the entries as data, and the item itself in the running app.
 Windows report the session they show while their scene appears active. A tap opens
 `agenthesia://session/<id>` (declared in `App/Info.plist`), which `RootView` handles with `onOpenURL`.
 

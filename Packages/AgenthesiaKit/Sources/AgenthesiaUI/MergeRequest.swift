@@ -20,6 +20,14 @@ import Persistence
 
     var title: String { session.baseBranch.map { "Merge into \($0)" } ?? "Merge" }
 
+    static let pushDefaultsKey = "pushAfterMerge"
+
+    /// The merge pushes the base branch: it has a remote upstream and the remembered choice is on (ADR-0045).
+    var pushes: Bool {
+        guard case .ready(_, _, _, _?) = check else { return false }
+        return UserDefaults.standard.bool(forKey: Self.pushDefaultsKey)
+    }
+
     var canMerge: Bool {
         guard case .ready = check, !isMerging else { return false }
         return !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

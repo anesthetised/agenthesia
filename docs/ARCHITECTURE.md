@@ -698,8 +698,18 @@ disabled, with the reason in its help text, while the displayed session cannot t
 session, or is not shown), and without a selection. *Merge…* in the pane and *Merge into <base>…* in the Session menu open the merge sheet, which
 `RootView` presents.
 
-> **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds a `Push <base> to <remote>` checkbox to the
-> merge sheet (when the base has an upstream; the last choice is remembered) and *Open Pull Request…* through `gh`
+**Push after merge** ([ADR-0045](adr/0045-push-and-pull-requests.md)). `SessionManager.mergeCheck` adds the base
+branch's remote to `.ready` (`SessionWorkspace.pushRemote`, from ADR-0047's `upstream(of:in:)`; nil without an upstream
+or for a local one), and `MergeSheet` shows `Push <base> to <remote>` for it, bound to `@AppStorage("pushAfterMerge")`
+(off by default, the last choice for every project). `SessionManager.merge(_:message:push:)` pushes after the outcome
+is recorded and before the worktree goes: `SessionWorkspace.push` runs `git push <remote>
+refs/heads/<base>:<upstream branch>` with the login-shell environment and `GIT_TERMINAL_PROMPT=0`, its output in a file
+(an ssh child could hold a pipe open), and stops it after 2 minutes. It never pulls, rebases or forces. A failure is
+thrown last as `MergeError.notPushed(commit:base:output:)`, which the window treats like the other committed errors:
+the sheet closes and an alert `Merged, but Not Pushed` shows Git's output. Tests use a local bare remote: a pushed
+merge, a remote that moved (rejected, nothing undone), no or a local upstream, and a transport that hangs.
+
+> **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds *Open Pull Request…* through `gh`
 > (push of the session branch, `gh pr create`, a `pullRequestOpened` event, the link and a Push button in the
 > inspector; the session stays live and local Merge is hidden). [ADR-0043](adr/0043-sessions-in-the-project-folder.md)
 > adds sessions that run in a Git project's own folder: `baseRevision` is `HEAD` at start, `baseBranch` the checked-out

@@ -65,6 +65,67 @@ import Testing
         #expect(try await helpers.branches(fixture.repo) == ["main"])
     }
 
+    /// ADR-0045, with a local bare repository as `origin`.
+    @Test func mergePushesTheBaseBranchAndAFailedPushStillFinishesTheMerge() async throws {
+        let fixture = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let manager = fixture.manager
+        let remote = fixture.directory.appending(path: "remote.git")
+        try await helpers.git(["init", "-q", "--bare", "-b", "main", remote.path], in: fixture.directory)
+        try await helpers.git(["remote", "add", "origin", remote.path], in: fixture.repo)
+        try await helpers.git(["push", "-q", "-u", "origin", "main"], in: fixture.repo)
+
+        let id = UUID()
+        let session = try await helpers.savedSession(
+            fixture,
+            branch: "agenthesia/\(id.uuidString.lowercased())",
+            stored: nil,
+            id: id
+        )
+        try write("hello", to: "greeting.txt", in: session)
+        #expect(
+            try await manager.mergeCheck(session)
+                == .ready(baseBranch: "main", files: 1, commits: 0, pushRemote: "origin")
+        )
+        let commit = try await manager.merge(session, message: "Add a greeting", push: true)
+        #expect(try await helpers.git(["rev-parse", "main"], in: remote) == commit)
+
+        // Someone else pushes after the merge check: the push is rejected, the merge stays done.
+        let other = fixture.directory.appending(path: "other")
+        try await helpers.git(["clone", "-q", remote.path, other.path], in: fixture.directory)
+        try "theirs".write(to: other.appending(path: "theirs.txt"), atomically: true, encoding: .utf8)
+        try await helpers.git(["add", "."], in: other)
+        try await helpers.git(
+            ["-c", "user.name=Other", "-c", "user.email=o@example.com", "commit", "-qm", "Theirs"],
+            in: other
+        )
+        try await helpers.git(["push", "-q", "origin", "main"], in: other)
+        let theirs = try await helpers.git(["rev-parse", "HEAD"], in: other)
+        let secondID = UUID()
+        let second = try await helpers.savedSession(
+            fixture,
+            branch: "agenthesia/\(secondID.uuidString.lowercased())",
+            stored: nil,
+            id: secondID
+        )
+        try write("bye", to: "farewell.txt", in: second)
+        var failure: SessionManager.MergeError?
+        do { try await manager.merge(second, message: "Say goodbye", push: true) } catch let error
+            as SessionManager
+            .MergeError
+        { failure = error }
+        guard case .notPushed(let merged, "main", let output) = failure else {
+            Issue.record("Expected a failed push, got \(String(describing: failure))")
+            return
+        }
+        #expect(!output.isEmpty)
+        #expect(try await helpers.git(["rev-parse", "main"], in: fixture.repo) == merged)
+        #expect(try await helpers.git(["rev-parse", "main"], in: remote) == theirs)
+        #expect(try await manager.library.worktreeOutcomes()[second.id] == .merged(commit: merged, into: "main"))
+        #expect(!FileManager.default.fileExists(atPath: second.workingDirectory))
+        #expect(!manager.isMerging(second.id))
+    }
+
     @Test func mergeCommitsTheSessionEndsItAndRecordsTheOutcome() async throws {
         let fixture = try await fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }

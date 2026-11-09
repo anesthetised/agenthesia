@@ -175,7 +175,8 @@ public final class SessionManager {
 
     public enum MergeCheck: Equatable, Sendable {
         /// Files changed from the merge base, uncommitted ones included, and the commits on the session branch.
-        case ready(baseBranch: String, files: Int, commits: Int)
+        /// `pushRemote` is where the base branch's upstream lives, so the merge can push it (ADR-0045).
+        case ready(baseBranch: String, files: Int, commits: Int, pushRemote: String? = nil)
         case blocked(String)
     }
 
@@ -192,6 +193,8 @@ public final class SessionManager {
         case notRecorded(commit: String, reason: String)
         /// The commit exists and is recorded, but the worktree is still there; Discard Worktree… removes it.
         case worktreeKept(commit: String, reason: String)
+        /// The merge finished, but pushing the base branch failed; Git's output (ADR-0045).
+        case notPushed(commit: String, base: String, output: String)
 
         static let busyExplanation =
             "The session is working, starting, or being merged or discarded. Merge once it is idle, with no "
@@ -216,6 +219,9 @@ public final class SessionManager {
             case .worktreeKept(let commit, let reason):
                 "Merged as \(commit.prefix(7)), but the worktree could not be removed. \(reason) "
                     + "Use Discard Worktree… to remove it."
+            case .notPushed(let commit, let base, let output):
+                "Merged as \(commit.prefix(7)) into \(base), but the push failed, so \(base) is only local. Push it "
+                    + "by hand once the problem below is resolved.\n\n\(output)"
             }
         }
 
@@ -238,15 +244,22 @@ public final class SessionManager {
         let (worktree, outcome) = try await removableWorktree(session)
         guard outcome == nil else { throw DiscardError.alreadyRemoved }
         switch try await SessionWorkspace.mergeCheck(of: worktree, into: base, baseRevision: session.baseRevision) {
-        case .ready(let files, let commits): return .ready(baseBranch: base, files: files, commits: commits)
+        case .ready(let files, let commits):
+            let remote = await SessionWorkspace.pushRemote(of: base, in: worktree.projectDirectory)
+            return .ready(baseBranch: base, files: files, commits: commits, pushRemote: remote)
         case .blocked(let blocker): return .blocked(blocker.explanation)
         }
     }
 
     /// Squash-merges the session into its base branch and returns the commit (ADR-0032). The agent stays attached
     /// until the commit exists, so it can resolve a conflict; then the owners end, the outcome is recorded and the
-    /// worktree and branch are removed.
-    @discardableResult public func merge(_ session: SessionRecord, message: String) async throws -> String {
+    /// worktree and branch are removed. With `push`, the base branch is pushed to its upstream after the commit was
+    /// recorded (ADR-0045); a failed push undoes nothing and is thrown last, as `notPushed`.
+    @discardableResult public func merge(
+        _ session: SessionRecord,
+        message: String,
+        push: Bool = false
+    ) async throws -> String {
         let id = session.id
         guard let base = session.baseBranch else {
             throw MergeError.blocked(SessionWorkspace.MergeBlocker.noBaseBranch.explanation)
@@ -258,6 +271,7 @@ public final class SessionManager {
             let (worktree, outcome) = try await removableWorktree(session)
             guard outcome == nil else { throw DiscardError.alreadyRemoved }
             let resolve = environment ?? LiveSession.shellEnvironment
+            let values = await resolve().values
             let commit: String
             do {
                 commit = try await SessionWorkspace.merge(
@@ -265,7 +279,7 @@ public final class SessionManager {
                     into: base,
                     baseRevision: session.baseRevision,
                     message: message,
-                    environment: await resolve().values
+                    environment: values
                 )
             } catch let failure as SessionWorkspace.MergeFailure {
                 throw MergeError(failure)
@@ -282,9 +296,17 @@ public final class SessionManager {
             } catch {
                 throw MergeError.notRecorded(commit: commit, reason: error.localizedDescription)
             }
-            do { try await SessionWorkspace.remove(worktree) } catch {
-                throw MergeError.worktreeKept(commit: commit, reason: error.localizedDescription)
+            var pushFailure: String?
+            if push {
+                do {
+                    try await SessionWorkspace.push(base, in: worktree.projectDirectory, environment: values)
+                } catch { pushFailure = error.localizedDescription }
             }
+            do { try await SessionWorkspace.remove(worktree) } catch {
+                let pushed = pushFailure.map { " The push failed too: \($0)" } ?? ""
+                throw MergeError.worktreeKept(commit: commit, reason: error.localizedDescription + pushed)
+            }
+            if let pushFailure { throw MergeError.notPushed(commit: commit, base: base, output: pushFailure) }
             return commit
         }
         merging[id] = task

@@ -615,10 +615,10 @@ import os
         let shown = displayed?.session.id == id || owner?.sessionID == id
         var committed: SessionManager.MergeError?
         do {
-            try await sessions.merge(request.session, message: request.message)
+            try await sessions.merge(request.session, message: request.message, push: request.pushes)
         } catch let error as SessionManager.MergeError {
             switch error {
-            case .worktreeKept, .notRecorded: committed = error
+            case .worktreeKept, .notRecorded, .notPushed: committed = error
             default:
                 request.failure = error
                 return
@@ -636,7 +636,10 @@ import os
         }
         await refreshShowing(id, shown: shown)
         // After the sheets have gone, so the alert is not lost behind a dismissing sheet.
-        if let committed { showAlert("The Merge Did Not Finish", committed) }
+        if let committed {
+            let pushOnly = if case .notPushed = committed { true } else { false }
+            showAlert(pushOnly ? "Merged, but Not Pushed" : "The Merge Did Not Finish", committed)
+        }
     }
 
     private func showAlert(_ title: String, _ error: any Error) {

@@ -2,8 +2,8 @@
 
 The conversation of a session fills the center of its window: one row per message, tool call or notice, in a column
 at most 720 pt wide that the composer card below it shares ([ADR-0039](../adr/0039-t3-style-window-layout.md)). This
-document covers how rows are selected and copied and how the keyboard moves through them, and how the agent's thoughts
-show; what the other kinds of row show is not summarised here yet.
+document covers how rows are selected and copied and how the keyboard moves through them, how the agent's thoughts
+show and how a finished turn's work folds; what the other kinds of row show is not summarised here yet.
 
 ## First message of a starting session
 
@@ -47,7 +47,8 @@ bubble, the label being where it came from:
   names: a step's question is its first field's description, else its title, else its name. A choice reads as its
   title; the step's text, when given, replaces the pick, as the adapter's custom field means; a multiple choice joins
   its picks with `, `; a toggle reads `Yes` or `No`.
-- The row is never folded into a group of tool calls. Copy returns each question with its answer on the next line,
+- The row is never folded into a group of tool calls, and it stays outside a finished turn's fold
+  ([below](#finished-turns)). Copy returns each question with its answer on the next line,
   indented by two spaces, the steps separated by a blank line, then `Declined` or `Cancelled` when the form was not
   submitted.
 
@@ -96,6 +97,29 @@ thought is one row with a disclosure, like a tool card: a brain icon and one lin
   in its header, the `Copy` accessibility action and ⌘C on a table selection, which copies the row once.
 - VoiceOver reads the header text; the disclosure is `Show all` when collapsed and `Show less` when expanded.
 
+## Finished turns
+
+When a turn ends on its own, its work folds into one row, as in T3 Code: everything between its prompt and its answer
+(the last agent message) collapses under `Worked for 1m 3s`.
+
+- The row sits directly below the prompt (below the last of prompts sent together): `Worked for` and the turn's time
+  in secondary text with tabular digits, then a small chevron (`chevron.right` collapsed, `chevron.down` expanded),
+  over a hairline across the column. The time runs from the turn's prompt to its end, by the stored events'
+  timestamps, and reads as the working line does (`12s`, `1m 3s`, `1h 2m`), so a saved session shows it too.
+- It hides tool calls and groups, thoughts, permission records, earlier agent messages and any work after the answer.
+  The answer stays open below it, and so do answered questions, in their place. A turn without an answer folds all its
+  work; a turn with nothing to hide gets no row.
+- Nothing folds while the turn runs: the row appears when it ends. A turn stopped with Stop, interrupted by a steer
+  or ended by an error never folds, so the divider, the hairline or the error stays below its work in view.
+- Clicking the label or the chevron expands the turn: its rows appear below the row as they show today (groups and
+  thoughts keep their own disclosures) and the chevron points down; clicking again folds them. Each turn remembers its
+  own expansion, also while a later turn streams. Turns are collapsed when a session opens.
+- Find in Transcript searches the folded work; stepping to a match inside a collapsed turn expands it, then the row
+  that holds the match as for thoughts and groups. Stepping to the answer or a question leaves the turn folded.
+- The row has no Copy: it is not copied from a selection, has no hover button and no `Copy` action. The rows inside an
+  expanded turn select and copy as before.
+- VoiceOver reads the row as a disclosure triangle labelled `Worked for 1m 3s`, collapsed or expanded.
+
 ## Row selection
 
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
@@ -123,7 +147,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 - An answered question copies its questions and answers ([above](#questions-from-the-agent)). A tool call row copies
   its output, and a folded summary of several calls copies what its cards hold. A row of thoughts copies their full
   text, collapsed or not. When a summary
-  and some of its expanded cards are both selected, the cards are copied once.
+  and some of its expanded cards are both selected, the cards are copied once. A finished turn's `Worked for` row
+  copies nothing.
 - Pointing at a row shows a `Copy` button in its header (tooltip `Copy message as Markdown`) that copies that one
   row; VoiceOver gets the same action as a custom action `Copy` on the row. It is a small bordered button in the
   system's label colors, readable on the selection in light, dark and Increase Contrast.
@@ -137,6 +162,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-10, #341: a finished turn's work (calls, thoughts, permission records, earlier agent messages) folds into
+  one `Worked for 1m 3s` row with a chevron above its answer; previously every row of a turn stayed open.
 - 2026-11-09, #340: an answered, declined or cancelled form is one question row with its answers behind a disclosure
   instead of the `Input` card with raw field names; a stopped turn ends with the red `Run interrupted · Stopped by
   user` divider; a prompt sent now is a bubble labelled `↪ Steer` and the turn it interrupted ends with a plain hairline

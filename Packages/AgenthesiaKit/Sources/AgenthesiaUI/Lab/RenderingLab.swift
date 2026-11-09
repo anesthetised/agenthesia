@@ -245,10 +245,10 @@
                 : turns
                     ? "S11 Turns, 10k items"
                     : thoughts
-                    ? "S10 Thoughts"
-                    : history > 200
-                        ? "S9 Tool updates, 10k items"
-                        : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
+                        ? "S10 Thoughts"
+                        : history > 200
+                            ? "S9 Tool updates, 10k items"
+                            : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
             var turnFinished = !turns
             await measure("\(name), \(prototype.title), warm", in: view.view) {
                 guard !schedule.isComplete else {

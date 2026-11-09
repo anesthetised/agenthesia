@@ -113,7 +113,9 @@ import Testing
             try SessionEvent.permissionRequested(id: permission, toolCall: .init(toolCallId: "p"), options: [])
                 .storedEvent()
         )
-        try await recorded.append(try SessionEvent.permissionResolved(id: permission, outcome: .cancelled).storedEvent())
+        try await recorded.append(
+            try SessionEvent.permissionResolved(id: permission, outcome: .cancelled).storedEvent()
+        )
         let input = UUID()
         let schema = ACP.ElicitationSchema(properties: ["q_0": .boolean(.init(title: "Proceed"))])
         try await recorded.append(
@@ -299,23 +301,22 @@ import Testing
             defer { window.close() }
             controller.update(freshSource)
             await settle(window)
-            return heights(controller)
+            return withExtendedLifetime(freshSource) { heights(controller) }
         }
 
         let controller = TranscriptTableController()
         let window = host(controller, width: 500)
         defer { window.close() }
-        controller.update(source(recorded))
+        // The table holds its source weakly.
+        let shown = source(recorded)
+        defer { withExtendedLifetime(shown) {} }
+        controller.update(shown)
         await settle(window)
         let collapsed = heights(controller)
-        #expect(collapsed.count == 4 && collapsed[1] < collapsed[3])
+        #expect(collapsed.count == 4 && collapsed[1] < collapsed[3], "\(collapsed)")
         #expect(collapsed == (await fresh(width: 500, expanded: false)))
 
-        let toggle = try #require(
-            views(NSButton.self, in: try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true)))
-                .first
-        )
-        controller.toggleExpansion(toggle)
+        controller.toggleExpansion(try toggle(in: controller))
         await settle(window)
         #expect(heights(controller)[1] == collapsed[1])
         window.setContentSize(.init(width: 1364, height: 600))
@@ -323,11 +324,7 @@ import Testing
         let wide = await fresh(width: 1364, expanded: true)
         #expect(zip(heights(controller), wide).allSatisfy { abs($0 - $1) <= 1 }, "\(heights(controller)), \(wide)")
 
-        let reopened = try #require(
-            views(NSButton.self, in: try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true)))
-                .first
-        )
-        controller.toggleExpansion(reopened)
+        controller.toggleExpansion(try toggle(in: controller))
         await settle(window)
         let wideCollapsed = await fresh(width: 1364, expanded: false)
         #expect(heights(controller).count == 4)
@@ -359,6 +356,12 @@ import Testing
             #expect(prototype.rows == [.item(0), .turn(first: 1), .item(1), .item(4), .turn(first: 5), .item(10)])
         }
     #endif
+
+    /// The chevron of the fold's row, the table's second.
+    private func toggle(in controller: TranscriptTableController) throws -> NSButton {
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        return try #require(views(NSButton.self, in: row).first)
+    }
 
     private func host(_ controller: TranscriptTableController, width: CGFloat = 600) -> NSWindow {
         let window = OffscreenWindow(size: .init(width: width, height: 600))

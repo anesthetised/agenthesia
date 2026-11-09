@@ -49,7 +49,10 @@
                 ? []
                 : TranscriptRow.turnFolds(
                     count: items.count,
-                    part: { index in prompts[index].map { .prompt($0) } ?? (items[index].0 == "Agent" ? .answer : .work) },
+                    part: { index in
+                        if let turn = prompts[index] { return .prompt(turn) }
+                        return items[index].0 == "Agent" ? .answer : .work
+                    },
                     finished: { $0 != runningTurn },
                     isExpanded: { _ in false }
                 )

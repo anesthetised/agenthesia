@@ -156,8 +156,8 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
   field is a step of its own. Steps are grouped from the form's schema alone, never from an agent's field names
   (VISION principle 8), in the order of the field names with numbers compared by value (`q_2` before `q_10`).
 - The dock shows, top to bottom: the form's message in small secondary text when the step has a question of its own;
-  the step's title (the field's title, else its name, with ` (required)`), `1 of 3` while the form has several steps,
-  and `Skip`; the step's question (the field's description, else the form's message); its choices; its errors in red
+  the step's title (the field's title, else its name, with ` (required)`), `Back` from the second step on, `1 of 3`
+  while the form has several steps, and `Skip`; the step's question (the field's description, else the form's message); its choices; its errors in red
   (on the last step also those of fields no step shows, as `<name>: <error>`).
 - A choice is a row with its number (1–9), a radio or checkbox mark, the title and the agent's description in secondary
   text; the picked one has a tinted background. A click picks it; a multiple choice toggles. A field that is neither a
@@ -172,6 +172,9 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
   empty composer, 1–9 pick a choice and ↑ ↓ move a single choice (from none, ↓ picks the first and ↑ the last); once
   text is typed, digits and arrows edit it. Escape declines the form, as Skip does. ⌘. still stops the turn, which
   cancels the form. ⌘Return and ⇧⌘Return do nothing.
+- **Back** shows the previous step with its pick and text back in the composer; the step left keeps its own answers
+  for when the user comes forward again. Nothing reaches the agent until the last step is answered. Back has no
+  keyboard shortcut; VoiceOver reads it as `Back, previous question`.
 - Skip and Escape decline the form (the agent reads that the user skipped); Stop, a withdrawn request, a failure and
   the end of the turn cancel it. Validation (patterns, limits, required fields) is the form's as before.
 - The dock never takes focus. VoiceOver reads it as `Question 1 of 3 <title>: <question>` and announces that when a
@@ -208,6 +211,7 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
 
 - 2026-11-09, #326: an agent's questions dock in the composer and are answered one step at a time; Return reads Next
   or Answer and never queues while a form waits; Stop no longer replaces the round button while a form waits.
+- 2026-11-09, #326: Back returns to the previous question of a docked form, keeping every step's answers.
 
 - 2026-11-09, #222: the context ring before the Send options, from 70 % of the context window.
 - 2026-11-09, #221: the status line counts the plan's completed entries and names the one in progress.

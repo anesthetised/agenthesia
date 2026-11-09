@@ -127,6 +127,16 @@ import SwiftUI
         return true
     }
 
+    /// Back shows the previous step; the answers of every step stay in the draft, and nothing reaches the agent until
+    /// the last step is answered.
+    var canGoBack: Bool { index > 0 }
+
+    @discardableResult func goBack() -> Bool {
+        guard canGoBack else { return false }
+        draft.step = index - 1
+        return true
+    }
+
     /// Skip and Escape decline the form, as the transcript card's Decline did (ADR-0020).
     @discardableResult func decline() -> Bool { answer(.init(action: .decline)) }
 
@@ -149,10 +159,15 @@ struct InputDock: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(form.title).fontWeight(.semibold)
                 Spacer(minLength: 8)
+                if form.canGoBack {
+                    Button("Back", action: goBack)
+                        .help("Go back to the previous question")
+                        .accessibilityLabel("Back, previous question")
+                }
                 if let progress = form.progress {
                     Text(progress).foregroundStyle(.secondary).monospacedDigit()
                 }
-                Button("Skip") { form.decline() }
+                Button("Skip", action: skip)
                     .help("Decline the agent's questions (Escape)")
             }
             if let question = form.question {
@@ -182,6 +197,9 @@ struct InputDock: View {
             AccessibilityNotification.Announcement(form.announcement).post()
         }
     }
+
+    private func goBack() { form.goBack() }
+    private func skip() { form.decline() }
 }
 
 /// One choice: its number for 1–9, a radio or checkbox mark, the title and the agent's description.

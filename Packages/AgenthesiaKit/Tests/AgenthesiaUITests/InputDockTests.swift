@@ -148,6 +148,28 @@ import Testing
         #expect(form.draft.values["question_1"] == nil)
     }
 
+    /// Back shows the previous step with its answers; the later step keeps its own, and nothing is sent meanwhile.
+    @Test func backKeepsTheAnswersOfBothSteps() {
+        var answered = false
+        let form = form(questions) { _ in
+            answered = true
+            return true
+        }
+        #expect(!form.canGoBack && !form.goBack() && form.index == 0)
+        form.pick(1)
+        form.text = "a note"
+        #expect(form.advance())
+        form.pick(0)
+        form.text = "more"
+        #expect(form.canGoBack && form.goBack())
+        #expect(form.index == 0 && form.progress == "1 of 2" && !form.canGoBack)
+        #expect(form.isPicked(form.choices[1]) && form.text == "a note")
+        form.pick(0)
+        #expect(form.advance())
+        #expect(form.text == "more" && form.isPicked(form.choices[0]) && !answered)
+        #expect(form.draft.values["question_0"] == "A" && form.draft.values["question_0_custom"] == "a note")
+    }
+
     @Test func theLastStepSendsTheAnswersAndSkipDeclines() {
         var responses: [ACP.ElicitationResponse] = []
         let form = form(questions) {
@@ -306,11 +328,24 @@ import Testing
         try await waitUntil { form.index == 1 && composer.string.isEmpty }
         composer.keyDown(with: try key("1", code: 18))
         #expect(form.draft.values["question_1"] == ["Unit"])
+
+        // Back shows step 1 with its pick and text; a changed pick is what the agent gets.
+        // The dock's buttons are SwiftUI's own, not AppKit views a test can click; this is Back's action.
+        #expect(form.goBack())
+        try await waitUntil { form.index == 0 && composer.string == "a note1" }
+        #expect(form.isPicked(form.choices[1]))
+        composer.selectAll(nil)
+        composer.deleteBackward(nil)
+        try await waitUntil { form.draft.values["question_0_custom"] == nil }
+        composer.keyDown(with: try key("1", code: 18))
+        #expect(form.draft.values["question_0"] == "Foundation")
+        composer.keyDown(with: try key("\r", code: 36))
+        try await waitUntil { form.index == 1 }
         composer.keyDown(with: try key("\r", code: 36))
         try await waitUntil { controller.status == .idle && composer.string == "my draft" }
         #expect(composer.accessibilityLabel() == "Message")
         try await waitUntil { scroll.contentView.bounds.height >= height - 1 }
-        #expect(agentText(of: controller).contains(#""question_1":["Unit"]"#))
+        #expect(agentText(of: controller).contains(#"Answers: {"question_0":"Foundation","question_1":["Unit"]}"#))
         await fixture.remove()
     }
 

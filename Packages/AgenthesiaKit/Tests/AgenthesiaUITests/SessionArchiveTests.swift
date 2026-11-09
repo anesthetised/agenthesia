@@ -5,6 +5,7 @@ import Testing
 @testable import AgenthesiaCore
 @testable import AgenthesiaUI
 
+/// Archive and delete (ADR-0044).
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionArchiveTests {
     @MainActor private struct Fixture {
         let directory: URL
@@ -147,6 +148,74 @@ import Testing
         while fixture.model.history.first?.archivedAt != nil { await Task.yield() }
         #expect(try await fixture.store.session(id: record.id)?.archivedAt == nil)
         await fixture.close()
+    }
+
+    @Test func deleteSaysWhatGoesAndEveryWindowShowingTheSessionReturnsToTheDraft() async throws {
+        let fixture = try await Fixture()
+        let (record, other) = (try await fixture.save("Doomed", at: 1), try await fixture.save("Kept", at: 2))
+        let second = SessionWindowModel(sessions: fixture.sessions)
+        for model in [fixture.model, second] {
+            await model.refresh()
+            await model.showHistory(record)
+            #expect(model.canDelete)
+        }
+        await fixture.model.requestDelete(record)
+        let pending = try #require(fixture.model.pendingDelete)
+        #expect(pending.title == "Delete “Doomed”?")
+        #expect(pending.message == "This session failed to start. Its history will be deleted. This cannot be undone.")
+        await fixture.model.confirmDelete(pending)
+        #expect(try await fixture.store.session(id: record.id) == nil)
+        #expect(fixture.model.showingSetup && fixture.model.displayed == nil && fixture.model.pendingDelete == nil)
+        #expect(fixture.model.sidebar.rows.map(\.id) == [AnyHashable(other.id)])
+        // The other window learns of it at its next refresh, which a finished deletion triggers.
+        await second.refresh()
+        #expect(second.showingSetup && second.displayed == nil)
+        second.close()
+        await fixture.close()
+    }
+
+    @Test func aLiveSessionCannotBeDeleted() async throws {
+        let fixture = try await Fixture()
+        let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
+        let binary = try #require(
+            [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
+                .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        )
+        fixture.model.start(directory: fixture.directory, executable: binary.path, arguments: [])
+        let owner = try #require(fixture.model.owner)
+        await owner.startup?.value
+        await fixture.model.refresh()
+        let record = try #require(owner.controller?.session)
+        #expect(!fixture.model.canDelete && fixture.model.archiveHelp == "End the session first")
+        await fixture.model.requestDelete(record)
+        #expect(fixture.model.pendingDelete == nil)
+        await #expect(throws: SessionManager.DeleteError.live) { try await fixture.sessions.delete(record) }
+        #expect(try await fixture.store.session(id: record.id) != nil)
+        await fixture.close()
+    }
+
+    @Test func theConfirmationNamesWhatIsLost() {
+        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), title: nil, workingDirectory: "/tmp")
+        func message(_ summary: SessionManager.DeleteSummary) -> String {
+            SessionWindowModel.PendingDelete(session: record, summary: summary).message
+        }
+        let end = "Its history will be deleted. This cannot be undone."
+        #expect(SessionWindowModel.PendingDelete(session: record, summary: .history).title == "Delete “New Session”?")
+        #expect(message(.history) == end)
+        #expect(message(.merged) == "This session was merged. \(end)")
+        #expect(message(.discarded) == "This session was discarded. \(end)")
+        #expect(
+            message(.worktree(.init(uncommittedFiles: 1, commits: 3, branch: "agenthesia/fix")))
+                == "This session still has a worktree with 1 uncommitted file and 3 commits on agenthesia/fix; they "
+                + "will be deleted. \(end)"
+        )
+        #expect(
+            message(.worktree(nil)) == "This session still has a worktree; it and its branch will be deleted. \(end)"
+        )
+        #expect(
+            message(.folder(name: "plan-a-trip-1a2b3c4d", files: 2))
+                == "Its folder “plan-a-trip-1a2b3c4d” with 2 files will be moved to the Trash. \(end)"
+        )
     }
 
     @Test func continuingAnUnarchivedSessionWritesNothing() async throws {

@@ -76,6 +76,21 @@ enum Schema {
         migrator.registerMigration("v7-session-fallback-upstream") { db in
             try db.execute(sql: "ALTER TABLE session ADD COLUMN fallbackUpstream TEXT")
         }
+        // Deleting a session is the one way events go (ADR-0044): `deleteSession` marks the session in
+        // `session_deletion` within its transaction, and the guard lets only that session's events go.
+        migrator.registerMigration("v8-session-deletion") { db in
+            try db.execute(
+                sql: """
+                    CREATE TABLE session_deletion (sessionID TEXT NOT NULL PRIMARY KEY);
+                    DROP TRIGGER event_no_delete;
+                    CREATE TRIGGER event_no_delete BEFORE DELETE ON event
+                    WHEN NOT EXISTS (SELECT 1 FROM session_deletion WHERE sessionID = OLD.sessionID)
+                    BEGIN
+                        SELECT RAISE(ABORT, 'Events are append-only');
+                    END;
+                    """
+            )
+        }
         return migrator
     }
 }

@@ -17,6 +17,12 @@ public final class SessionManager {
     private var discarding: [UUID: Task<Void, any Error>] = [:]
     /// Sessions being merged into their base branch; turns, Continue and discard are refused, and quit waits.
     private var merging: [UUID: Task<String, any Error>] = [:]
+    /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
+    public internal(set) var deletingIDs: Set<UUID> = []
+    // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
+    @ObservationIgnored var trash: @Sendable (URL) throws -> Void = {
+        try FileManager.default.trashItem(at: $0, resultingItemURL: nil)
+    }
     // Test seam applied to new owners and merges; production uses the login-shell resolver.
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
     // Test seam for a history write failing after the merge commit; production appends to the library.
@@ -26,7 +32,7 @@ public final class SessionManager {
     /// The tokens the `agenthesia-mcp` helper presents to the app's socket (ADR-0049).
     @ObservationIgnored public let mcpTokens = MCPTokens()
     private let worktreesRoot: URL
-    private let scratchRoot: URL
+    let scratchRoot: URL
     /// The root of the project that sessions without a project belong to (ADR-0048), for `ProjectRecord.isScratch`.
     public let scratchPath: String
 
@@ -299,7 +305,7 @@ public final class SessionManager {
         owners.contains { $0.sessionID == id && ($0.isStarting || $0.signIn != nil) }
     }
 
-    private func worktree(of session: SessionRecord, project: ProjectRecord) -> SessionWorkspace.Worktree? {
+    func worktree(of session: SessionRecord, project: ProjectRecord) -> SessionWorkspace.Worktree? {
         SessionWorkspace.Worktree(
             projectDirectory: URL(filePath: project.rootPath, directoryHint: .isDirectory),
             workingDirectory: URL(filePath: session.workingDirectory, directoryHint: .isDirectory),

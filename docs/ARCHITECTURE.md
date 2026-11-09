@@ -445,10 +445,26 @@ The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` wit
 
 **Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable `session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when; `PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of Settled (so out of its header count, and out of the section altogether when nothing else is saved) unless a query is entered: a search lists them in Settled order, the header then counts the matches, and the row's reason is `Archived` (`SidebarReason.saved`, which wins over `Merged` and `Discarded`). Previous and Next Session skip archived rows even while a search shows them. *Archive Session* / *Unarchive Session* (the title follows `archivedAt`) is in the row's context menu of a saved row and in the Session menu; neither asks for confirmation. The Session menu item is disabled unless the displayed session is saved, with the help text `End the session first` for a live one (`SessionWindowModel.canArchive`, `archiveHelp`); live rows have no context-menu item. **Continue** clears `archivedAt` (`SessionWindowModel.continueRestored`): a session the user talks to again is not archived. Every write refreshes the window's history; other windows pick it up at their next refresh.
 
+**Delete Session…** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) removes a saved session for good. Events are
+append-only in the schema itself (`event_no_delete`); migration `v8-session-deletion` lets the guard pass only the
+events of a session listed in `session_deletion`, which `PersistenceStore.deleteSession` fills and empties inside its
+one transaction (mark, delete the events, which hold the queue too, delete the record, unmark). `event` is the only
+table that references a session, and a test lists the foreign keys so a new one cannot be forgotten.
+`SessionManager.delete` refuses a live or starting session (`DeleteError.live`) and one being merged, discarded or
+deleted (`busy`); it removes the files first and deletes nothing when that fails: a worktree Agenthesia created goes
+through `SessionWorkspace.remove` (ADR-0032's checks; skipped when it is already gone after a discard or merge, or
+when neither it nor the project exists), and the folder of a session without a project goes to the Trash
+(`SessionManager.trash`, a test seam), only when the stored path lies directly in the scratch root with no `.` or `..`
+component. `deleteSummary` words the confirmation's state (`DeleteSummary`: merged, discarded, the worktree's
+`DiscardSummary`, the folder's name and file count, failed to start when the session stored no event, or history
+only). `SessionManager.deletingIDs` is part of `RootView`'s history key, so every window refreshes when a deletion
+ends, and `SessionWindowModel.refresh` sends a window whose displayed saved session vanished back to the draft,
+dropping its review and viewed marks. The item is on saved rows' context menus and in the Session menu
+(`canDelete`, with Archive's help text); `SessionAlerts` holds the confirmations of Discard and Delete.
+
 > **Accepted, not yet implemented (M16):** [ADR-0046](adr/0046-session-board-and-menu-bar.md) adds an *Overview* row above the sections
 > (⌘0; a board of live-session cards that can answer requests without a diff) and a `MenuBarExtra` with the Needs You
-> count and the sessions. [ADR-0044](adr/0044-delete-and-archive-sessions.md) adds Delete Session… for saved sessions
-> (Archive Session is implemented, see below).
+> count and the sessions.
 
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user

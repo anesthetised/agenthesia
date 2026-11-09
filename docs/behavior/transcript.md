@@ -2,8 +2,8 @@
 
 The conversation of a session fills the center of its window: one row per message, tool call or notice, in a column
 at most 720 pt wide that the composer card below it shares ([ADR-0039](../adr/0039-t3-style-window-layout.md)). This
-document covers how rows are selected and copied and how the keyboard moves through them; what each kind of row shows
-is not summarised here yet.
+document covers how rows are selected and copied and how the keyboard moves through them, and how the agent's thoughts
+show; what the other kinds of row show is not summarised here yet.
 
 ## First message of a starting session
 
@@ -39,6 +39,30 @@ bubble, the label being where it came from:
   answer…` until the response is stored, then `Submitted` with each submitted field and value, `Declined` or
   `Cancelled`. A form of a saved session that was never answered reads `Cancelled`.
 
+## Thoughts
+
+The agent's thoughts are collapsed ([ADR-0039](../adr/0039-t3-style-window-layout.md), amendment of 2026-11-07). A
+thought is one row with a disclosure, like a tool card: a brain icon and one line of small secondary text, no body.
+
+- While the agent is thinking (the thoughts end the transcript of the running turn), the row reads `Thinking…` followed
+  by the last line of the latest thought so far, without code and bold marks and truncated at the column's edge. It
+  changes with every streamed chunk.
+- Once the agent moves on, the row reads `Thought for 12s` (`1m 12s`, `1h 2m` as the working line words them): the time
+  from the first thought chunk to the next item of another kind, or to the end of the turn when nothing follows it.
+  The time comes from the stored events' timestamps, so a saved transcript shows it too. Updates that are not items,
+  such as the plan or context usage, do not end a thought.
+- Consecutive thoughts fold into one row, as consecutive tool calls do, and its time is their sum. A tool call, a
+  message or any other item ends the run.
+- The disclosure expands the row: the full text of its thoughts below the header, dimmed (65 % opacity, so the code
+  colors of their Markdown stay), separated by a blank line. While expanded and thinking, the header reads only
+  `Thinking…` and the text streams below it. The row is collapsed by default and keeps its expansion while more
+  thoughts stream into it, as a tool card keeps its own.
+- Find in Transcript searches the full text of every thought, collapsed or not; stepping to a match in a collapsed row
+  expands it, selects it and marks the match.
+- Copy returns the full text of the row's thoughts, whether the row is collapsed or expanded: the hover `Copy` button
+  in its header, the `Copy` accessibility action and ⌘C on a table selection, which copies the row once.
+- VoiceOver reads the header text; the disclosure is `Show all` when collapsed and `Show less` when expanded.
+
 ## Row selection
 
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
@@ -63,7 +87,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 - ⌘C (Edit → Copy) with rows selected puts them on the pasteboard as Markdown, whole rows in transcript order,
   separated by a blank line.
-- A tool call row copies its output, and a folded summary of several calls copies what its cards hold. When a summary
+- A tool call row copies its output, and a folded summary of several calls copies what its cards hold. A row of
+  thoughts copies their full text, collapsed or not. When a summary
   and some of its expanded cards are both selected, the cards are copied once.
 - Pointing at a row shows a `Copy` button in its header (tooltip `Copy message as Markdown`) that copies that one
   row; VoiceOver gets the same action as a custom action `Copy` on the row. It is a small bordered button in the
@@ -78,8 +103,9 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-09, #223: thoughts are one collapsed disclosure row (`Thinking… <last line>`, then `Thought for 12s`), and
+  consecutive thoughts fold into it; previously they streamed in full, dimmed, under a `Thinking` caption.
 - 2026-11-09, #326: a waiting input form is a compact row; it is answered in the composer instead of in the row.
-
 - 2026-11-09, #225: the first message of a starting session is shown as the transcript's only row.
 - 2026-11-09, #311: prompts the user did not send are labelled rows instead of the user's bubble.
 - 2026-11-09, #301: a row's hover Copy follows the pointer when a layout moves the row from under it.

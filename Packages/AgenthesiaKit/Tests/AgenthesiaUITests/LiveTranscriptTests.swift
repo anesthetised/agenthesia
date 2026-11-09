@@ -618,12 +618,18 @@ final class RecordedTranscript {
         for stored in try await store.append([event], to: session.id) { try state.apply(stored) }
     }
 
-    func apply(_ update: ACP.SessionUpdate) async throws {
+    func apply(_ update: ACP.SessionUpdate, at timestamp: Date = .now) async throws {
         let notification = Message.notification(
             method: "session/update",
             params: try JSONValue(encoding: ACP.V1.SessionNotification(sessionId: "s", update: update))
         )
-        try await append(NewEvent(kind: SessionEvent.updateKind, payload: try JSONEncoder().encode(notification)))
+        try await append(
+            NewEvent(
+                kind: SessionEvent.updateKind,
+                payload: try JSONEncoder().encode(notification),
+                timestamp: timestamp
+            )
+        )
     }
 }
 
@@ -772,7 +778,7 @@ extension LiveTranscriptTests {
         try await recorded.append(SessionEvent.interrupted(id: UUID()).storedEvent())
         let source = source(of: recorded)
         let kinds = (0..<source.messageCount).map { source.message(at: $0).kind }
-        #expect(kinds == [.user, .user, .user, .agent, .thought, .card, .card])
+        #expect(kinds == [.user, .user, .user, .agent, .group, .card, .card])
         #expect((0..<4).map { source.message(at: $0).caption } == [nil, "not sent", "sent together", nil])
         // The role stays in the model, so that Copy and accessibility keep naming it.
         #expect(source.message(at: 0).role == "You" && source.message(at: 1).role == "You")
@@ -802,7 +808,7 @@ extension LiveTranscriptTests {
         #expect(labels(in: mine) == ["Mine"] && !views(BubbleCell.self, in: mine).isEmpty)
     }
 
-    @Test func agentRowsHaveNoRoleLabelAndThoughtsKeepAQuietOne() async throws {
+    @Test func agentRowsHaveNoRoleLabelAndThoughtsAreACollapsedHeader() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Answer"))))
         try await recorded.apply(.agentThoughtChunk(.init(content: .init(text: "Idea"))))
@@ -814,10 +820,10 @@ extension LiveTranscriptTests {
         let agent = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
         let thought = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
         #expect(labels(in: agent) == ["Answer"] && views(BubbleCell.self, in: agent).isEmpty)
-        #expect(labels(in: thought) == ["Thinking", "Idea"])
-        // Copy is still there for both, hidden until hover.
+        #expect(labels(in: thought).contains("Thought for 0s") && !labels(in: thought).contains("Idea"))
+        // Copy is still there for both, hidden until hover, and a collapsed thought copies its text.
         #expect(!views(NSButton.self, in: agent).isEmpty && !views(NSButton.self, in: thought).isEmpty)
-        #expect(source.message(at: 0).markdown == "Answer" && source.message(at: 1).markdown == "Idea")
+        #expect(source.message(at: 0).markdown == "Answer" && source.message(at: 1).copyText?() == "Idea")
     }
 
     @Test(arguments: [1200.0, 600.0, 300.0])
@@ -1638,6 +1644,179 @@ extension LiveTranscriptTests {
             #expect(prototype.rows.count == plain.count + 5)
             #expect(prototype.message(at: 3).tool?.kind == "Search")
             #expect(prototype.message(at: 8).markdown == "Hello")
+        }
+    #endif
+}
+
+extension LiveTranscriptTests {
+    private func thought(_ text: String, id: String) -> ACP.SessionUpdate {
+        .agentThoughtChunk(.init(content: .init(text: text), messageId: .init(id)))
+    }
+
+    @Test func consecutiveThoughtsAreOneRowThatSaysWhatTheAgentThinksThenHowLong() async throws {
+        let recorded = try await RecordedTranscript()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(thought("Read the `file`", id: "a"), at: start)
+        try await recorded.apply(thought("**Plan**\n\nWrite tests\n", id: "b"), at: start + 4)
+        let source = LiveTranscriptSource()
+        source.running = true
+        publish(recorded, to: source)
+        #expect(source.rows == [.item(0), .thoughts(first: 1)])
+        #expect(source.message(at: 1).tool?.kind == "Thinking… Write tests")
+        #expect(source.message(at: 1).kind == .group && source.message(at: 1).markdown.isEmpty)
+        #expect(source.isStreaming(at: 1))
+        #expect(source.message(at: 1).copyText?() == "Read the `file`\n\n**Plan**\n\nWrite tests\n")
+
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))), at: start + 12)
+        publish(recorded, to: source)
+        #expect(source.rows == [.item(0), .thoughts(first: 1), .item(3)])
+        #expect(source.message(at: 1).tool?.kind == "Thought for 12s")
+        #expect(!source.isStreaming(at: 1))
+        // History shows the time too.
+        let saved = LiveTranscriptSource()
+        publish(recorded, to: saved)
+        #expect(saved.message(at: 1).tool?.kind == "Thought for 12s")
+    }
+
+    @Test func anExpandedThoughtStreamsIntoItsRowAndKeepsItsExpansion() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(thought("First line", id: "a"))
+        let source = LiveTranscriptSource()
+        source.running = true
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let toggle = try disclosure(in: controller, row: 1)
+        #expect(toggle.state == .off)
+        controller.toggleExpansion(toggle)
+        #expect(source.message(at: 1).kind == .thought && source.message(at: 1).tool?.kind == "Thinking…")
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        let text = try #require(views(NSTextView.self, in: row).first)
+        #expect(text.string.contains("First line"))
+
+        // A chunk and the next thought stream into the open row.
+        try await recorded.apply(thought(" more", id: "a"))
+        try await recorded.apply(thought("Second", id: "b"))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(source.rows == [.item(0), .thoughts(first: 1)])
+        #expect(try disclosure(in: controller, row: 1).state == .on)
+        #expect(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: false) === row)
+        #expect(text.string.contains("First line more") && text.string.contains("Second"))
+
+        // The answer ends the thoughts: the header says how long, and the text stays in a finished field.
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(labels(in: row).contains { $0.hasPrefix("Thought for") })
+        #expect(views(NSTextView.self, in: row).isEmpty)
+        #expect(views(LinkTextField.self, in: row).first?.stringValue.contains("Second") == true)
+
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        let collapsed = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(views(LinkTextField.self, in: collapsed).isEmpty)
+    }
+
+    @Test func findExpandsTheThoughtsItStepsToAndCopyReturnsTheirTextOnce() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(thought("Consider the Needle", id: "a"))
+        try await recorded.apply(thought("Then decide", id: "b"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Answer"))))
+        let source = LiveTranscriptSource()
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let both = "Consider the Needle\n\nThen decide"
+        #expect(TranscriptSearch.matches("needle", in: source.state.items) == [1])
+        #expect(TranscriptSearch.matches("decide", in: source.state.items) == [2])
+
+        // Collapsed, the row copies all its thoughts: from the selection, once, and from its Copy action.
+        controller.table.selectRowIndexes([1, 2], byExtendingSelection: false)
+        #expect(controller.selectedMarkdown == both + "\n\nAnswer")
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        let action = try #require(row.accessibilityCustomActions()?.first)
+        #expect(action.handler?() == true)
+        #expect(NSPasteboard.general.string(forType: .string) == both)
+
+        // Find steps to the second thought: the row that holds it expands and is selected.
+        let revealed = try #require(source.reveal(item: 2))
+        controller.update(source)
+        controller.reveal(row: revealed)
+        #expect(revealed == 1 && controller.table.selectedRowIndexes == [1])
+        #expect(source.message(at: 1).tool?.expanded == true)
+        controller.findQuery = "needle"
+        let expanded = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        let field = try #require(views(LinkTextField.self, in: expanded).first)
+        let needle = (field.attributedStringValue.string as NSString).range(of: "Needle")
+        #expect(
+            field.attributedStringValue.attribute(.backgroundColor, at: needle.location, effectiveRange: nil) != nil
+        )
+        #expect(controller.selectedMarkdown == both)
+    }
+
+    @Test func aThoughtRowFitsItsTextWhenExpandedCollapsedAndResized() async throws {
+        let recorded = try await RecordedTranscript()
+        let paragraph = String(repeating: "A thought that wraps when the transcript is narrow. ", count: 12)
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(thought(paragraph, id: "a"))
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        func height(_ controller: TranscriptTableController) -> CGFloat { controller.table.rect(ofRow: 1).height }
+        // AppKit measures the rows again on a later turn of the main queue.
+        func settle(_ window: NSWindow) async {
+            await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+            window.contentView?.layoutSubtreeIfNeeded()
+        }
+
+        let fresh = TranscriptTableController()
+        let freshSource = source(of: recorded)
+        freshSource.toggleExpansion(at: 1)
+        let freshWindow = host(fresh, width: 1364)
+        defer { freshWindow.close() }
+        fresh.update(freshSource)
+        freshWindow.contentView?.layoutSubtreeIfNeeded()
+
+        let resized = TranscriptTableController()
+        let window = host(resized, width: 500)
+        defer { window.close() }
+        let resizedSource = source(of: recorded)
+        resized.update(resizedSource)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let collapsed = height(resized)
+        resized.toggleExpansion(try disclosure(in: resized, row: 1))
+        await settle(window)
+        #expect(height(resized) > collapsed + 40, "expanded to \(height(resized)) pt from \(collapsed) pt")
+        window.setContentSize(.init(width: 1364, height: 600))
+        await settle(window)
+        #expect(abs(height(resized) - height(fresh)) <= 1, "\(height(resized)) pt, \(height(fresh)) pt built this wide")
+
+        resized.toggleExpansion(try disclosure(in: resized, row: 1))
+        await settle(window)
+        #expect(abs(height(resized) - collapsed) <= 1, "collapsed again to \(height(resized)) pt, not \(collapsed) pt")
+    }
+
+    #if DEBUG
+        @Test func theRenderingLabPrototypeFoldsStreamedThoughts() {
+            let prototype = AppTranscriptPrototype()
+            prototype.show(LabTranscript(items: [.user("Go")]))
+            prototype.didAppendThought()
+            prototype.append("First\nlast line")
+            prototype.didAppendThought()
+            prototype.append("Second")
+            #expect(prototype.rows == [.item(0), .thoughts(first: 1)])
+            #expect(prototype.message(at: 1).tool?.kind == "Thinking… Second")
+            #expect(prototype.isStreaming(at: 1))
+            prototype.didAppend()
+            prototype.append("Answer")
+            #expect(prototype.rows == [.item(0), .thoughts(first: 1), .item(3)])
+            #expect(prototype.message(at: 1).tool?.kind == "Thought for 0s" && !prototype.isStreaming(at: 1))
+            #expect(prototype.isStreaming(at: 2))
         }
     #endif
 }

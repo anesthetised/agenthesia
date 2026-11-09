@@ -397,8 +397,9 @@ ADR-0042 addresses in its own, narrower way.
 
 - Status: Accepted by the owner on 2026-11-07 (#220). The plan landed in #221 (2026-11-09; a new turn clears the
   previous turn's plan at once, and a turn started by another session keeps its origin as the sidebar reason), context
-  usage and the composer ring in #222 (the ring's percentage is rounded down); collapsed thoughts are not yet
-  implemented. [docs/behavior/](../behavior/) describes the code.
+  usage and the composer ring in #222 (the ring's percentage is rounded down), collapsed thoughts in #223 (2026-11-09;
+  the times are recorded by `TranscriptState`'s reducer from the stored events, not by `LiveTranscriptSource`, so
+  live and saved transcripts share them; a lone thought is a disclosure row too). [docs/behavior/](../behavior/) describes the code.
 - Related: [0007](0007-transcript-rendering.md), [0026](0026-app-wide-session-manager.md) (amendment),
   [0046](0046-session-board-and-menu-bar.md)
 

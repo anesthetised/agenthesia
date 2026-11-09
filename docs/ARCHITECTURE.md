@@ -294,13 +294,9 @@ Copy button is shown only while the pointer is over the row (`NSTrackingArea`, `
 `TranscriptMessage.kind` says how a row shows its role: a user message is a `BubbleCell` at the column's trailing edge
 (`NSColor.quaternarySystemFill`, radius 14, padding 10 × 14) that hugs its text and stops at 80 % of the column
 (`TranscriptColumn.bubbleWidth(forTextWidth:inColumnOfWidth:)`); its `caption` (`not sent`, `sent together`) is a
-right-aligned label under the bubble. Agent messages have no role label; thoughts keep a `Thinking` caption and are
-dimmed. Tool, permission and input rows keep their headers. `role` stays in the model, and Copy returns a row's
+right-aligned label under the bubble. Agent messages have no role label. Tool, permission and input rows keep their
+headers. `role` stays in the model, and Copy returns a row's
 Markdown without it.
-
-> **Accepted, not yet implemented (M16):** [ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md) collapses thoughts into
-> one disclosure row (`Thinking… <last line>`, then `Thought for 12s`, consecutive thoughts folded). This section
-> describes the code as it is. The plan (#221) and context usage (#222) have landed: see the inspector below.
 
 The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
 `TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
@@ -314,6 +310,19 @@ changed, so the others keep their views, selected text and table selection. A ro
 A group has no Markdown of its own: its `copyText` builds its cards' Markdown only when asked, which also keeps
 streaming from rendering cards nobody sees. A table selection skips an expanded group's summary, so that its cards are
 copied once.
+
+Thoughts are collapsed ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)): `TranscriptRow.fold` folds every
+run of one or more consecutive thoughts into a `.thoughts(first:)` row. Collapsed, the row is a header without a body,
+as a group is; expanded (`LiveTranscriptSource` keys it by the run's first item, in the same set as a card's own
+expansion), it adds the thoughts' Markdown below the header, dimmed, in the same row, so expanding inserts no rows and
+goes through the row's own height (`rowContentHugging`). `ThoughtSummary` words the header: `Thinking… <last line>`
+while the run ends the running turn's transcript (`Thinking…` alone when expanded, so streamed text does not rebuild the
+header), `Thought for 12s` after. The times come from `TranscriptState`: the reducer sets a thought's `thoughtStart` at
+its first chunk and moves `thoughtEnd` to each event's timestamp while the thought is the last item of a running turn,
+so the next item or the turn's end closes it, in live and saved transcripts alike; a run's time is the sum of its
+thoughts' `thoughtDuration`. Copy returns the run's Markdown through `copyText`, built when asked; Find matches each
+thought item and `reveal(item:)` expands the run that holds it. The Rendering Lab's S10 streams two folding thoughts
+before the S1 answer.
 
 Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
 hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of

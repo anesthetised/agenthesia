@@ -204,6 +204,14 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                 )
             } else if visible.tool != message.tool, visible.markdown == message.markdown {
                 visible.showHeader(message, controller: self)
+                // Thoughts that end change their header with the text they streamed.
+                if finished, visible.streamingCell != nil, !keepsSelection {
+                    visible.showFinished(
+                        message,
+                        width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                        controller: self
+                    )
+                }
             } else if visible.tool != message.tool {
                 // The header and body changed; rebuild the row's content in place.
                 visible.show(

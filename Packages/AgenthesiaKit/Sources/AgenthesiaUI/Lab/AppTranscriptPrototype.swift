@@ -33,11 +33,13 @@
             table.update(self)
         }
 
-        /// Folds consecutive tool cards as the live transcript does; every group shares `groupExpanded`.
+        /// Folds consecutive tool cards and thoughts as the live transcript does; every group shares `groupExpanded`,
+        /// and thoughts stay collapsed.
         private func fold() {
             rows = TranscriptRow.fold(
                 count: items.count,
                 isToolCall: { tools[$0] != nil },
+                isThought: { items[$0].0 == "Thought" },
                 isExpanded: { _ in groupExpanded }
             )
         }
@@ -60,6 +62,15 @@
         func replaceTool(_ call: ACP.ToolCall) {
             guard let index = tools.first(where: { $0.value.toolCallId == call.toolCallId })?.key else { return }
             tools[index] = call
+        }
+
+        /// Starts a thought that the next ``append(_:)`` streams into; consecutive thoughts fold into one row.
+        func didAppendThought() {
+            items.append(("Thought", ""))
+            streaming = true
+            fold()
+            revision += 1
+            table.update(self)
         }
 
         func didAppend() {
@@ -89,6 +100,15 @@
                     expanded: groupExpanded,
                     copyText: { "" }
                 )
+            case .thoughts(let first):
+                let end = TranscriptRow.groupEnd(from: first, count: items.count) { items[$0].0 == "Thought" }
+                return rendering.thoughts(
+                    id: Int64(first),
+                    latest: items[end - 1].1,
+                    thinking: streaming && end == items.count,
+                    duration: 0,
+                    expanded: false
+                ) { "" }
             }
             guard let tool = tools[index] else {
                 var message = rendering.render(id: Int64(index), role: items[index].0, markdown: items[index].1)
@@ -105,6 +125,15 @@
             message.tool = card.header
             return message
         }
-        func isStreaming(at row: Int) -> Bool { streaming && rows[row] == .item(items.count - 1) }
+        func isStreaming(at row: Int) -> Bool {
+            switch rows[row] {
+            case .item(let index): streaming && index == items.count - 1
+            case .group: false
+            case .thoughts(let first):
+                streaming
+                    && TranscriptRow.groupEnd(from: first, count: items.count) { items[$0].0 == "Thought" }
+                        == items.count
+            }
+        }
     }
 #endif

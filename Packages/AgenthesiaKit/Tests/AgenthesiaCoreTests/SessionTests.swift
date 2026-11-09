@@ -96,6 +96,44 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         #expect(output.output.bytes.prefix(1) == Data("a".utf8))
     }
 
+    @Test func aThoughtLastsUntilAnotherItemOrTheEndOfItsTurn() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        func at(_ seconds: TimeInterval, _ update: ACP.SessionUpdate) throws -> NewEvent {
+            NewEvent(kind: SessionEvent.updateKind, payload: try rawUpdate(update), timestamp: start + seconds)
+        }
+        let turn = UUID()
+        let events = [
+            try SessionEvent.prompt(id: turn, content: [.init(text: "Hi")]).storedEvent(),
+            try at(1, .agentThoughtChunk(.init(content: .init(text: "Plan")))),
+            try at(3, .agentThoughtChunk(.init(content: .init(text: " more")))),
+            // Updates that are not items do not end a thought.
+            try at(5, .usage(.init(used: 10, size: 100))),
+            try at(13, .agentMessageChunk(.init(content: .init(text: "Answer")))),
+            try at(14, .agentThoughtChunk(.init(content: .init(text: "Again")))),
+            NewEvent(
+                kind: SessionEvent.kind,
+                payload: try JSONEncoder().encode(SessionEvent.finished(id: turn, reason: .endTurn)),
+                timestamp: start + 20
+            ),
+            // After its turn ended, nothing extends a thought.
+            NewEvent(
+                kind: SessionEvent.kind,
+                payload: try JSONEncoder().encode(SessionEvent.queuePaused(true)),
+                timestamp: start + 90
+            ),
+        ]
+        var state = TranscriptState()
+        for event in try await fixture.store.append(events, to: session.id) { try state.apply(event) }
+        let messages = state.items.compactMap(\.message)
+        #expect(messages.map(\.role) == [.user, .thought, .assistant, .thought])
+        #expect(messages[1].thoughtStart == start + 1)
+        #expect(messages.map(\.thoughtDuration) == [0, 12, 0, 6])
+        #expect(messages[0].thoughtStart == nil && messages[2].thoughtEnd == nil)
+    }
+
     @Test func replayMessagesToolsAndMetadata() async throws {
         let fixture = try Fixture()
         let session = try await fixture.seed()

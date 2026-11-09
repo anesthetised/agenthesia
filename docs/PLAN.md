@@ -956,6 +956,30 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #223 (collapsed thoughts) landed: `TranscriptRow.thoughts(first:)` folds every run of thoughts into one row,
+  `ThoughtSummary` words its header (`Thinking… <last line>`, `Thinking…` when expanded, `Thought for 12s`),
+  `LiveTranscriptSource` builds it header-only when collapsed and with the run's Markdown, dimmed, when expanded (keyed
+  by the run's first item), and `TranscriptState` records `thoughtStart`/`thoughtEnd` from event timestamps (the next
+  item or the end of the turn closes a thought), so history shows the time. The table settles an expanded streaming
+  row into a finished field when only its header changed. Tested: the times in Core (chunks, non-item updates, the next
+  item, the turn's end, nothing after it); the fold and `row(showing:)`; the header words; hosted: one row for
+  consecutive thoughts with the summed time live and in history, expansion surviving streamed chunks and a new
+  thought, the finished field, Find expanding and marking, Copy once from the selection and the Copy action, and the
+  row height on expand, collapse and resize. Rendering Lab **S10** streams two folding thoughts and the S1 answer on the
+  200-item history (`didAppendThought()` in `AppTranscriptPrototype`, `scripts/bench.py` accepts `S10:App`).
+  **Benchmark not run yet; do not merge #223's pull request before it.** Workload, with the owner's approval:
+  `just lab-run S1:App,S7:App,S9:App,S10:App --runs 1` per side and round, three rounds with the sides interleaved
+  (before first), as in [tool-groups](benchmarks/2026-11-02/tool-groups/README.md): *before* is `origin/main` at the
+  pull request's base with S10 patched in by hand (the pull request description has the patch), *after* is the pull
+  request's head; record free RAM and load, results in `docs/benchmarks/<date>/collapsed-thoughts/`. **Running-app
+  check deferred** (`MockAgent`'s `think` verb or a `--demo` file with thought chunks, isolated home, light and dark):
+  (1) a streaming thought reads `Thinking… <last line>` and its line changes as chunks arrive, truncated at the column
+  edge; (2) when the answer starts it reads `Thought for Ns`, and two consecutive thoughts are one row with the summed
+  time; (3) the disclosure expands the text dimmed below the header, the row keeps its expansion while thoughts
+  stream, collapse restores the one-line height with no empty band, also after resizing the window; (4) hover Copy
+  and ⌘C on the selected row paste the full text once; (5) Find (⌘F) on a word inside a collapsed thought expands,
+  selects and marks it; (6) a reopened saved session shows `Thought for Ns`; (7) follow-bottom keeps the end in view
+  while a collapsed thought streams; (8) VoiceOver reads the header and `Show all`/`Show less`.
 - #326 (questions answered from the composer) landed: `InputStep.steps` groups a form into steps from the schema
   alone; `DockedInput` (`SessionWindowModel.dockedInput`) and `InputDock` dock the oldest pending form at the top of the
   composer card, and the composer's text is the step's text answer while `ComposerDraft` waits untouched. Return reads

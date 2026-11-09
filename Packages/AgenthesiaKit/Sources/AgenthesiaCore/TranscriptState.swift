@@ -18,6 +18,16 @@ public struct TranscriptState: Equatable, Sendable {
         public var notSent = false
         /// Who sent a user-role message: the user, or another session (ADR-0049).
         public var origin = QueuedPrompt.Origin.user
+        /// A thought's first chunk, and the last event of its turn before another item followed it (ADR-0039's
+        /// amendment). Nil for other roles.
+        public var thoughtStart: Date?
+        public var thoughtEnd: Date?
+
+        /// How long a thought took; 0 without its times.
+        public var thoughtDuration: TimeInterval {
+            guard let thoughtStart, let thoughtEnd else { return 0 }
+            return max(0, thoughtEnd.timeIntervalSince(thoughtStart))
+        }
 
         public var text: String {
             content.compactMap { if case .text(let block) = $0 { block.text } else { nil } }.joined()
@@ -193,6 +203,9 @@ public struct TranscriptState: Equatable, Sendable {
         guard event.sequence == sequence + 1 else {
             throw ReplayError.outOfOrder(expected: sequence + 1, actual: event.sequence)
         }
+        // A thought lasts from its first chunk until another item follows it or its turn ends.
+        let thinking = activeTurn != nil && items.last?.message?.role == .thought ? items.count - 1 : nil
+        let count = items.count
         if event.event.formatVersion != 1 {
             unsupportedEvents += 1
         } else if event.event.kind == SessionEvent.kind {
@@ -207,6 +220,12 @@ public struct TranscriptState: Equatable, Sendable {
             apply(notification.update, sequence: event.sequence)
         } else {
             unsupportedEvents += 1
+        }
+        let time = event.event.timestamp
+        if let thinking { items[thinking].message?.thoughtEnd = time }
+        for index in count..<items.count where items[index].message?.role == .thought {
+            items[index].message?.thoughtStart = time
+            items[index].message?.thoughtEnd = time
         }
         sequence = event.sequence
     }

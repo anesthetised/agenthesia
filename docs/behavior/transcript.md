@@ -5,6 +5,24 @@ at most 720 pt wide that the composer card below it shares ([ADR-0039](../adr/00
 document covers how rows are selected and copied and how the keyboard moves through them; what each kind of row shows
 is not summarised here yet.
 
+## Prompts the user did not send
+
+A turn started by another session through the app's tools ([ADR-0049](../adr/0049-built-in-agenthesia-mcp-server.md))
+is never shown as the developer's message: its prompt is a left-aligned row with a quiet label instead of the user's
+bubble, the label being where it came from:
+
+| Origin | Label |
+|---|---|
+| `session_send` from another session | `From <title> · <agent>`; `From another session` when that session is not open in this launch, and `From another session · <agent>` while it has no title |
+| A delegated task, in the child session | `Delegated task` |
+| A delegated task's result, in the parent | `Delegated result` |
+| A finished `task_run` command | `Background task` |
+
+- The label sits where a card's title does (small, semibold, secondary); the text below it is plain, never linked, as
+  in the user's bubble. Copy returns the message alone, and `not sent` and `sent together` captions still apply.
+- The agent receives such a prompt marked as coming from another agent session, which stays anonymous to it: the
+  receiver is not told the sender's title or agent.
+
 ## Row selection
 
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
@@ -44,6 +62,7 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-09, #311: prompts the user did not send are labelled rows instead of the user's bubble.
 - 2026-11-09, #301: a row's hover Copy follows the pointer when a layout moves the row from under it.
 - 2026-11-09, #160: a row fits its content again after the transcript changes width, with no empty band above the
   text.

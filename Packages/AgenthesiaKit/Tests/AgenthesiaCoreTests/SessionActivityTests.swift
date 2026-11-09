@@ -68,6 +68,20 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func anOpenSourceSessionIsNamedByItsTitleAndAgent() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        await owner.send("hello")
+        let id = try #require(owner.sessionID)
+        let title = try #require(owner.controller?.session.title)
+        let origin = QueuedPrompt.Origin.session(id: id, turnID: UUID())
+        #expect(manager.originLabel(origin) == "From \(title) · Mock")
+        #expect(owner.originLabel(origin) == "From \(title) · Mock")
+        await manager.closeAll()
+    }
+
     @Test func aFinishedTurnIsDoneUntilSeenAndStopDoesNotCount() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

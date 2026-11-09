@@ -739,9 +739,10 @@ extension LiveTranscriptTests {
         _ text: String,
         in recorded: RecordedTranscript,
         together: Bool = false,
-        notSent: Bool = false
+        notSent: Bool = false,
+        origin: QueuedPrompt.Origin = .user
     ) async throws -> QueuedPrompt {
-        let queued = QueuedPrompt(content: [.init(text: text)])
+        let queued = QueuedPrompt(content: [.init(text: text)], origin: origin)
         let turn = UUID()
         try await recorded.append(
             SessionEvent.promptMessage(prompt: queued, turnID: turn, startsTurn: true, sentTogether: together)
@@ -776,6 +777,29 @@ extension LiveTranscriptTests {
         // The role stays in the model, so that Copy and accessibility keep naming it.
         #expect(source.message(at: 0).role == "You" && source.message(at: 1).role == "You")
         #expect(source.message(at: 3).role == "Agent" && source.message(at: 4).role == "Thinking")
+    }
+
+    @Test func aPromptFromAnotherSessionIsALabelledRowNotTheUsersBubble() async throws {
+        let recorded = try await RecordedTranscript()
+        let origin = QueuedPrompt.Origin.session(id: UUID(), turnID: UUID())
+        try await prompt("Run the tests", in: recorded, origin: origin)
+        try await prompt("Mine", in: recorded)
+        let source = source(of: recorded)
+        source.originLabel = { $0.label(title: "Fix the build", agent: "Claude") }
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let other = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let mine = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(source.message(at: 0).kind == .card && source.message(at: 0).role == "From Fix the build · Claude")
+        #expect(
+            labels(in: other) == ["From Fix the build · Claude", "Run the tests"]
+                && views(BubbleCell.self, in: other).isEmpty
+        )
+        // Copy returns the message, as for the user's own.
+        #expect(source.message(at: 0).markdown == "Run the tests")
+        #expect(labels(in: mine) == ["Mine"] && !views(BubbleCell.self, in: mine).isEmpty)
     }
 
     @Test func agentRowsHaveNoRoleLabelAndThoughtsKeepAQuietOne() async throws {

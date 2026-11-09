@@ -30,6 +30,8 @@ public final class LiveSession {
     @ObservationIgnored public var onInitialPromptSubmitted: (() -> Void)?
     /// The configured agent's name, once its install is known.
     public var agentName: String? { agent?.name }
+    /// Labels a turn the user did not send (ADR-0049); `SessionManager` names the source session.
+    @ObservationIgnored public var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
     /// Turns finished when the user last saw a result on screen (ADR-0026's amendment). In memory only.
     private var seenTurns = 0
     @ObservationIgnored private let library: SessionLibrary
@@ -90,7 +92,8 @@ public final class LiveSession {
             merging: controller?.isMerging == true,
             stopReason: controller?.transcript.lastStopReason,
             promptFailed: controller?.transcript.lastTurnFailed == true,
-            queuePaused: controller.map { $0.queuePaused && !$0.queuedPrompts.isEmpty } == true
+            queuePaused: controller.map { $0.queuePaused && !$0.queuedPrompts.isEmpty } == true,
+            turnOrigin: controller.flatMap { originLabel($0.transcript.turnOrigin) }
         )
     }
 

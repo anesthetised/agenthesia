@@ -709,9 +709,21 @@ thrown last as `MergeError.notPushed(commit:base:output:)`, which the window tre
 the sheet closes and an alert `Merged, but Not Pushed` shows Git's output. Tests use a local bare remote: a pushed
 merge, a remote that moved (rejected, nothing undone), no or a local upstream, and a transport that hangs.
 
-> **Accepted, not yet implemented (M16):** [ADR-0045](adr/0045-push-and-pull-requests.md) adds *Open Pull Request…* through `gh`
-> (push of the session branch, `gh pr create`, a `pullRequestOpened` event, the link and a Push button in the
-> inspector; the session stays live and local Merge is hidden). [ADR-0043](adr/0043-sessions-in-the-project-folder.md)
+**Pull requests** ([ADR-0045](adr/0045-push-and-pull-requests.md)). `SessionManager.pullRequestTarget` decides whether
+*Open Pull Request…* is shown: a removable worktree without an outcome, a base branch with a remote upstream
+(`SessionWorkspace.remoteUpstream`, from ADR-0047's `upstream(of:in:)`) and `gh auth status` succeeding through
+`/usr/bin/env gh` with the login-shell environment (`gitHubCLIIsSignedIn`, a positive answer kept for the launch).
+`openPullRequest` refuses a busy session (`canBeginMerge`), marks it in `pushingIDs` (merge and discard refuse it
+meanwhile), commits the uncommitted changes (`commitUncommittedChanges`, `--no-verify`), pushes with `pushBranch`
+(`git push -u`, sharing the base push's output file, `GIT_TERMINAL_PROMPT=0` and 2-minute stop) and runs `gh pr create`
+(`GH_PROMPT_DISABLED`), reading the number from the URL it prints. The result is appended as its own event kind,
+`session.pullRequestOpened` with `PullRequest(url, number)`, through the live controller (`SessionController.record`)
+or the library; builds that do not know the kind skip it, which a new `SessionEvent` case would not allow.
+`TranscriptState.pullRequest` replays it with a notice. `PullRequestFlow` (UI) hosts the sheet and rechecks the target
+or, with a pull request, `hasUnpushedWork` for Push, keyed on the session, the file index, the status and the pull
+request. The discard summary names the branch's remote upstream. Tests use a local bare remote and a fake `gh`.
+
+> **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md)
 > adds sessions that run in a Git project's own folder: `baseRevision` is `HEAD` at start, `baseBranch` the checked-out
 > branch, Changes and Review compare with that revision, and Merge and Discard are not offered; the in-place form is
 > recognised by the removal check's location test.

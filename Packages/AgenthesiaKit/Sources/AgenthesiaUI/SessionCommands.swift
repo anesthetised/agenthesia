@@ -53,8 +53,14 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut("a", modifiers: [.command, .option])
                 .disabled(model?.canAskAgent != true)
                 .help(model?.askAgentHelp ?? "")
-            Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
-                .disabled(model?.canMerge != true)
+            if model?.showsMerge != false {
+                Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
+                    .disabled(model?.canMerge != true)
+            }
+            if model?.showsOpenPullRequest == true {
+                Button("Open Pull Request…") { model?.requestPullRequest() }
+                    .disabled(model?.canOpenPullRequest != true)
+            }
             Divider()
             Button("Stop") { Task { [model] in await model?.stop() } }
                 .keyboardShortcut(".", modifiers: .command)

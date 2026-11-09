@@ -22,7 +22,8 @@ The same plan drives the [status line](composer.md#status-line) and a Working ro
 ## Changed files
 
 - The Changes section lists the changed files with their line counts, Review and Merge (`Review` is prominent while
-  there are changes) and a manual refresh when the file watcher is unavailable. A session without a project reads `Not tracked: this session has no
+  there are changes), Open Pull Request… when `gh` can open one, and once a pull request is open `Pull request #12` as a
+  link with Push beside it instead of Merge ([merge.md](merge.md#pull-requests)), and a manual refresh when the file watcher is unavailable. A session without a project reads `Not tracked: this session has no
   project` ([ADR-0048](../adr/0048-sessions-without-a-project.md)).
 
 ## Workspace
@@ -41,5 +42,6 @@ The same plan drives the [status line](composer.md#status-line) and a Working ro
 
 ## Changes
 
+- 2026-11-09, #233: Open Pull Request…, the pull request link and Push in Changes.
 - 2026-11-09, #222: Context and Cost in the Agent section.
 - 2026-11-09, #221: the Plan section; the rest of the inspector summarised from the code at f5a8232.

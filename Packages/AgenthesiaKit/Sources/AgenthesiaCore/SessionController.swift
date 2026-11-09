@@ -559,6 +559,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         return true
     }
 
+    /// Appends the pull request opened from the session's branch (ADR-0045) and shows it at once.
+    func record(_ pullRequest: PullRequest) async throws {
+        try await record([pullRequest.storedEvent()])
+        publishTranscript()
+    }
+
     var canBeginMerge: Bool {
         status == .idle && !isMerging && !isChangingConfig && !steering && injectionTask == nil
             && (queuePaused || reduced.queuedPrompts.isEmpty)

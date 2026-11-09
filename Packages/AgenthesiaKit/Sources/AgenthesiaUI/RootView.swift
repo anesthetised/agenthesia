@@ -159,6 +159,7 @@ public struct RootView: View {
         }
         .onChange(of: fileQuery) { model.files.setQuery(fileQuery) }
         .modifier(SessionAlerts(model: model))
+        .modifier(PullRequestFlow(model: model))
         .sheet(isPresented: $showingQuickOpen) {
             let id = model.files.sessionID
             QuickOpen(

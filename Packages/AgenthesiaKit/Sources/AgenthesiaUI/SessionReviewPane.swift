@@ -40,9 +40,15 @@ struct SessionReviewPane: View {
                 Button("Ask Agent", action: model.askAgent)
                     .disabled(!model.canAskAgent)
                     .help(model.askAgentHelp)
-                Button("Merge…") { Task { await model.requestMerge() } }
-                    .disabled(!model.canMerge)
-                    .help(model.mergeHelp ?? "")
+                if model.showsMerge {
+                    Button("Merge…") { Task { await model.requestMerge() } }
+                        .disabled(!model.canMerge)
+                        .help(model.mergeHelp ?? "")
+                }
+                if model.showsOpenPullRequest {
+                    Button("Open Pull Request…", action: model.requestPullRequest)
+                        .disabled(!model.canOpenPullRequest)
+                }
                 Spacer()
                 if !review.changes.isEmpty {
                     Text(review.viewedSummary)

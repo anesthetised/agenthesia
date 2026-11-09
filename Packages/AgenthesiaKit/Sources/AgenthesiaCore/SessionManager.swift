@@ -17,6 +17,10 @@ public final class SessionManager {
     private var discarding: [UUID: Task<Void, any Error>] = [:]
     /// Sessions being merged into their base branch; turns, Continue and discard are refused, and quit waits.
     private var merging: [UUID: Task<String, any Error>] = [:]
+    /// Sessions whose branch is being pushed for a pull request (ADR-0045); merge and discard wait for them.
+    public internal(set) var pushingIDs: Set<UUID> = []
+    /// `gh` was found signed in once; only a negative answer is asked again (ADR-0045).
+    @ObservationIgnored var gitHubCLISignedIn = false
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
     // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
@@ -116,7 +120,9 @@ public final class SessionManager {
     /// Whether the session has a worktree Agenthesia created and nothing blocks discarding or merging it now.
     /// Callers check the recorded outcome (`SessionLibrary.worktreeOutcomes`) themselves.
     public func canDiscard(_ session: SessionRecord, project: ProjectRecord?) -> Bool {
-        guard let project, !isDiscarding(session.id), !isMerging(session.id), !isStarting(session.id) else {
+        guard let project, !isDiscarding(session.id), !isMerging(session.id), !isStarting(session.id),
+            !pushingIDs.contains(session.id)
+        else {
             return false
         }
         return worktree(of: session, project: project) != nil
@@ -127,10 +133,12 @@ public final class SessionManager {
         public let uncommittedFiles: Int
         public let commits: Int
         public let branch: String
+        /// The branch's upstream on a remote, e.g. `origin/fix-login`, which discarding leaves alone (ADR-0045).
+        public var remoteBranch: String? = nil
     }
 
     public enum DiscardError: LocalizedError, Equatable {
-        case notRemovable, starting, alreadyRemoved, merging
+        case notRemovable, starting, alreadyRemoved, merging, pushing
 
         public var errorDescription: String? {
             switch self {
@@ -138,6 +146,7 @@ public final class SessionManager {
             case .starting: "The session is starting. Try again once it has started."
             case .alreadyRemoved: "The worktree of this session was already removed."
             case .merging: "The session is being merged. Try again once the merge has finished."
+            case .pushing: "The session’s branch is being pushed. Try again once the push has finished."
             }
         }
     }
@@ -148,7 +157,8 @@ public final class SessionManager {
         return DiscardSummary(
             uncommittedFiles: counts.uncommittedFiles,
             commits: counts.commits,
-            branch: worktree.branch
+            branch: worktree.branch,
+            remoteBranch: await SessionWorkspace.remoteUpstream(of: worktree.branch, in: worktree.directory)?.name
         )
     }
 
@@ -159,6 +169,7 @@ public final class SessionManager {
         if let running = discarding[session.id] { return try await running.value }
         guard !isStarting(session.id) else { throw DiscardError.starting }
         guard !isMerging(session.id) else { throw DiscardError.merging }
+        guard !pushingIDs.contains(session.id) else { throw DiscardError.pushing }
         let task = Task {
             let (worktree, outcome) = try await removableWorktree(session)
             for owner in owners where owner.sessionID == session.id { await end(owner) }
@@ -315,11 +326,13 @@ public final class SessionManager {
     }
 
     /// Nothing else runs on the session, and its live owner, if any, is idle with no queued send pending.
-    private func canBeginMerge(_ id: UUID) -> Bool {
+    func canBeginMerge(_ id: UUID) -> Bool {
         !isOccupied(id) && owner(of: id)?.controller?.canBeginMerge ?? true
     }
 
-    private func isOccupied(_ id: UUID) -> Bool { isMerging(id) || isDiscarding(id) || isStarting(id) }
+    private func isOccupied(_ id: UUID) -> Bool {
+        isMerging(id) || isDiscarding(id) || isStarting(id) || pushingIDs.contains(id)
+    }
 
     /// Starting a new session or continuing a saved one.
     /// Starting includes waiting for sign-in: a new session has no history until it has started (ADR-0033).
@@ -338,7 +351,7 @@ public final class SessionManager {
     }
 
     /// The session's worktree and its recorded outcome. Only a merge whose removal failed leaves one behind.
-    private func removableWorktree(
+    func removableWorktree(
         _ session: SessionRecord
     ) async throws -> (SessionWorkspace.Worktree, WorktreeOutcome?) {
         guard let project = try await library.project(id: session.projectID),

@@ -954,6 +954,18 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #233 (pull request with `gh`) landed: `SessionManager.pullRequestTarget`/`openPullRequest`/`push`, the
+  `session.pullRequestOpened` event kind (its own kind, so older builds skip it), `PullRequestSheet` with its three
+  steps, the inspector's `Pull request #12` link and Push, Merge hidden once a pull request is open, and Discard's
+  confirmation naming the pushed branch. Tests with a local bare remote and a fake `gh` script: success, a failing
+  `gh` (branch pushed, nothing recorded), a rejected push (`gh` never runs), replay, a live session staying live, and
+  the window model. Running-app check deferred (the owner was using the machine); it must cover, in light and dark,
+  with MockAgent, a throwaway repository whose `main` tracks a local bare remote and a fake `gh` first on the login
+  shell's `PATH` (`auth status` exits 0, `pr create` prints a URL; a second variant fails it): the action absent
+  without the fake `gh` and for a session without a project; the button in the inspector, the review footer and the
+  Session menu; the sheet's layout, its steps while running and a failure with long output; the link opening the
+  browser; Push appearing after an edit and disappearing after it; Merge hidden; the Discard confirmation's extra
+  sentence; VoiceOver on the steps.
 - #232 (push after merge) landed: `SessionWorkspace.pushRemote`/`push` (2-minute timeout, no prompts, never forces),
   the merge sheet's `Push <base> to <remote>` remembered in `UserDefaults`, `MergeError.notPushed` after the merge is
   recorded and the worktree removed. Tests with a local bare remote: pushed, rejected after the remote moved, no or a

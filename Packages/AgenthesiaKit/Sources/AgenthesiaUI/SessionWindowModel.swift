@@ -59,6 +59,13 @@ import os
     var pendingDelete: PendingDelete?
     /// The merge sheet, presented by `RootView`.
     var merge: MergeRequest?
+    /// The Open Pull Request sheet (ADR-0045).
+    var pullRequestDraft: PullRequestDraft?
+    /// Where the displayed session's pull request would go; nil hides Open Pull Request… (ADR-0045).
+    var pullRequestTarget: (sessionID: UUID, target: SessionManager.PullRequestTarget)?
+    /// The session whose worktree has work its pushed branch lacks; Push shows beside its pull request.
+    var unpushedSessionID: UUID?
+    var isPushing = false
     /// A failed lifecycle action, shown in an alert.
     var alertMessage: String?
     var alertTitle = ""
@@ -365,6 +372,21 @@ import os
     /// Why Merge is disabled when nothing else is in the way.
     var mergeHelp: String? { canMergeSession && hasNoChanges ? "No changes to merge" : nil }
     var mergeCommandTitle: String { displayed?.session.baseBranch.map { "Merge into \($0)…" } ?? "Merge…" }
+    /// The displayed session's pull request; with one, the pull request is the integration path (ADR-0045).
+    var displayedPullRequest: PullRequest? { displayed?.transcript.pullRequest }
+    var showsMerge: Bool { displayedPullRequest == nil }
+    private var displayedPullRequestTarget: SessionManager.PullRequestTarget? {
+        guard let pullRequestTarget, pullRequestTarget.sessionID == displayed?.session.id else { return nil }
+        return pullRequestTarget.target
+    }
+    /// Hidden, not disabled, without `gh` or a remote for the base branch (ADR-0045).
+    var showsOpenPullRequest: Bool {
+        displayedPullRequest == nil && displayedPullRequestTarget != nil && !displaysSessionWithoutProject
+    }
+    var canOpenPullRequest: Bool { showsOpenPullRequest && canMerge }
+    var showsPush: Bool {
+        displayedPullRequest != nil && unpushedSessionID == displayed?.session.id && canMergeSession
+    }
     /// The displayed transcript knows an outcome recorded after the last history refresh.
     func outcome(of id: UUID) -> WorktreeOutcome? {
         (displayed?.session.id == id ? displayed?.transcript.worktreeOutcome : nil) ?? outcomes[id]
@@ -390,7 +412,9 @@ import os
             let files =
                 summary.uncommittedFiles == 1 ? "1 uncommitted file" : "\(summary.uncommittedFiles) uncommitted files"
             let commits = summary.commits == 1 ? "1 commit" : "\(summary.commits) commits"
-            return "\(files) and \(commits) on \(summary.branch) will be deleted. This cannot be undone."
+            let deleted = "\(files) and \(commits) on \(summary.branch) will be deleted. This cannot be undone."
+            guard let remote = summary.remoteBranch else { return deleted }
+            return deleted + " The remote branch \(remote) and any pull request from it are not touched."
         }
     }
 
@@ -642,6 +666,69 @@ import os
         }
     }
 
+    /// Asks Git and `gh` whether the displayed session can open a pull request, or, once it has one, whether it has
+    /// work to push.
+    func refreshPullRequest() async {
+        guard canMergeSession, !displaysSessionWithoutProject, let session = displayed?.session else { return }
+        if displayedPullRequest == nil {
+            let target = await sessions.pullRequestTarget(session)
+            guard displayed?.session.id == session.id else { return }
+            pullRequestTarget = target.map { (session.id, $0) }
+        } else {
+            let unpushed = await sessions.hasUnpushedWork(session)
+            guard displayed?.session.id == session.id else { return }
+            unpushedSessionID = unpushed ? session.id : nil
+        }
+    }
+
+    /// Opens the pull request sheet for the displayed session, titled like the session.
+    func requestPullRequest() {
+        guard canOpenPullRequest, let displayed, let target = displayedPullRequestTarget else { return }
+        let title = displayed.session.title ?? displayed.transcript.mergeMessage
+        pullRequestDraft = PullRequestDraft(session: displayed.session, target: target, title: title)
+    }
+
+    /// Runs Create; a failure stays in the sheet with its step. Once `gh` opened the pull request the sheet closes,
+    /// and a failure to record it is an alert, because creating it again would open a second one.
+    func confirmPullRequest(_ draft: PullRequestDraft) async {
+        guard draft.canCreate else { return }
+        draft.isRunning = true
+        draft.failure = nil
+        draft.step = nil
+        defer { draft.isRunning = false }
+        let id = draft.session.id
+        let shown = displayed?.session.id == id || owner?.sessionID == id
+        do {
+            try await sessions.openPullRequest(draft.session, to: draft.target, title: draft.title, body: draft.body) {
+                draft.step = $0
+            }
+        } catch let error as SessionManager.PullRequestError {
+            guard case .notRecorded = error.failure else {
+                draft.failure = error.localizedDescription
+                return
+            }
+            if pullRequestDraft === draft { pullRequestDraft = nil }
+            showAlert("The Pull Request Was Not Recorded", error)
+            return
+        } catch {
+            draft.failure = error.localizedDescription
+            return
+        }
+        if pullRequestDraft === draft { pullRequestDraft = nil }
+        // A live session shows the event at once; a saved one is read again.
+        if sessions.owner(of: id) == nil { await refreshShowing(id, shown: shown) }
+        await refreshPullRequest()
+    }
+
+    /// Push beside the pull request: the session's new work goes to the same pull request.
+    func pushPullRequestBranch() async {
+        guard showsPush, let session = displayed?.session else { return }
+        isPushing = true
+        defer { isPushing = false }
+        do { try await sessions.push(session) } catch { showAlert("Cannot Push", error) }
+        await refreshPullRequest()
+    }
+
     private func showAlert(_ title: String, _ error: any Error) {
         alertTitle = title
         alertMessage = error.localizedDescription
@@ -880,6 +967,7 @@ import os
     /// Detaches the window; its sessions keep running.
     func close() {
         closed = true; selection = UUID(); files.close(); review = nil; showingReview = false; merge = nil
+        pullRequestDraft = nil
         sessions.setShown(nil, in: self)
     }
 }

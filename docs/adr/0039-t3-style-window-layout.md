@@ -473,3 +473,10 @@ are collapsed rows".
   entry and the counts, tested per state.
 - The ring and the Agent rows read `transcript.usage`; an agent that never sends it changes nothing.
 - The screenshots of the bubble transcript become outdated and are replaced by the verification issue.
+
+### Note (2026-11-09): user messages stay bubbles
+
+The owner dropped the first decision of this amendment, "User messages are left-aligned blocks" (#224, closed as not
+planned). After M18 the owner compared the transcript with T3 Code and kept the right-aligned bubbles; a tinted block
+would also clash with the quiet row selection of #269. The bubbles and `TranscriptColumn.bubbleWidth` stay as they
+are. The rest of the amendment (thoughts, the plan, context usage) is unchanged.

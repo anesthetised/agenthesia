@@ -92,3 +92,11 @@ coordinate them; the user chose to share the checkout.
 
 Remembering the choice, a warning banner on the first write, and whether a folder session should be startable from a
 transcript path or a notification. None has a demonstrated need.
+
+## Note (2026-11-09): wording after ADR-0047 and ADR-0048
+
+The checkout menu item reads `New worktree from <upstream>` as [0047](0047-worktrees-from-the-fetched-upstream.md)
+words the worktree origin (the branch itself without an upstream); the project-folder form never fetches. Sessions
+without a project ([0048](0048-sessions-without-a-project.md)) have no checkout choice, so the menu is hidden for them.
+The test "in place = has a `baseRevision` and lives outside the worktrees root" stays safe for them: a scratch session
+has no `baseRevision`.

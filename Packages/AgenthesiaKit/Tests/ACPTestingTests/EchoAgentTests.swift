@@ -129,6 +129,22 @@ final class EchoClient: Sendable {
         #expect(client.agentText == "Edited \(directory.path(percentEncoded: false))/Sources/A.swift")
     }
 
+    /// `scripts/app-check/demos/plan.json` advances a plan for the running-app check (#221).
+    @Test func theAppCheckPlanDemoAdvancesItsPlan() async throws {
+        let demo = URL(filePath: #filePath).deletingLastPathComponent()
+            .appending(path: "../../../../scripts/app-check/demos/plan.json")
+        var options = EchoAgent.Options()
+        options.demo = try String(contentsOf: demo, encoding: .utf8)
+        let client = await EchoClient(options: options)
+        _ = try await client.initialize()
+        let session = try await client.newSession()
+        #expect(try await client.prompt("anything", in: session.sessionId) == .endTurn)
+        let plans = client.receivedUpdates.compactMap { if case .plan(let plan) = $0 { plan } else { nil } }
+        #expect(plans.count == 5)
+        #expect(plans.first?.entries.map(\.status) == [.inProgress, .pending, .pending, .pending])
+        #expect(plans.last?.entries.allSatisfy { $0.status == .completed } == true)
+    }
+
     @Test func announcesCommandsThatPromptsMayPrefixWithASlash() async throws {
         var options = EchoAgent.Options()
         options.announcesCommands = true

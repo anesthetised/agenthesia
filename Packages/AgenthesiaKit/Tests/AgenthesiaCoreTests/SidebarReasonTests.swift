@@ -52,6 +52,15 @@ import Testing
         #expect(text(.working) == nil)
     }
 
+    @Test func aWorkingRowNamesThePlanStepUnlessAnotherSessionStartedTheTurn() {
+        let step = SidebarReason.text(activity: .working, planStep: "Writing tests")
+        #expect(step == "Writing tests")
+        let origin = SidebarReason.text(activity: .working, turnOrigin: "From Fix CI", planStep: "Writing tests")
+        #expect(origin == "From Fix CI")
+        #expect(SidebarReason.text(activity: .working, starting: true, planStep: "Writing tests") == "Starting")
+        #expect(SidebarReason.text(activity: .idle, planStep: "Writing tests") == nil)
+    }
+
     @Test func mergingAnIdleSession() { #expect(text(.idle, merging: true, queuePaused: true) == "Merging") }
 
     @Test func aFinishedTurnSaysHowItEnded() {

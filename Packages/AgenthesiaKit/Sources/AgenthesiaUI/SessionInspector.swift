@@ -4,7 +4,7 @@ import Persistence
 import SwiftUI
 import Workspace
 
-/// The displayed session's details beside its transcript: changes, workspace and branch, and agent (ADR-0039).
+/// The displayed session's details beside its transcript: plan, changes, workspace and branch, and agent (ADR-0039).
 struct SessionInspector: View {
     let model: SessionWindowModel
     @Binding var showingLog: Bool
@@ -19,6 +19,11 @@ struct SessionInspector: View {
 
     var body: some View {
         Form {
+            if let displayed = model.displayed, let plan = displayed.transcript.plan, let progress = PlanProgress(plan)
+            {
+                PlanSection(plan: plan, progress: progress, running: displayed.turnStartedAt != nil)
+                    .id(displayed.session.id)
+            }
             if let session, model.files.root != nil, model.files.sessionID == session.id { changes(session) }
             if let directory { workspace(directory, session: session) }
             if model.restored == nil, let owner = model.owner { agent(owner) }

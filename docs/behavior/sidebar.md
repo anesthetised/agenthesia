@@ -85,6 +85,7 @@ The reason follows the status, so it never contradicts the symbol (`SidebarReaso
 | Failed | `Failed` |
 | Starting / stopping | `Starting` / `Stopping` |
 | Running a turn the user did not send (ADR-0049) | the transcript's label of its prompt, e.g. `From <title> · <agent>` or `Delegated task` ([transcript](transcript.md#prompts-the-user-did-not-send)) |
+| Running, a plan entry in progress | the entry's text, one line, at most 120 characters ([inspector](inspector.md#plan)) |
 | Running | none |
 | Done, turn ended with `refusal` | `Refused` |
 | Done, turn ended with `max_tokens` or `max_turn_requests` | `Hit a limit` |
@@ -169,6 +170,7 @@ session first`. Each change refreshes the window's history; other windows pick i
 
 ## Changes
 
+- 2026-11-09, #221: a running session's reason is the plan entry in progress; a turn's origin outranks it.
 - 2026-11-09, #311: a session running a turn that the user did not send names where it came from.
 - 2026-11-08, #279: sessions without a project show a dashed square and `No project`.
 - 2026-11-08, #275: a live row settles (ends) from a hover button and `Settle Session` in its context menu.

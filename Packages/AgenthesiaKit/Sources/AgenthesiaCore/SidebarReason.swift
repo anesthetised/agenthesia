@@ -12,6 +12,7 @@ public enum SidebarReason {
     ///   - promptFailed: The agent rejected the last prompt.
     ///   - queuePaused: The queue holds prompts and will not send them.
     ///   - turnOrigin: The label of a running turn the user did not send (ADR-0049).
+    ///   - planStep: The plan entry in progress; the turn's origin outranks it.
     /// - Returns: Nil when the symbol and the section say it all.
     public static func text(
         activity: LiveSession.Activity,
@@ -23,7 +24,8 @@ public enum SidebarReason {
         stopReason: ACP.StopReason? = nil,
         promptFailed: Bool = false,
         queuePaused: Bool = false,
-        turnOrigin: String? = nil
+        turnOrigin: String? = nil,
+        planStep: String? = nil
     ) -> String? {
         switch activity {
         case .needsInput:
@@ -33,7 +35,7 @@ public enum SidebarReason {
             let more = permissionTitles.count - 1
             return more > 0 ? "Allow? \(title) +\(more)" : "Allow? \(title)"
         case .failed: return "Failed"
-        case .working: return starting ? "Starting" : stopping ? "Stopping" : turnOrigin
+        case .working: return starting ? "Starting" : stopping ? "Stopping" : turnOrigin ?? planStep
         case .done:
             switch stopReason {
             case .refusal: return "Refused"

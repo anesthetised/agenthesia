@@ -108,7 +108,9 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 - While a turn runs or stops, a caption directly above the composer card, aligned with its leading edge in the
   transcript column (under the docked request and errors), reads `Working for 12s` (`1m 12s`, `1h 2m`) with a small
-  spinner, ticking once a second.
+  spinner, ticking once a second. With a plan ([inspector](inspector.md#plan)) it goes on with the completed entries
+  and the entry in progress, `Working for 1m 12s · 3 of 7 · Writing tests`, or `· 3 of 7 done` while none is; one
+  line, truncated at the end.
 - While a permission request or an input form is pending, it reads `Waiting for you` with an orange symbol instead.
 - There is no status line while the session is idle.
 
@@ -157,6 +159,7 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 ## Changes
 
+- 2026-11-09, #221: the status line counts the plan's completed entries and names the one in progress.
 - 2026-11-08, #276: one control row in the draft and the session; booleans are toggle pills instead of checkboxes;
   options that do not fit move into a `…` menu; the status line sits directly above the card.
 - 2026-11-08, #271: the mode pill opens a popover with the agent's descriptions instead of a menu.

@@ -145,6 +145,7 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var lastStopReason: ACP.StopReason?
     /// The agent rejected the last turn's prompt; a new turn or a continued session clears it.
     public private(set) var lastTurnFailed = false
+    /// The current turn's plan; a new turn clears it until the agent sends one (ADR-0039's amendment).
     public private(set) var plan: ACP.Plan?
     public private(set) var commands: [ACP.AvailableCommand] = []
     public private(set) var configOptions: [ACP.ConfigOption] = []
@@ -215,6 +216,7 @@ public struct TranscriptState: Equatable, Sendable {
         case .prompt(let id, let content):
             activeTurn = id
             turnOrigin = .user
+            plan = nil
             stopRequested = false
             lastStopReason = nil
             lastTurnFailed = false
@@ -241,6 +243,7 @@ public struct TranscriptState: Equatable, Sendable {
             if startsTurn {
                 activeTurn = turnID
                 turnOrigin = prompt.origin
+                plan = nil
                 stopRequested = false
                 lastStopReason = nil
                 lastTurnFailed = false

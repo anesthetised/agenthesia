@@ -956,6 +956,29 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #227 (session board) landed: `WindowTarget.board`, `SessionWindowModel.showingBoard`/`showBoard()`, the sidebar's
+  fixed Overview row (`overviewID`) and Session → Overview (⌘0); a window whose displayed session was deleted goes to
+  the board (`leaveDeletedSession`), and the `Start a session` placeholder became the board. `SessionBoard` and
+  `SessionCard` (a grid of one to three 280 pt columns, `columnCount(width:)`), `TranscriptState.agentLastLine` in Core,
+  `SessionRowMenu` (the row's context menu, shared) and `SessionWindowModel.reason(of:)`. A card answers a request
+  without a diff in place and offers Open first for one with a diff (`PermissionChoice.choices`, plain rule), armed
+  after 400 ms. Tested: the last line in Core; the model (board, selection, New Session, restore, activation, delete)
+  and the cards against MockAgent (content, shelf time, the Open-first rule, answering); the card by its measured
+  size. A notification tapped while the only window shows the board fills that window (it is not a draft).
+  PR #335 (wave-1 check findings) also changes `leaveDeletedSession`; it must land on the board, not the draft.
+  **Running-app check deferred** (MockAgent, isolated home, light and dark): (1) the Overview row sits above Needs You,
+  stays during a search and is selected while the board shows; ⌘0 and Session → Overview show it from a session and
+  from the draft; (2) `No agents running` with New Session on an empty board, and New Session opens the draft with the
+  typed text; (3) two and more sessions: the grid wraps to one, two and three columns as the window widens, cards align
+  at the top, the grid scrolls; (4) a card shows the badge, title, status symbol, `project · reason` (the plan step with
+  `MockAgent --demo plan.json`), the agent's last line (a running tool's title, then the message) and the time
+  (`Working 1m 12s` ticking each second, `Idle 20m`, `5m` for a Needs You card); (5) a command permission's card
+  answers in place, an edit's card offers Open first and Open selects the session; the buttons stay disabled for
+  400 ms after the request appears; a request answered in the window meanwhile leaves the card; (6) an input form's
+  card reads `Question` and opens the session; (7) a click selects the session, the context menu matches the row's
+  (Settle Session, Open in New Window, Discard Worktree…); (8) deleting the displayed saved session lands on the
+  board, and a window quit on the board restores to it; (9) with keyboard navigation on, Tab reaches every card and
+  its buttons, Space opens the session; VoiceOver reads a card as one button with the row's label and the last line.
 - #229 (sessions in the project folder) landed: the draft's Checkout chip is a menu for Git projects
   (`DraftCheckout`, `SessionWindowModel.draftInProjectFolder`, per draft: Send, another project and New Session in
   Project clear it, a failed start returns it); `SessionWorkspace.prepare(inProjectFolder:)` returns the repository

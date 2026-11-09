@@ -484,13 +484,20 @@ when neither it nor the project exists), and the folder of a session without a p
 component. `deleteSummary` words the confirmation's state (`DeleteSummary`: merged, discarded, the worktree's
 `DiscardSummary`, the folder's name and file count, failed to start when the session stored no event, or history
 only). `SessionManager.deletingIDs` is part of `RootView`'s history key, so every window refreshes when a deletion
-ends, and `SessionWindowModel.refresh` sends a window whose displayed saved session vanished back to the draft,
+ends, and `SessionWindowModel.refresh` sends a window whose displayed saved session vanished to the session board,
 dropping its review and viewed marks. The item is on saved rows' context menus and in the Session menu
 (`canDelete`, with Archive's help text); `SessionAlerts` holds the confirmations of Discard and Delete.
 
-> **Accepted, not yet implemented (M16):** [ADR-0046](adr/0046-session-board-and-menu-bar.md) adds an *Overview* row above the sections
-> (⌘0; a board of live-session cards that can answer requests without a diff) and a `MenuBarExtra` with the Needs You
-> count and the sessions.
+The session board ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior](behavior/board.md)) is a state of
+the window, not a scene: `SessionWindowModel.showingBoard` sits beside `showingSetup` (set together, since neither shows
+a session; any assignment to `showingSetup` leaves the board), `showBoard()` (⌘0, the sidebar's Overview row tagged
+`SessionWindowModel.overviewID`, a deleted session) drops the displayed owner, and `WindowTarget.board` restores it.
+`SessionBoard` builds `SessionCard.Content` for each live row of an unfiltered `SessionSidebar`: the row's title,
+project and reason (`SessionWindowModel.reason(of:)`, shared with the row), `SessionSidebar.shelfTime`, the agent's last
+line (`TranscriptState.agentLastLine`, Core, pure) and the oldest pending permission with `PermissionChoice.choices`
+under the plain rule. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
+`WrappingLayout`, and answer through `SessionController.answerPermission`; its context menu is `SessionRowMenu`, the
+rows' own.
 
 `LiveSession.activity` is the status, in priority order: needs input, failed, working, done, idle. *Done*
 means `SessionController.completedTurns` (turns that ended on their own, not by Stop) exceeds what the user
@@ -548,7 +555,7 @@ The menu bar item ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior
 Working sections (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
 its `WindowTarget` URL as a notification does, and an option answers through `SessionController.answerPermission`.
 `PermissionChoice` (Core, pure) is the Open-first rule: a request that edits files offers Open before the agent's
-options; the session board will reuse it. `WindowPresence` counts the visible main-capable windows from AppKit's
+options; the session board reuses it without `openAlways`. `WindowPresence` counts the visible main-capable windows from AppKit's
 window notifications, so that Open Agenthesia shows only when none is open. Hosted views cannot test a `MenuBarExtra`:
 the views are tested by their size and the entries as data, and the item itself in the running app.
 Windows report the session they show while their scene appears active. A tap opens

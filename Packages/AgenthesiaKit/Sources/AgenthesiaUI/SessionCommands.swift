@@ -96,6 +96,9 @@ public struct SessionCommands: Commands {
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option])
                 .disabled(model?.canJumpToLatest != true)
             Divider()
+            Button("Overview") { model?.showBoard() }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(model?.canStart != true)
             Menu("Switch to Session") {
                 ForEach(Array(sessions.enumerated()), id: \.offset) { index, row in
                     Button(row?.title ?? "No Session") {

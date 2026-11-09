@@ -4,6 +4,8 @@ public import Foundation
 public enum WindowTarget: Codable, Hashable, Sendable {
     case launch
     case session(UUID)
+    /// The session board (ADR-0046).
+    case board
 }
 
 extension WindowTarget {

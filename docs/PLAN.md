@@ -837,9 +837,8 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 
 Pitfalls known so far:
 
-- `SessionDraftView` is also changed by #225 (M16, the held first message); whichever lands second adapts the
-  transition of the card to the held message. Since #278 Send's motion is `DraftSendTransition`, the draft's removal
-  transition in `RootView`; #225 replaces it if the held message keeps the card on screen.
+- `SessionDraftView` is also changed by #225 (M16, the held first message, landed). Since #278 Send's motion is
+  `DraftSendTransition`, the draft's removal transition in `RootView`; #225 kept it as it is.
 - The upstream start is a safety path in `prepare` and the merge: real-repository tests with a local bare remote,
   never against this repository.
 - The development bundle identifier must not share `~/Library/Application Support/Agenthesia` with the installed app:
@@ -917,8 +916,8 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 Pitfalls known so far:
 
 - `RootView.swift` and `TranscriptTable.swift` are the collision points with M18, which is done. In `RootView`,
-  `DraftSendTransition` moves the draft's card to the bottom at Send; #225 and #230 (the landing place after a delete)
-  adapt it. In `TranscriptTable`, the quiet row selection (#269) and the row height (since #302 row stacks hold their
+  `DraftSendTransition` moves the draft's card to the bottom at Send; #225 (landed) kept it and #230 (the landing place
+  after a delete) may adapt it. In `TranscriptTable`, the quiet row selection (#269) and the row height (since #302 row stacks hold their
   own height above AppKit's `rowContentHugging`) matter for #223's expand and collapse, which must go through that path
   and get a resize test. Within M16, merge in table order.
 - #223 changes the row model again after #155 and #209; the streaming benchmarks are the gate, and the owner approves
@@ -931,6 +930,23 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #225 (first message at once) landed: `LiveSession.startLine` (`Fetching origin/main…` from
+  `SessionWorkspace.prepare(onFetch:)`, then `Starting <agent> in a new worktree…` / `… in the project folder…` / `… in
+  a new folder…` from `startPlace`), `HeldPromptSource` (a one-item `TranscriptSource`) in `HeldTranscript`, and
+  `SessionWindowModel.heldPrompt`, which also covers the gap between the controller and the submitted prompt and the
+  sign-in panel. Tested: the held row and the session's own first row have equal markdown and equal frames in a hosted
+  table (with and without an attachment), the model through start, sign-in and a failed start, a hosted `RootView`
+  with a gated startup, and the fetch callback against a local bare remote. The draft's `DraftSendTransition` is
+  unchanged: the card still moves to the bottom and fades while the starting column fades in (owner's choice: no
+  morph of the text field into the bubble). The inspector is absent until the controller exists. **Running-app check
+  deferred** (`MockAgent`, isolated home, light and dark, owner away from the machine): (1) a Git project with an
+  upstream and a stalled fetch (an unreachable remote) shows `Fetching origin/main…`, then `Starting MockAgent in a new
+  worktree…`; (2) a project outside Git shows `… in the project folder…`; (3) `or start without a project` shows `… in
+  a new folder…`; (4) with attachments, the bubble and its attachment placeholders appear at once and stay put when
+  the session's own transcript replaces them (compare screenshots before and after); (5) `MockAgent --auth` shows the
+  sign-in panel under the message; (6) `Cancel Startup` and a missing executable return the draft; (7) Send's motion
+  with and without Reduce Motion; (8) VoiceOver reads the line and the card. Not checked: the narrow window with the
+  inspector open.
 - #226 ⌘1…⌘9 (ADR-0046): Session → Switch to Session lists the first nine rows of Needs You and Working in the filtered
   sidebar (`SessionSidebar.numberedRows`, `SessionWindowModel.numberedSessions`); ⌘1…⌘9 were free (only ⌥⌘1…⌥⌘9 answer
   permissions). Tested in Core and on the window model; the menu items themselves have no hosted test. Running app

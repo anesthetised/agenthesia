@@ -18,14 +18,16 @@ public struct SessionWorkspace: Sendable {
 
     /// `topic` names the branch (`branchName`): the first line of the initial prompt. When the checked-out branch
     /// has an upstream, the worktree starts from it, fetched with `environment` (the login shell's, so credentials
-    /// apply) and stopped after `fetchTimeout` (ADR-0047).
+    /// apply) and stopped after `fetchTimeout` (ADR-0047). `onFetch` is told the upstream (`origin/main`) when the
+    /// fetch starts, from a background thread.
     public static func prepare(
         directory: URL,
         id: UUID,
         topic: String? = nil,
         worktreesRoot: URL = defaultWorktreesRoot,
         environment: [String: String]? = nil,
-        fetchTimeout: Duration = .seconds(20)
+        fetchTimeout: Duration = .seconds(20),
+        onFetch: (@Sendable (String) -> Void)? = nil
     ) async throws -> SessionWorkspace {
         // Git can run for seconds on large checkouts; keep the blocking calls off the cooperative pool.
         try await blocking {
@@ -35,7 +37,8 @@ public struct SessionWorkspace: Sendable {
                 topic: topic,
                 worktreesRoot: worktreesRoot,
                 environment: environment,
-                fetchTimeout: fetchTimeout
+                fetchTimeout: fetchTimeout,
+                onFetch: onFetch
             )
         }
     }
@@ -46,7 +49,8 @@ public struct SessionWorkspace: Sendable {
         topic: String?,
         worktreesRoot: URL,
         environment: [String: String]?,
-        fetchTimeout: Duration
+        fetchTimeout: Duration,
+        onFetch: (@Sendable (String) -> Void)?
     ) throws -> SessionWorkspace {
         let directory = directory.resolvingSymlinksInPath().standardizedFileURL
         guard try directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
@@ -99,6 +103,7 @@ public struct SessionWorkspace: Sendable {
         var start = (revision: "HEAD", name: "HEAD")
         var fallbackUpstream: String?
         if let branch, let upstream = upstream(of: branch, in: root) {
+            onFetch?(upstream.name)
             if fetch(upstream, in: root, environment: environment, timeout: fetchTimeout),
                 let commit = try? git(
                     ["rev-parse", "--verify", "--end-of-options", "\(upstream.ref)^{commit}"],

@@ -745,6 +745,15 @@ import os
         draftWithoutProject = false
     }
 
+    /// The first message of the session that starts in this window, until its own transcript shows it: the detail
+    /// column shows it as the transcript's only row (ADR-0040's amendment of 2026-11-07).
+    var heldPrompt: PromptDraft? {
+        guard !closed, !showingSetup, restored == nil, let prompt = owner?.initialPrompt,
+            displayed?.transcript.items.isEmpty ?? true
+        else { return nil }
+        return prompt
+    }
+
     /// The displayed owner was started from the draft and failed or was cancelled before its prompt was submitted.
     var abandonedStart: LiveSession? {
         guard !closed, !showingSetup, restored == nil, let owner, owner.initialPrompt != nil, !owner.isLive else {

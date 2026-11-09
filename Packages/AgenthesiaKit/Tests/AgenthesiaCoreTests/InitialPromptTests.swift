@@ -82,6 +82,17 @@ import Testing
         #expect(restored.transcript == controller.transcript)
     }
 
+    @Test func theStartLineNamesWhereTheSessionWorksOnceItsPlaceIsKnown() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let owner = fixture.owner()
+        #expect(owner.startLine == nil)
+        await owner.start(directory: fixture.project, agent: try fixture.mock(), initialPrompt: PromptDraft(text: "hi"))
+        #expect(owner.startPlace == .projectFolder && owner.fetching == nil)
+        #expect(owner.startLine == "Starting Mock in the project folder…")
+        await owner.close()
+    }
+
     @Test func aSessionThatNeedsSignInSubmitsTheDraftAfterSignIn() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

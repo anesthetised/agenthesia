@@ -55,6 +55,8 @@ public struct RootView: View {
                         ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if let session = model.displayed {
                         GeometryReader { geometry in panes(session, size: geometry.size) }
+                    } else if let held = model.heldPrompt {
+                        GeometryReader { geometry in startingColumn(held, size: geometry.size) }
                     } else {
                         let starting = model.owner?.isStarting == true
                         ContentUnavailableView {
@@ -241,25 +243,29 @@ public struct RootView: View {
         )
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
-                // A finished turn's Done mark clears once its end was on screen in an active window.
-                LiveTranscript(
-                    session: session,
-                    pathIndex: pathIndex(for: session),
-                    originLabel: model.sessions.originLabel,
-                    find: model.find,
-                    unseenResult: model.unseenResult(appearsActive: appearsActive),
-                    onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) },
-                    jumpRequests: model.jumpRequests,
-                    onPositionChange: { [weak model] in model?.endPosition = $0 }
-                ) {
-                    openFile($0.path, line: $0.line, for: $1)
-                }
-                .id(session.session.id)
-                .overlay(alignment: .topTrailing) {
-                    if model.find.isOpen { TranscriptFindBar(model: model) }
-                }
-                .overlay(alignment: .bottom) {
-                    if model.endPosition == .newBelow { NewResponseButton(action: model.jumpToLatest) }
+                if let held = model.heldPrompt {
+                    HeldTranscript(prompt: held)
+                } else {
+                    // A finished turn's Done mark clears once its end was on screen in an active window.
+                    LiveTranscript(
+                        session: session,
+                        pathIndex: pathIndex(for: session),
+                        originLabel: model.sessions.originLabel,
+                        find: model.find,
+                        unseenResult: model.unseenResult(appearsActive: appearsActive),
+                        onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) },
+                        jumpRequests: model.jumpRequests,
+                        onPositionChange: { [weak model] in model?.endPosition = $0 }
+                    ) {
+                        openFile($0.path, line: $0.line, for: $1)
+                    }
+                    .id(session.session.id)
+                    .overlay(alignment: .topTrailing) {
+                        if model.find.isOpen { TranscriptFindBar(model: model) }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if model.endPosition == .newBelow { NewResponseButton(action: model.jumpToLatest) }
+                    }
                 }
                 if let signIn = model.signIn {
                     SignInPanel(
@@ -305,6 +311,35 @@ public struct RootView: View {
         .frame(width: width)
     }
 
+    /// The detail column of a session that is starting and has no controller yet: the first message, the status line
+    /// and the `Starting…` card. The columns are those of `panes`, so the message does not move when the transcript
+    /// replaces it; the inspector's width stays empty until the session exists.
+    private func startingColumn(_ held: PromptDraft, size: CGSize) -> some View {
+        let widths = DetailPanes(width: size.width, filePane: false, inspector: model.showingInspector)
+            .widths(filePane: model.filePaneWidth, inspector: model.inspectorWidth)
+        return HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                HeldTranscript(prompt: held)
+                startingCard
+            }.frame(width: widths.transcript)
+            Spacer(minLength: 0)
+        }
+        .frame(width: size.width)
+    }
+
+    /// The status line and the card that stands for the composer while the session starts.
+    private var startingCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let line = model.owner?.startLine { StartingLine(text: line) }
+            if let state = ContinueCard.State(status: .starting, isMerging: false, outcome: nil, canContinue: false) {
+                ContinueCard(state: state, onContinue: {})
+            }
+        }
+        .frame(maxWidth: TranscriptColumn.maxWidth)
+        .padding(.horizontal, 16).padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+    }
+
     /// What a failure banner can do here. Reconnecting is the Continue card's button, so the banner has no Retry.
     private let failureActions: Set<SessionFailure.Action> = [.agentLog, .newSession, .manageAgents]
 
@@ -335,6 +370,7 @@ public struct RootView: View {
             if let error = model.errorMessage ?? configError {
                 FailureBanner(error, offering: failureActions, perform: perform)
             }
+            if model.heldPrompt != nil, let line = model.owner?.startLine { StartingLine(text: line) }
             if let startedAt = session.turnStartedAt {
                 WorkingTimeLine(
                     startedAt: startedAt,

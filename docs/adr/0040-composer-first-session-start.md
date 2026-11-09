@@ -176,7 +176,7 @@ run before.
 
 ## Amendment (2026-11-07): the first message shows at once
 
-- Status: Accepted by the owner on 2026-11-07 (#220); not yet implemented. Until it lands, "Start on Send" above describes the code.
+- Status: Accepted by the owner on 2026-11-07 (#220); implemented in #225. The line also names the fetch and the session without a project, see [session-start.md](../behavior/session-start.md).
 - Related: [0039](0039-t3-style-window-layout.md), [0043](0043-sessions-in-the-project-folder.md)
 
 ### Context

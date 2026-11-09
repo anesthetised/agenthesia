@@ -967,11 +967,11 @@ Pitfalls known so far:
   thought, the finished field, Find expanding and marking, Copy once from the selection and the Copy action, and the
   row height on expand, collapse and resize. Rendering Lab **S10** streams two folding thoughts and the S1 answer on the
   200-item history (`didAppendThought()` in `AppTranscriptPrototype`, `scripts/bench.py` accepts `S10:App`).
-  **Benchmark not run yet; do not merge #223's pull request before it.** Workload, with the owner's approval:
-  `just lab-run S1:App,S7:App,S9:App,S10:App --runs 1` per side and round, three rounds with the sides interleaved
-  (before first), as in [tool-groups](benchmarks/2026-11-02/tool-groups/README.md): *before* is `origin/main` at the
-  pull request's base with S10 patched in by hand (the pull request description has the patch), *after* is the pull
-  request's head; record free RAM and load, results in `docs/benchmarks/<date>/collapsed-thoughts/`. **Running-app
+  First benchmark run (2026-11-09, `just lab-run S1:App,S7:App,S9:App,S10:App --runs 1`, three interleaved rounds,
+  [results](benchmarks/2026-11-09/collapsed-thoughts/README.md)): S1, S7 and S9 within noise, **S10 regressed** (7–14
+  hitches per run before, 64–197 after, also at the lowest load) because the table rebuilt a collapsed thought's
+  header and measured its row on every chunk. Fixed: a header whose text alone changes (`retitle`) keeps its views and
+  height. **Do not merge before the second run**, S1 and S10 with the owner's approval, recorded in the same README. **Running-app
   check deferred** (`MockAgent`'s `think` verb or a `--demo` file with thought chunks, isolated home, light and dark):
   (1) a streaming thought reads `Thinking… <last line>` and its line changes as chunks arrive, truncated at the column
   edge; (2) when the answer starts it reads `Thought for Ns`, and two consecutive thoughts are one row with the summed

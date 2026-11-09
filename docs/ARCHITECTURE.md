@@ -317,7 +317,9 @@ as a group is; expanded (`LiveTranscriptSource` keys it by the run's first item,
 expansion), it adds the thoughts' Markdown below the header, dimmed, in the same row, so expanding inserts no rows and
 goes through the row's own height (`rowContentHugging`). `ThoughtSummary` words the header: `Thinking… <last line>`
 while the run ends the running turn's transcript (`Thinking…` alone when expanded, so streamed text does not rebuild the
-header), `Thought for 12s` after. The times come from `TranscriptState`: the reducer sets a thought's `thoughtStart` at
+header), `Thought for 12s` after. When only the text of a one-line, truncating header changes, as a collapsed
+thought's does with each chunk, `TranscriptTableController` sets the label in place and does not measure the row
+again (S10 found the rebuild costly). The times come from `TranscriptState`: the reducer sets a thought's `thoughtStart` at
 its first chunk and moves `thoughtEnd` to each event's timestamp while the thought is the last item of a running turn,
 so the next item or the turn's end closes it, in live and saved transcripts alike; a run's time is the sum of its
 thoughts' `thoughtDuration`. Copy returns the run's Markdown through `copyText`, built when asked; Find matches each

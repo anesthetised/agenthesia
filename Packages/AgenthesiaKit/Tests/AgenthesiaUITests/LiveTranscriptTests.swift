@@ -1679,6 +1679,47 @@ extension LiveTranscriptTests {
         #expect(saved.message(at: 1).tool?.kind == "Thought for 12s")
     }
 
+    @Test func aStreamedChunkRetitlesACollapsedThoughtInPlace() async throws {
+        let recorded = try await RecordedTranscript()
+        try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())
+        try await recorded.apply(thought("Reading the file", id: "a"))
+        let source = LiveTranscriptSource()
+        source.running = true
+        publish(recorded, to: source)
+        let controller = TranscriptTableController()
+        let window = host(controller)
+        defer { window.close() }
+        controller.update(source)
+        let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        let label = try #require(
+            views(NSTextField.self, in: row).first { $0.stringValue == "Thinking… Reading the file" }
+        )
+        let height = controller.table.rect(ofRow: 1).height
+
+        // Each chunk changes only the header's text: the row keeps its views and its height.
+        for chunk in [" again", "\nPlanning the fix"] {
+            try await recorded.apply(thought(chunk, id: "a"))
+            publish(recorded, to: source)
+            controller.update(source)
+            #expect(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: false) === row)
+            #expect(views(NSTextField.self, in: row).contains { $0 === label })
+            #expect(controller.table.rect(ofRow: 1).height == height)
+        }
+        #expect(label.stringValue == "Thinking… Planning the fix")
+
+        // The answer ends it the same way.
+        try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "Done"))))
+        publish(recorded, to: source)
+        controller.update(source)
+        #expect(
+            label.stringValue.hasPrefix("Thought for") && views(NSTextField.self, in: row).contains { $0 === label }
+        )
+        // A header whose other parts change is rebuilt: expanding replaces the label.
+        controller.toggleExpansion(try disclosure(in: controller, row: 1))
+        let expanded = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
+        #expect(!views(NSTextField.self, in: expanded).contains { $0 === label })
+    }
+
     @Test func anExpandedThoughtStreamsIntoItsRowAndKeepsItsExpansion() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.append(try SessionEvent.prompt(id: UUID(), content: [.init(text: "Go")]).storedEvent())

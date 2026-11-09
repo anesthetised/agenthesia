@@ -106,7 +106,8 @@ fold on every chunk too. To compare, run S9 against a commit from before #155 wi
 `just lab-run S10:App --runs 3` (#223) streams two ~1000-token thoughts and then the S1 answer below the S1 200-item
 history. The thoughts fold into one collapsed row whose header shows the latest line on every chunk, as a running turn
 shows them; the answer then follows as in S1. To compare, run S10 against a commit from before #223 with the scenario
-added by hand, where the thoughts are two rows streaming their full text.
+added by hand, where the thoughts are two rows streaming their full text. Results:
+[2026-11-09](benchmarks/2026-11-09/collapsed-thoughts/README.md).
 
 Results for #19 on an M1 Pro (MacBookPro18,2, 120 Hz display), macOS 27.0.1, optimized Debug lab, fresh
 process per run, 1-minute load 2.6–4.9 and 80–81% free memory throughout. Hitches are callbacks over one

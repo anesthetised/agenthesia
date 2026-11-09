@@ -964,8 +964,9 @@ Pitfalls known so far:
   without a diff in place and offers Open first for one with a diff (`PermissionChoice.choices`, plain rule), armed
   after 400 ms. Tested: the last line in Core; the model (board, selection, New Session, restore, activation, delete)
   and the cards against MockAgent (content, shelf time, the Open-first rule, answering); the card by its measured
-  size. A notification tapped while the only window shows the board fills that window (it is not a draft).
-  PR #335 (wave-1 check findings) also changes `leaveDeletedSession`; it must land on the board, not the draft.
+  size; a hosted test tabs through the key view loop and reaches every card (it fails without `.focusable()`). A
+  notification tapped while the only window shows the board fills that window (it is not a draft).
+  #335's case, a window that ended its session and then deleted it, lands on the board too.
   **Running-app check deferred** (MockAgent, isolated home, light and dark): (1) the Overview row sits above Needs You,
   stays during a search and is selected while the board shows; ⌘0 and Session → Overview show it from a session and
   from the draft; (2) `No agents running` with New Session on an empty board, and New Session opens the draft with the
@@ -977,8 +978,8 @@ Pitfalls known so far:
   400 ms after the request appears; a request answered in the window meanwhile leaves the card; (6) an input form's
   card reads `Question` and opens the session; (7) a click selects the session, the context menu matches the row's
   (Settle Session, Open in New Window, Discard Worktree…); (8) deleting the displayed saved session lands on the
-  board, and a window quit on the board restores to it; (9) with keyboard navigation on, Tab reaches every card and
-  its buttons, Space opens the session; VoiceOver reads a card as one button with the row's label and the last line.
+  board, and a window quit on the board restores to it; (9) Tab reaches every card with keyboard navigation off
+  and on (no card is a double stop with it on), its focus ring shows, Space and Return open the session; VoiceOver reads a card as one button with the row's label and the last line.
 - #229 (sessions in the project folder) landed: the draft's Checkout chip is a menu for Git projects
   (`DraftCheckout`, `SessionWindowModel.draftInProjectFolder`, per draft: Send, another project and New Session in
   Project clear it, a failed start returns it); `SessionWorkspace.prepare(inProjectFolder:)` returns the repository

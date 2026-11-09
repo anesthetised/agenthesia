@@ -185,8 +185,8 @@ import Testing
         await fixture.settle()
         let tables = fixture.sidebarTables()
         try #require(tables.count == 2)
-        // The top list holds Needs You alone, which is empty; the shelf lists the session under it.
-        #expect(tables[0].numberOfRows == 0)
+        // The top list holds the Overview row and Needs You, which is empty; the shelf lists the session under it.
+        #expect(tables[0].numberOfRows == 1)
         #expect(tables[1].numberOfRows == 1)
         let list = try #require(tables[1].enclosingScrollView)
         #expect(abs(list.frame.height - (SidebarShelves.rowHeight + SidebarShelves.listPadding)) < 2)

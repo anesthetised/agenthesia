@@ -94,7 +94,7 @@ struct SessionCard: View {
         .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(.separator) }
     }
 
-    /// The card's button: one accessibility element with the row's label and the last line.
+    /// The card's button: one accessibility element with the row's label and the last line, a stop of Tab.
     private func summary(now: Date) -> some View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 6) {
@@ -124,6 +124,12 @@ struct SessionCard: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // In the key view loop also without keyboard navigation, so Tab reaches every card (ADR-0046).
+        .focusable()
+        .onKeyPress(keys: [.space, .return]) { _ in
+            open()
+            return .handled
+        }
         .accessibilityLabel(content.accessibilityLabel(now: now))
     }
 }

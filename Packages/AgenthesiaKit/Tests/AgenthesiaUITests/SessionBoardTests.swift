@@ -242,4 +242,44 @@ import Testing
         #expect(SessionBoard.cards(fixture.model).count == 2)
         await fixture.close()
     }
+
+    @Test func tabReachesEveryCard() async throws {
+        _ = NSApplication.shared
+        let fixture = try Fixture()
+        for _ in 0..<3 { _ = try await fixture.start() }
+        let cards = SessionBoard.cards(fixture.model)
+        #expect(cards.count == 3)
+        let window = OffscreenWindow(size: .init(width: 400, height: 600))
+        defer { window.close() }
+        let log = FocusLog()
+        let host = NSHostingView(rootView: FocusProbe(cards: cards, log: log))
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        // Whether or not keyboard navigation is on, each card is a stop of the window's key view loop.
+        for _ in cards {
+            window.selectNextKeyView(nil)
+            for _ in 0..<10 { await Task.yield() }
+        }
+        #expect(Set(log.focused) == Set(cards.map(\.id)))
+        await fixture.close()
+    }
+}
+
+/// The cards the board would show, with the one that has keyboard focus reported to `log`.
+@MainActor private final class FocusLog { var focused: [AnyHashable] = [] }
+
+private struct FocusProbe: View {
+    let cards: [SessionCard.Content]
+    let log: FocusLog
+    @FocusState private var focused: AnyHashable?
+
+    var body: some View {
+        VStack {
+            ForEach(cards) { card in
+                SessionCard(content: card) {}.focused($focused, equals: card.id)
+            }
+        }
+        .onChange(of: focused) { if let focused { log.focused.append(focused) } }
+    }
 }

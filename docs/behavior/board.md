@@ -37,8 +37,9 @@ and answers a command's permission request without opening the session
 - Clicking a card selects its session in this window. The card's context menu is the row's: `New Session in Project`,
   `Open in New Window`, `Settle Session`, `Discard Worktree…` ([sidebar.md](sidebar.md#row-actions)).
 - The card's summary is one accessibility element, a button, labelled like the row (`title, project, reason, last
-  active 3m`, or the shelf time) followed by the agent's last line. With keyboard navigation on, Tab reaches every
-  card and its buttons; Space opens the session.
+  active 3m`, or the shelf time) followed by the agent's last line. Tab reaches every
+  card, also with the system's keyboard navigation off, and Space or Return on a focused card opens its session; the
+  option buttons are Tab stops only with keyboard navigation on.
 - An empty board reads `No agents running` with a `New Session` button, which opens the draft.
 
 ## Answering from a card

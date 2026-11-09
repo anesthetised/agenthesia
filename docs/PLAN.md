@@ -1016,6 +1016,9 @@ Pitfalls known so far:
 - `html_render` (#315) must not put a web view in the transcript table; the streaming benchmarks are the gate, run with
   the owner's approval of the workload.
 - Screen Recording (#314) and the secret card (#316) are checked with a fresh bundle identifier (AGENTS.md).
+- #309: the `MCP` module serves tools through `MCP.server(info:instructions:tools:)`, a `JSONRPC.Router`. There is no
+  separate client type: a `Connection` with the `MCP.Method` types is the client, which is what MockAgent's `mcp` verb
+  (#71) uses. Tests cover the module fully.
 
 ## Next steps
 

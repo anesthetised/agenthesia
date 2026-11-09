@@ -11,6 +11,9 @@ public import Workspace
 @MainActor @Observable public final class SessionReview: Identifiable {
     public let id: UUID
     public let baseBranch: String?
+    /// The session works in the project folder (ADR-0043): the review compares with its start, not the merge base
+    /// with its branch, which is the checkout itself.
+    public let inProjectFolder: Bool
     private var snapshot: SessionWorkspace.Review?
     public var changes: [SessionWorkspace.Review.Change] { snapshot?.changes ?? [] }
     /// Line counts against the review's own merge base; a path without an entry has none to show.
@@ -43,12 +46,24 @@ public import Workspace
     }
 
     /// `root` is the canonical directory captured by `SessionFiles` when the session was attached.
-    public init(session: SessionRecord, root: URL, viewed: ViewedMarks = ViewedMarks()) {
+    public init(
+        session: SessionRecord,
+        root: URL,
+        viewed: ViewedMarks = ViewedMarks(),
+        inProjectFolder: Bool = false
+    ) {
         id = session.id
         self.viewed = viewed
         self.root = root
-        baseBranch = session.baseBranch
+        self.inProjectFolder = inProjectFolder
+        baseBranch = inProjectFolder ? nil : session.baseBranch
         baseRevision = session.baseRevision
+    }
+
+    /// What the review compares with, for its header.
+    public var title: String {
+        if inProjectFolder { return "Changes since the session started" }
+        return baseBranch.map { "Changes against \($0)" } ?? "Session changes"
     }
 
     public func refresh() async {

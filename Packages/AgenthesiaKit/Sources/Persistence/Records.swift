@@ -53,11 +53,13 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let protocolVersion: Int
     public var title: String?
     public let workingDirectory: String
-    /// Initial Git HEAD for new sessions. Legacy and non-Git sessions have no known base.
+    /// Initial Git HEAD for new sessions: the worktree's, or the project folder's for a session that works there
+    /// (ADR-0043). Legacy and non-Git sessions have no known base.
     public let baseRevision: String?
     /// Branch the session started from, the target of a merge. Detached, legacy and non-Git sessions have none.
     public let baseBranch: String?
-    /// The session branch as created. Sessions from before it was stored, and non-Git sessions, have none.
+    /// The session branch as created. Sessions from before it was stored, non-Git sessions and sessions in the project
+    /// folder (ADR-0043) have none.
     public let branch: String?
     /// The upstream of `baseBranch` that could not be fetched at start, e.g. `origin/main`, so the worktree started
     /// from the local branch instead (ADR-0047). Nil when it started from the upstream, the branch has none, or the

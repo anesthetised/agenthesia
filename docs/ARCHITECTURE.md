@@ -116,6 +116,23 @@ unborn repositories fail explicitly. Worktrees
 are retained after close or failed startup until the session is merged or discarded, except one whose session never
 got a history record.
 
+Folder sessions run in a folder rather than a worktree of their own, and come in three kinds: a **non-Git folder**
+(`prepare` on a directory without a `.git` entry: no base revision), a **Git project folder**
+([ADR-0043](adr/0043-sessions-in-the-project-folder.md)) and **scratch**, a session without a project (below). For the
+second the draft's Checkout chip is a menu (`SessionWindowModel.draftInProjectFolder`, per draft: Send, another project
+and New Session in Project clear it, a failed start returns it), passed as `inProjectFolder` through
+`SessionManager.start` and `LiveSession` to `prepare`. That form keeps the bare and broken repository checks, then
+returns the repository root as project directory, the selected directory as working directory, `HEAD` as
+`baseRevision` and the checked-out branch, or nil when detached, as `baseBranch`, with no branch, no worktree and no
+fetch; an unborn `HEAD` fails. No column marks it: `SessionManager.worksInProjectFolder` reads a session with a base
+revision whose working directory lies outside the worktrees root, a location `SessionWorkspace.Worktree` never matches,
+so merge, discard, push, Open Pull Request… and Delete Session's file removal all refuse or skip it; deleting one
+deletes only its history. Non-Git and scratch sessions have no base revision, so the test never reads them as such.
+`SessionWindowModel.displaysProjectFolderSession` gives Merge and Discard Worktree… the help text `This session works
+in the project folder` (inspector, review footer, Session menu), titles Changes `Changes since the session started`, and
+opens `SessionReview` with `inProjectFolder`, which drops the base branch so the review compares with `baseRevision`:
+the merge base with the checked-out branch would be the checkout itself.
+
 Sessions without a project ([ADR-0048](adr/0048-sessions-without-a-project.md)) start with a nil directory:
 `SessionManager.start(directory: nil, …)` passes its `scratchRoot` (default `SessionWorkspace.defaultScratchRoot`,
 `~/.agenthesia/scratch`, injectable like the worktrees root) to `LiveSession`, whose `create` calls
@@ -199,8 +216,9 @@ is a one-item `TranscriptSource` that renders the prompt with `LiveTranscriptSou
 `SessionWorkspace.prepare(onFetch:)` while ADR-0047's fetch runs, and `startPlace` (`newWorktree`, `projectFolder` or
 `newFolder`, ADR-0048) once the checkout is known, before the install check.
 
-> **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md) turns the Checkout label into a menu for Git
-> projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default).
+The Checkout chip is `DraftCheckout`: for a Git project a menu of `New worktree from <upstream>` (the default) and
+`Project folder` ([ADR-0043](adr/0043-sessions-in-the-project-folder.md)), outside Git the label `Project folder`;
+`SessionWorkspace.worktreeBase` names both the worktree's base and what is checked out, for the folder's help text.
 
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
@@ -732,10 +750,9 @@ or the library; builds that do not know the kind skip it, which a new `SessionEv
 or, with a pull request, `hasUnpushedWork` for Push, keyed on the session, the file index, the status and the pull
 request. The discard summary names the branch's remote upstream. Tests use a local bare remote and a fake `gh`.
 
-> **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md)
-> adds sessions that run in a Git project's own folder: `baseRevision` is `HEAD` at start, `baseBranch` the checked-out
-> branch, Changes and Review compare with that revision, and Merge and Discard are not offered; the in-place form is
-> recognised by the removal check's location test.
+Sessions in a Git project's own folder ([ADR-0043](adr/0043-sessions-in-the-project-folder.md), see *folder
+sessions* above) have no worktree, so `removableWorktree` fails for them and neither Push nor Open Pull Request… is
+offered.
 
 ### Transcript paths and Open in Editor
 

@@ -5,12 +5,13 @@ public import Foundation
 public struct SessionWorkspace: Sendable {
     public let projectDirectory: URL
     public let workingDirectory: URL
-    /// The actual new worktree's initial HEAD, before the agent starts; nil outside Git.
+    /// The actual new worktree's initial HEAD, before the agent starts, or the project folder's `HEAD` for a session
+    /// that works there (ADR-0043); nil outside Git.
     public let baseRevision: String?
     /// The branch checked out in the selected checkout when the worktree was created; nil for a detached `HEAD`
     /// or outside Git. Such a session cannot be merged back.
     public let baseBranch: String?
-    /// The session branch the worktree was created on; nil outside Git.
+    /// The session branch the worktree was created on; nil outside Git and in the project folder.
     public let branch: String?
     /// The upstream of `baseBranch` that could not be fetched, e.g. `origin/main`, so the worktree started from the
     /// local `HEAD` instead (ADR-0047). Nil when it started from the upstream, or the branch has none.
@@ -19,11 +20,13 @@ public struct SessionWorkspace: Sendable {
     /// `topic` names the branch (`branchName`): the first line of the initial prompt. When the checked-out branch
     /// has an upstream, the worktree starts from it, fetched with `environment` (the login shell's, so credentials
     /// apply) and stopped after `fetchTimeout` (ADR-0047). `onFetch` is told the upstream (`origin/main`) when the
-    /// fetch starts, from a background thread.
+    /// fetch starts, from a background thread. `inProjectFolder` starts a Git session in `directory` itself
+    /// (ADR-0043): no worktree, no branch and no fetch, with the checkout's `HEAD` as the base revision.
     public static func prepare(
         directory: URL,
         id: UUID,
         topic: String? = nil,
+        inProjectFolder: Bool = false,
         worktreesRoot: URL = defaultWorktreesRoot,
         environment: [String: String]? = nil,
         fetchTimeout: Duration = .seconds(20),
@@ -35,6 +38,7 @@ public struct SessionWorkspace: Sendable {
                 directory: directory,
                 id: id,
                 topic: topic,
+                inProjectFolder: inProjectFolder,
                 worktreesRoot: worktreesRoot,
                 environment: environment,
                 fetchTimeout: fetchTimeout,
@@ -47,6 +51,7 @@ public struct SessionWorkspace: Sendable {
         directory: URL,
         id: UUID,
         topic: String?,
+        inProjectFolder: Bool,
         worktreesRoot: URL,
         environment: [String: String]?,
         fetchTimeout: Duration,
@@ -78,6 +83,20 @@ public struct SessionWorkspace: Sendable {
                 directoryHint: .isDirectory
             ).resolvingSymlinksInPath()
         } catch { throw brokenRepository(error) }
+        // A detached HEAD makes this exit non-zero; that only means there is no branch to merge back into.
+        let branch = (try? git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory)).flatMap {
+            $0.isEmpty ? nil : $0
+        }
+        if inProjectFolder {
+            return SessionWorkspace(
+                projectDirectory: root,
+                workingDirectory: directory,
+                baseRevision: try git(["rev-parse", "--verify", "HEAD"], in: directory),
+                baseBranch: branch,
+                branch: nil,
+                fallbackUpstream: nil
+            )
+        }
         let slug = id.uuidString.lowercased()
         let destination = worktreesRoot.appending(path: root.lastPathComponent).appending(path: slug)
             .resolvingSymlinksInPath().standardizedFileURL
@@ -90,10 +109,6 @@ public struct SessionWorkspace: Sendable {
         )
         // Keep the selected subdirectory, e.g. one package of a monorepo.
         let prefix = try git(["rev-parse", "--show-prefix"], in: directory)
-        // A detached HEAD makes this exit non-zero; that only means there is no branch to merge back into.
-        let branch = (try? git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory)).flatMap {
-            $0.isEmpty ? nil : $0
-        }
         var sessionBranch = branchName(for: id, topic: topic)
         // A taken name (the user's branch, or one left by a deleted database) falls back to the full session id.
         if (try? git(["rev-parse", "--verify", "--quiet", "refs/heads/\(sessionBranch)"], in: root)) != nil {
@@ -138,15 +153,17 @@ public struct SessionWorkspace: Sendable {
     }
 
     /// What `prepare` would start a worktree from: the upstream of the branch checked out in `directory`
-    /// (`origin/main`), the branch itself without one, or the short commit of a detached `HEAD`. Nil outside Git,
+    /// (`origin/main`), the branch itself without one, or the short commit of a detached `HEAD`; and what is
+    /// checked out, the branch or that commit, where a project-folder session works (ADR-0043). Nil outside Git,
     /// where the session works in the directory itself.
-    public static func worktreeBase(of directory: URL) async -> String? {
+    public static func worktreeBase(of directory: URL) async -> (base: String, checkout: String)? {
         let directory = directory.resolvingSymlinksInPath().standardizedFileURL
         guard hasGitEntry(atOrAbove: directory) else { return nil }
         if let branch = try? await git(["symbolic-ref", "--quiet", "--short", "HEAD"], in: directory), !branch.isEmpty {
-            return (try? await blocking { upstream(of: branch, in: directory) })?.name ?? branch
+            return ((try? await blocking { upstream(of: branch, in: directory) })?.name ?? branch, branch)
         }
-        return (try? await git(["rev-parse", "--short", "HEAD"], in: directory)) ?? "HEAD"
+        let commit = (try? await git(["rev-parse", "--short", "HEAD"], in: directory)) ?? "HEAD"
+        return (commit, commit)
     }
 
     /// The main checkout and root of a linked worktree containing `directory`, or nil outside one.

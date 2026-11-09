@@ -32,7 +32,9 @@ struct SessionInspector: View {
 
     private func workspace(_ directory: URL, session: SessionRecord?) -> some View {
         Section {
-            if let session, let name = Self.branchName(of: session) {
+            if let session, model.displaysProjectFolderSession {
+                Label(Self.projectFolder(of: session), systemImage: "arrow.triangle.branch").textSelection(.enabled)
+            } else if let session, let name = Self.branchName(of: session) {
                 VStack(alignment: .leading) {
                     Label(name, systemImage: "arrow.triangle.branch")
                     if let start = Self.start(of: session) { Text(start).foregroundStyle(.secondary) }
@@ -44,6 +46,7 @@ struct SessionInspector: View {
                 Button("Discard Worktree…", systemImage: "trash") { Task { await model.requestDiscard(session) } }
                     .buttonStyle(.borderless)
                     .disabled(!model.canDiscard)
+                    .help(model.discardHelp ?? "")
             }
         } header: {
             HStack {
@@ -65,6 +68,12 @@ struct SessionInspector: View {
         session.baseRevision == nil ? nil : session.branch ?? SessionWorkspace.legacyBranchName(for: session.id)
     }
 
+    /// What a session in the project folder works on (ADR-0043): `In main, project folder`, or the short commit of a
+    /// detached `HEAD`. It has no branch of its own, so no legacy name is derived.
+    static func projectFolder(of session: SessionRecord) -> String {
+        "In \(session.baseBranch ?? String(session.baseRevision?.prefix(7) ?? "HEAD")), project folder"
+    }
+
     /// Where the worktree started: `from main`, or the local branch when its upstream could not be fetched
     /// (ADR-0047). Sessions without a base branch have none.
     static func start(of session: SessionRecord) -> String? {
@@ -75,7 +84,7 @@ struct SessionInspector: View {
 
     private func changes(_ session: SessionRecord) -> some View {
         let files = model.files
-        return Section("Changes") {
+        return Section(model.displaysProjectFolderSession ? "Changes since the session started" : "Changes") {
             if model.displaysSessionWithoutProject {
                 // Not a project: nothing is tracked, reviewed or merged (ADR-0048).
                 Text("Not tracked: this session has no project").font(.caption).foregroundStyle(.secondary)

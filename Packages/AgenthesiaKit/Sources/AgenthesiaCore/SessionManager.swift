@@ -51,9 +51,11 @@ public final class SessionManager {
     }
 
     /// Adds an owner that starts in the background, applies `configHints` before its record exists and then
-    /// submits `initialPrompt` (ADR-0040). A nil `directory` starts without a project (ADR-0048).
+    /// submits `initialPrompt` (ADR-0040). A nil `directory` starts without a project (ADR-0048); `inProjectFolder`
+    /// starts a Git project's session in `directory` itself (ADR-0043).
     public func start(
         directory: URL?,
+        inProjectFolder: Bool = false,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         additionalDirectories: [URL] = [],
@@ -63,6 +65,7 @@ public final class SessionManager {
         add(
             .new(
                 directory: directory,
+                inProjectFolder: inProjectFolder,
                 agent: agent,
                 worktreesRoot: worktreesRoot ?? self.worktreesRoot,
                 scratchRoot: scratchRoot,
@@ -340,6 +343,16 @@ public final class SessionManager {
     /// Starting includes waiting for sign-in: a new session has no history until it has started (ADR-0033).
     private func isStarting(_ id: UUID) -> Bool {
         owners.contains { $0.sessionID == id && ($0.isStarting || $0.signIn != nil) }
+    }
+
+    /// Whether the session works in the project folder of a Git repository (ADR-0043): it has a base revision and its
+    /// working directory lies outside the worktrees root, where the removal check never looks. Sessions outside Git
+    /// and sessions without a project have no base revision.
+    public func worksInProjectFolder(_ session: SessionRecord) -> Bool {
+        guard session.baseRevision != nil else { return false }
+        let root = worktreesRoot.resolvingSymlinksInPath().standardizedFileURL.path
+        let working = URL(filePath: session.workingDirectory).standardizedFileURL.path
+        return working != root && !working.hasPrefix(root + "/")
     }
 
     func worktree(of session: SessionRecord, project: ProjectRecord) -> SessionWorkspace.Worktree? {

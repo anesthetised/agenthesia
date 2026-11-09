@@ -167,8 +167,10 @@ Right-click on a row:
   `Delete` / `Cancel`. The worktree and its branch, or the folder, go first; if that fails nothing is deleted and
   `Cannot Delete the Session` shows the error. A window showing the session returns to the draft. Live rows have no
   such item: a session is ended first.
-- `Discard Worktree…` is absent on a `No project` row. It is enabled when the session has a worktree Agenthesia
-  created and no outcome yet (or a merge left its worktree behind), and it is not starting, merging or being
+- `Discard Worktree…` is absent on a `No project` row. It is disabled for a session in the project folder
+  ([ADR-0043](../adr/0043-sessions-in-the-project-folder.md)), and the Session menu's item says why: `This session works
+  in the project folder`; deleting such a session deletes only its history, never the checkout. It is enabled when the
+  session has a worktree Agenthesia created and no outcome yet (or a merge left its worktree behind), and it is not starting, merging or being
   discarded. It asks first: `Discard the worktree of “<title>”?` with what will be lost (`2 uncommitted files and 1
   commit on <branch> will be deleted. This cannot be undone.`, then, when the branch was pushed, `The remote branch
   origin/<branch> and any pull request from it are not touched.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
@@ -181,6 +183,7 @@ their next refresh, and a finished deletion triggers one in every window.
 
 ## Changes
 
+- 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.
 - 2026-11-09, #230: `Delete Session…` for saved sessions.
 - 2026-11-09, #221: a running session's reason is the plan entry in progress; a turn's origin outranks it.
 - 2026-11-09, #311: a session running a turn that the user did not send names where it came from.

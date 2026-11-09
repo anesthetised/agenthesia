@@ -27,5 +27,7 @@ import Testing
         #expect(await LiveSession.place(of: directory) == .projectFolder)
         try await SessionWorkspace.git(["init", "-q", "-b", "main"], in: directory)
         #expect(await LiveSession.place(of: directory) == .newWorktree)
+        // A Git project's folder, when the draft chose it (ADR-0043).
+        #expect(await LiveSession.place(of: directory, inProjectFolder: true) == .projectFolder)
     }
 }

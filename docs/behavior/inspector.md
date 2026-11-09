@@ -25,12 +25,19 @@ The same plan drives the [status line](composer.md#status-line) and a Working ro
   there are changes), Open Pull Request… when `gh` can open one, and once a pull request is open `Pull request #12` as a
   link with Push beside it instead of Merge ([merge.md](merge.md#pull-requests)), and a manual refresh when the file watcher is unavailable. A session without a project reads `Not tracked: this session has no
   project` ([ADR-0048](../adr/0048-sessions-without-a-project.md)).
+- A session in the project folder ([ADR-0043](../adr/0043-sessions-in-the-project-folder.md)) titles the section
+  `Changes since the session started`: the files changed since the commit checked out at its start, commits made in
+  the checkout meanwhile and uncommitted changes included. Merge is disabled with the help text `This session works in
+  the project folder`, and Open Pull Request… and Push are absent.
 
 ## Workspace
 
 - The branch and where it started (`from main`, or `Started from local main: could not fetch origin/main`,
   [ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)), the working directory, Show in Finder and Open in
   Editor in the header, and Discard Worktree… for a session with a worktree.
+- A session in the project folder shows `In <branch>, project folder` (the short commit for a detached `HEAD`) instead
+  of a branch and where it started, then the path; Discard Worktree… is disabled with the help text `This session
+  works in the project folder`.
 
 ## Agent
 
@@ -42,6 +49,8 @@ The same plan drives the [status line](composer.md#status-line) and a Working ro
 
 ## Changes
 
+- 2026-11-09, #229: a session in the project folder: `Changes since the session started`, `In <branch>, project
+  folder`, Merge and Discard Worktree… disabled with `This session works in the project folder`.
 - 2026-11-09, #233: Open Pull Request…, the pull request link and Push in Changes.
 - 2026-11-09, #222: Context and Cost in the Agent section.
 - 2026-11-09, #221: the Plan section; the rest of the inspector summarised from the code at f5a8232.

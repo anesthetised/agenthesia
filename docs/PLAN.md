@@ -887,7 +887,7 @@ and chose a second set of UI/UX changes, several of them against accepted ADRs. 
 |---|---|---|
 | Plan in the inspector and the working line; context usage and cost; collapsed thoughts | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Accepted (user messages as left-aligned blocks dropped on 2026-11-09, #224) |
 | The first message shows at once while the session starts | [ADR-0040](adr/0040-composer-first-session-start.md), amendment of 2026-11-07 | Accepted |
-| Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Accepted |
+| Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Accepted; landed in #229 |
 | Delete and archive saved sessions | [ADR-0044](adr/0044-delete-and-archive-sessions.md) | Accepted |
 | Push after merge; pull requests with `gh`, the session stays live | [ADR-0045](adr/0045-push-and-pull-requests.md) | Accepted |
 | Session board on an Overview row (⌘0), a menu bar item, ⌘1…⌘9 | [ADR-0046](adr/0046-session-board-and-menu-bar.md) | Accepted |
@@ -956,6 +956,30 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #229 (sessions in the project folder) landed: the draft's Checkout chip is a menu for Git projects
+  (`DraftCheckout`, `SessionWindowModel.draftInProjectFolder`, per draft: Send, another project and New Session in
+  Project clear it, a failed start returns it); `SessionWorkspace.prepare(inProjectFolder:)` returns the repository
+  root, the selected directory, `HEAD` and the checked-out branch, never fetching; `SessionManager.worksInProjectFolder`
+  is the location test (a base revision, outside the worktrees root), no new column. Changes and Review compare with
+  `baseRevision` (`SessionReview(inProjectFolder:)` drops the base branch) under `Changes since the session started`;
+  Merge and Discard Worktree… are disabled with `This session works in the project folder`; Push and Open Pull
+  Request… never show. Real-repository tests (temporary repositories only): the root, an untracked subdirectory, a
+  detached `HEAD`, a dirty checkout with a commit after the start, no fetch against a local bare remote, the bare,
+  broken and unborn checks; through `SessionManager`, discard, merge, the pull request target and delete refuse or
+  skip the checkout (delete removes only the history; files, branches, worktrees and `HEAD` unchanged), a failed start
+  leaves the folder, and scratch, non-Git and worktree sessions are never read as in the project folder. Hosted tests
+  of the chip (light and dark) and the inspector. **Running-app check deferred** (`MockAgent`, isolated home, a
+  throwaway repository `agh-project-folder-check` with a commit, light and dark): (1) the chip reads `New worktree from
+  main` with a menu of both items, the checkmark and each item's tooltip, and a non-Git folder shows the plain
+  `Project folder` label, a draft without a project none; (2) choose `Project folder`, Send: the start line reads
+  `Starting MockAgent in the project folder…`, no `Fetching…` even with an upstream, no worktree in
+  `~/.agenthesia/worktrees`, no new branch; (3) the inspector shows `In main, project folder` and the path, `Changes
+  since the session started`, and after an edit in the checkout (and a commit made there) both files; (4) Merge in the
+  inspector, the review footer and the Session menu, and Discard Worktree… in the inspector, the Session menu and the
+  row's context menu are disabled, with the help text where macOS shows it; no Open Pull Request… with a fake `gh`;
+  (5) Review's header reads `Changes since the session started`; (6) the next draft and New Session in Project start
+  with the worktree again; (7) Delete Session… on the ended session leaves the checkout's files and branches as they
+  were; (8) VoiceOver reads `Checkout: <item>`. Not checked: a detached `HEAD` in the running app.
 - #225 (first message at once) landed: `LiveSession.startLine` (`Fetching origin/main…` from
   `SessionWorkspace.prepare(onFetch:)`, then `Starting <agent> in a new worktree…` / `… in the project folder…` / `… in
   a new folder…` from `startPlace`), `HeldPromptSource` (a one-item `TranscriptSource`) in `HeldTranscript`, and

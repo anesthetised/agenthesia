@@ -43,6 +43,7 @@ public struct SessionCommands: Commands {
                 }
             }
             .disabled(model?.canDiscard != true)
+            .help(model?.discardHelp ?? "")
             Button(model?.isReviewShown == true ? "Hide Review" : "Review Changes") { model?.toggleReview() }
                 .keyboardShortcut("r", modifiers: [.command, .control])
                 .disabled(model?.canReview != true)
@@ -56,6 +57,7 @@ public struct SessionCommands: Commands {
             if model?.showsMerge != false {
                 Button(model?.mergeCommandTitle ?? "Merge…") { Task { [model] in await model?.requestMerge() } }
                     .disabled(model?.canMerge != true)
+                    .help(model?.mergeHelp ?? "")
             }
             if model?.showsOpenPullRequest == true {
                 Button("Open Pull Request…") { model?.requestPullRequest() }

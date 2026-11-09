@@ -100,3 +100,14 @@ words the worktree origin (the branch itself without an upstream); the project-f
 without a project ([0048](0048-sessions-without-a-project.md)) have no checkout choice, so the menu is hidden for them.
 The test "in place = has a `baseRevision` and lives outside the worktrees root" stays safe for them: a scratch session
 has no `baseRevision`.
+
+## Implementation notes (2026-11-09, #229)
+
+- The location test is `SessionManager.worksInProjectFolder`: a base revision and a working directory outside the
+  worktrees root. `SessionWorkspace.Worktree` never matches such a directory, so merge, discard, push and Delete
+  Session's file removal refuse or skip it; deleting the session deletes only its history.
+- Review drops the base branch for such a session: the merge base with the checked-out branch is the checkout itself,
+  which would hide the commits made since the start.
+- Picking another project in the draft also returns the chip to the worktree, so the choice never carries over to a
+  project it was not made for. With a detached `HEAD`, the help text and the Workspace block name the short commit
+  (`In 1a2b3c4, project folder`).

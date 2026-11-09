@@ -79,15 +79,24 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   while the executable is blank. `~` is expanded. The chip then shows the executable's file name; opening the sheet
   again edits that command. A custom command can be remembered as the default like any other agent.
 
-## Checkout label
+## Checkout
 
-- Not a menu. For a Git project it reads `New worktree from <base>`: the upstream of the branch checked out in the
-  project when it has one (`New worktree from origin/main`), the branch itself without one, or the short commit when
-  `HEAD` is detached; tooltip `The session works in a new Git worktree of the committed files.
-  Uncommitted and untracked files are not copied.` Every Git session gets its own worktree and branch
-  ([ADR-0006](../adr/0006-worktree-isolation.md), [ADR-0032](../adr/0032-worktree-merge-and-discard.md)); the branch
-  is named after the first line of the message.
-- With an upstream, Send fetches that one branch (at most 20 seconds) and the worktree starts from it, so the agent
+- For a Git project the chip is a menu ([ADR-0043](../adr/0043-sessions-in-the-project-folder.md)) with two items, the
+  chosen one checked:
+  - `New worktree from <base>`, the default: the upstream of the branch checked out in the project when it has one
+    (`New worktree from origin/main`), the branch itself without one, or the short commit when `HEAD` is detached;
+    tooltip `The session works in a new Git worktree of the committed files. Uncommitted and untracked files are not
+    copied.` The session gets its own worktree and branch ([ADR-0006](../adr/0006-worktree-isolation.md),
+    [ADR-0032](../adr/0032-worktree-merge-and-discard.md)); the branch is named after the first line of the message.
+  - `Project folder`: the session works in the selected folder itself, on whatever is checked out there, with no
+    worktree, no branch and no fetch; tooltip `The agent works in your checkout. Edits land on <branch> directly and
+    are not isolated from your own changes.` (the short commit when `HEAD` is detached).
+- The chip shows the chosen item with a branch symbol, or a folder for the project folder; its tooltip is the chosen
+  item's, and VoiceOver reads `Checkout: <item>`.
+- The choice is per draft and never remembered: every draft starts with the worktree, and Send, picking another
+  project and New Session in Project return to it. A failed or cancelled start returns the draft with the choice it
+  was sent with.
+- With an upstream, a worktree's Send fetches that one branch (at most 20 seconds) and the worktree starts from it, so the agent
   works on the latest code even when the local branch was not pulled
   ([ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)). The local branch is never moved. When the fetch
   fails or takes longer, the session starts from the local branch, and the Workspace block of the inspector reads
@@ -95,8 +104,13 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - Merge into the local branch waits until that branch contains the commit the session started from: until then Merge
   explains `The session started from a newer origin/main than “main” contains. Pull origin/main into “main” first,
   then merge.`, and Review compares with the session's start rather than the merge base.
-- Outside Git it reads `Project folder`, tooltip `Not a Git repository: the session works in the folder itself.`
-- The label appears once the project has been checked, and is absent without a project.
+- Outside Git it is a label, not a menu: `Project folder`, tooltip `Not a Git repository: the session works in the
+  folder itself.`
+- The chip appears once the project has been checked, and is absent without a project
+  ([ADR-0048](../adr/0048-sessions-without-a-project.md)).
+- A project-folder session's Changes and Review compare with the commit checked out when it started, under the header
+  `Changes since the session started`; it offers no Merge, Discard Worktree…, Push or Open Pull Request…
+  ([inspector.md](inspector.md), [merge.md](merge.md)).
 
 ## Mode, model and effort hints
 
@@ -141,7 +155,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
   inspector, which needs the session, appears once it exists.
 - The status line reads `Fetching origin/main…` while the fetch of the branch's upstream runs (at most 20 seconds,
   [ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)), then `Starting <agent> in a new worktree…`, or
-  `Starting <agent> in the project folder…` for a project outside Git, or `Starting <agent> in a new folder…` for a
+  `Starting <agent> in the project folder…` for the project folder (a project outside Git, or `Project folder`
+  chosen), or `Starting <agent> in a new folder…` for a
   session without a project. It is blank for the moment before the place is known.
 - The app checks the agent's executable or installed version first (so a mistyped command leaves no worktree), then
   fetches and creates the worktree.
@@ -174,6 +189,8 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 
 ## Changes
 
+- 2026-11-09, #229: the Checkout label becomes a menu for Git projects, `New worktree from <base>` or `Project folder`,
+  per draft (ADR-0043).
 - 2026-11-09, #225: while a session starts, the detail column shows the first message as the transcript's only
   row with the line `Fetching origin/<branch>…`, then `Starting <agent> in …`, and the `Starting…` card, instead of
   `Starting session…`.

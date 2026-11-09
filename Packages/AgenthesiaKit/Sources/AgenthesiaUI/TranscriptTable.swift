@@ -191,12 +191,12 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
             let sameBody =
                 visible.markdown == message.markdown && visible.links == message.links
-                && visible.input == message.input && visible.caption == message.caption
+                && visible.caption == message.caption
                 && !(finished && visible.streamingCell != nil && !keepsSelection)
             // Only a one-line header's text changed, as a collapsed thought's does with every chunk: the row keeps its
             // views and its height, so it is not measured again.
             if sameBody, visible.tool == message.tool || message.tool.map(visible.retitle) == true { continue }
-            if visible.input != message.input || visible.caption != message.caption {
+            if visible.caption != message.caption {
                 visible.show(
                     message,
                     streaming: !finished,
@@ -459,7 +459,6 @@ private final class TranscriptMessageRow: NSTableCellView {
     var markdown: String
     var links: Int?
     var tool: ToolCardHeader?
-    var input: InputCard?
     var caption: String?
     var copyText: (() -> String)?
     var streamingCell: TextKitCell?
@@ -540,14 +539,17 @@ private final class TranscriptMessageRow: NSTableCellView {
         markdown = message.markdown
         links = message.links
         tool = message.tool
-        input = message.input
         caption = message.caption
         copyText = message.copyText
+        if message.kind == .interruption {
+            showDivider(message)
+            return
+        }
         if message.isNotice {
             showNotice(message)
             return
         }
-        if message.kind == .group {
+        if message.kind == .group || (message.kind == .question && message.markdown.isEmpty) {
             showGroup(message, controller: controller)
             return
         }
@@ -575,6 +577,7 @@ private final class TranscriptMessageRow: NSTableCellView {
             content = cell
         }
         if message.kind == .thought { content.alphaValue = Self.thoughtAlpha }
+        if message.kind == .failure { content.alphaValue = Self.failureAlpha }
         let header = makeHeader(message, controller: controller)
         let stack = NSStackView(views: [header, content])
         stack.orientation = .vertical
@@ -602,15 +605,41 @@ private final class TranscriptMessageRow: NSTableCellView {
             stack.addArrangedSubview(label)
             label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        if let input = message.input {
-            let form = NSHostingView(rootView: InputForm(card: input))
-            stack.addArrangedSubview(form)
-            form.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        if message.kind == .failure {
+            readAsOneElement(stack, label: "Error: \(message.text.string)", message: message)
         }
     }
 
     /// Thoughts read as secondary text; dimming keeps the code colors of their Markdown.
     private static let thoughtAlpha: CGFloat = 0.65
+    /// An error's message under its red label, as T3 Code dims it.
+    private static let failureAlpha: CGFloat = 0.8
+
+    /// VoiceOver reads `view` as one element with `label`; the row's Copy and a disclosure inside it become its actions.
+    private func readAsOneElement(_ view: NSView, label: String, message: TranscriptMessage) {
+        for child in descendants(of: view) { child.setAccessibilityElement(false) }
+        view.setAccessibilityElement(true)
+        view.setAccessibilityRole(.staticText)
+        view.setAccessibilityLabel(label)
+        var actions = accessibilityCustomActions() ?? []
+        if let tool = message.tool, tool.expandable,
+            let disclosure = descendants(of: view).compactMap({ $0 as? NSButton }).first(where: {
+                $0.bezelStyle == .disclosure
+            })
+        {
+            actions.append(
+                NSAccessibilityCustomAction(name: tool.expanded ? "Hide details" : "Details") { [weak disclosure] in
+                    disclosure?.performClick(nil)
+                    return true
+                }
+            )
+        }
+        view.setAccessibilityCustomActions(actions)
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
 
     /// Centers `view` in a column of at most `TranscriptColumn.maxWidth`, which shrinks to keep the margins, and keeps
     /// the row as tall as its content.
@@ -655,6 +684,53 @@ private final class TranscriptMessageRow: NSTableCellView {
                 lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
             ]
         )
+    }
+
+    /// An interrupted turn ends with a thin red divider: a line, an X, the text, a line, without a box or Copy.
+    private func showDivider(_ message: TranscriptMessage) {
+        let size = NSFont.smallSystemFontSize
+        let text = NSMutableAttributedString(
+            string: message.markdown,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: size), .foregroundColor: NSColor.systemRed.withAlphaComponent(0.7),
+            ]
+        )
+        // The label in medium weight, its detail after ` · ` dimmed, as T3 Code's system divider.
+        let label = (message.markdown as NSString).range(of: " · ")
+        let lead = NSRange(location: 0, length: label.location == NSNotFound ? text.length : label.location)
+        text.addAttributes(
+            [.font: NSFont.systemFont(ofSize: size, weight: .medium), .foregroundColor: NSColor.systemRed],
+            range: lead
+        )
+        let caption = NSTextField(labelWithAttributedString: text)
+        caption.setContentHuggingPriority(.required, for: .horizontal)
+        let icon = NSImageView(
+            image: NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: size - 2, weight: .semibold)) ?? NSImage()
+        )
+        icon.contentTintColor = .systemRed
+        let lines = [NSBox(), NSBox()]
+        for line in lines {
+            line.boxType = .separator
+            line.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
+        let stack = NSStackView(views: [lines[0], icon, caption, lines[1]])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        stack.setCustomSpacing(12, after: lines[0])
+        stack.setCustomSpacing(12, after: caption)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        self.stack = stack
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+                lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
+            ]
+        )
+        readAsOneElement(stack, label: message.markdown, message: message)
     }
 
     /// A folded group is only a header; its tool cards are rows of their own once it is expanded.
@@ -711,15 +787,15 @@ private final class TranscriptMessageRow: NSTableCellView {
         // Assistive technology uses the row's Copy action while the button is not shown.
         copy.setAccessibilityElement(hovering)
         copyButton = copy
-        if message.kind == .group || message.tool?.record == true {
+        if message.kind == .group || message.kind == .question || message.tool?.record == true {
             // The title of a running call or a request can be any length.
             role.lineBreakMode = .byTruncatingTail
             role.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
         // Users and the agent speak without a label; their Copy button stays at the row's trailing edge.
-        let labeled = message.kind == .card || message.kind == .thought || message.kind == .group
+        let labeled = ![.user, .agent].contains(message.kind)
         let header = NSStackView(
-            views: (labeled ? toolHeader(message.tool, role: role, controller: controller) : []) + [
+            views: (labeled ? toolHeader(message.tool, kind: message.kind, role: role, controller: controller) : []) + [
                 NSView(), copy,
             ]
         )
@@ -727,11 +803,21 @@ private final class TranscriptMessageRow: NSTableCellView {
         header.setHuggingPriority(rowContentHugging, for: .vertical)
         // `· kind` follows a record's status as one phrase, so the stack's gap would read as a double space.
         if message.tool?.record == true, let status = statusLabel { header.setCustomSpacing(3, after: status) }
+        if message.kind == .question, let status = statusLabel {
+            // The answers truncate too, once the questions have given up their room.
+            status.lineBreakMode = .byTruncatingTail
+            status.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
+        }
+        if message.kind == .failure {
+            role.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            role.textColor = .systemRed
+        }
         return header
     }
 
     private func toolHeader(
         _ tool: ToolCardHeader?,
+        kind: TranscriptMessage.Kind,
         role: NSTextField,
         controller: TranscriptTableController
     ) -> [NSView] {
@@ -755,7 +841,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         let icon = NSImageView(
             image: NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.kind) ?? NSImage()
         )
-        icon.contentTintColor = .secondaryLabelColor
+        icon.contentTintColor = kind == .failure ? .systemRed : .secondaryLabelColor
         // The label beside it says the same.
         icon.setAccessibilityElement(false)
         let status = NSTextField(labelWithString: tool.status)
@@ -769,6 +855,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     private func statusColor(_ tone: ToolCardHeader.Tone) -> NSColor {
         switch tone {
         case .neutral: .secondaryLabelColor
+        case .primary: .labelColor
         case .running: .controlAccentColor
         case .attention: .systemOrange
         case .success: .systemGreen

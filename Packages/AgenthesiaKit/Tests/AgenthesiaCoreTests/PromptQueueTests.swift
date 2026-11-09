@@ -294,7 +294,7 @@ private actor QueueGate {
                 await connection.waitForPrompts(2)
                 #expect(await connection.prompts.last == expected)
                 #expect(await connection.cancellationCount == 1)
-                #expect(session.transcript.items.contains { $0.notice == "Interrupted" })
+                #expect(session.transcript.items.contains { $0.isInterruption })
             }
             #expect(session.queuedPrompts.count == (all ? 0 : 1))
             await session.close()

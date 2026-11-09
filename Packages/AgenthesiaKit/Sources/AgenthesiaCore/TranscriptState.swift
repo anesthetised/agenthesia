@@ -118,6 +118,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var notice: String?
         /// `notice` is the stored description of a failed prompt, not a session notice.
         public var isFailure = false
+        /// A turn the user stopped, or interrupted by sending a prompt now, ended here; shown as a divider (#340).
+        public var isInterruption = false
         /// When a saved session was continued; shown as a divider.
         public var reopenedAt: Date?
         public var permission: Permission?
@@ -289,11 +291,13 @@ public struct TranscriptState: Equatable, Sendable {
                 )
             )
         case .interrupted:
-            items.append(Item(id: sequence, notice: "Interrupted"))
+            // A stop the user asked for; the turn's end shows the divider.
+            break
         case .stopRequested(let id):
             if id == activeTurn { stopRequested = true }
         case .finished(let id, let reason):
             guard id == activeTurn else { return }
+            if stopRequested, reason == .cancelled { items.append(Item(id: sequence, isInterruption: true)) }
             activeTurn = nil
             stopRequested = false
             lastStopReason = reason

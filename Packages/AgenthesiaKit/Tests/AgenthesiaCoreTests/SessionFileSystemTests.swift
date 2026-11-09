@@ -219,7 +219,8 @@ import Testing
         await gate.release()
         try await turn.value
         #expect(fixture.controller.status == .idle)
-        #expect(fixture.controller.transcript.items.last?.message?.text == "Stopping")
+        #expect(fixture.controller.transcript.items.dropLast().last?.message?.text == "Stopping")
+        #expect(fixture.controller.transcript.items.last?.isInterruption == true)
         try await files.writeTextFile(at: latePath, content: "next turn", in: "s")
         await fixture.controller.close()
     }

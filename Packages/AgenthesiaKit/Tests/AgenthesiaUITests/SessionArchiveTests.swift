@@ -174,6 +174,35 @@ import Testing
         await fixture.close()
     }
 
+    @Test func deletingTheSessionAWindowEndedReturnsItToTheDraft() async throws {
+        let fixture = try await Fixture()
+        let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
+        let binary = try #require(
+            [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
+                .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+        )
+        fixture.model.start(directory: fixture.directory, executable: binary.path, arguments: [])
+        let owner = try #require(fixture.model.owner)
+        await owner.startup?.value
+        await fixture.model.refresh()
+        let record = try #require(owner.controller?.session)
+        await fixture.model.endSession()
+        // The window keeps the ended session's transcript, with the controller of its owner.
+        #expect(fixture.model.displayed?.session.id == record.id && fixture.model.restored == nil)
+        let second = SessionWindowModel(sessions: fixture.sessions)
+        await second.refresh()
+        await second.showHistory(record)
+        await fixture.model.requestDelete(record)
+        let pending = try #require(fixture.model.pendingDelete)
+        await fixture.model.confirmDelete(pending)
+        #expect(try await fixture.store.session(id: record.id) == nil)
+        #expect(fixture.model.showingSetup && fixture.model.displayed == nil && fixture.model.owner == nil)
+        await second.refresh()
+        #expect(second.showingSetup && second.displayed == nil)
+        second.close()
+        await fixture.close()
+    }
+
     @Test func aLiveSessionCannotBeDeleted() async throws {
         let fixture = try await Fixture()
         let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized

@@ -101,6 +101,8 @@ import os
     /// The displayed session has no project: its changes are not tracked and nothing can be reviewed (ADR-0048).
     var displaysSessionWithoutProject: Bool {
         guard let session = displayed?.session else { return false }
+        // While it starts the project may not be in `projects` yet; the place is already known.
+        if restored == nil, owner?.startPlace == .newFolder { return true }
         return isScratch(projects.first { $0.id == session.projectID })
     }
 
@@ -654,6 +656,9 @@ import os
             history = try await library.history()
             if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
                 leaveDeletedSession(id)
+            } else if let id = displayed?.session.id, sessions.deletedIDs.contains(id) {
+                // The session this window ended and kept showing; a starting one is not in history yet.
+                leaveDeletedSession(id)
             }
             projects = try await library.projects()
             (outcomes, lastActivity) = try await library.lastEvents()
@@ -871,6 +876,7 @@ import os
     private func leaveDeletedSession(_ id: UUID) {
         if review?.id == id { review = nil; showingReview = false }
         viewedMarks[id] = nil
+        if owner?.sessionID == id { owner = nil }
         showLive()
         showingSetup = true
     }

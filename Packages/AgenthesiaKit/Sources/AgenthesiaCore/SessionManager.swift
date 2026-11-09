@@ -19,6 +19,8 @@ public final class SessionManager {
     private var merging: [UUID: Task<String, any Error>] = [:]
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
+    /// Saved sessions deleted since launch; a window still showing one of them (an ended session it ran) leaves it.
+    public internal(set) var deletedIDs: Set<UUID> = []
     // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
     @ObservationIgnored var trash: @Sendable (URL) throws -> Void = {
         try FileManager.default.trashItem(at: $0, resultingItemURL: nil)

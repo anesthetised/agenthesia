@@ -127,6 +127,8 @@ import Testing
         let scratch = fixture.sessions.scratchPath
         #expect(session.workingDirectory.hasPrefix(scratch + "/plan-a-trip-"))
         #expect(session.baseRevision == nil && session.branch == nil)
+        // Known at once, before the history has been read (the session may still be starting).
+        #expect(owner.startPlace == .newFolder && model.displaysSessionWithoutProject)
         await model.refresh()
         let project = try #require(model.projects.first { $0.id == session.projectID })
         #expect(project.name == "No project" && model.isScratch(project))

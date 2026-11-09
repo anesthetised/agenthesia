@@ -478,4 +478,5 @@ are collapsed rows".
 
 The owner dropped the first decision of this amendment, "User messages are left-aligned blocks" (#224, closed as not
 planned). After M18 the owner compared the transcript with T3 Code and kept the right-aligned bubbles; a tinted block
-would also clash with the quiet row selection of #269. The bubbles and `TranscriptColumn.bubbleWidth` stay as they are. The rest of the amendment (thoughts, the plan, context usage) is unchanged.
+would also clash with the quiet row selection of #269. The bubbles and `TranscriptColumn.bubbleWidth` stay as they
+are. The rest of the amendment (thoughts, the plan, context usage) is unchanged.

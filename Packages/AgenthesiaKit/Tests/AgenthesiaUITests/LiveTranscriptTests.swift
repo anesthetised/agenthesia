@@ -906,7 +906,7 @@ extension LiveTranscriptTests {
         source.state = recorded.state
         let message = source.message(at: 0)
         let card = try #require(message.input)
-        #expect(!card.active && !card.recording)
+        #expect(!card.recording)
         #expect(InputForm.outcome(card.input.response) == "Cancelled")
         #expect(LiveTranscriptSource.content(recorded.state.items[0]).1.contains("Cancelled"))
     }
@@ -983,26 +983,18 @@ private final class FormTranscriptSource: TranscriptSource {
 }
 
 extension LiveTranscriptTests {
-    @Test(arguments: [440.0, 600.0]) func nativeFormSizingAndDraftSurviveTranscriptRefresh(width: Double) throws {
+    @Test(arguments: [440.0, 600.0]) func aFormRecordFitsTheColumnAndSurvivesTranscriptRefresh(width: Double) throws {
         let schema = ACP.ElicitationSchema(
-            properties: [
-                "name": .string(.init(title: "Name", minLength: 2)), "enabled": .boolean(.init(title: "Enabled")),
-                "email": .string(.init(title: "Email", format: .email, default: "ada@example.com")),
-            ],
-            required: ["name"]
+            properties: ["name": .string(.init(title: "Name")), "enabled": .boolean(.init(title: "Enabled"))]
         )
         let request = ACP.ElicitationRequest(
             message: "Name",
             mode: .form(schema),
             scope: .session("s", toolCallId: nil)
         )
-        let draft = InputDraft(schema: schema)
         let card = InputCard(
-            input: .init(requestID: UUID(), request: request),
-            active: true,
-            recording: false,
-            draft: draft,
-            answer: { _ in }
+            input: .init(requestID: UUID(), request: request, response: .init(action: .accept(["name": "Ada"]))),
+            recording: false
         )
         let source = FormTranscriptSource(card: card)
         let controller = TranscriptTableController()
@@ -1014,15 +1006,13 @@ extension LiveTranscriptTests {
         window.contentView?.layoutSubtreeIfNeeded()
         let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
         let original = try #require(row.subviews.first)
-        #expect(controller.table.rect(ofRow: 0).height > 80)
-        draft.edit("name", text: "Ada", field: .string(.init(minLength: 2)))
+        #expect(controller.table.rect(ofRow: 0).height > 60)
         source.revision += 1
         controller.update(source)
         window.contentView?.layoutSubtreeIfNeeded()
         let refreshed = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
         #expect(refreshed === row)
         #expect(refreshed.subviews.first === original)
-        #expect(draft.values["name"] == "Ada")
         #expect(controller.table.rect(ofRow: 0).width <= width)
     }
 }

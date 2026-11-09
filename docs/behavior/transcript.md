@@ -30,6 +30,15 @@ bubble, the label being where it came from:
 - The agent receives such a prompt marked as coming from another agent session, which stays anonymous to it: the
   receiver is not told the sender's title or agent.
 
+## Questions from the agent
+
+- An input form ([ADR-0020](../adr/0020-native-elicitation-forms.md)) is answered in the composer
+  ([composer.md](composer.md#docked-questions)). While it waits, its row is compact: `Input` and `Asked 2 questions ·
+  answer below` (`Asked 1 question`), counting the composer's steps.
+- Once the form is answered, declined or cancelled, the row shows the form's message and its record: `Recording
+  answer…` until the response is stored, then `Submitted` with each submitted field and value, `Declined` or
+  `Cancelled`. A form of a saved session that was never answered reads `Cancelled`.
+
 ## Row selection
 
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
@@ -68,6 +77,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
   running turn; reaching the end again resumes it.
 
 ## Changes
+
+- 2026-11-09, #326: a waiting input form is a compact row; it is answered in the composer instead of in the row.
 
 - 2026-11-09, #225: the first message of a starting session is shown as the transcript's only row.
 - 2026-11-09, #311: prompts the user did not send are labelled rows instead of the user's bubble.

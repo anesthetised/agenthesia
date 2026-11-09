@@ -3,6 +3,8 @@ import AgenthesiaCore
 import JSONRPC
 import SwiftUI
 
+/// A form field that offers no choices and that the composer's text cannot answer: a toggle, or a note that the
+/// field is unsupported (#326).
 struct InputField: View {
     let key: String
     let field: ACP.PropertySchema
@@ -14,8 +16,7 @@ struct InputField: View {
         let metadata = Self.metadata(field)
         let title = (metadata.title ?? key) + (schema.required?.contains(key) == true ? " (required)" : "")
         VStack(alignment: .leading, spacing: 4) {
-            switch field {
-            case .boolean:
+            if case .boolean = field {
                 Toggle(
                     title,
                     isOn: Binding(
@@ -23,74 +24,8 @@ struct InputField: View {
                         set: { draft.values[key] = .bool($0) }
                     )
                 )
-            case .string(let string) where string.enum != nil || string.oneOf != nil:
-                Picker(
-                    title,
-                    selection: Binding(
-                        get: { draft.text[key] },
-                        set: { value in
-                            if let value {
-                                draft.edit(key, text: value, field: field)
-                            } else {
-                                draft.text.removeValue(forKey: key); draft.values.removeValue(forKey: key)
-                            }
-                        }
-                    )
-                ) {
-                    Text("Choose…").tag(Optional<String>.none)
-                    ForEach(
-                        string.oneOf ?? (string.enum ?? []).map { ACP.EnumOption(const: $0, title: $0) },
-                        id: \.const
-                    ) { option in
-                        Text(option.title).tag(Optional(option.const))
-                    }
-                }
-            case .multiSelect(let multiple):
-                Text(title)
-                if case .unknown = multiple.items { Text("Unsupported choices.").foregroundStyle(.secondary) }
-                ForEach(Self.choices(multiple.items), id: \.const) { option in
-                    Toggle(
-                        option.title,
-                        isOn: Binding(
-                            get: {
-                                if case .array(let values) = draft.values[key] {
-                                    values.contains(.string(option.const))
-                                } else {
-                                    false
-                                }
-                            },
-                            set: { selected in
-                                var values: [JSONValue] = []
-                                if case .array(let current) = draft.values[key] { values = current }
-                                values.removeAll { $0 == .string(option.const) }
-                                if selected { values.append(.string(option.const)) }
-                                if values.isEmpty, schema.required?.contains(key) != true {
-                                    draft.values.removeValue(forKey: key)
-                                } else {
-                                    draft.values[key] = .array(values)
-                                }
-                            }
-                        )
-                    )
-                }
-            case .unknown:
+            } else {
                 Text("\(title): unsupported field").foregroundStyle(.secondary)
-            default:
-                HStack {
-                    TextField(
-                        title,
-                        text: Binding(
-                            get: { draft.text[key] ?? "" },
-                            set: { draft.edit(key, text: $0, field: field) }
-                        )
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    if case .string = field, schema.required?.contains(key) != true, draft.values[key] != nil {
-                        Button("Omit \(metadata.title ?? key)", systemImage: "xmark.circle.fill") { draft.omit(key) }
-                            .labelStyle(.iconOnly).buttonStyle(.borderless)
-                            .help("Leave this optional field out of the response.")
-                    }
-                }
             }
             if let description = metadata.description { Text(description).font(.caption).foregroundStyle(.secondary) }
             if let error {

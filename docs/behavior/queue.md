@@ -11,9 +11,12 @@ The composer itself is described in [composer.md](composer.md).
 
 - Return sends the draft immediately when the session is idle and the queue is empty; otherwise it adds the draft to
   the end of the queue. ⇧Return and ⌥Return insert a line break.
+- **Return never queues while an input form waits.** The turn waits for the form, so a queued message would wait for a
+  turn that cannot end. While a form is docked in the composer ([composer.md](composer.md#docked-questions)), Return
+  answers it and the draft is set aside until the form is answered, declined or cancelled.
 - The round button says what Return will do: an arrow alone for `Send`, the arrow with `Queue` beside it when the draft
-  will be queued, `Save` while editing a queued message, and a stop symbol (`Stop`, ⌘.) while a turn runs, is stopping
-  or waits for an input form and the draft is empty. Help texts: `Send the message (Return)`, `Queue the message until
+  will be queued, `Save` while editing a queued message, `Next` or `Answer` while an input form is docked, and a stop
+  symbol (`Stop`, ⌘.) while a turn runs or is stopping and the draft is empty. Help texts: `Send the message (Return)`, `Queue the message until
   the agent is ready (Return)`, `Save the queued message (Return)`, `Stop the current turn (⌘.)`.
 - Send and Queue are disabled for an empty draft. A draft is empty when it has no attachments and its text is only
   whitespace. Send, Queue and the Send options items are also disabled while a config option change is being confirmed.
@@ -35,7 +38,8 @@ sends the queue ([ADR-0028](../adr/0028-empty-draft-sends-queue.md)):
 
 - While a turn runs, is stopping or waits for an input form, the first item reads `Send Draft Now (Interrupts Turn)` or
   `Send Queue Now (Interrupts Turn)`.
-- Both send items are disabled when there is neither a draft nor a queued message, and while a queued message is edited.
+- Both send items are disabled when there is neither a draft nor a queued message, while a queued message is edited,
+  and while an input form is docked.
   Both work while the queue is paused.
 - Sending now while a turn runs is steering. Every agent today is steered by interrupting: the running turn is
   cancelled, the transcript shows an `Interrupted` notice, and the new prompt starts once the cancellation has settled.
@@ -100,6 +104,9 @@ captioned `not sent`.
   `Prompt failed` instead. Neither moves the row ([sidebar.md](sidebar.md)).
 
 ## Changes
+
+- 2026-11-09, #326: Return never queues while an input form waits; the round button reads `Next` or `Answer` instead,
+  and the send items are disabled.
 
 - 2026-11-08, #261: summarised from ADR-0010, ADR-0021, ADR-0027, ADR-0028, ADR-0029 and ADR-0039, checked against main
   at c65b8a1.

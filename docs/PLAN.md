@@ -956,6 +956,31 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #326 (questions answered from the composer) landed: `InputStep.steps` groups a form into steps from the schema
+  alone; `DockedInput` (`SessionWindowModel.dockedInput`) and `InputDock` dock the oldest pending form at the top of the
+  composer card, and the composer's text is the step's text answer while `ComposerDraft` waits untouched. Return reads
+  `Next`/`Answer` and never queues; `Back` (button only, from the second step) returns to the previous step with every
+  step's answers kept in the draft; Escape and Skip decline; 1–9 and ↑ ↓ pick in an empty composer; ⌘Return and
+  ⇧⌘Return do nothing; ⌘. stops. The transcript row of a waiting form reads `Asked 2 questions · answer below`;
+  `InputForm` keeps only the resolved record, and `InputField` only the toggle and the unsupported note. `MockAgent`'s
+  `ask` sends a two-question form shaped like `claude-agent-acp` 0.101.0's AskUserQuestion (`question_<n>` choice,
+  `question_<n>_custom` text) and echoes the response as JSON. Tested: the grouping, the docked form (progress, picks,
+  text, validation, answer, decline, Back keeping both steps' answers), the key routing and the primary action as pure functions; the draft set aside
+  and restored, the agent's answer and the oldest of two forms docking against MockAgent; a hosted test (dock shows,
+  the composer types the answer, 2 then Return, 1, Back restores step 1's pick and text, a changed pick, Return twice
+  and the agent gets the changed answer; fails without the dock; Back is called through its action, since the dock's
+  SwiftUI buttons are no AppKit views a hosted test can click) and Return on a read-only
+  composer. Stored data and the protocol are unchanged. **Running-app check deferred** (MockAgent `ask`, isolated home,
+  light and dark): (1) with a draft and an attachment in the composer, `ask` docks `Library` with `1 of 2`, `Skip`, the
+  question, two choices with descriptions and the transcript row `Asked 2 questions · answer below`; the chips and
+  Attach are gone and the placeholder is the `Other` description; (2) 2 picks SwiftDate, typing a note keeps the pick,
+  ↑ ↓ move the pick in an empty composer, the round button reads `Next` and Return shows `2 of 2` with checkboxes and
+  an empty composer; 1 and 3 toggle; a click on `Back` (absent on step 1) shows the SwiftDate pick and the note again,
+  and Return brings back step 2's checks; Return (`Answer`) sends; the agent echoes the JSON and the draft and its
+  attachment come back; (3) Escape and Skip decline (`declined`), ⌘. stops and cancels; (4) a click on a choice and on
+  Skip leaves focus in the composer; (5) the dock and the picked row's tint in light and dark, Increase Contrast;
+  (6) VoiceOver reads `Question 1 of 2 Library: …`, `Back, previous question`, each choice with its description and selected state, and announces
+  the second step.
 - #227 (session board) landed: `WindowTarget.board`, `SessionWindowModel.showingBoard`/`showBoard()`, the sidebar's
   fixed Overview row (`overviewID`) and Session → Overview (⌘0); a window whose displayed session was deleted goes to
   the board (`leaveDeletedSession`), and the `Start a session` placeholder became the board. `SessionBoard` and

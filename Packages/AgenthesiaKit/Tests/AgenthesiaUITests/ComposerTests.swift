@@ -122,4 +122,51 @@ struct ComposerTests {
         #expect(coordinator.textView(view, doCommandBy: #selector(NSResponder.insertTab(_:))))
         #expect(commands == [#selector(NSResponder.insertTab(_:))])
     }
+
+    /// While a form is docked, Return answers, Escape declines, ↑ ↓ move the pick in an empty composer, ⌘. stops and
+    /// ⌘Return sends nothing (#326).
+    @Test func aDockedFormTakesTheComposerKeys() {
+        let enter = #selector(NSResponder.insertNewline(_:))
+        let escape = #selector(NSResponder.cancelOperation(_:))
+        let up = #selector(NSResponder.moveUp(_:))
+        let down = #selector(NSResponder.moveDown(_:))
+        func key(
+            _ selector: Selector,
+            lineBreak: Bool = false,
+            command: Bool = false,
+            empty: Bool = true
+        )
+            -> ComposerInput.KeyAction?
+        {
+            ComposerInput.keyAction(
+                selector,
+                matches: 0,
+                selection: 0,
+                lineBreak: lineBreak,
+                command: command,
+                empty: empty,
+                answering: true
+            )
+        }
+        #expect(key(enter) == .submit && key(enter, empty: false) == .submit)
+        #expect(key(enter, lineBreak: true) == nil)
+        #expect(key(enter, command: true) == .ignore)
+        #expect(key(escape) == .decline && key(escape, command: true) == .stop)
+        #expect(key(up) == .movePick(-1) && key(down) == .movePick(1))
+        #expect(key(up, empty: false) == nil && key(down, empty: false) == nil)
+        // Without a form, ↑ in an empty composer still recalls the last queued message.
+        #expect(ComposerInput.keyAction(up, matches: 0, selection: 0, lineBreak: false, empty: true) == .recall)
+    }
+
+    @Test func digitsPickChoicesOnlyInAnEmptyComposer() {
+        #expect(ComposerInput.choiceIndex("1", modifiers: [], empty: true, choices: 3) == 0)
+        #expect(ComposerInput.choiceIndex("3", modifiers: [.shift], empty: true, choices: 3) == 2)
+        #expect(ComposerInput.choiceIndex("4", modifiers: [], empty: true, choices: 3) == nil)
+        #expect(ComposerInput.choiceIndex("0", modifiers: [], empty: true, choices: 9) == nil)
+        #expect(ComposerInput.choiceIndex("1", modifiers: [], empty: false, choices: 3) == nil)
+        #expect(ComposerInput.choiceIndex("1", modifiers: [.command], empty: true, choices: 3) == nil)
+        #expect(ComposerInput.choiceIndex("1", modifiers: [.option], empty: true, choices: 3) == nil)
+        #expect(ComposerInput.choiceIndex("12", modifiers: [], empty: true, choices: 9) == nil)
+        #expect(ComposerInput.choiceIndex(nil, modifiers: [], empty: true, choices: 3) == nil)
+    }
 }

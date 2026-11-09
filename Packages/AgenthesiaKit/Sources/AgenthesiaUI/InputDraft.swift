@@ -7,6 +7,8 @@ import Observation
 @MainActor @Observable final class InputDraft {
     var text: [String: String] = [:]
     var values: [String: JSONValue] = [:]
+    /// The step the docked form shows (#326).
+    var step = 0
 
     init(schema: ACP.ElicitationSchema) {
         for (key, field) in schema.properties {
@@ -35,6 +37,22 @@ import Observation
         case .number: values[key] = Double(text).map(JSONValue.double) ?? .string(text)
         case .integer: values[key] = Int64(text).map(JSONValue.int) ?? .string(text)
         default: values[key] = .string(text)
+        }
+    }
+
+    /// Adds or removes `choice` in a multiple choice field; an optional field left empty is omitted.
+    func toggle(_ choice: String, in key: String, required: Bool) {
+        var current: [JSONValue] = []
+        if case .array(let values) = values[key] { current = values }
+        if current.contains(.string(choice)) {
+            current.removeAll { $0 == .string(choice) }
+        } else {
+            current.append(.string(choice))
+        }
+        if current.isEmpty, !required {
+            values.removeValue(forKey: key)
+        } else {
+            values[key] = .array(current)
         }
     }
 

@@ -9,6 +9,8 @@ public import JSONRPC
 /// - `writes <count> <text>` does the same for `note1.txt` … `note<count>.txt` at once, so up to nine
 ///   requests are pending together.
 /// - `plan` reports a plan, `think` reports a thought.
+/// - `ask` asks two questions in one form shaped like `claude-agent-acp`'s AskUserQuestion (a `question_<n>` choice
+///   and an optional `question_<n>_custom` text each), then echoes the answer.
 /// - `tools` streams a long answer while earlier tool calls change: an update before its call,
 ///   several calls, a failure, long output, and diff, terminal and unknown content. The test run reports
 ///   its output in `_meta` chunks (`terminal_output_delta`) and an exit status, as Codex does.
@@ -234,6 +236,7 @@ public final class EchoAgent: Sendable {
         .init(name: "tools", description: "Report tool calls"),
         .init(name: "plan", description: "Report a plan"),
         .init(name: "think", description: "Report a thought"),
+        .init(name: "ask", description: "Ask two questions in a form"),
         .init(name: "slow", description: "Stream slowly until cancelled"),
         .init(name: "fail", description: "Fail the turn"),
         .init(name: "exit", description: "Exit without replying"),
@@ -429,6 +432,9 @@ extension EchoAgent {
                 )
             case "think":
                 await send(.agentThoughtChunk(.init(content: .init(text: "Thinking about \(text)"))))
+            case "ask":
+                let response = try await connection.request(ACP.V1.Method.CreateElicitation.self, questions())
+                await send(.agentMessageChunk(.init(content: .init(text: "Answers: \(Self.describe(response))\n\n"))))
             case "fail":
                 throw RPCError.internalError("Echo agent failed on purpose")
             case "exit":
@@ -476,6 +482,58 @@ extension EchoAgent {
                 if options.chunkDelay > .zero { try? await Task.sleep(for: options.chunkDelay) }
             }
             return .init(stopReason: .endTurn)
+        }
+
+        /// Two questions as `claude-agent-acp` 0.101.0 asks them: a titled choice with the question as its
+        /// description, then an optional `Other` text whose words join or replace the pick.
+        private func questions() -> ACP.ElicitationRequest {
+            func custom(_ description: String) -> ACP.PropertySchema {
+                .string(.init(title: "Other", description: description))
+            }
+            let schema = ACP.ElicitationSchema(properties: [
+                "question_0": .string(
+                    .init(
+                        title: "Library",
+                        description: "Which date library should the parser use?",
+                        oneOf: [
+                            .init(const: "Foundation", title: "Foundation", description: "No new dependency"),
+                            .init(const: "SwiftDate", title: "SwiftDate", description: "Richer parsing"),
+                        ]
+                    )
+                ),
+                "question_0_custom": custom(
+                    "Type your own answer, or add a note to the option you chose above (optional)."
+                ),
+                "question_1": .multiSelect(
+                    .init(
+                        title: "Tests",
+                        description: "Which tests should I add?",
+                        items: .titled([
+                            .init(const: "Unit", title: "Unit"),
+                            .init(const: "Snapshot", title: "Snapshot"),
+                            .init(const: "Benchmark", title: "Benchmark"),
+                        ])
+                    )
+                ),
+                "question_1_custom": custom("Type your own answer to add to your selection above (optional)."),
+            ])
+            return .init(
+                message: "Please answer the following questions.",
+                mode: .form(schema),
+                scope: .session(sessionID, toolCallId: nil)
+            )
+        }
+
+        private static func describe(_ response: ACP.ElicitationResponse) -> String {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            return switch response.action {
+            case .accept(let values):
+                (try? encoder.encode(values ?? [:])).map { String(decoding: $0, as: UTF8.self) } ?? "unreadable"
+            case .decline: "declined"
+            case .cancel: "cancelled"
+            case .unknown(let action): action
+            }
         }
 
         private func send(_ update: ACP.SessionUpdate) async {

@@ -52,4 +52,27 @@ import Testing
             ComposerPrimaryAction.sendNowTitle(hasDraft: false, turnActive: true) == "Send Queue Now (Interrupts Turn)"
         )
     }
+
+    /// Return never queues while a form waits: the turn waits for the answer (#326).
+    @Test func aDockedFormTurnsReturnIntoNextAndAnswer() {
+        for active in [false, true] {
+            for draft in [false, true] {
+                for editing in [false, true] {
+                    for last in [false, true] {
+                        let action = ComposerPrimaryAction(
+                            turnActive: active,
+                            hasDraft: draft,
+                            editingQueued: editing,
+                            idleWithEmptyQueue: !active,
+                            answering: last
+                        )
+                        #expect(action == (last ? .answer : .next))
+                    }
+                }
+            }
+        }
+        #expect(ComposerPrimaryAction.next.title == "Next" && ComposerPrimaryAction.answer.title == "Answer")
+        #expect(ComposerPrimaryAction.next.showsTitle && ComposerPrimaryAction.answer.showsTitle)
+        #expect(ComposerPrimaryAction.answer.symbol == "arrow.up")
+    }
 }

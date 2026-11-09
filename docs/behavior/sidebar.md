@@ -140,6 +140,7 @@ Right-click on a row:
 | `Open in New Window` | yes | yes |
 | `Settle Session` | yes | — |
 | `Archive Session` / `Unarchive Session` | — | yes |
+| `Delete Session…` | — | yes |
 | `Discard Worktree…` | yes | yes |
 
 - `New Session in Project` opens the draft with the row's project selected; the typed message and the agent stay.
@@ -158,18 +159,28 @@ Right-click on a row:
   is ended before it can be archived. Continue on an archived session unarchives it. Storage and the reasons are in
   [ADR-0044](../adr/0044-delete-and-archive-sessions.md). A failed write shows `Cannot Archive the Session` /
   `Cannot Unarchive the Session`.
+- `Delete Session…` removes a saved session for good ([ADR-0044](../adr/0044-delete-and-archive-sessions.md)). It asks
+  first: `Delete “<title>”?` with what goes besides the history (`This session was merged.`, `This session was
+  discarded.`, `This session still has a worktree with 2 uncommitted files and 1 commit on <branch>; they will be
+  deleted.`, `Its folder “<name>” with 3 files will be moved to the Trash.` for a session without a project, `This
+  session failed to start.` when it stored nothing), then `Its history will be deleted. This cannot be undone.`, and
+  `Delete` / `Cancel`. The worktree and its branch, or the folder, go first; if that fails nothing is deleted and
+  `Cannot Delete the Session` shows the error. A window showing the session returns to the draft. Live rows have no
+  such item: a session is ended first.
 - `Discard Worktree…` is absent on a `No project` row. It is enabled when the session has a worktree Agenthesia
   created and no outcome yet (or a merge left its worktree behind), and it is not starting, merging or being
   discarded. It asks first: `Discard the worktree of “<title>”?` with what will be lost (`2 uncommitted files and 1
   commit on <branch> will be deleted. This cannot be undone.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
   `Discarded` ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)).
 
-The Session menu has the same `Archive Session` / `Unarchive Session` and `Discard Worktree…` for the displayed session,
-without shortcuts. Archive is disabled unless the displayed session is saved; for a live one its help text is `End the
-session first`. Each change refreshes the window's history; other windows pick it up at their next refresh.
+The Session menu has the same `Archive Session` / `Unarchive Session`, `Delete Session…` and `Discard Worktree…` for the
+displayed session, without shortcuts. Archive and Delete are disabled unless the displayed session is saved; for a live
+one their help text is `End the session first`. Each change refreshes the window's history; other windows pick it up at
+their next refresh, and a finished deletion triggers one in every window.
 
 ## Changes
 
+- 2026-11-09, #230: `Delete Session…` for saved sessions.
 - 2026-11-09, #221: a running session's reason is the plan entry in progress; a turn's origin outranks it.
 - 2026-11-09, #311: a session running a turn that the user did not send names where it came from.
 - 2026-11-08, #279: sessions without a project show a dashed square and `No project`.

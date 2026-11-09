@@ -124,6 +124,18 @@ public final class PersistenceStore: Sendable {
         }
     }
 
+    /// Removes a session for good: its events (and with them its queue) and its record, in one transaction
+    /// (ADR-0044). Its project stays. Every table that references a session is cleared here.
+    public func deleteSession(_ sessionID: UUID) async throws {
+        try await database.write { db in
+            let id = sessionID.uuidString
+            try db.execute(sql: "INSERT INTO session_deletion (sessionID) VALUES (?)", arguments: [id])
+            try db.execute(sql: "DELETE FROM event WHERE sessionID = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM session WHERE id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM session_deletion WHERE sessionID = ?", arguments: [id])
+        }
+    }
+
     public func session(id: UUID) async throws -> SessionRecord? {
         try await database.read { db in
             try Row.fetchOne(db, sql: "SELECT * FROM session WHERE id = ?", arguments: [id.uuidString])

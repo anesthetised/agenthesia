@@ -28,6 +28,14 @@ public struct SessionCommands: Commands {
             }
             .disabled(model?.canArchive != true)
             .help(model?.archiveHelp ?? "")
+            Button("Delete Session…") {
+                Task { [model] in
+                    guard let session = model?.displayed?.session else { return }
+                    await model?.requestDelete(session)
+                }
+            }
+            .disabled(model?.canDelete != true)
+            .help(model?.archiveHelp ?? "")
             Button("Discard Worktree…") {
                 Task { [model] in
                     guard let session = model?.displayed?.session else { return }

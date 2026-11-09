@@ -120,7 +120,8 @@ public struct RootView: View {
             id: HistoryKey(
                 owners: model.sessions.owners.filter { !$0.isStarting }.map(\.sessionID),
                 discarding: model.sessions.discardingIDs,
-                merging: model.sessions.mergingIDs
+                merging: model.sessions.mergingIDs,
+                deleting: model.sessions.deletingIDs
             )
         ) {
             await model.refresh()
@@ -155,20 +156,7 @@ public struct RootView: View {
             if model.review?.id != model.files.sessionID { model.review = nil }
         }
         .onChange(of: fileQuery) { model.files.setQuery(fileQuery) }
-        .alert(
-            model.pendingDiscard?.title ?? "",
-            isPresented: $model.isConfirmingDiscard,
-            presenting: model.pendingDiscard
-        ) { pending in
-            Button("Discard", role: .destructive) { Task { await model.confirmDiscard(pending) } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text($0.message)
-        }
-        .alert(model.alertTitle, isPresented: $model.isShowingAlert, presenting: model.alertMessage) { _ in
-        } message: {
-            Text($0)
-        }
+        .modifier(SessionAlerts(model: model))
         .sheet(isPresented: $showingQuickOpen) {
             let id = model.files.sessionID
             QuickOpen(
@@ -195,6 +183,7 @@ public struct RootView: View {
         let owners: [UUID?]
         let discarding: Set<UUID>
         let merging: Set<UUID>
+        let deleting: Set<UUID>
     }
 
     private func open(_ url: URL) {

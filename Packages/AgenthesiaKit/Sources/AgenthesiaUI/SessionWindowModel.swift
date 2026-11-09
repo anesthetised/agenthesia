@@ -55,6 +55,8 @@ import os
     var leftoverWorktrees: Set<UUID> = []
     /// The discard waiting for confirmation.
     var pendingDiscard: PendingDiscard?
+    /// The deletion waiting for confirmation (ADR-0044).
+    var pendingDelete: PendingDelete?
     /// The merge sheet, presented by `RootView`.
     var merge: MergeRequest?
     /// A failed lifecycle action, shown in an alert.
@@ -63,6 +65,10 @@ import os
     var isConfirmingDiscard: Bool {
         get { pendingDiscard != nil }
         set { if !newValue { pendingDiscard = nil } }
+    }
+    var isConfirmingDelete: Bool {
+        get { pendingDelete != nil }
+        set { if !newValue { pendingDelete = nil } }
     }
     var isShowingAlert: Bool {
         get { alertMessage != nil }
@@ -402,6 +408,52 @@ import os
     }
     static func archiveTitle(archived: Bool) -> String { archived ? "Unarchive Session" : "Archive Session" }
 
+    /// Delete applies to a saved session only, like Archive; `archiveHelp` says why it is disabled.
+    var canDelete: Bool { displayedSaved.map { !sessions.deletingIDs.contains($0.id) } ?? false }
+
+    struct PendingDelete: Identifiable {
+        let session: SessionRecord
+        let summary: SessionManager.DeleteSummary
+        var id: UUID { session.id }
+
+        var title: String { "Delete “\(session.title ?? "New Session")”?" }
+        var message: String {
+            let state: String? =
+                switch summary {
+                case .merged: "This session was merged."
+                case .discarded: "This session was discarded."
+                case .worktree(let lost?):
+                    "This session still has a worktree with \(Self.count(lost.uncommittedFiles, "uncommitted file")) "
+                        + "and \(Self.count(lost.commits, "commit")) on \(lost.branch); they will be deleted."
+                case .worktree(nil): "This session still has a worktree; it and its branch will be deleted."
+                case .folder(let name, let files):
+                    "Its folder “\(name)” with \(Self.count(files, "file")) will be moved to the Trash."
+                case .failedToStart: "This session failed to start."
+                case .history: nil
+                }
+            return [state, "Its history will be deleted. This cannot be undone."].compactMap(\.self)
+                .joined(separator: " ")
+        }
+
+        static func count(_ value: Int, _ noun: String) -> String { value == 1 ? "1 \(noun)" : "\(value) \(noun)s" }
+    }
+
+    /// Says what deleting a saved session takes with it and asks for confirmation (ADR-0044).
+    func requestDelete(_ record: SessionRecord) async {
+        guard !closed, savedSessions.contains(where: { $0.id == record.id }) else { return }
+        do {
+            let summary = try await sessions.deleteSummary(record)
+            guard !closed else { return }
+            pendingDelete = PendingDelete(session: record, summary: summary)
+        } catch { showAlert("Cannot Delete the Session", error) }
+    }
+    /// Deletes the confirmed session; every window refreshes, and one that showed it returns to the draft.
+    func confirmDelete(_ pending: PendingDelete) async {
+        pendingDelete = nil
+        do { try await sessions.delete(pending.session) } catch { showAlert("Cannot Delete the Session", error) }
+        await refresh()
+    }
+
     /// Archives the displayed session, or unarchives it.
     func toggleArchived() async {
         guard let record = displayedSaved else { return }
@@ -600,6 +652,9 @@ import os
     func refresh() async {
         do {
             history = try await library.history()
+            if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
+                leaveDeletedSession(id)
+            }
             projects = try await library.projects()
             (outcomes, lastActivity) = try await library.lastEvents()
             leftoverWorktrees = Set(
@@ -802,6 +857,13 @@ import os
     }
     func showLive() {
         selectedHistoryID = nil; selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil
+    }
+    /// The displayed saved session was deleted: the window shows the draft, and the session's view state goes.
+    private func leaveDeletedSession(_ id: UUID) {
+        if review?.id == id { review = nil; showingReview = false }
+        viewedMarks[id] = nil
+        showLive()
+        showingSetup = true
     }
     /// Detaches the window; its sessions keep running.
     func close() {

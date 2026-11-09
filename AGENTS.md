@@ -143,8 +143,9 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
   matched by their process: address one with `unix id`, not `tell application "Agenthesia"`.
 - Test sessions need a Git repository with a commit (`git init`, then `git commit --allow-empty`), or the
   start fails with `invalid reference: HEAD`. Name directories so they are recognisable, such as
-  `agh-<feature>-check`, and start as few sessions as possible: **history is append-only, so test sessions
-  can never be deleted** and stay in the owner's sidebar.
+  `agh-<feature>-check`, and start as few sessions as possible. A check under `CFFIXED_USER_HOME` keeps its
+  sessions out of the owner's history; a session made anywhere else is deleted with *Delete Session…* before the
+  pull request.
 - Guard every click and paste: check that the app under test is frontmost right before sending input and
   abort otherwise, because the owner may be working at the same time. Click a banner only after it was
   found.
@@ -161,8 +162,9 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
   - quit the app and restore the clipboard and any System Settings value you changed;
   - check `git diff` and `git status` for leftover debug logging, `/tmp` paths and experiments, and rebuild
     the committed state with `just app`;
-  - leftovers the owner has to remove: test sessions in history and the notification entry of each test
-    bundle identifier in System Settings → Notifications.
+  - delete test sessions made outside a temporary home with *Delete Session…* (ending them first);
+  - leftovers the owner has to remove: the notification entry of each test bundle identifier in System Settings →
+    Notifications.
 - Windows restore after relaunch only with System Settings → Desktop & Dock → *Close windows when quitting
   an application* turned off; tell the owner when the setting can be restored.
 - Record what was checked, what was not (VoiceOver, system prompts) and how in PLAN.md.

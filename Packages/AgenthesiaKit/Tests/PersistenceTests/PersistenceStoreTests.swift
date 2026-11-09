@@ -79,7 +79,7 @@ final class PersistenceStoreTests: Sendable {
         #expect(
             try await database.read { try Schema.migrator.appliedMigrations($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
-                "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream",
+                "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream", "v8-session-deletion",
             ]
         )
     }
@@ -526,6 +526,40 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await store.events(in: session.id) == initial)
     }
 
+    @Test func deletingASessionRemovesItsEventsAndRecordAndNothingElse() async throws {
+        let (project, agent, first) = try await seed()
+        let second = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/other")
+        try await store.createSession(second)
+        _ = try await store.append([event(1), event(2), event(3)], to: first.id)
+        let kept = try await store.append([event(4)], to: second.id)
+        try await store.deleteSession(first.id)
+        #expect(try await store.session(id: first.id) == nil)
+        #expect(try await store.events(in: first.id).isEmpty)
+        #expect(try await store.sessions(in: project.id) == [second])
+        #expect(try await store.events(in: second.id) == kept)
+        #expect(try await store.projects() == [project])
+        #expect(try await store.agentInstalls() == [agent])
+        // The deletion leaves no mark behind: the remaining events are append-only again.
+        #expect(try await database.read { try Int.fetchOne($0, sql: "SELECT count(*) FROM session_deletion") } == 0)
+        await #expect(throws: DatabaseError.self) {
+            try await database.write { try $0.execute(sql: "DELETE FROM event") }
+        }
+        // An unknown session is not an error; a deleted id can be reused.
+        try await store.deleteSession(UUID())
+        try await store.createSession(first)
+        #expect(try await store.events(in: first.id).isEmpty)
+    }
+
+    /// `deleteSession` clears `event`; a new table that references a session must be cleared there too.
+    @Test func eventIsTheOnlyTableThatReferencesASession() async throws {
+        let referencing = try await database.read { db in
+            try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table'").filter { table in
+                try Row.fetchAll(db, sql: "PRAGMA foreign_key_list(\(table))").contains { $0["table"] == "session" }
+            }
+        }
+        #expect(referencing == ["event"])
+    }
+
     @Test func cancellationDoesNotWriteEvents() async throws {
         let (_, _, session) = try await seed()
         let task = Task {
@@ -547,7 +581,7 @@ final class PersistenceStoreTests: Sendable {
             try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
                 "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream",
-                "future-version",
+                "v8-session-deletion", "future-version",
             ]
         )
     }

@@ -83,3 +83,14 @@ ADR-0039 stands. Notifications and the Dock badge do not change: a saved session
 - A window showing a deleted session needs a defined place to go; ADR-0046's overview is it. Until the overview lands,
   it shows the draft.
 - Documentation: AGENTS.md's warning about test sessions becomes "delete test sessions before the pull request".
+
+## Implementation notes (2026-11-09, #230)
+
+- The schema keeps refusing to delete events. Migration `v8-session-deletion` adds a `session_deletion` table that
+  `deleteSession` fills and empties inside its transaction; the delete guard lets only the events of a session listed
+  there go, so any other deletion is still refused by the database.
+- The folder of a session without a project ([ADR-0048](0048-sessions-without-a-project.md)) is moved to the Trash
+  rather than deleted, by the owner's choice: the agent may have written files there that the user still wants. The
+  confirmation says so. Worktrees are removed with Git as in ADR-0032.
+- `failed to start` is a session that stored no event. Live rows have no Delete item in the context menu, as with
+  Archive; the Session menu item is disabled with `End the session first`.

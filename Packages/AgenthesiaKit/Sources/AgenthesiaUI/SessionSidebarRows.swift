@@ -54,6 +54,7 @@ struct SessionSidebarRows: View {
             newSessionButton(row.project)
             windowMenu(.saved(record))
             archiveButton(record)
+            Button("Delete Session…") { Task { await model.requestDelete(record) } }
             // A session without a project has no worktree (ADR-0048).
             if !model.isScratch(row.project) { discardButton(record) }
         }

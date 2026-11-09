@@ -938,6 +938,12 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #230 (delete) landed: migration `v8-session-deletion` keeps the append-only guard and lets `deleteSession` remove
+  one session's events in its transaction; `SessionManager.delete` removes a worktree (ADR-0032's checks) or moves a
+  scratch folder to the Trash (owner's choice) first and deletes nothing when that fails. Real-repository tests cover
+  a worktree with commits and changes, a locked worktree that refuses removal, discarded and merged sessions, a
+  session in the user's checkout, the scratch folder and planted paths outside the scratch root. Windows showing the
+  session return to the draft. AGENTS.md now asks to delete test sessions. Running-app check deferred with wave 1.
 - #222 (context usage) landed: `ContextUsage` (Core) gives the inspector's Agent rows `Context 84k of 200k · 42 %` and
   `Cost` (system currency format) and the composer's `ContextRing`, a fixed slot before Send options that takes no room
   below 70 %, orange from 90 %, the percentage rounded down so a threshold is never claimed early.

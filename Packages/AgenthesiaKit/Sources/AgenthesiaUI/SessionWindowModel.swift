@@ -1,9 +1,11 @@
 import ACP
+import AgentRuntime
 public import AgenthesiaCore
 public import AppKit
 import Observation
 import Persistence
 import SwiftUI
+import os
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
@@ -815,6 +817,7 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
     var catalog = AgentCatalog.shared
     private var terminating = false
     private var attention: SessionAttention?
+    private var mcpSocket: MCPSocket?
     var confirmQuit: (Int) -> Bool = { count in
         let alert = NSAlert()
         alert.messageText = "Quit Agenthesia?"
@@ -830,8 +833,17 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         sessions.catalog = catalog
-        // Notification Center needs an app bundle, so package tests and the CLI never reach it.
+        // Notification Center and the helper's socket need an app bundle, so package tests and the CLI never reach
+        // them.
         guard Bundle.main.bundleURL.pathExtension == "app" else { return }
+        // The agenthesia-mcp helper's socket (ADR-0049); serving MCP on its connections comes with #71.
+        do {
+            let path = MCPSocket.path(dataFolder: AppSupport.directory)
+            mcpSocket = try MCPSocket(path: path, tokens: sessions.mcpTokens, serve: { _, _ in })
+        } catch {
+            Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "MCP")
+                .error("Cannot listen for agenthesia-mcp: \(error, privacy: .public)")
+        }
         let system = SystemAttention()
         let attention = SessionAttention(sessions: sessions, sink: system)
         system.attention = attention

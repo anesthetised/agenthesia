@@ -986,6 +986,12 @@ Pitfalls known so far:
   token may open several connections, one per Codex subagent (#56, #71). Neither agent asked permission for our tools
   in its auto mode, so the shape of that request is still unseen; #321 checks it with a supervised mode.
 - MockAgent's `mcp` verb (#71) is what lets every tool be tested without a real agent; land it before the tools.
+- #56 landed the helper, `MCPSocket` and `MCPTokens` without issuing any token: #71 issues one in `LiveSession.create`
+  (the session id exists there, before `session/new`) and for `load`/`resume`, revokes it when the owner closes, and
+  replaces the app delegate's empty `serve` with the `MCP` server. The hello is the bare token and a newline; the socket
+  reads it a byte at a time so the first JSON-RPC line is never consumed with it.
+- The app target embeds the helper through an *Embed Helpers* copy phase (`Contents/Helpers`, *Code Sign On Copy*) that
+  references the package product, plus a target dependency on it; the copy is signed with the app's identity.
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with

@@ -197,7 +197,7 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             // Only a one-line header's text changed, as a collapsed thought's does with every chunk: the row keeps its
             // views and its height, so it is not measured again.
             if sameBody, visible.tool == message.tool || message.tool.map(visible.retitle) == true { continue }
-            if visible.caption != message.caption || visible.label != message.label {
+            if visible.caption != message.caption || visible.label != message.label || message.kind == .turn {
                 visible.show(
                     message,
                     streaming: !finished,
@@ -548,6 +548,10 @@ private final class TranscriptMessageRow: NSTableCellView {
             if message.markdown.isEmpty { showSeparator() } else { showDivider(message) }
             return
         }
+        if message.kind == .turn {
+            showTurn(message, controller: controller)
+            return
+        }
         if message.isNotice {
             showNotice(message)
             return
@@ -705,6 +709,46 @@ private final class TranscriptMessageRow: NSTableCellView {
         line.setAccessibilityElement(false)
         line.translatesAutoresizingMaskIntoConstraints = false
         let stack = NSStackView(views: [line])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        self.stack = stack
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+                line.heightAnchor.constraint(equalToConstant: 1),
+                line.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            ]
+        )
+    }
+
+    /// A finished turn's fold, as T3 Code's: `Worked for 1m 3s` and a chevron that expands it, over a hairline. It has
+    /// nothing to copy.
+    private func showTurn(_ message: TranscriptMessage, controller: TranscriptTableController) {
+        setAccessibilityCustomActions([])
+        let header = message.tool ?? ToolCardHeader(symbol: "chevron.right", kind: "", status: "", tone: .neutral)
+        let toggle = NSButton(
+            title: header.kind,
+            target: controller,
+            action: #selector(TranscriptTableController.toggleExpansion(_:))
+        )
+        toggle.isBordered = false
+        toggle.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        // A borderless button tints its title and its template image alike.
+        toggle.contentTintColor = .secondaryLabelColor
+        toggle.image = NSImage(systemSymbolName: header.symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: NSFont.smallSystemFontSize - 1, weight: .semibold))
+        toggle.imagePosition = .imageTrailing
+        toggle.setAccessibilityRole(.disclosureTriangle)
+        toggle.setAccessibilityExpanded(header.expanded)
+        toggle.setAccessibilityValue(header.expanded ? 1 : 0)
+        let line = NSBox()
+        line.boxType = .separator
+        line.setAccessibilityElement(false)
+        let stack = NSStackView(views: [toggle, line])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         self.stack = stack

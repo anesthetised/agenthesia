@@ -134,6 +134,39 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         #expect(messages[0].thoughtStart == nil && messages[2].thoughtEnd == nil)
     }
 
+    @Test func aTurnThatEndsOnItsOwnKnowsHowLongItTook() async throws {
+        let fixture = try Fixture()
+        let session = try await fixture.seed()
+        try await fixture.store.createSession(session)
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        func at(_ seconds: TimeInterval, _ event: SessionEvent) throws -> NewEvent {
+            NewEvent(kind: SessionEvent.kind, payload: try JSONEncoder().encode(event), timestamp: start + seconds)
+        }
+        let (done, together, stopped, steered, failed) = (UUID(), UUID(), UUID(), UUID(), UUID())
+        let prompt = QueuedPrompt(content: [.init(text: "Go")])
+        let events = [
+            try at(0, .prompt(id: done, content: [.init(text: "Hi")])),
+            try at(63, .finished(id: done, reason: .endTurn)),
+            // A turn of prompts sent together starts with the first of them.
+            try at(100, .promptMessage(prompt: prompt, turnID: together, startsTurn: true, sentTogether: true)),
+            try at(101, .promptMessage(prompt: prompt, turnID: together, startsTurn: false, sentTogether: true)),
+            try at(112, .finished(id: together, reason: .endTurn)),
+            try at(200, .prompt(id: stopped, content: [.init(text: "Hi")])),
+            try at(201, .stopRequested(id: stopped)),
+            try at(202, .finished(id: stopped, reason: .cancelled)),
+            try at(300, .prompt(id: steered, content: [.init(text: "Hi")])),
+            try at(301, .stopRequested(id: steered)),
+            try at(301, .interrupted(id: steered)),
+            try at(302, .finished(id: steered, reason: .cancelled)),
+            try at(400, .prompt(id: failed, content: [.init(text: "Hi")])),
+            try at(401, .failed(id: failed, message: "Overloaded")),
+        ]
+        var state = TranscriptState()
+        for event in try await fixture.store.append(events, to: session.id) { try state.apply(event) }
+        // Stopped, steered and failed turns have no time: their work never folds.
+        #expect(state.finishedTurns == [done: 63, together: 12])
+    }
+
     @Test func replayMessagesToolsAndMetadata() async throws {
         let fixture = try Fixture()
         let session = try await fixture.seed()

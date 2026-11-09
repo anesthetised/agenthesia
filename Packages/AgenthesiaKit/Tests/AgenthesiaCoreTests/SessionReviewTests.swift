@@ -3,9 +3,9 @@ import Observation
 import Persistence
 import Synchronization
 import Testing
-import Workspace
 
 @testable import AgenthesiaCore
+@testable import Workspace
 
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionReviewTests {
     @Test func readsBothSidesAndRetainsSelectionAcrossRefresh() async throws {
@@ -255,6 +255,36 @@ import Workspace
         try fixture.write("1\nx\n3\n", "edited")
         await review.refresh()
         #expect(review.stats.files["edited"] == ChangeStats.Lines(added: 1, removed: 1))
+    }
+
+    /// ADR-0043: in the project folder the branch is the checkout itself, so the review compares with the session's
+    /// start, commits made since included, and says so.
+    @Test func aProjectFolderSessionComparesWithItsStart() async throws {
+        let fixture = try await SessionReviewFixture()
+        defer { fixture.remove() }
+        try await fixture.git(["checkout", "-q", "-b", "main"])
+        try fixture.write("old\n", "file")
+        try await fixture.commit()
+        let start = try await SessionWorkspace.git(["rev-parse", "HEAD"], in: fixture.root)
+        try fixture.write("committed\n", "committed")
+        try await fixture.commit()
+        try fixture.write("new\n", "file")
+        let session = SessionRecord(
+            projectID: UUID(),
+            agentInstallID: UUID(),
+            workingDirectory: fixture.root.path,
+            baseRevision: start,
+            baseBranch: "main"
+        )
+        let worktree = SessionReview(session: session, root: fixture.root)
+        #expect(worktree.title == "Changes against main")
+        let review = SessionReview(session: session, root: fixture.root, inProjectFolder: true)
+        #expect(review.title == "Changes since the session started")
+        #expect(review.baseBranch == nil)
+        await review.refresh()
+        #expect(review.error == nil)
+        #expect(review.changes.map(\.path) == ["committed", "file"])
+        #expect(SessionReview(session: fixture.session, root: fixture.root).title == "Session changes")
     }
 
     @Test func rejectsOversizedHistoricalFilesAndOutsideSymlinksAndReplacedRoots() async throws {

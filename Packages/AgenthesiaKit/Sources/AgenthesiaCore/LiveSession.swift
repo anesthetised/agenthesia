@@ -144,9 +144,11 @@ public final class LiveSession {
                 || controller.map { [.idle, .running, .stopping].contains($0.status) } == true)
     }
 
-    /// A nil `directory` starts without a project, in a new folder under `scratchRoot` (ADR-0048).
+    /// A nil `directory` starts without a project, in a new folder under `scratchRoot` (ADR-0048);
+    /// `inProjectFolder` starts a Git project's session in `directory` itself (ADR-0043).
     public func start(
         directory: URL?,
+        inProjectFolder: Bool = false,
         agent: AgentInstallRecord,
         worktreesRoot: URL? = nil,
         scratchRoot: URL? = nil,
@@ -157,6 +159,7 @@ public final class LiveSession {
         begin(
             .new(
                 directory: directory,
+                inProjectFolder: inProjectFolder,
                 agent: agent,
                 worktreesRoot: worktreesRoot,
                 scratchRoot: scratchRoot,
@@ -178,6 +181,7 @@ public final class LiveSession {
         /// A nil `directory` is a session without a project.
         case new(
             directory: URL?,
+            inProjectFolder: Bool = false,
             agent: AgentInstallRecord,
             worktreesRoot: URL?,
             scratchRoot: URL? = nil,
@@ -206,7 +210,7 @@ public final class LiveSession {
             guard !isClosed else { return }
             let agent: AgentInstallRecord
             switch launch {
-            case .new(_, let new, _, _, _, _): agent = new
+            case .new(_, _, let new, _, _, _, _): agent = new
             case .saved(let session):
                 guard let install = try await library.install(id: session.agentInstallID) else {
                     throw LaunchError(message: "The agent of this session is no longer configured.")
@@ -214,8 +218,8 @@ public final class LiveSession {
                 agent = install
             }
             self.agent = agent
-            if case .new(let directory, _, _, _, _, _) = launch {
-                startPlace = await Self.place(of: directory)
+            if case .new(let directory, let inProjectFolder, _, _, _, _, _) = launch {
+                startPlace = await Self.place(of: directory, inProjectFolder: inProjectFolder)
             }
             // Resolve and check the command first, so a mistyped executable does not leave a worktree behind.
             if let installationID = agent.installationID {
@@ -236,9 +240,18 @@ public final class LiveSession {
             guard !isClosed else { return }
             let controller: SessionController
             switch launch {
-            case .new(let directory, _, let worktreesRoot, let scratchRoot, let additionalDirectories, let configHints):
+            case .new(
+                let directory,
+                let inProjectFolder,
+                _,
+                let worktreesRoot,
+                let scratchRoot,
+                let additionalDirectories,
+                let configHints
+            ):
                 controller = try await create(
                     directory: directory,
+                    inProjectFolder: inProjectFolder,
                     agent: agent,
                     worktreesRoot: worktreesRoot,
                     scratchRoot: scratchRoot,
@@ -275,8 +288,9 @@ public final class LiveSession {
         }
     }
 
-    static func place(of directory: URL?) async -> StartPlace {
+    static func place(of directory: URL?, inProjectFolder: Bool = false) async -> StartPlace {
         guard let directory else { return .newFolder }
+        if inProjectFolder { return .projectFolder }
         return await SessionWorkspace.worktreeBase(of: directory) == nil ? .projectFolder : .newWorktree
     }
 
@@ -514,6 +528,7 @@ public final class LiveSession {
 
     private func create(
         directory: URL?,
+        inProjectFolder: Bool,
         agent: AgentInstallRecord,
         worktreesRoot: URL?,
         scratchRoot: URL?,
@@ -531,6 +546,7 @@ public final class LiveSession {
                 directory: directory,
                 id: id,
                 topic: topic,
+                inProjectFolder: inProjectFolder,
                 worktreesRoot: worktreesRoot,
                 // The agent's login-shell environment, resolved once for this launch.
                 environment: agentCommand?.environment,

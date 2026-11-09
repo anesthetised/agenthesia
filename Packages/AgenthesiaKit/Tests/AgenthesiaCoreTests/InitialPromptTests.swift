@@ -4,6 +4,7 @@ import Persistence
 import Testing
 
 @testable import AgenthesiaCore
+@testable import Workspace
 
 /// A session started from the draft holds its first message until it is idle (ADR-0040).
 @MainActor @Suite(.timeLimit(.minutes(1))) struct InitialPromptTests {
@@ -162,11 +163,28 @@ import Testing
         let fixture = try Fixture()
         defer { fixture.remove() }
         #expect(await DraftCheckout.of(fixture.project) == .folder)
-        #expect(DraftCheckout.folder.title == "Project folder")
-        #expect(DraftCheckout.worktree(from: "main").title == "New worktree from main")
-        #expect(DraftCheckout.worktree(from: "origin/main").title == "New worktree from origin/main")
-        #expect(DraftCheckout.worktree(from: "main").help.contains("Uncommitted and untracked files are not copied"))
-        #expect(!DraftCheckout.folder.help.isEmpty)
+        for inProjectFolder in [false, true] {
+            #expect(DraftCheckout.folder.title(inProjectFolder: inProjectFolder) == "Project folder")
+            #expect(
+                DraftCheckout.folder.help(inProjectFolder: inProjectFolder)
+                    == "Not a Git repository: the session works in the folder itself."
+            )
+        }
+        let main = DraftCheckout.worktree(from: "main", checkout: "main")
+        #expect(main.title(inProjectFolder: false) == "New worktree from main")
+        #expect(
+            DraftCheckout.worktree(from: "origin/main", checkout: "main").title(inProjectFolder: false)
+                == "New worktree from origin/main"
+        )
+        #expect(main.help(inProjectFolder: false).contains("Uncommitted and untracked files are not copied"))
+        // The project folder of a Git project (ADR-0043).
+        #expect(main.title(inProjectFolder: true) == "Project folder")
+        #expect(
+            DraftCheckout.worktree(from: "origin/main", checkout: "main").help(inProjectFolder: true)
+                == "The agent works in your checkout. Edits land on main directly and are not isolated from your own changes."
+        )
+        try await SessionWorkspace.git(["init", "-q", "-b", "main"], in: fixture.project)
+        #expect(await DraftCheckout.of(fixture.project) == .worktree(from: "main", checkout: "main"))
     }
 
     @Test func emptyDraftsHaveNothingToSend() {

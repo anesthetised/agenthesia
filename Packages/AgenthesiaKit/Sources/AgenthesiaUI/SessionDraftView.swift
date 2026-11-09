@@ -87,10 +87,7 @@ struct SessionDraftView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 agentMenu
-                if let checkout, !model.draftWithoutProject {
-                    Label(checkout.title, systemImage: checkout == .folder ? "folder" : "arrow.triangle.branch")
-                        .foregroundStyle(.secondary).lineLimit(1).help(checkout.help)
-                }
+                if let checkout, !model.draftWithoutProject { checkoutChip(checkout) }
                 Spacer(minLength: 0)
             }
             if needsAgent {
@@ -208,6 +205,44 @@ struct SessionDraftView: View {
         .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
         .accessibilityLabel(agentLabel)
         .help("The agent that starts the session")
+    }
+
+    /// A Git project's checkout: a menu of a new worktree, the default, and the project folder (ADR-0043). Outside Git
+    /// the session always works in the folder, so the chip is a label.
+    @ViewBuilder private func checkoutChip(_ checkout: DraftCheckout) -> some View {
+        let inFolder = model.draftInProjectFolder
+        let title = checkout.title(inProjectFolder: inFolder)
+        if case .worktree = checkout {
+            Menu {
+                ForEach([false, true], id: \.self) { choice in
+                    Button {
+                        model.draftInProjectFolder = choice
+                    } label: {
+                        let name = checkout.title(inProjectFolder: choice)
+                        if choice == inFolder { Label(name, systemImage: "checkmark") } else { Text(name) }
+                    }
+                    .help(checkout.help(inProjectFolder: choice))
+                }
+            } label: {
+                Label {
+                    Text(title)
+                } icon: {
+                    // As in the agent chip: the pop-up button would otherwise read the symbol's own description.
+                    Image(
+                        nsImage: NSImage(
+                            systemSymbolName: inFolder ? "folder" : "arrow.triangle.branch",
+                            accessibilityDescription: "Checkout: \(title)"
+                        ) ?? NSImage()
+                    )
+                }
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
+            .accessibilityLabel("Checkout: \(title)")
+            .help(checkout.help(inProjectFolder: inFolder))
+        } else {
+            Label(title, systemImage: "folder")
+                .foregroundStyle(.secondary).lineLimit(1).help(checkout.help(inProjectFolder: false))
+        }
     }
 
     private var agentLabel: String { "Agent: \(model.selectedAgent.flatMap(agentName) ?? "none")" }

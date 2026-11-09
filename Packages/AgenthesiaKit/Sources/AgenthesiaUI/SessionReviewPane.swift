@@ -13,7 +13,7 @@ struct SessionReviewPane: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(review.baseBranch.map { "Changes against \($0)" } ?? "Session changes").font(.headline)
+                Text(review.title).font(.headline)
                     .lineLimit(1).truncationMode(.middle)
                 WatchErrorNotice(files: files)
             }

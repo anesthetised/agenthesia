@@ -14,8 +14,9 @@ import Testing
         let record: SessionRecord
     }
 
-    /// A MockAgent session in `repo`, which is a Git repository on `main` when `git` is set.
-    func fixture(git: Bool) async throws -> Fixture {
+    /// A MockAgent session in `repo`, which is a Git repository on `main` when `git` is set; in the project folder
+    /// rather than a worktree with `inProjectFolder` (ADR-0043).
+    func fixture(git: Bool, inProjectFolder: Bool = false) async throws -> Fixture {
         let directory = FileManager.default.temporaryDirectory.appending(path: "inspector-\(UUID())")
         let repo = directory.appending(path: "repo")
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
@@ -38,7 +39,11 @@ import Testing
                 .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
         )
         let model = SessionWindowModel(sessions: sessions)
-        model.start(directory: repo, executable: binary.path, arguments: ["--reopen"])
+        model.start(
+            directory: repo,
+            inProjectFolder: inProjectFolder,
+            agent: AgentCatalog.record(custom: .init(executable: binary.path, arguments: ["--reopen"]))
+        )
         let owner = try #require(model.owner)
         await owner.startup?.value
         await model.refresh()
@@ -142,7 +147,46 @@ import Testing
         #expect(stats.total == .init(added: 3, removed: 1))
         #expect(fixture.model.files.changedPaths == ["added.txt", "kept"])
         #expect(fixture.model.canReview && fixture.model.canMerge && fixture.model.canDiscard)
+        #expect(!fixture.model.displaysProjectFolderSession && fixture.model.discardHelp == nil)
         #expect(await height(of: fixture.model, dark: dark) > empty)
+    }
+
+    /// ADR-0043: changes count from the session's start; nothing can be merged or discarded, and the menu, the
+    /// inspector and the review footer say why.
+    @Test(arguments: [false, true])
+    func aProjectFolderSessionTracksChangesButOffersNoMergeOrDiscard(dark: Bool) async throws {
+        let fixture = try await fixture(git: true, inProjectFolder: true)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let model = fixture.model
+        #expect(model.displaysProjectFolderSession)
+        #expect(fixture.record.branch == nil)
+        #expect(SessionInspector.projectFolder(of: fixture.record) == "In main, project folder")
+        let empty = await height(of: model, dark: dark)
+        try "new\n".write(
+            to: URL(filePath: fixture.record.workingDirectory).appending(path: "added.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        await model.files.refresh()
+        #expect(model.files.changedPaths == ["added.txt"])
+        #expect(model.canReview && !model.canMerge && !model.canDiscard)
+        #expect(model.mergeHelp == "This session works in the project folder")
+        #expect(model.discardHelp == "This session works in the project folder")
+        await model.refreshPullRequest()
+        #expect(!model.showsOpenPullRequest && !model.showsPush)
+        model.toggleReview()
+        #expect(model.review?.title == "Changes since the session started")
+        #expect(await height(of: model, dark: dark) > empty)
+    }
+
+    @Test func aDetachedProjectFolderSessionNamesItsCommit() {
+        let detached = SessionRecord(
+            projectID: UUID(),
+            agentInstallID: UUID(),
+            workingDirectory: "/tmp",
+            baseRevision: "0123456789abcdef0123456789abcdef01234567"
+        )
+        #expect(SessionInspector.projectFolder(of: detached) == "In 0123456, project folder")
     }
 
     @Test func eachSectionAddsToTheInspector() async throws {

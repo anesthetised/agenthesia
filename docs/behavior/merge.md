@@ -4,6 +4,10 @@ The merge sheet squash-merges a session's worktree into its base branch in the p
 ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)). It opens from Merge into `<base>`… in the inspector's
 Changes, the review pane's Merge… and the Session menu.
 
+A session in the project folder ([ADR-0043](../adr/0043-sessions-in-the-project-folder.md)) has nothing to merge:
+Merge in the inspector, the review pane's footer and the Session menu is disabled with the help text `This session works
+in the project folder`, and the review's header reads `Changes since the session started`.
+
 ## The sheet
 
 - The title is `Merge into <base>`. While Git is asked it reads `Checking the merge…`; a blocker replaces the form with
@@ -35,7 +39,7 @@ pane's footer and in the Session menu.
 
 - It is shown only for a session with an Agenthesia worktree and no outcome yet, whose base branch tracks a branch on a
   remote, while `gh` is on the login shell's `PATH` and `gh auth status` succeeds. Otherwise it is absent, not disabled;
-  a session without a project never has it ([ADR-0048](../adr/0048-sessions-without-a-project.md)). A signed-in `gh` is
+  a session in the project folder or without a project never has it ([ADR-0048](../adr/0048-sessions-without-a-project.md)). A signed-in `gh` is
   remembered until the app quits; a missing or signed-out one is asked again when another session is shown. It is
   disabled like Merge: while the session is busy, and with no changes.
 - The sheet is titled `Open Pull Request` and reads `<branch> into <base> on <remote>`, the base being the name of the
@@ -61,5 +65,6 @@ pane's footer and in the Session menu.
 
 ## Changes
 
+- 2026-11-09, #229: Merge is disabled for a session in the project folder, and Open Pull Request… absent.
 - 2026-11-09, #233: Open Pull Request…, the pull request link and Push.
 - 2026-11-09, #232: the `Push <base> to <remote>` checkbox; the rest summarised from ADR-0032 and the code at 3e6d0c3.

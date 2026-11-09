@@ -54,7 +54,7 @@ import Testing
         #expect(await SessionWorkspace.worktreeBase(of: repo) == nil)
         try await SessionWorkspace.git(["init", "-q", "-b", "feature/x"], in: repo)
         // A repository without commits still names its branch; starting a session there fails later.
-        #expect(await SessionWorkspace.worktreeBase(of: repo.appending(path: "sub")) == "feature/x")
+        #expect(await SessionWorkspace.worktreeBase(of: repo.appending(path: "sub"))?.base == "feature/x")
         try await SessionWorkspace.git(
             [
                 "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit",
@@ -64,7 +64,9 @@ import Testing
         )
         let commit = try await SessionWorkspace.git(["rev-parse", "--short", "HEAD"], in: repo)
         try await SessionWorkspace.git(["checkout", "-q", "--detach"], in: repo)
-        #expect(await SessionWorkspace.worktreeBase(of: repo) == commit)
+        let detached = await SessionWorkspace.worktreeBase(of: repo)
+        #expect(detached?.base == commit)
+        #expect(detached?.checkout == commit)
     }
 
     @Test func nonRepositoryUsesSelectedDirectoryAndEmptyRepositoryFails() async throws {

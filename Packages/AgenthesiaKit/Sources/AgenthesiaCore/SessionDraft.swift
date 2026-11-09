@@ -17,27 +17,32 @@ public struct PromptDraft: Equatable, Sendable {
     public var isEmpty: Bool { attachments.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
-/// Where a session started from the draft works (ADR-0006, ADR-0040).
+/// Where a session started from the draft works (ADR-0006, ADR-0040, ADR-0043).
 public enum DraftCheckout: Equatable, Sendable {
-    /// A Git project: a new worktree from this branch, or the short commit of a detached `HEAD`.
-    case worktree(from: String)
+    /// A Git project: a new worktree from `base` (the upstream, the branch, or the short commit of a detached
+    /// `HEAD`), or the project folder itself, where `checkout` (the branch or that commit) is checked out.
+    case worktree(from: String, checkout: String)
     case folder
 
     public static func of(_ directory: URL) async -> DraftCheckout {
-        await SessionWorkspace.worktreeBase(of: directory).map { .worktree(from: $0) } ?? .folder
+        await SessionWorkspace.worktreeBase(of: directory).map { .worktree(from: $0.base, checkout: $0.checkout) }
+            ?? .folder
     }
 
-    public var title: String {
+    /// The chip's text; `inProjectFolder` is the draft's choice, which only a Git project offers.
+    public func title(inProjectFolder: Bool) -> String {
         switch self {
-        case .worktree(let base): "New worktree from \(base)"
-        case .folder: "Project folder"
+        case .worktree(let base, _) where !inProjectFolder: "New worktree from \(base)"
+        case .worktree, .folder: "Project folder"
         }
     }
 
-    public var help: String {
+    public func help(inProjectFolder: Bool) -> String {
         switch self {
-        case .worktree:
+        case .worktree where !inProjectFolder:
             "The session works in a new Git worktree of the committed files. Uncommitted and untracked files are not copied."
+        case .worktree(_, let checkout):
+            "The agent works in your checkout. Edits land on \(checkout) directly and are not isolated from your own changes."
         case .folder: "Not a Git repository: the session works in the folder itself."
         }
     }

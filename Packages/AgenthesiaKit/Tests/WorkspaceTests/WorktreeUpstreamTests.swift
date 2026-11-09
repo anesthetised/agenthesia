@@ -38,7 +38,9 @@ import Testing
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let local = try await head(fixture.repo)
         let upstream = try await pushUpstream("upstream", from: other, fixture: fixture)
-        #expect(await SessionWorkspace.worktreeBase(of: fixture.repo) == "origin/main")
+        let base = await SessionWorkspace.worktreeBase(of: fixture.repo)
+        #expect(base?.base == "origin/main")
+        #expect(base?.checkout == "main")
 
         let (workspace, worktree) = try await fixture.prepare()
         #expect(workspace.baseRevision == upstream)
@@ -88,7 +90,7 @@ import Testing
     @Test func withoutAnUpstreamTheWorktreeStartsFromHEAD() async throws {
         let fixture = try await Fixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
-        #expect(await SessionWorkspace.worktreeBase(of: fixture.repo) == "main")
+        #expect(await SessionWorkspace.worktreeBase(of: fixture.repo)?.base == "main")
         let (workspace, _) = try await fixture.prepare()
         #expect(workspace.baseRevision == (try await head(fixture.repo)))
         #expect(workspace.fallbackUpstream == nil)

@@ -13,8 +13,13 @@ import os
     var showingSetup = true
     /// The draft's first message; it moves to the session on Send and comes back if startup fails or is cancelled.
     var draft = PromptDraft()
-    /// The project and agent picked in the draft; nil uses the defaults.
-    var draftDirectory: URL? { didSet { draftError = nil } }
+    /// The project and agent picked in the draft; nil uses the defaults. Another project starts with a worktree again.
+    var draftDirectory: URL? {
+        didSet {
+            draftError = nil
+            draftInProjectFolder = false
+        }
+    }
     var draftAgent: AgentCatalog.Choice? {
         didSet {
             draftError = nil
@@ -25,10 +30,16 @@ import os
     var draftConfig: [ACP.ConfigOptionID: ACP.ConfigValueID] = [:]
     /// The draft starts without a project, in a folder of its own (ADR-0048). Per draft: Send clears it.
     var draftWithoutProject = false { didSet { draftError = nil } }
+    /// The draft's Git project starts in its project folder instead of a new worktree (ADR-0043). Per draft, never
+    /// remembered: Send, another project and New Session in Project clear it.
+    var draftInProjectFolder = false { didSet { draftError = nil } }
     /// The picks each start from the draft was sent with, until its first prompt is submitted; a failed or cancelled
     /// start brings them back with the text.
     private var sentConfig:
-        [ObjectIdentifier: (config: [ACP.ConfigOptionID: ACP.ConfigValueID], withoutProject: Bool)] = [:]
+        [ObjectIdentifier: (
+            config: [ACP.ConfigOptionID: ACP.ConfigValueID], withoutProject: Bool, inProjectFolder: Bool
+        )] =
+            [:]
     /// Why the last session started from the draft did not start.
     var draftError: String?
     /// Whether the inspector is wanted; `DetailPanes` hides it when the window is too narrow.
@@ -111,6 +122,13 @@ import os
         return isScratch(projects.first { $0.id == session.projectID })
     }
 
+    /// The displayed session works in the project folder of a Git repository: there is nothing to merge or discard
+    /// (ADR-0043).
+    var displaysProjectFolderSession: Bool {
+        displayed.map { sessions.worksInProjectFolder($0.session) } ?? false
+    }
+    static let projectFolderHelp = "This session works in the project folder"
+
     /// The review pane holds the slot; `DetailPanes` may still hide it in a narrow window.
     var isReviewShown: Bool { showingReview && canReview && review?.id == displayed?.session.id }
 
@@ -124,7 +142,12 @@ import os
         if review?.id != session.id {
             let viewed = viewedMarks[session.id] ?? ViewedMarks()
             viewedMarks[session.id] = viewed
-            review = SessionReview(session: session, root: root, viewed: viewed)
+            review = SessionReview(
+                session: session,
+                root: root,
+                viewed: viewed,
+                inProjectFolder: displaysProjectFolderSession
+            )
         }
         showingReview = true
     }
@@ -370,7 +393,12 @@ import os
     /// The displayed session's file list is loaded and empty; while it loads or failed, the merge sheet decides.
     private var hasNoChanges: Bool { files.sessionID == displayed?.session.id && files.hasNoChanges }
     /// Why Merge is disabled when nothing else is in the way.
-    var mergeHelp: String? { canMergeSession && hasNoChanges ? "No changes to merge" : nil }
+    var mergeHelp: String? {
+        if displaysProjectFolderSession { return Self.projectFolderHelp }
+        return canMergeSession && hasNoChanges ? "No changes to merge" : nil
+    }
+    /// Why Discard Worktree… is disabled for a session without a worktree of its own.
+    var discardHelp: String? { displaysProjectFolderSession ? Self.projectFolderHelp : nil }
     var mergeCommandTitle: String { displayed?.session.baseBranch.map { "Merge into \($0)…" } ?? "Merge…" }
     /// The displayed session's pull request; with one, the pull request is the integration path (ADR-0045).
     var displayedPullRequest: PullRequest? { displayed?.transcript.pullRequest }
@@ -789,6 +817,7 @@ import os
     /// A nil `directory` starts without a project (ADR-0048).
     @discardableResult func start(
         directory: URL?,
+        inProjectFolder: Bool = false,
         agent: AgentInstallRecord,
         initialPrompt: PromptDraft? = nil,
         configHints: [ACP.ConfigOption] = []
@@ -796,6 +825,7 @@ import os
         guard canStart else { return nil }
         let owner = sessions.start(
             directory: directory,
+            inProjectFolder: inProjectFolder,
             agent: agent,
             initialPrompt: initialPrompt,
             configHints: configHints
@@ -860,8 +890,9 @@ import os
     }
 
     /// Opens the draft with `project` selected; the typed message and agent stay (ADR-0040). The project of sessions
-    /// without a project opens a draft without one (ADR-0048).
+    /// without a project opens a draft without one (ADR-0048). Either way the checkout is a new worktree (ADR-0043).
     func newSession(in project: ProjectRecord) {
+        defer { draftInProjectFolder = false }
         if isScratch(project) {
             draftWithoutProject = true
         } else {
@@ -877,9 +908,15 @@ import os
         draftError = nil
         let directory = draftWithoutProject ? nil : selectedDirectory
         // Only a session that started is remembered: a failed or cancelled start keeps the last agent (ADR-0040).
-        if let owner = start(directory: directory, agent: agent, initialPrompt: draft, configHints: draftHints) {
+        if let owner = start(
+            directory: directory,
+            inProjectFolder: draftInProjectFolder,
+            agent: agent,
+            initialPrompt: draft,
+            configHints: draftHints
+        ) {
             let id = ObjectIdentifier(owner)
-            sentConfig[id] = (draftConfig, draftWithoutProject)
+            sentConfig[id] = (draftConfig, draftWithoutProject, draftInProjectFolder)
             owner.onInitialPromptSubmitted = { [weak self, catalog] in
                 catalog?.remember(choice)
                 self?.sentConfig[id] = nil
@@ -888,6 +925,7 @@ import os
         draft = PromptDraft()
         draftConfig = [:]
         draftWithoutProject = false
+        draftInProjectFolder = false
     }
 
     /// The first message of the session that starts in this window, until its own transcript shows it: the detail
@@ -915,6 +953,7 @@ import os
         let sent = sentConfig.removeValue(forKey: ObjectIdentifier(owner))
         let picks = sent?.config ?? [:]
         draftWithoutProject = sent?.withoutProject ?? false
+        draftInProjectFolder = sent?.inProjectFolder ?? false
         draftConfig = picks
         draftConfig = picks.filter { pick in
             draftPills.contains { $0.id == pick.key && draftValue(of: $0) == pick.value }

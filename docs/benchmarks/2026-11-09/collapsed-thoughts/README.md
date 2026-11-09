@@ -63,7 +63,31 @@ test checks that the label and the row stay the same objects and the height does
 
 ## Second run (after the fix)
 
-TODO (parent, with the owner's approval): `just lab-run S1:App,S10:App --runs 1` per side and round, three rounds with
-the sides interleaved as above; *before* is the same patched `main`, *after* is #339's head with the fix. Record the
-load and free memory per run, add the raw reports as `fix-before.json` and `fix-after.json`, and the tables and a
-reading here.
+Command: `just lab-run S1:App,S10:App --runs 1` per side and round, three rounds with the sides interleaved (before,
+after; after, before; before, after), 2026-11-09 23:05–23:10, approved by the owner, who left the Mac alone. *Before* is
+the same `916a81c` with the S10 patch; *after* is `1656500`, #339's head with the in-place header update. The 1-minute
+load average stayed at 4–8 and free memory at 76–77 % on every run (free plus inactive 39–41 %). The raw reports are
+`fix-before.json` and `fix-after.json` (three reports each, in round order).
+
+## S1:App
+
+| | Hitches per run | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms | Load per run | Free memory, % | Frames |
+|---|---|---|---|---|---|---|---|
+| Before | 8, 7, 8 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 21.1, 20.7, 19.0 | 10.1, 10.8, 10.7 | 4.4, 4.2, 4.5 | 76, 77, 77 | 1479, 1482, 1481 |
+| After | 11, 10, 10 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 20.6, 29.5, 28.4 | 10.8, 9.9, 10.9 | 7.6, 4.8, 4.3 | 77, 77, 77 | 1478, 1480, 1481 |
+
+## S10:App
+
+| | Hitches per run | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms | Load per run | Free memory, % | Frames |
+|---|---|---|---|---|---|---|---|
+| Before | 17, 11, 10 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 25.3, 23.3, 23.3 | 10.8, 10.5, 10.2 | 4.8, 4.0, 4.8 | 76, 77, 77 | 2276, 2283, 2284 |
+| After | 16, 19, 16 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 29.0, 30.1, 29.9 | 10.2, 10.1, 10.6 | 6.4, 4.3, 4.8 | 77, 77, 77 | 2280, 2274, 2277 |
+
+### Reading
+
+The S10 regression of the first run is gone: hitches per run are 16, 19, 16 after against 17, 11, 10 before (64, 105,
+197 in the first run), p95 and p99 stay at one 120 Hz frame (8.3 ms) on both sides, the frames delivered match (about
+2280), and apply p95 is unchanged. The worst single frame is about 6 ms longer after (29–30 ms against 23–25 ms), and
+S1 shows two or three more hitches per run with a worst frame up to 29 ms; both are within the run-to-run spread seen
+before and are not visible as dropped frames. The fix holds: a streamed thought chunk now costs about what it did
+before #223.

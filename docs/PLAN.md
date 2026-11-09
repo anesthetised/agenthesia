@@ -794,28 +794,46 @@ Not adopted: T3 Code's fixed access levels with icons (principle 8), settled sta
 snoozing and pins, automatic removal of merged or inactive worktrees, a worktree folder or branch prefix setting
 (principle 6).
 
+**Reconciled with M18 (2026-11-09).** M18 landed between the M16 decisions and their implementation, so the owner and a
+review of the open issues against the code settled four things:
+
+1. **#224 is dropped.** The owner compared the transcript with T3 Code in M18 and kept the right-aligned bubbles; a
+   tinted block would also clash with the quiet row selection of #269. ADR-0039's amendment carries a note. #225 and
+   #223 no longer depend on it.
+2. **#222:** the context ring gets a fixed slot before the Send options chevron in the composer's control row. Its width
+   comes out of the pill budget and it never moves into the `…` overflow (since #276 overflowing pills go there, and
+   [composer.md](behavior/composer.md) says no pill is cut by the card's edge).
+3. **#225:** the start line names the fetch: `Fetching origin/<branch>…` while ADR-0047's fetch runs (up to 20 s), then
+   `Starting <agent> in …`, and `Starting <agent> in a new folder…` for a session without a project (ADR-0048). Since
+   #278 Send moves the card to the bottom (`DraftSendTransition`), so the held first message appears in the first-row
+   position the card leaves. The pull request replaces `Starting session…` in
+   [session-start.md](behavior/session-start.md).
+4. **New order** in four waves, below.
+
+Other conflicts the issues now carry: #229 conflicts with the Checkout label of
+[session-start.md](behavior/session-start.md) ("Not a menu"; the menu item reads `New worktree from <upstream>`, the
+project-folder form never fetches, and the item is hidden for sessions without a project), and its pull request
+replaces that section. #227's "a window with no selection shows the board" clashes with the same file (new and restored
+windows show the draft): the board is shown on ⌘0 and the Overview row, and when the displayed session is deleted;
+blank windows keep the draft. #206 and #208 are closed and are no longer dependencies.
+
 Issues, in order. Within a wave the issues are independent apart from the listed dependencies.
 
-| Order | Issue | Area | Tier | Depends on |
+| Order | Issue | Decision | Tier | Depends on |
 |---|---|---|---|---|
-| 1 | #268 Working shelf: footer, turn start time per row, `Working …` / `Idle …`, `Nothing needs you` | Sidebar | `agent:strong` | — |
-| 1 | #269 Quiet transcript row selection; writes `docs/behavior/transcript.md` | Transcript | `agent:light` | — |
-| 1 | #270 Effort hint in the draft (`thought_level` in the cache, applied like the model; done) | Draft | `agent:light` | — |
-| 1 | #271 Mode popover with the agent's descriptions | Composer | `agent:light` | — |
-| 1 | #272 `Sign In…` only when the agent asked | Settings | `agent:light` | — |
-| 1 | #273 Development builds use their own bundle identifier and data folder | Tooling | `agent:light` | — |
-| 1 | #263 ⌘. in the composer stops an idle session and pauses its queue | Queue | `agent:light` | — |
-| 1 | #264 Manage Agents… opens Settings without switching to the Agents tab | Settings | `agent:light` | — |
-| 1 | #265 A failed start drops the mode and model picked in the draft | Draft | `agent:light` | — |
-| 1 | #266 Remove deletes an installed agent version without confirmation | Settings | `agent:light` | — |
-| 1 | #267 A saved session shows neither its queue nor its settings (owner decides first) | Composer | `agent:light` | — |
-| 2 | #274 Settled collapses with a selected row | Sidebar | `agent:light` | #268 |
-| 2 | #275 Settle from the row (`✓ Settle` on hover, context menu) | Sidebar | `agent:light` | #268 |
-| 2 | #276 One composer control row: toggle pills, `…` overflow, working line above the card (done; hosted tests at narrow and wide widths, not yet checked in the running app) | Composer | `agent:strong` | #270, #271 |
-| 2 | #277 Worktrees start from the fetched upstream; merge blocked while the base is behind | Workspace | `agent:strong` | — |
-| 3 | #278 Draft heading with the project picker, centered composer moving to the bottom at Send (done; heading text, project menu and the draft state around Send tested; the layout, the narrow heading and the Send animation not yet checked in the running app) | Draft | `agent:strong` | #276, #265 |
-| 4 | #279 Sessions without a project (done; prepare, the project record, recent projects, the draft switch, the badge and the failed start tested; the draft, the row and the inspector not yet checked in the running app) | Draft, Workspace | `agent:strong` | #278 |
-| 5 | #160 Verify the redesign in the running app and refresh screenshots | — | `agent:light` | all |
+| 1 | #221 Plan: inspector section, `PlanProgress` in Core, working line text, Working-row reason, MockAgent demo | Transcript | `agent:light` | — |
+| 1 | #222 Context usage and cost: Agent section rows, composer ring in a fixed slot from 70 %, MockAgent demo | Transcript | `agent:light` | — |
+| 1 | #230 Delete a saved session: `deleteSession`, worktree or scratch folder removal first, confirmation, windows | Workflow | `agent:strong` | — (lands on the draft; #227 changes that later) |
+| 1 | #232 Push after merge: upstream detection, checkbox, remembered choice, failure after a successful merge | Workflow | `agent:strong` | — |
+| 2 | #225 First message shows at once: one-item transcript source, `Fetching` / `Starting <agent> in …` line | Draft | `agent:light` | — |
+| 2 | #223 Collapsed thoughts: disclosure row, fold of consecutive thoughts, Rendering Lab rerun with the owner's approval | Transcript | `agent:strong` | — |
+| 2 | #229 Sessions in the project folder: checkout menu, in-place `prepare`, Changes since start, Merge and Discard disabled | Workflow | `agent:strong` | — |
+| 2 | #233 Pull request with `gh`: availability, sheet, push and `gh pr create`, `pullRequestOpened`, inspector link and Push | Workflow | `agent:strong` | #232 |
+| 3 | #227 Session board: `WindowTarget.board`, Overview row, cards, answers with the Open-first rule, arming | Board | `agent:strong` | #221 |
+| 3 | #228 Menu bar item: `MenuBarExtra`, count, sessions, permission submenu | Board | `agent:light` | — (the Open-first rule goes into a pure Core function that #227 or #228 adds, whichever lands first) |
+| 4 | #234 Verify in the running app and refresh screenshots | — | `agent:light` | all |
+| — | #224 User messages as left-aligned blocks | Transcript | — | Dropped (2026-11-09) |
+| — | #226 ⌘1…⌘9 (done) · #231 Archive (done) | Keyboard, Workflow | `agent:light` | — |
 
 Pitfalls known so far:
 
@@ -868,7 +886,7 @@ and chose a second set of UI/UX changes, several of them against accepted ADRs. 
 
 | Decision | Where | Status |
 |---|---|---|
-| Plan in the inspector and the working line; context usage and cost; collapsed thoughts; user messages as left-aligned blocks | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Accepted |
+| Plan in the inspector and the working line; context usage and cost; collapsed thoughts | [ADR-0039](adr/0039-t3-style-window-layout.md), amendment of 2026-11-07 | Accepted (user messages as left-aligned blocks dropped on 2026-11-09, #224) |
 | The first message shows at once while the session starts | [ADR-0040](adr/0040-composer-first-session-start.md), amendment of 2026-11-07 | Accepted |
 | Sessions in the project folder of a Git repository (a checkout menu in the draft, per draft, worktree by default) | [ADR-0043](adr/0043-sessions-in-the-project-folder.md) | Accepted |
 | Delete and archive saved sessions | [ADR-0044](adr/0044-delete-and-archive-sessions.md) | Accepted |
@@ -898,8 +916,11 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 
 Pitfalls known so far:
 
-- `RootView.swift` and `TranscriptTable.swift` are shared with the open M15 work (#206, #207, #209, #210, #213):
-  M15 merges first, M16 rebases; within M16, merge in table order.
+- `RootView.swift` and `TranscriptTable.swift` are the collision points with M18, which is done. In `RootView`,
+  `DraftSendTransition` moves the draft's card to the bottom at Send; #225 and #230 (the landing place after a delete)
+  adapt it. In `TranscriptTable`, the quiet row selection (#269) and the row height (since #302 row stacks hold their
+  own height above AppKit's `rowContentHugging`) matter for #223's expand and collapse, which must go through that path
+  and get a resize test. Within M16, merge in table order.
 - #223 changes the row model again after #155 and #209; the streaming benchmarks are the gate, and the owner approves
   the workload before a run.
 - #229 and #232/#233 touch safety paths (`prepare`, the removal check, the merge). Real-repository tests, a local bare

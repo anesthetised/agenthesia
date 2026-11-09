@@ -269,9 +269,8 @@ right-aligned label under the bubble. Agent messages have no role label; thought
 dimmed. Tool, permission and input rows keep their headers. `role` stays in the model, and Copy returns a row's
 Markdown without it.
 
-> **Accepted, not yet implemented (M16):** [ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md) makes user messages
-> left-aligned tinted blocks of the column's width, collapses thoughts into one disclosure row (`Thinking… <last
-> line>`, then `Thought for 12s`, consecutive thoughts folded), adds the plan step to the working line (`Working for
+> **Accepted, not yet implemented (M16):** [ADR-0039's 2026-11-07 amendment](adr/0039-t3-style-window-layout.md) collapses thoughts into
+> one disclosure row (`Thinking… <last line>`, then `Thought for 12s`, consecutive thoughts folded), adds the plan step to the working line (`Working for
 > 1m 12s · 3 of 7 · Writing tests`), a Plan section and context usage to the inspector, and a context ring to the
 > composer from 70 %. This section describes the code as it is.
 

@@ -34,7 +34,12 @@ The same plan drives the [status line](composer.md#status-line) and a Working ro
 ## Agent
 
 - The agent's name and the Agent Log switch, for a live session.
+- Once the agent reported its context usage (`usage_update`), `Context` reads `84k of 200k · 42 %` (tokens in context
+  of the window's size, the percentage rounded down), and `Cost` the cost the agent reports, formatted by the system
+  in the agent's currency (`$1.23`). Nothing shows before the first report. Beyond 70 % the composer also shows it
+  ([context ring](composer.md#session-settings)).
 
 ## Changes
 
+- 2026-11-09, #222: Context and Cost in the Agent section.
 - 2026-11-09, #221: the Plan section; the rest of the inspector summarised from the code at f5a8232.

@@ -146,6 +146,10 @@ struct SessionInspector: View {
     private func agent(_ owner: LiveSession) -> some View {
         Section("Agent") {
             if let name = owner.agentName { LabeledContent("Name", value: name) }
+            if let usage = ContextUsage(owner.controller?.transcript.usage) {
+                LabeledContent("Context", value: usage.summary)
+                if let cost = usage.costText { LabeledContent("Cost", value: cost) }
+            }
             Toggle("Agent Log", systemImage: "terminal", isOn: $showingLog)
         }
     }

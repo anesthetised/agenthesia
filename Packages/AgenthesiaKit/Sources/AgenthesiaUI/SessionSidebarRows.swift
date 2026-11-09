@@ -6,7 +6,6 @@ import SwiftUI
 struct SessionSidebarRows: View {
     let model: SessionWindowModel
     let section: SessionSidebar.Section
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ForEach(section.rows) { row in
@@ -18,12 +17,11 @@ struct SessionSidebarRows: View {
     }
 
     private func liveRow(_ owner: LiveSession, _ row: SessionSidebar.Row) -> some View {
-        let session = owner.controller?.session ?? owner.resuming
-        return SessionRow(
+        SessionRow(
             title: row.title,
             project: row.project?.name,
             isScratch: model.isScratch(row.project),
-            reason: owner.reason ?? session.flatMap { model.outcome(of: $0.id) }?.label,
+            reason: model.reason(of: owner),
             activity: owner.activity,
             lastActivity: row.lastActivity,
             shelf: section.kind == .working,
@@ -31,13 +29,7 @@ struct SessionSidebarRows: View {
             onSettle: model.canSettle(owner) ? { Task { await model.settle(owner) } } : nil
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
-        .contextMenu {
-            newSessionButton(row.project)
-            windowMenu(.live(owner))
-            Button("Settle Session") { Task { await model.settle(owner) } }
-                .disabled(!model.canSettle(owner))
-            if let session, !model.isScratch(row.project) { discardButton(session) }
-        }
+        .contextMenu { SessionRowMenu(model: model, row: row) }
     }
 
     private func savedRow(_ record: SessionRecord, _ row: SessionSidebar.Row) -> some View {
@@ -50,8 +42,34 @@ struct SessionSidebarRows: View {
             lastActivity: row.lastActivity
         )
         .tag(AnyHashable(record.id))
-        .contextMenu {
-            newSessionButton(row.project)
+        .contextMenu { SessionRowMenu(model: model, row: row) }
+    }
+}
+
+extension SessionWindowModel {
+    /// The reason a live session's row and card give: its status's, else its worktree's outcome.
+    func reason(of owner: LiveSession) -> String? {
+        owner.reason ?? (owner.controller?.session ?? owner.resuming).flatMap { outcome(of: $0.id) }?.label
+    }
+}
+
+/// The context menu of a session row, and of its card on the board (ADR-0046).
+struct SessionRowMenu: View {
+    let model: SessionWindowModel
+    let row: SessionSidebar.Row
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        newSessionButton(row.project)
+        switch row.source {
+        case .live(let owner):
+            windowMenu(.live(owner))
+            Button("Settle Session") { Task { await model.settle(owner) } }
+                .disabled(!model.canSettle(owner))
+            if let session = owner.controller?.session ?? owner.resuming, !model.isScratch(row.project) {
+                discardButton(session)
+            }
+        case .saved(let record):
             windowMenu(.saved(record))
             archiveButton(record)
             Button("Delete Session…") { Task { await model.requestDelete(record) } }

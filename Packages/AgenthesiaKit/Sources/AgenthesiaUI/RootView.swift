@@ -49,7 +49,9 @@ public struct RootView: View {
             VStack(spacing: 0) {
                 // Stacked, so the draft keeps its size while Send's transition moves its card to the bottom.
                 ZStack {
-                    if model.inDraft {
+                    if model.showingBoard {
+                        SessionBoard(model: model)
+                    } else if model.inDraft {
                         SessionDraftView(model: model).transition(DraftSendTransition())
                     } else if model.isLoadingHistory {
                         ProgressView("Loading history…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -57,16 +59,10 @@ public struct RootView: View {
                         GeometryReader { geometry in panes(session, size: geometry.size) }
                     } else if let held = model.heldPrompt {
                         GeometryReader { geometry in startingColumn(held, size: geometry.size) }
+                    } else if model.owner?.isStarting == true {
+                        ContentUnavailableView("Starting session…", systemImage: "bubble.left.and.bubble.right")
                     } else {
-                        let starting = model.owner?.isStarting == true
-                        ContentUnavailableView {
-                            Label(
-                                starting ? "Starting session…" : "Start a session",
-                                systemImage: "bubble.left.and.bubble.right"
-                            )
-                        } description: {
-                            if !starting { Text("Choose a project and an installed ACP agent.") }
-                        }
+                        SessionBoard(model: model)
                     }
                 }
                 if model.restored == nil, let diagnostic = model.owner?.diagnostic {

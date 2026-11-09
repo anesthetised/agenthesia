@@ -30,10 +30,11 @@ Noticeable UX changes are still decided with the owner first (AGENTS.md); the do
 | [transcript.md](transcript.md) | The transcript: selecting rows, Copy, keyboard navigation |
 | [merge.md](merge.md) | The merge sheet and the push after a merge |
 | [inspector.md](inspector.md) | The inspector: plan, changed files, workspace, agent |
+| [board.md](board.md) | The session board: the Overview row, ⌘0, the cards, answering a permission from a card |
 | [menu-bar.md](menu-bar.md) | The menu bar item: the Needs You count, the sessions that need you or work, answering a permission |
 
 Not written yet, each by the first pull request that changes it: review, permissions and forms,
-session sign-in, notifications and the Dock, the board.
+session sign-in, notifications and the Dock.
 
 ## File template
 

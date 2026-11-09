@@ -8,8 +8,9 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 
 ## Opening the draft
 
-- New Session (⇧⌘N, Session menu) and the `+` button in the sidebar's toolbar show the draft in the current window. A
-  new window, and a restored window that had no session, show it too.
+- New Session (⇧⌘N, Session menu) and the `+` button in the sidebar's toolbar show the draft in the current window,
+  also from the session board. A new window, and a restored window that had no session, show it too. The board
+  ([board.md](board.md)) shows only on ⌘0 and the sidebar's Overview row, and when the displayed session is deleted.
 - `New Session in Project` in the context menu of a session row (live or saved) opens the draft with that row's
   project selected; the typed message and the agent stay. A starting session has no project yet and offers nothing.
 - The `New Session` button of a failure banner that offers it (for example `The agent no longer has this session.`)
@@ -189,6 +190,8 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 
 ## Changes
 
+- 2026-11-09, #227: blank and restored windows keep the draft; the session board shows on ⌘0, the Overview row and
+  after the displayed session is deleted.
 - 2026-11-09, #229: the Checkout label becomes a menu for Git projects, `New worktree from <base>` or `Project folder`,
   per draft (ADR-0043).
 - 2026-11-09, #225: while a session starts, the detail column shows the first message as the transcript's only

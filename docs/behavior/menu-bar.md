@@ -31,7 +31,7 @@ system; the app has no setting for it.
 - An item opens its session the way a notification does ([ADR-0030](../adr/0030-notification-activation-and-identity.md)):
   `agenthesia://session/<id>`, so the window that shows the session comes forward or one opens.
 - Choosing an option answers the request in place and does not open a window. Open comes first in the submenu even for
-  a request without a diff, because the submenu replaces the item that would open the session; the board offers Open
+  a request without a diff, because the submenu replaces the item that would open the session; the [board](board.md) offers Open
   first only for a request with a diff (`PermissionChoice.choices`).
 - A request answered elsewhere meanwhile is gone: a stale choice does nothing.
 

@@ -1,12 +1,15 @@
 # Sidebar
 
 The left column of every window lists the sessions by what they ask of the user: *Needs You* scrolls under a search
-field, and *Working* and *Settled* are shelves pinned to the bottom edge, Working above Settled. Selecting a row shows
-that session in the window; the draft (new session) has no selected row. The search text and the selection belong to
-the window.
+field, and *Working* and *Settled* are shelves pinned to the bottom edge, Working above Settled. Above Needs You, a
+fixed *Overview* row shows the session board. Selecting a row shows that session in the window; the draft (new session)
+has no selected row. The search text and the selection belong to the window.
 
 ## Sections
 
+- **Overview** — always the first row, `Overview` with `square.grid.2x2`, above Needs You and not filtered by the
+  search. Selecting it, or Session → `Overview` (⌘0), shows the session board in the window, and it is selected while
+  the board shows ([board.md](board.md)).
 - **Needs You** — live sessions whose status is *needs input* (waits for sign-in, a permission or an input form),
   *failed* (startup or the connection failed), or *done* (a turn finished and its end has not been on screen yet,
   [ADR-0026's amendment](../adr/0026-app-wide-session-manager.md)). In start order.
@@ -119,8 +122,8 @@ its call only by id takes the title the agent reported for that call.
 All in the Session menu, acting on the focused window:
 
 - `Previous Session` ⌥⌘[ and `Next Session` ⌥⌘] step through the visible rows in order — Needs You, Working,
-  Settled — and wrap. Archived rows are skipped even when a search shows them. From the draft, or when the selected row
-  is not visible, Next selects the first row and Previous the last. Disabled when there is no row.
+  Settled — and wrap; the Overview row is not a stop. Archived rows are skipped even when a search shows them. From the
+  draft or the board, or when the selected row is not visible, Next selects the first row and Previous the last. Disabled when there is no row.
 - `Next Session Needing Input` ⇧⌥⌘] goes to the next live row whose status is *needs input* (sign-in, permission or
   form), in the same order with wrap; failed and done rows in Needs You are skipped. Disabled when none waits.
 - `Switch to Session` lists nine items, ⌘1…⌘9, for the first nine rows of Needs You then Working, in the order on
@@ -165,7 +168,7 @@ Right-click on a row:
   deleted.`, `Its folder “<name>” with 3 files will be moved to the Trash.` for a session without a project, `This
   session failed to start.` when it stored nothing), then `Its history will be deleted. This cannot be undone.`, and
   `Delete` / `Cancel`. The worktree and its branch, or the folder, go first; if that fails nothing is deleted and
-  `Cannot Delete the Session` shows the error. A window showing the session returns to the draft. Live rows have no
+  `Cannot Delete the Session` shows the error. A window showing the session goes to the board. Live rows have no
   such item: a session is ended first.
 - `Discard Worktree…` is absent on a `No project` row. It is disabled for a session in the project folder
   ([ADR-0043](../adr/0043-sessions-in-the-project-folder.md)), and the Session menu's item says why: `This session works
@@ -183,6 +186,8 @@ their next refresh, and a finished deletion triggers one in every window.
 
 ## Changes
 
+- 2026-11-09, #227: the Overview row above Needs You (⌘0) shows the session board; a window whose session was deleted
+  goes to the board instead of the draft.
 - 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.
 - 2026-11-09, #230: `Delete Session…` for saved sessions.
 - 2026-11-09, #221: a running session's reason is the plan entry in progress; a turn's origin outranks it.

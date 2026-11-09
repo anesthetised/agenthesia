@@ -9,8 +9,10 @@ import os
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
-    /// Whether the window shows the draft (ADR-0040) instead of a session.
-    var showingSetup = true
+    /// Whether the window shows the draft (ADR-0040) or the board instead of a session. Setting it leaves the board.
+    var showingSetup = true { didSet { showingBoard = false } }
+    /// Whether the window shows the session board (ADR-0046); `showingSetup` is set with it, as no session is shown.
+    private(set) var showingBoard = false
     /// The draft's first message; it moves to the session on Send and comes back if startup fails or is cancelled.
     var draft = PromptDraft()
     /// The project and agent picked in the draft; nil uses the defaults. Another project starts with a worktree again.
@@ -220,8 +222,11 @@ import os
     }
     var canStart: Bool { !closed }
     /// The draft is not the session that stays displayed behind it.
-    var inDraft: Bool { showingSetup && canStart }
-    var windowTitle: String { inDraft ? "New Session" : displayed?.title ?? displayed?.session.title ?? "New Session" }
+    var inDraft: Bool { showingSetup && !showingBoard && canStart }
+    var windowTitle: String {
+        showingBoard
+            ? "Overview" : inDraft ? "New Session" : displayed?.title ?? displayed?.session.title ?? "New Session"
+    }
     var windowSubtitle: String {
         inDraft ? "" : projects.first { $0.id == displayed?.session.projectID }?.name ?? ""
     }
@@ -287,6 +292,7 @@ import os
     }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {
+        if !closed, showingBoard { return .board }
         guard !closed, !showingSetup, let id = displayed?.session.id ?? owner?.sessionID else { return .launch }
         return .session(id)
     }
@@ -315,14 +321,20 @@ import os
         )
     }
 
+    /// The sidebar's Overview row (ADR-0046).
+    static let overviewID = AnyHashable("overview")
+
     var sidebarSelection: AnyHashable? {
         get {
-            showingSetup || closed
+            if showingBoard { return Self.overviewID }
+            return showingSetup || closed
                 ? nil : selectedHistoryID.map(AnyHashable.init) ?? owner.map { NavigationTarget.live($0).id }
         }
         set {
             guard !closed, let id = newValue, id != sidebarSelection else { return }
-            if let owner = sessions.owners.first(where: { NavigationTarget.live($0).id == id }) {
+            if id == Self.overviewID {
+                showBoard()
+            } else if let owner = sessions.owners.first(where: { NavigationTarget.live($0).id == id }) {
                 show(owner)
             } else if let record = history.first(where: { AnyHashable($0.id) == id }) {
                 showingSetup = false
@@ -794,6 +806,7 @@ import os
     }
     /// Shows the target as the window opens, including after relaunch; a vanished session opens the launch form.
     func restore(_ target: WindowTarget) async {
+        if target == .board { return showBoard() }
         guard case .session(let id) = target else { return }
         await refresh()
         if let record = history.first(where: { $0.id == id }) {
@@ -807,7 +820,7 @@ import os
     /// to receive the URL. Otherwise the session gets its own window, or the one that already shows it.
     func activate(_ target: WindowTarget, isBlank: Bool, windowCount: Int, openWindow: (WindowTarget) -> Void) async {
         guard !closed, case .session = target else { return }
-        if isBlank, self.target == .launch, windowCount <= 1 {
+        if isBlank && self.target == .launch || self.target == .board, windowCount <= 1 {
             await restore(target)
         } else {
             openWindow(target)
@@ -890,7 +903,7 @@ import os
         return catalog?.record(for: choice)
     }
     var canStartDraft: Bool {
-        canStart && showingSetup && !draft.isEmpty && (draftWithoutProject || selectedDirectory != nil)
+        inDraft && !draft.isEmpty && (draftWithoutProject || selectedDirectory != nil)
             && selectedAgent.flatMap(record(for:)) != nil
     }
 
@@ -1001,13 +1014,20 @@ import os
     func showLive() {
         selectedHistoryID = nil; selection = UUID(); isLoadingHistory = false; restored = nil; errorMessage = nil
     }
-    /// The displayed saved session was deleted: the window shows the draft, and the session's view state goes.
+    /// The displayed saved session was deleted: the window shows the board (ADR-0046), and the session's view state
+    /// goes.
     private func leaveDeletedSession(_ id: UUID) {
         if review?.id == id { review = nil; showingReview = false }
         viewedMarks[id] = nil
-        if owner?.sessionID == id { owner = nil }
+        showBoard()
+    }
+    /// Shows the session board (⌘0, the Overview row); the draft keeps its text for ⇧⌘N.
+    func showBoard() {
+        guard !closed else { return }
+        owner = nil
         showLive()
         showingSetup = true
+        showingBoard = true
     }
     /// Detaches the window; its sessions keep running.
     func close() {

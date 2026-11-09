@@ -150,7 +150,7 @@ import Testing
         await fixture.close()
     }
 
-    @Test func deleteSaysWhatGoesAndEveryWindowShowingTheSessionReturnsToTheDraft() async throws {
+    @Test func deleteSaysWhatGoesAndEveryWindowShowingTheSessionGoesToTheBoard() async throws {
         let fixture = try await Fixture()
         let (record, other) = (try await fixture.save("Doomed", at: 1), try await fixture.save("Kept", at: 2))
         let second = SessionWindowModel(sessions: fixture.sessions)
@@ -165,16 +165,16 @@ import Testing
         #expect(pending.message == "This session failed to start. Its history will be deleted. This cannot be undone.")
         await fixture.model.confirmDelete(pending)
         #expect(try await fixture.store.session(id: record.id) == nil)
-        #expect(fixture.model.showingSetup && fixture.model.displayed == nil && fixture.model.pendingDelete == nil)
+        #expect(fixture.model.showingBoard && fixture.model.displayed == nil && fixture.model.pendingDelete == nil)
         #expect(fixture.model.sidebar.rows.map(\.id) == [AnyHashable(other.id)])
         // The other window learns of it at its next refresh, which a finished deletion triggers.
         await second.refresh()
-        #expect(second.showingSetup && second.displayed == nil)
+        #expect(second.showingBoard && second.displayed == nil && second.target == .board)
         second.close()
         await fixture.close()
     }
 
-    @Test func deletingTheSessionAWindowEndedReturnsItToTheDraft() async throws {
+    @Test func deletingTheSessionAWindowEndedSendsItToTheBoard() async throws {
         let fixture = try await Fixture()
         let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
         let binary = try #require(
@@ -196,9 +196,9 @@ import Testing
         let pending = try #require(fixture.model.pendingDelete)
         await fixture.model.confirmDelete(pending)
         #expect(try await fixture.store.session(id: record.id) == nil)
-        #expect(fixture.model.showingSetup && fixture.model.displayed == nil && fixture.model.owner == nil)
+        #expect(fixture.model.showingBoard && fixture.model.displayed == nil && fixture.model.owner == nil)
         await second.refresh()
-        #expect(second.showingSetup && second.displayed == nil)
+        #expect(second.showingBoard && second.displayed == nil)
         second.close()
         await fixture.close()
     }

@@ -2,11 +2,13 @@ import AgenthesiaCore
 import Persistence
 import SwiftUI
 
-/// Needs You, the scrolling top of the sidebar (ADR-0039). Working and Settled are `SidebarShelves`.
+/// The Overview row (ADR-0046) and Needs You, the scrolling top of the sidebar (ADR-0039). Working and Settled are
+/// `SidebarShelves`.
 struct SessionSidebarList: View {
     let model: SessionWindowModel
 
     var body: some View {
+        Label("Overview", systemImage: "square.grid.2x2").tag(SessionWindowModel.overviewID)
         if let section = model.sidebar.section(.needsYou) {
             Section(section.kind.rawValue) { SessionSidebarRows(model: model, section: section) }
         }

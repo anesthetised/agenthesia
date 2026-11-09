@@ -108,6 +108,21 @@ import Testing
         try helper.closeInput()
     }
 
+    @Test func leavesTheSocketOfALiveInstanceAlone() async throws {
+        let path = Self.testPath()
+        let tokens = MCPTokens()
+        let session = UUID()
+        let first = try MCPSocket(path: path, tokens: tokens, serve: echo)
+        defer { first.close() }
+        #expect(throws: POSIXError(.EADDRINUSE)) {
+            try MCPSocket(path: path, tokens: MCPTokens()) { _, _ in }
+        }
+        let helper = try Helper(socket: path, token: tokens.issue(for: session))
+        try helper.send("still here")
+        #expect(try await helper.line() == "\(session) still here")
+        try helper.closeInput()
+    }
+
     @Test func rejectsAPathLongerThanSunPath() {
         #expect(throws: POSIXError(.ENAMETOOLONG)) {
             try MCPSocket(path: "/tmp/" + String(repeating: "x", count: 104), tokens: MCPTokens()) { _, _ in }

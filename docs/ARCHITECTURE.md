@@ -514,8 +514,10 @@ exits 1).
 `SessionApplicationDelegate` opens one `MCPSocket` per app instance at launch (only in an app bundle, so package tests
 never do) at `MCPSocket.path(dataFolder: AppSupport.directory)`: `$TMPDIR/agenthesia-<16 hex digits>.sock`, the digits
 the start of a SHA-256 of the data folder, so the installed app, the `.dev` build and a run under `CFFIXED_USER_HOME`
-each get their own, and the path stays under `sun_path`'s 104 bytes. `init` unlinks whatever is at the path (a stale
-socket of an instance that did not close it), binds, sets mode `0600` before `listen` and accepts on a Dispatch source.
+each get their own, and the path stays under `sun_path`'s 104 bytes. `init` first connects to the path: when another
+instance with the same data folder answers (two `.dev` builds from different worktrees), it throws `EADDRINUSE` and the
+second app runs without the server, logged; otherwise it unlinks whatever is there (a stale socket of an instance that
+did not close it), binds, sets mode `0600` before `listen` and accepts on a Dispatch source.
 Each connection's hello is read a byte at a time on a global queue (at most 256 bytes and 5 seconds), so nothing after
 it is consumed. `SessionManager.mcpTokens` (`MCPTokens`) maps tokens, 256 bits from `SystemRandomNumberGenerator` as 64
 hex digits, to session ids; `revoke` drops every token of a session. A known token hands the connection, as a

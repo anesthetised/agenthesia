@@ -938,6 +938,12 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #221 (plan) landed: `PlanProgress` (Core) feeds the working line (`· 3 of 7 · Writing tests`), the Working row's
+  reason (a turn's ADR-0049 origin outranks it, owner's choice) and the inspector's `PlanSection`, open while the turn
+  runs and collapsed to `Plan · 3 of 7` after it (a hosted test checks that `Section(isExpanded:)` collapses in the
+  grouped form). `TranscriptState` clears the plan when a turn starts (owner's choice: the plan is always this turn's).
+  `scripts/app-check/demos/plan.json` (`MockAgent --demo`) advances a four-step plan. Running-app check deferred to
+  the end of wave 1, while the owner uses the machine.
 - #231 (archive) landed: migration `v6-session-archived-at`, `PersistenceStore.setArchived`, the Settled filter and
   the `Archived` search reason, Previous/Next skipping archived rows, the Archive/Unarchive menu items and the Continue
   reset, with Swift Testing tests (a migration test on a v5 database file, the model, the sidebar). Running app

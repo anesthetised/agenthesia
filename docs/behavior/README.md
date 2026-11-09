@@ -28,8 +28,9 @@ Noticeable UX changes are still decided with the owner first (AGENTS.md); the do
 | [file-pane.md](file-pane.md) | The file pane and the links in the Markdown preview and the transcript |
 | [agents-settings.md](agents-settings.md) | Settings → Agents: installed, local and registry agents, runtimes, sign-in from Settings |
 | [transcript.md](transcript.md) | The transcript: selecting rows, Copy, keyboard navigation |
+| [inspector.md](inspector.md) | The inspector: plan, changed files, workspace, agent |
 
-Not written yet, each by the first pull request that changes it: review, inspector, permissions and forms,
+Not written yet, each by the first pull request that changes it: review, permissions and forms,
 session sign-in, notifications and the Dock, the board and the menu bar.
 
 ## File template

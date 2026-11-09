@@ -395,8 +395,9 @@ ADR-0042 addresses in its own, narrower way.
 
 ## Amendment (2026-11-07): a quieter transcript, and the work in view
 
-- Status: Accepted by the owner on 2026-11-07 (#220); not yet implemented. Until it lands, the transcript, inspector and composer text above
-  describes the code.
+- Status: Accepted by the owner on 2026-11-07 (#220). The plan landed in #221 (2026-11-09; a new turn clears the
+  previous turn's plan at once, and a turn started by another session keeps its origin as the sidebar reason); the
+  rest is not yet implemented. [docs/behavior/](../behavior/) describes the code.
 - Related: [0007](0007-transcript-rendering.md), [0026](0026-app-wide-session-manager.md) (amendment),
   [0046](0046-session-board-and-menu-bar.md)
 

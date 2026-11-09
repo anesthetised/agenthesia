@@ -93,7 +93,8 @@ public final class LiveSession {
             stopReason: controller?.transcript.lastStopReason,
             promptFailed: controller?.transcript.lastTurnFailed == true,
             queuePaused: controller.map { $0.queuePaused && !$0.queuedPrompts.isEmpty } == true,
-            turnOrigin: controller.flatMap { originLabel($0.transcript.turnOrigin) }
+            turnOrigin: controller.flatMap { originLabel($0.transcript.turnOrigin) },
+            planStep: PlanProgress(controller?.transcript.plan)?.current
         )
     }
 

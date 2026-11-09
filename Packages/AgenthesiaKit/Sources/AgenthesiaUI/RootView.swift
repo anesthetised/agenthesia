@@ -338,7 +338,8 @@ public struct RootView: View {
             if let startedAt = session.turnStartedAt {
                 WorkingTimeLine(
                     startedAt: startedAt,
-                    waiting: !session.pendingPermissions.isEmpty || !session.pendingInputs.isEmpty
+                    waiting: !session.pendingPermissions.isEmpty || !session.pendingInputs.isEmpty,
+                    plan: PlanProgress(session.transcript.plan)
                 )
             }
             if let card = ContinueCard.State(

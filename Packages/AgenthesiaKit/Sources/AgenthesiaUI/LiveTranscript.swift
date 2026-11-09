@@ -14,23 +14,27 @@ struct TranscriptMessage {
     /// The signature of inline code links; nil for rows that do not link inline code.
     var links: Int?
     var tool: ToolCardHeader?
-    var input: InputCard?
     /// A session notice: a centered caption between hairlines, without role label or Copy.
     var isNotice = false
     var kind = Kind.card
     /// Right-aligned under a user bubble: `not sent` or `sent together`.
     var caption: String?
+    /// Right-aligned above a user bubble, after a symbol: `Steer` for a prompt sent now (#340).
+    var label: String?
     /// What Copy returns instead of `markdown`, built only when asked: a folded group's tool cards.
     var copyText: (() -> String)?
 
     /// How a row presents its role: users get a bubble, agent text no label, expanded thoughts dimmed text below their
-    /// header, a group of tool calls, collapsed thoughts or a folded permission record only a header.
-    enum Kind: Equatable { case card, user, agent, thought, group }
+    /// header, a group of tool calls, collapsed thoughts or a folded permission record only a header. An answered
+    /// question, an interrupted turn and a failed one have kinds of their own, which a turn's fold recognises (#340):
+    /// `question` is a header with its answers below while expanded, `interruption` a red divider, `failure` a red
+    /// error with the message below.
+    enum Kind: Equatable { case card, user, agent, thought, group, question, interruption, failure }
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
 struct ToolCardHeader: Equatable {
-    enum Tone: Equatable { case neutral, running, attention, success, failure }
+    enum Tone: Equatable { case neutral, primary, running, attention, success, failure }
     var symbol: String
     var kind: String
     var status: String
@@ -236,12 +240,10 @@ final class LiveTranscriptSource: TranscriptSource {
             if controller?.pendingInputs.contains(where: { $0.id == input.requestID }) == true {
                 return render(id: item.id, role: "Input", markdown: Self.waitingInput(schema))
             }
-            var message = render(id: item.id, role: "Input", markdown: input.request.message)
             let recording =
                 input.response == nil
                 && (controller?.status == .running || controller?.status == .idle || controller?.status == .stopping)
-            message.input = InputCard(input: input, recording: recording)
-            return message
+            return questionMessage(InputAnswer(input, recording: recording), id: item.id)
         }
         if let tool = item.toolCall {
             let card = Self.toolCard(
@@ -283,9 +285,10 @@ final class LiveTranscriptSource: TranscriptSource {
                 role: "Error",
                 markdown: isExpanded ? summary + "\n\n```\n" + stored + "\n```" : summary
             )
+            message.kind = .failure
             message.tool = ToolCardHeader(
-                symbol: "exclamationmark.triangle",
-                kind: "Prompt failed",
+                symbol: "exclamationmark.circle.fill",
+                kind: "Error",
                 status: "",
                 tone: .failure,
                 expandable: hasDetails,
@@ -294,9 +297,15 @@ final class LiveTranscriptSource: TranscriptSource {
             )
             return message
         }
+        if let interruption = item.interruption {
+            var message = render(id: item.id, role: "Session", markdown: Self.divider(interruption))
+            (message.isNotice, message.kind) = (true, .interruption)
+            return message
+        }
         let (role, markdown) = Self.content(item)
-        // Another session's prompt is a labelled card, never the developer's bubble.
-        let origin = item.message.flatMap { originLabel($0.origin) }
+        // Another session's prompt is a labelled card, never the developer's bubble; a steer says so after the origin.
+        let steer = item.message?.isSteer == true
+        let origin = item.message.flatMap { originLabel($0.origin) }.map { steer ? "\($0) · \(Self.steer)" : $0 }
         // Streaming rows keep their text until they finish; user prompts never link.
         let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(item: index)
         var message = render(id: item.id, role: origin ?? role, markdown: markdown, linksInlineCode: linksInlineCode)
@@ -305,6 +314,7 @@ final class LiveTranscriptSource: TranscriptSource {
             switch source.role {
             case .user:
                 message.kind = origin == nil ? .user : .card
+                if steer, origin == nil { message.label = Self.steer }
                 message.caption = source.notSent ? "not sent" : source.sentTogether ? "sent together" : nil
             case .assistant: message.kind = .agent
             case .thought: message.kind = .thought
@@ -312,6 +322,69 @@ final class LiveTranscriptSource: TranscriptSource {
         }
         return message
     }
+
+    /// The label of a prompt sent now while a turn ran, as T3 Code's.
+    static let steer = "Steer"
+
+    /// An interrupted turn's divider, as T3 Code words it; a steered turn ends with a plain line, its steer says why.
+    static func divider(_ interruption: TranscriptState.Interruption) -> String {
+        switch interruption {
+        case .stopped: "Run interrupted · Stopped by user"
+        case .steered: ""
+        }
+    }
+
+    /// An answered question is one row like a tool row: the questions, then the answers; expanded, each question with
+    /// its answer below. Its text is built here rather than from Markdown, so the answers can be indented.
+    private func questionMessage(_ answer: InputAnswer, id: Int64) -> TranscriptMessage {
+        let isExpanded = expanded.contains(id)
+        var message = TranscriptMessage(
+            role: "Input",
+            markdown: isExpanded ? answer.text : "",
+            text: isExpanded ? Self.answerText(answer) : NSAttributedString(string: "")
+        )
+        message.kind = .question
+        message.tool = ToolCardHeader(
+            symbol: "questionmark.bubble",
+            kind: answer.questions,
+            status: answer.answers,
+            tone: isExpanded ? .neutral : .primary,
+            expandable: true,
+            expanded: isExpanded,
+            detailsDisclosure: true
+        )
+        message.copyText = { answer.text }
+        return message
+    }
+
+    /// Each question in secondary text with its answer indented below, as T3 Code's answer history.
+    static func answerText(_ answer: InputAnswer) -> NSAttributedString {
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let text = NSMutableAttributedString()
+        for (index, pair) in answer.pairs.enumerated() {
+            let question = NSMutableParagraphStyle()
+            question.paragraphSpacingBefore = index == 0 ? 0 : 8
+            let lines = [(pair.question, question)] + (pair.answer.isEmpty ? [] : [(pair.answer, Self.answerIndent)])
+            for (line, style) in lines {
+                if text.length > 0 { text.append(NSAttributedString(string: "\n")) }
+                text.append(
+                    NSAttributedString(
+                        string: line,
+                        attributes: [
+                            .font: font, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style,
+                        ]
+                    )
+                )
+            }
+        }
+        return text
+    }
+
+    private static let answerIndent: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        (style.firstLineHeadIndent, style.headIndent, style.paragraphSpacingBefore) = (12, 12, 2)
+        return style
+    }()
 
     /// Makes the item's row exist and its whole text visible, expanding what hides it. Returns its row.
     func reveal(item index: Int) -> Int? {
@@ -440,8 +513,9 @@ final class LiveTranscriptSource: TranscriptSource {
             return ("Permission", permissionCard(permission, phase: .ended, expanded: false).markdown)
         }
         if let input = item.input {
-            return ("Input", input.request.message + "\n\n" + InputForm.outcome(input.response))
+            return ("Input", InputAnswer(input, recording: false).text)
         }
+        if let interruption = item.interruption { return ("Session", divider(interruption)) }
         if let date = item.reopenedAt {
             return ("Session", "Continued · \(date.formatted(date: .abbreviated, time: .shortened))")
         }

@@ -644,7 +644,8 @@ extension LiveTranscriptTests {
         source.state = recorded.state
         source.revision += 1
         let failure = source.message(at: 1)
-        #expect(failure.markdown == "Model \"x\" overloaded" && !failure.isNotice)
+        #expect(failure.markdown == "Model \"x\" overloaded" && !failure.isNotice && failure.kind == .failure)
+        #expect(failure.tool?.kind == "Error")
         #expect(failure.tool?.expandable == true && failure.tool?.expanded == false)
         #expect(failure.tool?.detailsDisclosure == true && failure.tool?.tone == .failure)
         source.toggleExpansion(at: 1)
@@ -663,18 +664,19 @@ extension LiveTranscriptTests {
     @Test func sessionNoticesAreCaptionsWithoutRoleLabelOrCopy() async throws {
         let recorded = try await RecordedTranscript()
         try await recorded.append(SessionEvent.prompt(id: UUID(), content: [.init(text: "hi")]).storedEvent())
-        try await recorded.append(SessionEvent.interrupted(id: UUID()).storedEvent())
+        try await recorded.append(SessionEvent.worktreeRemoved(.discarded).storedEvent())
+        let notice = try #require(recorded.state.items.last?.notice)
         let source = LiveTranscriptSource()
         source.state = recorded.state
         source.revision += 1
         #expect(!source.message(at: 0).isNotice)
-        #expect(source.message(at: 1).isNotice && source.message(at: 1).markdown == "Interrupted")
+        #expect(source.message(at: 1).isNotice && source.message(at: 1).markdown == notice)
         let controller = TranscriptTableController()
         let window = host(controller)
         defer { window.close() }
         controller.update(source)
         let row = try #require(controller.table.view(atColumn: 0, row: 1, makeIfNecessary: true))
-        #expect(labels(in: row) == ["Interrupted"])
+        #expect(labels(in: row) == [notice])
         #expect(views(NSButton.self, in: row).isEmpty)
         #expect(views(NSBox.self, in: row).count == 2)
         let message = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
@@ -775,7 +777,7 @@ extension LiveTranscriptTests {
         try await recorded.apply(.agentMessageChunk(.init(content: .init(text: "d"))))
         try await recorded.apply(.agentThoughtChunk(.init(content: .init(text: "e"))))
         try await recorded.apply(.toolCall(.init(toolCallId: "t", title: "Read", status: .completed)))
-        try await recorded.append(SessionEvent.interrupted(id: UUID()).storedEvent())
+        try await recorded.append(SessionEvent.worktreeRemoved(.discarded).storedEvent())
         let source = source(of: recorded)
         let kinds = (0..<source.messageCount).map { source.message(at: $0).kind }
         #expect(kinds == [.user, .user, .user, .agent, .group, .card, .card])
@@ -911,9 +913,7 @@ extension LiveTranscriptTests {
         let source = LiveTranscriptSource()
         source.state = recorded.state
         let message = source.message(at: 0)
-        let card = try #require(message.input)
-        #expect(!card.recording)
-        #expect(InputForm.outcome(card.input.response) == "Cancelled")
+        #expect(message.kind == .question && message.tool?.status == "Cancelled")
         #expect(LiveTranscriptSource.content(recorded.state.items[0]).1.contains("Cancelled"))
     }
     @Test func formDraftPreservesDefaultsAndInvalidNumericInputForValidation() {
@@ -972,54 +972,6 @@ extension LiveTranscriptTests {
         #expect(InputValidation.errors(in: draft.values, schema: schema).isEmpty)
         draft.edit("optional", text: "", field: .string(.init()))
         #expect(draft.values["optional"] == "")
-    }
-}
-
-private final class FormTranscriptSource: TranscriptSource {
-    var revision = 0
-    var messageCount: Int { 1 }
-    var card: InputCard
-    init(card: InputCard) { self.card = card }
-    func message(at row: Int) -> TranscriptMessage {
-        var message = TranscriptMessage(role: "Input", markdown: "Name", text: NSAttributedString(string: "Name"))
-        message.input = card
-        return message
-    }
-    func isStreaming(at row: Int) -> Bool { false }
-}
-
-extension LiveTranscriptTests {
-    @Test(arguments: [440.0, 600.0]) func aFormRecordFitsTheColumnAndSurvivesTranscriptRefresh(width: Double) throws {
-        let schema = ACP.ElicitationSchema(
-            properties: ["name": .string(.init(title: "Name")), "enabled": .boolean(.init(title: "Enabled"))]
-        )
-        let request = ACP.ElicitationRequest(
-            message: "Name",
-            mode: .form(schema),
-            scope: .session("s", toolCallId: nil)
-        )
-        let card = InputCard(
-            input: .init(requestID: UUID(), request: request, response: .init(action: .accept(["name": "Ada"]))),
-            recording: false
-        )
-        let source = FormTranscriptSource(card: card)
-        let controller = TranscriptTableController()
-        let window = host(controller)
-        defer { window.close() }
-        window.setContentSize(NSSize(width: width, height: 600))
-        controller.scroll.frame = window.contentLayoutRect
-        controller.update(source)
-        window.contentView?.layoutSubtreeIfNeeded()
-        let row = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
-        let original = try #require(row.subviews.first)
-        #expect(controller.table.rect(ofRow: 0).height > 60)
-        source.revision += 1
-        controller.update(source)
-        window.contentView?.layoutSubtreeIfNeeded()
-        let refreshed = try #require(controller.table.view(atColumn: 0, row: 0, makeIfNecessary: true))
-        #expect(refreshed === row)
-        #expect(refreshed.subviews.first === original)
-        #expect(controller.table.rect(ofRow: 0).width <= width)
     }
 }
 
@@ -1107,7 +1059,8 @@ extension LiveTranscriptTests {
         #expect(source.message(at: 0).tool?.kind == "Ran 2 commands")
         #expect(source.message(at: 1).role == "Permission")
         #expect(source.message(at: 2).tool?.kind == "Execute")
-        #expect(source.message(at: 3).input != nil)
+        // An answered question is never folded into a tool group.
+        #expect(source.message(at: 3).kind == .question)
         #expect(source.message(at: 4).tool?.kind == "Ran 2 commands")
         #expect(source.message(at: 5).markdown == "Done")
         #expect(!source.isStreaming(at: 0))

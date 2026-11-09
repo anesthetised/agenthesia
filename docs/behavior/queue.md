@@ -42,7 +42,8 @@ sends the queue ([ADR-0028](../adr/0028-empty-draft-sends-queue.md)):
   and while an input form is docked.
   Both work while the queue is paused.
 - Sending now while a turn runs is steering. Every agent today is steered by interrupting: the running turn is
-  cancelled, the transcript shows an `Interrupted` notice, and the new prompt starts once the cancellation has settled.
+  cancelled and ends with a plain hairline, and the new prompt, labelled `↪ Steer` above its bubble
+  ([transcript.md](transcript.md#interruptions-and-errors)), starts once the cancellation has settled.
   Agents keep the changes they already made. A steering interrupt does not pause the queue, so entries left behind by
   `Send Draft Now` drain when the new turn ends. If the interrupted turn ends with an error, the steering prompt is
   still sent. ([ADR-0010](../adr/0010-prompt-queue-and-steering.md) and ADR-0021 also allow inserting the message into
@@ -105,6 +106,8 @@ captioned `not sent`.
 
 ## Changes
 
+- 2026-11-09, #340: steering shows the new prompt with a `↪ Steer` label and ends the interrupted turn with a plain
+  hairline, instead of the `Interrupted` notice shown when the stop was requested.
 - 2026-11-09, #326: Return never queues while an input form waits; the round button reads `Next` or `Answer` instead,
   and the send items are disabled.
 

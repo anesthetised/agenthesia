@@ -294,8 +294,11 @@ private actor QueueGate {
                 await connection.waitForPrompts(2)
                 #expect(await connection.prompts.last == expected)
                 #expect(await connection.cancellationCount == 1)
-                #expect(session.transcript.items.contains { $0.notice == "Interrupted" })
+                #expect(session.transcript.items.contains { $0.interruption == .steered })
             }
+            // Only a prompt that interrupted the running turn is a steer.
+            let steers = session.transcript.items.compactMap(\.message).filter(\.isSteer).map(\.text)
+            #expect(steers == (strategy == .inject ? [] : all ? ["queued", "draft"] : ["draft"]))
             #expect(session.queuedPrompts.count == (all ? 0 : 1))
             await session.close()
         }

@@ -232,7 +232,7 @@ import Testing
         let transcript = LiveTranscriptSource()
         transcript.update(controller)
         let rows = (0..<transcript.messageCount).map { transcript.message(at: $0) }
-        #expect(rows.contains { $0.markdown == "Asked 2 questions · answer below" && $0.input == nil })
+        #expect(rows.contains { $0.markdown == "Asked 2 questions · answer below" && $0.kind == .card })
 
         let first = try #require(model.dockedInput(controller))
         #expect(first.progress == "1 of 2" && first.title == "Library")
@@ -255,7 +255,9 @@ import Testing
             #"Answers: {"question_0":"SwiftDate","question_0_custom":"with ISO weeks","question_1":["Unit","Benchmark"]}"#
         #expect(agentText(of: controller).contains(expected))
         transcript.update(controller)
-        #expect((0..<transcript.messageCount).contains { transcript.message(at: $0).input?.input.response != nil })
+        // The answered row reads the picks by title, with the custom text in place of the first pick.
+        let answered = (0..<transcript.messageCount).map { transcript.message(at: $0) }.first { $0.kind == .question }
+        #expect(answered?.tool?.status == "with ISO weeks · Unit, Benchmark")
         await fixture.remove()
     }
 

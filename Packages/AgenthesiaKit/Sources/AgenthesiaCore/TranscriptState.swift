@@ -28,6 +28,8 @@ public struct TranscriptState: Equatable, Sendable {
             guard let thoughtStart, let thoughtEnd else { return 0 }
             return max(0, thoughtEnd.timeIntervalSince(thoughtStart))
         }
+        /// Sent now while a turn ran, interrupting it (steering); reduced from `interrupted`, never stored (#340).
+        public var isSteer = false
 
         public var text: String {
             content.compactMap { if case .text(let block) = $0 { block.text } else { nil } }.joined()
@@ -110,6 +112,14 @@ public struct TranscriptState: Equatable, Sendable {
         }
     }
 
+    /// How the user interrupted a turn.
+    public enum Interruption: Equatable, Sendable {
+        /// Stop or ⌘.
+        case stopped
+        /// A prompt sent now, which cancels the running turn (steering).
+        case steered
+    }
+
     public struct Item: Identifiable, Equatable, Sendable {
         /// Sequence of the first event contributing this row; stable across replay.
         public let id: Int64
@@ -118,6 +128,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var notice: String?
         /// `notice` is the stored description of a failed prompt, not a session notice.
         public var isFailure = false
+        /// A turn the user interrupted ended here; shown as a divider (#340).
+        public var interruption: Interruption?
         /// When a saved session was continued; shown as a divider.
         public var reopenedAt: Date?
         public var permission: Permission?
@@ -152,6 +164,18 @@ public struct TranscriptState: Equatable, Sendable {
     /// Who started the latest turn; the sidebar names it while the turn runs.
     public private(set) var turnOrigin = QueuedPrompt.Origin.user
     public private(set) var stopRequested = false
+    /// The turn a prompt sent now interrupted; its stop request is recorded with `interrupted`.
+    private var steeredTurn: UUID?
+    /// The next turn is the steering prompt's, until a stop of the user's own (which pauses the queue) drops it.
+    private var steerPending = false
+    /// The turn the steering prompt started; every message sent together with it is a steer too.
+    private var steerTurn: UUID?
+
+    /// Starts a turn's bookkeeping for steering: the turn is the steer when one was pending.
+    private mutating func startTurn(_ id: UUID) {
+        steerTurn = steerPending ? id : nil
+        steerPending = false
+    }
     public private(set) var lastStopReason: ACP.StopReason?
     /// The agent rejected the last turn's prompt; a new turn or a continued session clears it.
     public private(set) var lastTurnFailed = false
@@ -239,6 +263,7 @@ public struct TranscriptState: Equatable, Sendable {
             lastTurnFailed = false
             items.append(Item(id: sequence, reopenedAt: timestamp))
         case .prompt(let id, let content):
+            startTurn(id)
             activeTurn = id
             turnOrigin = .user
             plan = nil
@@ -248,11 +273,21 @@ public struct TranscriptState: Equatable, Sendable {
             items.append(
                 Item(
                     id: sequence,
-                    message: .init(role: .user, turnID: id, agentMessageID: nil, content: content, isLocalPrompt: true)
+                    message: .init(
+                        role: .user,
+                        turnID: id,
+                        agentMessageID: nil,
+                        content: content,
+                        isLocalPrompt: true,
+                        isSteer: steerTurn == id
+                    )
                 )
             )
         case .queueChanged(let prompts): queuedPrompts = prompts
-        case .queuePaused(let paused): queuePaused = paused
+        case .queuePaused(let paused):
+            queuePaused = paused
+            // Stop after the interrupted turn ended means the steering prompt was never sent.
+            if paused, activeTurn == nil { steerPending = false }
         case .injectionPrepared(let prompts):
             let existing = Set(queuedPrompts.map(\.id))
             queuedPrompts += prompts.filter { !existing.contains($0.id) }
@@ -266,6 +301,7 @@ public struct TranscriptState: Equatable, Sendable {
             }
         case .promptMessage(let prompt, let turnID, let startsTurn, let sentTogether):
             if startsTurn {
+                startTurn(turnID)
                 activeTurn = turnID
                 turnOrigin = prompt.origin
                 plan = nil
@@ -284,16 +320,21 @@ public struct TranscriptState: Equatable, Sendable {
                         isLocalPrompt: true,
                         localPromptID: prompt.id,
                         sentTogether: sentTogether,
-                        origin: prompt.origin
+                        origin: prompt.origin,
+                        isSteer: steerTurn == turnID
                     )
                 )
             )
-        case .interrupted:
-            items.append(Item(id: sequence, notice: "Interrupted"))
+        case .interrupted(let id):
+            // A stop for a prompt sent now; the turn's end shows the divider.
+            if id == activeTurn { (steeredTurn, steerPending) = (id, true) }
         case .stopRequested(let id):
             if id == activeTurn { stopRequested = true }
         case .finished(let id, let reason):
             guard id == activeTurn else { return }
+            if stopRequested, reason == .cancelled {
+                items.append(Item(id: sequence, interruption: steeredTurn == id ? .steered : .stopped))
+            }
             activeTurn = nil
             stopRequested = false
             lastStopReason = reason

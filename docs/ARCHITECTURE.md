@@ -326,10 +326,22 @@ thoughts' `thoughtDuration`. Copy returns the run's Markdown through `copyText`,
 thought item and `reveal(item:)` expands the run that holds it. The Rendering Lab's S10 streams two folding thoughts
 before the S1 answer.
 
-Session notices (continued, ended, merged, discarded, interrupted) render as a centered caption between two
-hairlines, without role label or Copy. A failed prompt (`TranscriptState.Item.isFailure`) shows the `message` of
-its stored `RPCError(...)` description (`PromptFailure.summary`, applied when displayed, so saved history
-benefits and stored events do not change) and a Details disclosure with the full stored text.
+Session notices (continued, ended, merged, discarded) render as a centered caption between two hairlines, without
+role label or Copy. A turn that ends `cancelled` after `stopRequested` (Stop or steering) gets an item of its own
+(`TranscriptState.Item.interruption`, reduced from the stored events, which do not change; `interrupted` adds no
+item any more) whose cause is read from the same events: steering records `interrupted` with its stop request, so that turn is
+`.steered` and ends with a plain hairline, and any other is `.stopped` and gets T3 Code's red `Run interrupted ·
+Stopped by user` divider. The prompts of the turn that follows a steered stop are `Message.isSteer` (dropped when a
+`queuePaused(true)` with no turn running shows the user stopped instead) and show `↪ Steer` above the bubble
+(`TranscriptMessage.label`, drawn by `BubbleCell`), or `· Steer` after an origin label. A failed prompt
+(`TranscriptState.Item.isFailure`) is a red `Error` row with the `message` of its stored `RPCError(...)` description
+(`PromptFailure.summary`, applied when displayed, so saved history benefits and stored events do not change) below,
+and a Details disclosure with the full stored text. An answered, declined or cancelled form is a question row
+(`InputAnswer`: the composer's `InputStep.steps` paired with the stored response, a pure function), collapsed to one
+header line and expanded into an attributed list built without Markdown. These three rows have their own
+`TranscriptMessage.Kind` (`question`, `interruption`, `failure`), which a turn's fold (#341) recognises: it leaves
+answered questions out and never folds an interrupted or failed turn. The divider and the error read as one
+accessibility element each, with the row's Copy and the Details disclosure as custom actions.
 
 The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md)) in the transcript column
 (`TranscriptColumn`: at most 720 pt, 16 pt side and 12 pt bottom margins, `.bar` material with a hairline border).
@@ -1231,7 +1243,7 @@ composer's text to the step's text field instead of `ComposerDraft`, which is le
 afterwards; `ComposerInput.keyAction(answering:)` and `choiceIndex` route Return (advance), Escape (decline), ↑ ↓ and
 1–9 (pick), and `ComposerPrimaryAction` reads `next` or `answer`, so Return never queues behind the turn that waits
 for the answer. The transcript shows a waiting form as a compact row (`LiveTranscriptSource.waitingInput`) and an
-answered or cancelled one as `InputForm`'s record. Requests and final responses are committed before display and
+answered or cancelled one as a question row built from `InputAnswer` (#340). Requests and final responses are committed before display and
 delivery; drafts remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
 Saved forms have no active controls; Continue records cancellation of interrupted requests.
 Agent-provided regular expressions share a 20 ms budget of thread CPU time spent matching. Other

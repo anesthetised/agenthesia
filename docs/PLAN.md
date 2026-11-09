@@ -956,6 +956,27 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #340 (answered questions, interruptions and errors as T3 Code shows them) landed: `InputAnswer` pairs the
+  composer's `InputStep.steps` with the stored response (question = description, else title, else name; a choice by
+  its title; the step's text replaces the pick; multiple picks joined with `, `; `Declined`, `Cancelled`, `Recording
+  answer…`) and replaces `InputCard`/`InputForm`; the answered form is a `.question` row (header only while collapsed,
+  an attributed list while expanded). `TranscriptState` appends an `interruption` item when a turn with
+  `stopRequested` finishes `cancelled` (the `interrupted` event no longer adds the `Interrupted` notice, and marks the
+  turn `.steered` instead of `.stopped`): the red `Run interrupted · Stopped by user` divider after Stop, a plain
+  hairline after steering, whose prompt (`Message.isSteer`) shows `↪ Steer` above its bubble; failures are `.failure` rows with a red `Error` label. Stored data and the protocol are
+  unchanged. Tested: the answer summary as pure functions (pairing, custom text, multi-select, toggle, missing titles,
+  declined, cancelled, recording), the reduction (Stop, a turn that ends anyway, close), the source's rows and Copy,
+  the composer-to-row path against MockAgent's `ask`, hosted `OffscreenWindow` tests of the three rows in light and
+  dark (labels, colors, accessibility elements and actions), and their heights after a resize and after expanding and
+  collapsing the question row. **Running-app check deferred** (MockAgent, isolated home, light and dark): (1) `ask`,
+  answer both steps with a typed note on step 1: the row reads the two questions in secondary text and `<note> ·
+  <picks>` in primary text, truncating in a narrow window; the disclosure lists each question with its answer indented,
+  ⌘C and the hover Copy return the same as text; Skip on a second `ask` reads `Declined`; (2) `slow`, then Stop (and
+  ⌘.) during the turn: the red `Run interrupted · Stopped by user` divider with its X ends the turn; Send Now
+  (⌘Return) while `slow` runs ends it with a plain hairline instead, and the new bubble has `↪ Steer` right-aligned
+  above it (VoiceOver: `Steer, <text>`); (3) `fail`: the red alert symbol, bold red `Error` and the message below, wrapping; Details
+  where the stored text says more; (4) VoiceOver reads the divider and the error as one element with their full text
+  and offers Copy (and Details); (5) Increase Contrast.
 - #223 (collapsed thoughts) landed: `TranscriptRow.thoughts(first:)` folds every run of thoughts into one row,
   `ThoughtSummary` words its header (`Thinking… <last line>`, `Thinking…` when expanded, `Thought for 12s`),
   `LiveTranscriptSource` builds it header-only when collapsed and with the run's Markdown, dimmed, when expanded (keyed
@@ -986,7 +1007,7 @@ Pitfalls known so far:
   `Next`/`Answer` and never queues; `Back` (button only, from the second step) returns to the previous step with every
   step's answers kept in the draft; Escape and Skip decline; 1–9 and ↑ ↓ pick in an empty composer; ⌘Return and
   ⇧⌘Return do nothing; ⌘. stops. The transcript row of a waiting form reads `Asked 2 questions · answer below`;
-  `InputForm` keeps only the resolved record, and `InputField` only the toggle and the unsupported note. `MockAgent`'s
+  `InputForm` kept only the resolved record (replaced by #340's question row), and `InputField` only the toggle and the unsupported note. `MockAgent`'s
   `ask` sends a two-question form shaped like `claude-agent-acp` 0.101.0's AskUserQuestion (`question_<n>` choice,
   `question_<n>_custom` text) and echoes the response as JSON. Tested: the grouping, the docked form (progress, picks,
   text, validation, answer, decline, Back keeping both steps' answers), the key routing and the primary action as pure functions; the draft set aside

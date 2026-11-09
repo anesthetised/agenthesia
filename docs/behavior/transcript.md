@@ -26,7 +26,8 @@ bubble, the label being where it came from:
 | A finished `task_run` command | `Background task` |
 
 - The label sits where a card's title does (small, semibold, secondary); the text below it is plain, never linked, as
-  in the user's bubble. Copy returns the message alone, and `not sent` and `sent together` captions still apply.
+  in the user's bubble. A steering prompt ([below](#interruptions-and-errors)) adds `· Steer` after its origin, as
+  `From Fix CI · Steer`. Copy returns the message alone, and `not sent` and `sent together` captions still apply.
 - The agent receives such a prompt marked as coming from another agent session, which stays anonymous to it: the
   receiver is not told the sender's title or agent.
 
@@ -52,15 +53,23 @@ bubble, the label being where it came from:
 
 ## Interruptions and errors
 
-- A turn the user stopped (Stop, ⌘.) or interrupted by sending a prompt now ([queue.md](queue.md)) ends with a thin
-  centered divider, as in T3 Code: a hairline, an X symbol, `Run interrupted · Stopped by user` in small red text (the
-  first part in medium weight, the rest dimmed), a hairline; no box, no Copy button. It sits where the turn ended,
-  after anything the agent sent while the stop settled. A turn that finished on its own before the stop reached the
-  agent, or that ended because the session was closed, has none.
+- A turn the user stopped (Stop, ⌘.) ends with a thin centered divider, as in T3 Code: a hairline, an X symbol,
+  `Run interrupted · Stopped by user` in small red type (`Run interrupted` in medium weight, the rest dimmed), a
+  hairline; no box, no Copy button.
+- A prompt sent now while a turn runs (steering: Send Now, ⌘Return; [queue.md](queue.md)) is the user's ordinary
+  bubble with `↪ Steer` (the `arrow.uturn.right` symbol and `Steer`, small, semibold, secondary) right-aligned directly
+  above it, as in T3 Code; every message sent now together carries it. The turn it interrupted ends with a plain
+  hairline across the column: no text, no symbol, no red, nothing for VoiceOver or Copy.
+- The divider and the hairline sit where the turn ended, after anything the agent sent while the stop settled. A turn
+  that finished on its own before the stop reached the agent, or that ended because the session was closed, has
+  neither; a prompt sent now is a steer even when the turn it meant to interrupt finished first. A steering prompt
+  that never went out, because the user stopped meanwhile, leaves no label on the next one.
+- Which it was comes from the stored events: steering records `interrupted` with its stop request, Stop does not.
 - A failed turn's error is a row with a red alert symbol and a bold red `Error` label, and the message below it in the
   primary text color at 80 % opacity, wrapping. Its Details disclosure, when the stored text says more than the
   message, still shows that text, and Copy still returns what the row shows.
-- VoiceOver reads the divider as one element, `Run interrupted · Stopped by user`, and the error as one element,
+- VoiceOver reads the divider as one element with its text, a steer's bubble as one element, `Steer, <text>`, and the
+  error as one element,
   `Error: <message>`, with the row's `Copy` and, when there is more to show, `Details` (`Hide details`) as actions.
 
 ## Thoughts
@@ -130,7 +139,8 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 - 2026-11-09, #340: an answered, declined or cancelled form is one question row with its answers behind a disclosure
   instead of the `Input` card with raw field names; a stopped turn ends with the red `Run interrupted · Stopped by
-  user` divider instead of the `Interrupted` notice, which steering alone showed; a failed turn is a red `Error` row
+  user` divider; a prompt sent now is a bubble labelled `↪ Steer` and the turn it interrupted ends with a plain hairline
+  instead of the `Interrupted` notice; a failed turn is a red `Error` row
   instead of `Prompt failed`.
 - 2026-11-09, #223: thoughts are one collapsed disclosure row (`Thinking… <last line>`, then `Thought for 12s`), and
   consecutive thoughts fold into it; previously they streamed in full, dimmed, under a `Thinking` caption.

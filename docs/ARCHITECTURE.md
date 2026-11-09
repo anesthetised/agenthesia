@@ -328,8 +328,12 @@ before the S1 answer.
 
 Session notices (continued, ended, merged, discarded) render as a centered caption between two hairlines, without
 role label or Copy. A turn that ends `cancelled` after `stopRequested` (Stop or steering) gets an item of its own
-(`TranscriptState.Item.isInterruption`, reduced from the stored events, which do not change; `interrupted` adds no
-item any more) that renders as T3 Code's red `Run interrupted · Stopped by user` divider. A failed prompt
+(`TranscriptState.Item.interruption`, reduced from the stored events, which do not change; `interrupted` adds no
+item any more) whose cause is read from the same events: steering records `interrupted` with its stop request, so that turn is
+`.steered` and ends with a plain hairline, and any other is `.stopped` and gets T3 Code's red `Run interrupted ·
+Stopped by user` divider. The prompts of the turn that follows a steered stop are `Message.isSteer` (dropped when a
+`queuePaused(true)` with no turn running shows the user stopped instead) and show `↪ Steer` above the bubble
+(`TranscriptMessage.label`, drawn by `BubbleCell`), or `· Steer` after an origin label. A failed prompt
 (`TranscriptState.Item.isFailure`) is a red `Error` row with the `message` of its stored `RPCError(...)` description
 (`PromptFailure.summary`, applied when displayed, so saved history benefits and stored events do not change) below,
 and a Details disclosure with the full stored text. An answered, declined or cancelled form is a question row

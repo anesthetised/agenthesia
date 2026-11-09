@@ -100,31 +100,110 @@ import Testing
         #expect(expanded.text.string == "Which date\n  library?\nSwiftDate\nFeatures\nBeta\nq_2")
     }
 
-    @Test func aStoppedTurnEndsWithTheDivider() async throws {
-        let recorded = try await RecordedTranscript()
-        let stopped = UUID()
-        try await recorded.append(SessionEvent.prompt(id: stopped, content: [.init(text: "go")]).storedEvent())
-        try await recorded.append(SessionEvent.stopRequested(id: stopped).storedEvent())
-        try await recorded.append(SessionEvent.interrupted(id: stopped).storedEvent())
-        #expect(recorded.state.items.count == 1)
-        try await recorded.append(SessionEvent.finished(id: stopped, reason: .cancelled).storedEvent())
-        #expect(recorded.state.items.last?.isInterruption == true)
+    /// Stop records the stop request alone; a prompt sent now records it with `interrupted`, then starts its own turn.
+    private func interrupt(
+        _ recorded: RecordedTranscript,
+        steer: String?,
+        reason: ACP.StopReason = .cancelled
+    )
+        async throws
+    {
+        let turn = UUID()
+        try await recorded.append(SessionEvent.prompt(id: turn, content: [.init(text: "go")]).storedEvent())
+        try await recorded.append(SessionEvent.stopRequested(id: turn).storedEvent())
+        if steer != nil { try await recorded.append(SessionEvent.interrupted(id: turn).storedEvent()) }
+        try await recorded.append(SessionEvent.finished(id: turn, reason: reason).storedEvent())
+        guard let steer else { return }
+        let prompt = QueuedPrompt(content: [.init(text: steer)])
+        try await recorded.append(
+            SessionEvent.promptMessage(prompt: prompt, turnID: UUID(), startsTurn: true, sentTogether: false)
+                .storedEvent()
+        )
+    }
 
-        // A turn that ends anyway, or is cancelled by closing the session, has none.
-        for reason in [ACP.StopReason.endTurn, .cancelled] {
-            let turn = UUID()
-            try await recorded.append(SessionEvent.prompt(id: turn, content: [.init(text: "again")]).storedEvent())
-            if reason == .endTurn { try await recorded.append(SessionEvent.stopRequested(id: turn).storedEvent()) }
-            try await recorded.append(SessionEvent.finished(id: turn, reason: reason).storedEvent())
-        }
-        #expect(recorded.state.items.count { $0.isInterruption } == 1)
+    @Test func stopEndsWithTheRedDividerAndASteerWithALineAndItsLabel() async throws {
+        let recorded = try await RecordedTranscript()
+        try await interrupt(recorded, steer: nil)
+        try await interrupt(recorded, steer: "now")
+        let items = recorded.state.items
+        #expect(items.map(\.interruption) == [nil, .stopped, nil, .steered, nil])
+        #expect(items.compactMap(\.message).map(\.isSteer) == [false, false, true])
 
         let source = LiveTranscriptSource()
         source.state = recorded.state
-        let divider = source.message(at: 1)
-        #expect(divider.kind == .interruption && divider.isNotice)
-        #expect(divider.markdown == "Run interrupted · Stopped by user")
-        #expect(LiveTranscriptSource.content(recorded.state.items[1]).1 == divider.markdown)
+        let stopped = source.message(at: 1)
+        #expect(stopped.kind == .interruption && stopped.markdown == "Run interrupted · Stopped by user")
+        let line = source.message(at: 3)
+        #expect(line.kind == .interruption && line.isNotice && line.markdown.isEmpty)
+        let steer = source.message(at: 4)
+        #expect(steer.kind == .user && steer.label == "Steer" && steer.markdown == "now" && steer.role == "You")
+        #expect(source.message(at: 2).label == nil)
+
+        // Another session's steer keeps its origin label and says `Steer` after it.
+        source.originLabel = { $0 == .user ? "From Fix CI" : nil }
+        #expect(source.message(at: 4).role == "From Fix CI · Steer" && source.message(at: 4).kind == .card)
+        #expect(source.message(at: 4).label == nil && source.message(at: 2).role == "From Fix CI")
+    }
+
+    @Test func aSteerSentAfterATurnThatEndedAnywayIsStillOneAndAStopDropsAPendingSteer() async throws {
+        let recorded = try await RecordedTranscript()
+        // The turn finished before the stop reached the agent: no line, but the prompt was sent now.
+        try await interrupt(recorded, steer: "late", reason: .endTurn)
+        #expect(recorded.state.items.allSatisfy { $0.interruption == nil })
+        #expect(recorded.state.items.last?.message?.isSteer == true)
+
+        // Stop after the interrupted turn ended: the steering prompt was never sent, the next one is no steer.
+        let turn = UUID()
+        try await recorded.append(SessionEvent.prompt(id: turn, content: [.init(text: "go")]).storedEvent())
+        try await recorded.append(SessionEvent.stopRequested(id: turn).storedEvent())
+        try await recorded.append(SessionEvent.interrupted(id: turn).storedEvent())
+        try await recorded.append(SessionEvent.finished(id: turn, reason: .cancelled).storedEvent())
+        try await recorded.append(SessionEvent.queuePaused(true).storedEvent())
+        try await recorded.append(SessionEvent.prompt(id: UUID(), content: [.init(text: "later")]).storedEvent())
+        #expect(recorded.state.items.last?.message?.isSteer == false)
+
+        // Closing the session cancels a turn without a stop request: nothing marks it.
+        let closed = UUID()
+        try await recorded.append(SessionEvent.prompt(id: closed, content: [.init(text: "go")]).storedEvent())
+        try await recorded.append(SessionEvent.finished(id: closed, reason: .cancelled).storedEvent())
+        #expect(recorded.state.items.last?.interruption == nil)
+    }
+
+    @Test(arguments: [true, false]) func theSteerAndItsLineInLightAndDark(light: Bool) async throws {
+        let recorded = try await RecordedTranscript()
+        try await interrupt(recorded, steer: "now")
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        let controller = TranscriptTableController()
+        let window = host(controller, width: 600)
+        window.appearance = NSAppearance(named: light ? .aqua : .darkAqua)
+        defer { window.close() }
+        controller.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        // A plain line: no text, no symbol, no red, nothing for VoiceOver or Copy.
+        let line = try cell(controller, row: 1)
+        #expect(labels(in: line).isEmpty && views(NSImageView.self, in: line).isEmpty)
+        #expect(views(NSButton.self, in: line).isEmpty && views(NSBox.self, in: line).count == 1)
+        #expect(line.accessibilityCustomActions()?.isEmpty != false)
+        controller.table.selectRowIndexes([1, 2], byExtendingSelection: false)
+        #expect(controller.selectedMarkdown == "now")
+
+        // The steer: the bubble with `↪ Steer` right-aligned above it, read as one element.
+        let steer = try cell(controller, row: 2)
+        let bubble = try #require(views(BubbleCell.self, in: steer).first)
+        let label = try #require(views(NSTextField.self, in: bubble).first { $0.stringValue == "Steer" })
+        #expect(label.textColor == .secondaryLabelColor && label.font?.pointSize == NSFont.smallSystemFontSize)
+        let icon = try #require(views(NSImageView.self, in: bubble).first)
+        let field = try #require(views(LinkTextField.self, in: bubble).first)
+        let labelFrame = label.convert(label.bounds, to: bubble)
+        let fieldFrame = field.convert(field.bounds, to: bubble)
+        #expect(labelFrame.minY > fieldFrame.maxY)
+        // Right-aligned with the bubble; a text field's frame reaches a few points past its text.
+        #expect(abs(labelFrame.maxX - bubble.bounds.maxX) <= 3 && labelFrame.minX > bubble.bounds.midX)
+        #expect(icon.convert(icon.bounds, to: bubble).maxX <= labelFrame.minX)
+        #expect(bubble.isAccessibilityElement() && bubble.accessibilityLabel() == "Steer, now")
+        #expect(!field.isAccessibilityElement() && !label.isAccessibilityElement())
     }
 
     @Test(arguments: [true, false]) func theThreeRowsInLightAndDark(light: Bool) async throws {

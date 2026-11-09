@@ -122,7 +122,8 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             // An expanded group's cards are rows of their own, so a selection never copies them twice.
             let cards = session.cardCount(ofGroupAt: row)
             if cards > 0, table.selectedRowIndexes.intersects(integersIn: (row + 1)..<(row + 1 + cards)) { return nil }
-            return message.copyText?() ?? message.markdown
+            let text = message.copyText?() ?? message.markdown
+            return text.isEmpty ? nil : text
         }.joined(separator: "\n\n")
     }
 
@@ -191,12 +192,12 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
             let sameBody =
                 visible.markdown == message.markdown && visible.links == message.links
-                && visible.caption == message.caption
+                && visible.caption == message.caption && visible.label == message.label
                 && !(finished && visible.streamingCell != nil && !keepsSelection)
             // Only a one-line header's text changed, as a collapsed thought's does with every chunk: the row keeps its
             // views and its height, so it is not measured again.
             if sameBody, visible.tool == message.tool || message.tool.map(visible.retitle) == true { continue }
-            if visible.caption != message.caption {
+            if visible.caption != message.caption || visible.label != message.label {
                 visible.show(
                     message,
                     streaming: !finished,
@@ -460,6 +461,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     var links: Int?
     var tool: ToolCardHeader?
     var caption: String?
+    var label: String?
     var copyText: (() -> String)?
     var streamingCell: TextKitCell?
     var bubble: BubbleCell?
@@ -540,9 +542,10 @@ private final class TranscriptMessageRow: NSTableCellView {
         links = message.links
         tool = message.tool
         caption = message.caption
+        label = message.label
         copyText = message.copyText
         if message.kind == .interruption {
-            showDivider(message)
+            if message.markdown.isEmpty { showSeparator() } else { showDivider(message) }
             return
         }
         if message.isNotice {
@@ -561,9 +564,16 @@ private final class TranscriptMessageRow: NSTableCellView {
             cell.textView.invalidateIntrinsicContentSize()
             content = cell
         } else if message.kind == .user {
-            let cell = BubbleCell()
+            let cell = BubbleCell(label: message.label)
             cell.field.followLink = { [weak controller] in controller?.follow($0) ?? false }
             cell.field.attributedStringValue = message.text
+            if let label = message.label {
+                // VoiceOver reads the label and the message as one: `Steer, <text>`.
+                for child in descendants(of: cell) { child.setAccessibilityElement(false) }
+                cell.setAccessibilityElement(true)
+                cell.setAccessibilityRole(.staticText)
+                cell.setAccessibilityLabel("\(label), \(message.text.string)")
+            }
             setMessageField(cell.field, text: message.text)
             cell.fit(columnWidth: width)
             bubble = cell
@@ -682,6 +692,28 @@ private final class TranscriptMessageRow: NSTableCellView {
                 stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
                 stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
                 lines[0].widthAnchor.constraint(equalTo: lines[1].widthAnchor),
+            ]
+        )
+    }
+
+    /// A steered turn ends with a plain hairline; the steer's label above the next message says why.
+    private func showSeparator() {
+        // Nothing to read or copy: the line is decoration.
+        setAccessibilityCustomActions([])
+        let line = NSBox()
+        line.boxType = .separator
+        line.setAccessibilityElement(false)
+        line.translatesAutoresizingMaskIntoConstraints = false
+        let stack = NSStackView(views: [line])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        self.stack = stack
+        NSLayoutConstraint.activate(
+            columnConstraints(for: stack) + [
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+                line.heightAnchor.constraint(equalToConstant: 1),
+                line.widthAnchor.constraint(equalTo: stack.widthAnchor),
             ]
         )
     }
@@ -1026,16 +1058,41 @@ final class SelectionBackground: NSView {
     }
 }
 
-/// A user message: a rounded bubble at the trailing edge that hugs its text, up to 80 % of the column.
+/// A user message: a rounded bubble at the trailing edge that hugs its text, up to 80 % of the column, with an
+/// optional label right-aligned above it (`↪ Steer`), in the style of a card's role label.
 final class BubbleCell: NSView {
     let field = LinkTextField(wrappingLabelWithString: "")
     private let bubble = BubbleBackground()
     private let width: NSLayoutConstraint
     private var fittedColumnWidth: CGFloat = -1
 
-    init() {
+    init(label: String? = nil) {
         width = bubble.widthAnchor.constraint(equalToConstant: 0)
         super.init(frame: .zero)
+        var top = topAnchor
+        if let label {
+            let text = NSTextField(labelWithString: label)
+            text.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+            text.textColor = .secondaryLabelColor
+            let icon = NSImageView(
+                image: NSImage(systemSymbolName: "arrow.uturn.right", accessibilityDescription: nil)?
+                    .withSymbolConfiguration(.init(pointSize: NSFont.smallSystemFontSize - 1, weight: .semibold))
+                    ?? NSImage()
+            )
+            icon.contentTintColor = .secondaryLabelColor
+            for view in [icon, text] {
+                view.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(view)
+            }
+            NSLayoutConstraint.activate([
+                text.topAnchor.constraint(equalTo: topAnchor),
+                text.trailingAnchor.constraint(equalTo: trailingAnchor),
+                icon.trailingAnchor.constraint(equalTo: text.leadingAnchor, constant: -3),
+                icon.centerYAnchor.constraint(equalTo: text.centerYAnchor),
+                icon.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            ])
+            top = text.bottomAnchor
+        }
         field.isSelectable = true
         // Keeps the text's attributes when selecting it switches the field to its field editor.
         field.allowsEditingTextAttributes = true
@@ -1048,7 +1105,7 @@ final class BubbleCell: NSView {
             width,
             bubble.trailingAnchor.constraint(equalTo: trailingAnchor),
             bubble.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-            bubble.topAnchor.constraint(equalTo: topAnchor),
+            bubble.topAnchor.constraint(equalTo: top, constant: label == nil ? 0 : 4),
             bubble.bottomAnchor.constraint(equalTo: bottomAnchor),
             field.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: padding.width),
             field.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -padding.width),

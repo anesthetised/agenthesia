@@ -424,7 +424,7 @@ private actor Gate {
         #expect(controller.status == .idle)
         #expect(controller.transcript.lastStopReason == .cancelled)
         // The prompt, and the divider that ends the stopped turn.
-        #expect(controller.transcript.items.count == 2 && controller.transcript.items[1].isInterruption)
+        #expect(controller.transcript.items.count == 2 && controller.transcript.items[1].interruption == .stopped)
         let events = try await store.events(in: controller.session.id)
         #expect(events.map(\.sequence) == [1, 2, 3, 4, 5])
         #expect(controller.queuePaused && controller.transcript.queuePaused)
@@ -521,7 +521,7 @@ extension SessionControllerTests {
         #expect(controller.status == .idle)
         // Late chunks join the message before the divider that ends the stopped turn.
         #expect(controller.transcript.items.dropLast().last?.message?.text == "beforeafter")
-        #expect(controller.transcript.items.last?.isInterruption == true)
+        #expect(controller.transcript.items.last?.interruption == .stopped)
         #expect(controller.transcript.lastStopReason == .cancelled)
         let replay = try await SessionController.restore(id: controller.session.id, store: store)
         #expect(replay.transcript == controller.transcript)

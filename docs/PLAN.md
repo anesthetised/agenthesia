@@ -960,9 +960,10 @@ Pitfalls known so far:
   composer's `InputStep.steps` with the stored response (question = description, else title, else name; a choice by
   its title; the step's text replaces the pick; multiple picks joined with `, `; `Declined`, `Cancelled`, `Recording
   answer…`) and replaces `InputCard`/`InputForm`; the answered form is a `.question` row (header only while collapsed,
-  an attributed list while expanded). `TranscriptState` appends an `isInterruption` item when a turn with
-  `stopRequested` finishes `cancelled` (the `interrupted` event no longer adds the `Interrupted` notice), shown as the
-  red `.interruption` divider; failures are `.failure` rows with a red `Error` label. Stored data and the protocol are
+  an attributed list while expanded). `TranscriptState` appends an `interruption` item when a turn with
+  `stopRequested` finishes `cancelled` (the `interrupted` event no longer adds the `Interrupted` notice, and marks the
+  turn `.steered` instead of `.stopped`): the red `Run interrupted · Stopped by user` divider after Stop, a plain
+  hairline after steering, whose prompt (`Message.isSteer`) shows `↪ Steer` above its bubble; failures are `.failure` rows with a red `Error` label. Stored data and the protocol are
   unchanged. Tested: the answer summary as pure functions (pairing, custom text, multi-select, toggle, missing titles,
   declined, cancelled, recording), the reduction (Stop, a turn that ends anyway, close), the source's rows and Copy,
   the composer-to-row path against MockAgent's `ask`, hosted `OffscreenWindow` tests of the three rows in light and
@@ -971,8 +972,9 @@ Pitfalls known so far:
   answer both steps with a typed note on step 1: the row reads the two questions in secondary text and `<note> ·
   <picks>` in primary text, truncating in a narrow window; the disclosure lists each question with its answer indented,
   ⌘C and the hover Copy return the same as text; Skip on a second `ask` reads `Declined`; (2) `slow`, then Stop (and
-  ⌘.) during the turn: the red `Run interrupted · Stopped by user` divider with its X ends the turn, also after Send
-  Now while `slow` runs; (3) `fail`: the red alert symbol, bold red `Error` and the message below, wrapping; Details
+  ⌘.) during the turn: the red `Run interrupted · Stopped by user` divider with its X ends the turn; Send Now
+  (⌘Return) while `slow` runs ends it with a plain hairline instead, and the new bubble has `↪ Steer` right-aligned
+  above it (VoiceOver: `Steer, <text>`); (3) `fail`: the red alert symbol, bold red `Error` and the message below, wrapping; Details
   where the stored text says more; (4) VoiceOver reads the divider and the error as one element with their full text
   and offers Copy (and Details); (5) Increase Contrast.
 - #223 (collapsed thoughts) landed: `TranscriptRow.thoughts(first:)` folds every run of thoughts into one row,

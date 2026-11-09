@@ -19,6 +19,8 @@ struct TranscriptMessage {
     var kind = Kind.card
     /// Right-aligned under a user bubble: `not sent` or `sent together`.
     var caption: String?
+    /// Right-aligned above a user bubble, after a symbol: `Steer` for a prompt sent now (#340).
+    var label: String?
     /// What Copy returns instead of `markdown`, built only when asked: a folded group's tool cards.
     var copyText: (() -> String)?
 
@@ -295,14 +297,15 @@ final class LiveTranscriptSource: TranscriptSource {
             )
             return message
         }
-        if item.isInterruption {
-            var message = render(id: item.id, role: "Session", markdown: Self.interruption)
+        if let interruption = item.interruption {
+            var message = render(id: item.id, role: "Session", markdown: Self.divider(interruption))
             (message.isNotice, message.kind) = (true, .interruption)
             return message
         }
         let (role, markdown) = Self.content(item)
-        // Another session's prompt is a labelled card, never the developer's bubble.
-        let origin = item.message.flatMap { originLabel($0.origin) }
+        // Another session's prompt is a labelled card, never the developer's bubble; a steer says so after the origin.
+        let steer = item.message?.isSteer == true
+        let origin = item.message.flatMap { originLabel($0.origin) }.map { steer ? "\($0) · \(Self.steer)" : $0 }
         // Streaming rows keep their text until they finish; user prompts never link.
         let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(item: index)
         var message = render(id: item.id, role: origin ?? role, markdown: markdown, linksInlineCode: linksInlineCode)
@@ -311,6 +314,7 @@ final class LiveTranscriptSource: TranscriptSource {
             switch source.role {
             case .user:
                 message.kind = origin == nil ? .user : .card
+                if steer, origin == nil { message.label = Self.steer }
                 message.caption = source.notSent ? "not sent" : source.sentTogether ? "sent together" : nil
             case .assistant: message.kind = .agent
             case .thought: message.kind = .thought
@@ -319,8 +323,16 @@ final class LiveTranscriptSource: TranscriptSource {
         return message
     }
 
-    /// An interrupted turn's divider, as T3 Code words it.
-    static let interruption = "Run interrupted · Stopped by user"
+    /// The label of a prompt sent now while a turn ran, as T3 Code's.
+    static let steer = "Steer"
+
+    /// An interrupted turn's divider, as T3 Code words it; a steered turn ends with a plain line, its steer says why.
+    static func divider(_ interruption: TranscriptState.Interruption) -> String {
+        switch interruption {
+        case .stopped: "Run interrupted · Stopped by user"
+        case .steered: ""
+        }
+    }
 
     /// An answered question is one row like a tool row: the questions, then the answers; expanded, each question with
     /// its answer below. Its text is built here rather than from Markdown, so the answers can be indented.
@@ -503,7 +515,7 @@ final class LiveTranscriptSource: TranscriptSource {
         if let input = item.input {
             return ("Input", InputAnswer(input, recording: false).text)
         }
-        if item.isInterruption { return ("Session", interruption) }
+        if let interruption = item.interruption { return ("Session", divider(interruption)) }
         if let date = item.reopenedAt {
             return ("Session", "Continued · \(date.formatted(date: .abbreviated, time: .shortened))")
         }

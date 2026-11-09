@@ -386,11 +386,7 @@ final class LiveTranscriptSource: TranscriptSource {
                 case .assistant: "Agent";
                 case .thought: "Thinking"
                 }
-            let text = message.content.map { block -> String in
-                if case .text(let text) = block { return text.text }
-                return "\n\n\(placeholder(block))\n\n"
-            }.joined()
-            return (role, text)
+            return (role, markdown(of: message.content))
         }
         if let tool = item.toolCall {
             return ("Tool", toolCard(tool, output: item.commandOutput, expanded: false).markdown)
@@ -405,6 +401,14 @@ final class LiveTranscriptSource: TranscriptSource {
             return ("Session", "Continued · \(date.formatted(date: .abbreviated, time: .shortened))")
         }
         return ("Session", item.notice ?? "")
+    }
+
+    /// A message's text, with a placeholder where an attachment is.
+    static func markdown(of blocks: [ACP.ContentBlock]) -> String {
+        blocks.map { block -> String in
+            if case .text(let text) = block { return text.text }
+            return "\n\n\(placeholder(block))\n\n"
+        }.joined()
     }
 
     static func placeholder(_ block: ACP.ContentBlock) -> String {

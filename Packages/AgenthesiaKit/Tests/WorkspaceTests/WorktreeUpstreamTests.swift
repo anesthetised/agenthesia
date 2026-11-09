@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import Workspace
@@ -125,6 +126,27 @@ import Testing
         )
         #expect(workspace.baseRevision == (try await head(fixture.repo)))
         #expect(workspace.fallbackUpstream == "origin/main")
+    }
+
+    @Test func theFetchIsReportedByItsUpstreamAndOnlyWhenThereIsOne() async throws {
+        let (fixture, _) = try await fixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let fetched = Mutex<[String]>([])
+        _ = try await SessionWorkspace.prepare(
+            directory: fixture.repo,
+            id: UUID(),
+            worktreesRoot: fixture.trees,
+            onFetch: { upstream in fetched.withLock { $0.append(upstream) } }
+        )
+        #expect(fetched.withLock { $0 } == ["origin/main"])
+        try await SessionWorkspace.git(["branch", "--unset-upstream"], in: fixture.repo)
+        _ = try await SessionWorkspace.prepare(
+            directory: fixture.repo,
+            id: UUID(),
+            worktreesRoot: fixture.trees,
+            onFetch: { upstream in fetched.withLock { $0.append(upstream) } }
+        )
+        #expect(fetched.withLock { $0 } == ["origin/main"])
     }
 
     @Test func theBehindExplanationNamesBothBranches() {

@@ -28,8 +28,8 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - The composer card sits directly under the heading, centered with it, as wide as a session's composer at most. It has
   the Agent and Checkout chips on top, the text field, and a bottom row with Attach (⇧⌘A, tooltip `Attach files or
   folders (⇧⌘A)`), the hint pills and Send.
-- On Send the heading fades and the card moves to the bottom edge, where the session's composer sits, fading as it goes
-  (0.3 s; none under Reduce Motion). A failed or cancelled start returns the draft with the heading and the centered
+- On Send the heading fades and the card moves to the bottom edge, where the `Starting…` card appears, fading as it
+  goes while the first message fades in at the top of the column (0.3 s; none under Reduce Motion). A failed or cancelled start returns the draft with the heading and the centered
   card at once.
 - Text editing, attachments (Attach, drop, paste) and Return work as in a live session's composer, see
   [composer.md](composer.md). The draft has no slash commands and no config controls other than the hint pills.
@@ -134,13 +134,22 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 
 ## While starting
 
-- Until the session exists, the detail column shows `Starting session…`. The app checks the agent's executable or
-  installed version first (so a mistyped command leaves no worktree), then creates the worktree. Once the session
-  exists, the window shows its empty transcript with the compact card `Starting…`.
+- From Send until the session is idle, the detail column shows the transcript layout with the first message as its
+  only row: a user bubble with its attachments, as the session's own transcript will show it, so the message stays
+  where it is when that arrives ([ADR-0040's amendment of 2026-11-07](../adr/0040-composer-first-session-start.md)).
+  Under it, where the composer will be, a status line and the compact card `Starting…`; there is no composer. The
+  inspector, which needs the session, appears once it exists.
+- The status line reads `Fetching origin/main…` while the fetch of the branch's upstream runs (at most 20 seconds,
+  [ADR-0047](../adr/0047-worktrees-from-the-fetched-upstream.md)), then `Starting <agent> in a new worktree…`, or
+  `Starting <agent> in the project folder…` for a project outside Git, or `Starting <agent> in a new folder…` for a
+  session without a project. It is blank for the moment before the place is known.
+- The app checks the agent's executable or installed version first (so a mistyped command leaves no worktree), then
+  fetches and creates the worktree.
 - The sidebar lists the session under Working as `New Session` with the reason `Starting` ([sidebar.md](sidebar.md)).
 - The toolbar button and the Session menu item read `Cancel Startup` (⇧⌘E).
-- If the agent asks to sign in ([ADR-0033](../adr/0033-agent-sign-in.md)), the sign-in panel replaces the card and the
-  button reads `End Session`; after sign-in succeeds the session starts and the first message is submitted.
+- If the agent asks to sign in ([ADR-0033](../adr/0033-agent-sign-in.md)), the sign-in panel replaces the card, the
+  message stays above it, and the button reads `End Session`; after sign-in succeeds the session starts and the first
+  message is submitted.
 
 ## Failed or cancelled start
 
@@ -165,6 +174,9 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 
 ## Changes
 
+- 2026-11-09, #225: while a session starts, the detail column shows the first message as the transcript's only
+  row with the line `Fetching origin/<branch>…`, then `Starting <agent> in …`, and the `Starting…` card, instead of
+  `Starting session…`.
 - 2026-11-09, #301: VoiceOver reads the Agent chip as `Agent: <name>` (not its symbol, `CPU chip`) and the
   heading's project menu once.
 - 2026-11-08, #279: `or start without a project` under the heading; such a session works in its own folder under

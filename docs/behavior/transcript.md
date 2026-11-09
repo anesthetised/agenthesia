@@ -5,6 +5,13 @@ at most 720 pt wide that the composer card below it shares ([ADR-0039](../adr/00
 document covers how rows are selected and copied and how the keyboard moves through them; what each kind of row shows
 is not summarised here yet.
 
+## First message of a starting session
+
+While a session started from the draft is starting, its first message is the transcript's only row, before the session
+has a transcript ([session-start.md](session-start.md), *While starting*). It is rendered by the same table from a
+one-item source, with the user's bubble and the attachments as placeholders, so it keeps its place when the session's
+own first row replaces it.
+
 ## Prompts the user did not send
 
 A turn started by another session through the app's tools ([ADR-0049](../adr/0049-built-in-agenthesia-mcp-server.md))
@@ -62,6 +69,7 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-09, #225: the first message of a starting session is shown as the transcript's only row.
 - 2026-11-09, #311: prompts the user did not send are labelled rows instead of the user's bubble.
 - 2026-11-09, #301: a row's hover Copy follows the pointer when a layout moves the row from under it.
 - 2026-11-09, #160: a row fits its content again after the transcript changes width, with no empty band above the

@@ -189,10 +189,18 @@ in the composer's bottom row after Attach with `ConfigControlRow`, the control r
 as secondary, with the tooltip and accessibility note `Last used with this agent; confirmed when the session starts`;
 a pick sets `draftConfig`, and a change of agent clears it. An agent without a cache entry shows no pills.
 
+While the session starts, the detail column shows the held prompt instead of an empty view
+([ADR-0040's amendment of 2026-11-07](adr/0040-composer-first-session-start.md)). `SessionWindowModel.heldPrompt` is
+`LiveSession.initialPrompt` while the displayed session has no transcript item yet (also at sign-in). `HeldPromptSource`
+is a one-item `TranscriptSource` that renders the prompt with `LiveTranscriptSource.render` and the markdown of
+`LiveSession.content`, so `HeldTranscript` (a `TranscriptTableController`) lays it out as the session's own first prompt;
+`RootView.startingColumn` shows it with the `Starting…` card before the controller exists, and `panes` swaps
+`LiveTranscript` for it after. `LiveSession.startLine` is the line above the card: `fetching` is set from
+`SessionWorkspace.prepare(onFetch:)` while ADR-0047's fetch runs, and `startPlace` (`newWorktree`, `projectFolder` or
+`newFolder`, ADR-0048) once the checkout is known, before the install check.
+
 > **Accepted, not yet implemented (M16):** [ADR-0043](adr/0043-sessions-in-the-project-folder.md) turns the Checkout label into a menu for Git
-> projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default), and
-> [ADR-0040's second amendment](adr/0040-composer-first-session-start.md) shows the held first message as a user block
-> with `Starting <agent>…` instead of the empty `Starting session…` view.
+> projects (`New worktree from <branch>` or `Project folder`, per draft, the worktree by default).
 
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that

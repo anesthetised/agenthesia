@@ -26,10 +26,33 @@ public final class LiveSession {
     /// The draft a new session was started with (ADR-0040), held until it is submitted at the first idle state.
     /// It stays when startup fails or is cancelled, so the window can return it to the draft.
     public private(set) var initialPrompt: PromptDraft?
+    /// Where a new session works, once known; nil for a continued one.
+    public private(set) var startPlace: StartPlace?
+    /// The upstream (`origin/main`) being fetched before the worktree is created (ADR-0047).
+    public private(set) var fetching: String?
     /// Runs once the initial prompt was submitted, e.g. to remember the agent the session started with.
     @ObservationIgnored public var onInitialPromptSubmitted: (() -> Void)?
     /// The configured agent's name, once its install is known.
     public var agentName: String? { agent?.name }
+
+    /// Where a new session works (ADR-0006, ADR-0043, ADR-0048).
+    public enum StartPlace: Equatable, Sendable { case newWorktree, projectFolder, newFolder }
+
+    /// What the window says below the first message while a new session starts (ADR-0040's amendment of
+    /// 2026-11-07); nil until the place is known.
+    public var startLine: String? { Self.startLine(agent: agentName, place: startPlace, fetching: fetching) }
+
+    static func startLine(agent: String?, place: StartPlace?, fetching: String?) -> String? {
+        if let fetching { return "Fetching \(fetching)…" }
+        guard let place else { return nil }
+        let location =
+            switch place {
+            case .newWorktree: "a new worktree"
+            case .projectFolder: "the project folder"
+            case .newFolder: "a new folder"
+            }
+        return "Starting \(agent ?? "the agent") in \(location)…"
+    }
     /// Labels a turn the user did not send (ADR-0049); `SessionManager` names the source session.
     @ObservationIgnored public var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
     /// Turns finished when the user last saw a result on screen (ADR-0026's amendment). In memory only.
@@ -191,6 +214,9 @@ public final class LiveSession {
                 agent = install
             }
             self.agent = agent
+            if case .new(let directory, _, _, _, _, _) = launch {
+                startPlace = await Self.place(of: directory)
+            }
             // Resolve and check the command first, so a mistyped executable does not leave a worktree behind.
             if let installationID = agent.installationID {
                 try await acquire(installationID, name: agent.name)
@@ -247,6 +273,11 @@ public final class LiveSession {
         } catch {
             await fail(error)
         }
+    }
+
+    static func place(of directory: URL?) async -> StartPlace {
+        guard let directory else { return .newFolder }
+        return await SessionWorkspace.worktreeBase(of: directory) == nil ? .projectFolder : .newWorktree
     }
 
     /// Leases the installed version, which also checks its files and its saved Node runtime.
@@ -495,13 +526,15 @@ public final class LiveSession {
         let topic = initialPrompt.flatMap { SessionTitle.fromPrompt($0.text) }
         let workspace: SessionWorkspace
         if let directory {
+            defer { fetching = nil }
             workspace = try await SessionWorkspace.prepare(
                 directory: directory,
                 id: id,
                 topic: topic,
                 worktreesRoot: worktreesRoot,
                 // The agent's login-shell environment, resolved once for this launch.
-                environment: agentCommand?.environment
+                environment: agentCommand?.environment,
+                onFetch: { upstream in Task { @MainActor [weak self] in self?.fetching = upstream } }
             )
         } else {
             workspace = try await SessionWorkspace.prepareScratch(
@@ -576,7 +609,7 @@ public final class LiveSession {
         }
     }
 
-    static func content(
+    public static func content(
         _ text: String,
         attachments: [URL],
         checkout: (checkout: URL, worktree: URL)?

@@ -1011,6 +1011,85 @@ import Testing
         await fixture.remove()
     }
 
+    @Test func theFirstMessageShowsAsTheOnlyRowWhileTheSessionStartsAndAfterItsTranscriptTakesOver() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let gate = AsyncStream<Void>.makeStream()
+        // Startup waits for the login shell, so the window shows the starting session for as long as the test wants.
+        fixture.sessions.environment = {
+            for await _ in gate.stream {}
+            return (ProcessInfo.processInfo.environment, nil)
+        }
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: RootView(model: model))
+        let window = OffscreenWindow(size: .init(width: 1000, height: 600))
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        model.draftDirectory = fixture.directory
+        model.draftAgent = try fixture.mock()
+        model.draft = PromptDraft(text: "hello there")
+        #expect(model.heldPrompt == nil)
+        model.startDraft()
+        let owner = try #require(model.owner)
+        #expect(model.heldPrompt == PromptDraft(text: "hello there") && model.displayed == nil)
+        try await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            return owner.startLine != nil && shows("hello there", in: host)
+        }
+        // The transcript layout with its one row, and the `Starting…` card where the composer would be.
+        #expect(views(NSTextView.self, in: host).filter(\.isEditable).isEmpty)
+        #expect(owner.startLine == "Starting \(try #require(owner.agentName)) in the project folder…")
+
+        gate.continuation.finish()
+        await owner.startup?.value
+        let controller = try #require(owner.controller)
+        try await waitUntil { controller.status == .idle && controller.transcript.items.count > 1 }
+        try await waitUntil {
+            host.layoutSubtreeIfNeeded()
+            return model.heldPrompt == nil && !views(NSTextView.self, in: host).filter(\.isEditable).isEmpty
+        }
+        #expect(shows("hello there", in: host))
+        await fixture.remove()
+    }
+
+    @Test func signInKeepsTheFirstMessageAndTheNewSessionsStartLineStaysUntilItIsSubmitted() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let signInFile = fixture.directory.appending(path: "signed-in").path(percentEncoded: false)
+        model.draftDirectory = fixture.directory
+        model.draftAgent = try fixture.mock(["--auth", "--auth-file", signInFile])
+        model.draft = PromptDraft(text: "hello")
+        model.startDraft()
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        #expect(model.signIn != nil)
+        #expect(model.heldPrompt == PromptDraft(text: "hello"))
+        await owner.signIn(with: "mock-login")
+        #expect(model.signIn == nil && model.heldPrompt == nil)
+        await fixture.remove()
+    }
+
+    @Test func aFailedOrCancelledStartHoldsNothingOnceTheDraftIsBack() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        model.draftDirectory = fixture.directory
+        model.draftAgent = .custom(.init(executable: "/does-not-exist", arguments: []))
+        model.draft = PromptDraft(text: "hello")
+        model.startDraft()
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        await model.returnToDraft()
+        #expect(model.showingSetup && model.heldPrompt == nil)
+        await fixture.remove()
+    }
+
+    /// Whether a transcript row, a text view or a label, has exactly this text.
+    private func shows(_ text: String, in view: NSView) -> Bool {
+        views(NSTextView.self, in: view).contains { $0.string == text }
+            || views(NSTextField.self, in: view).contains { $0.stringValue == text }
+    }
+
     private func views<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
         ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { views(type, in: $0) }
     }

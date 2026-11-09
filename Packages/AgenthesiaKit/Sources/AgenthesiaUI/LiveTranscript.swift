@@ -80,6 +80,8 @@ final class LiveTranscriptSource: TranscriptSource {
     var root: URL?
     /// The displayed session's file index, against which inline code in agent text links.
     var pathIndex = TranscriptPathIndex()
+    /// Labels a prompt the user did not send (ADR-0049); nil for the user's own.
+    var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
     /// The requests the docked card answers, oldest first.
     var pending: [SessionController.PendingPermission] = [] {
         didSet { pendingCalls = Set(pending.map(\.toolCall.toolCallId)) }
@@ -256,14 +258,16 @@ final class LiveTranscriptSource: TranscriptSource {
             return message
         }
         let (role, markdown) = Self.content(item)
+        // Another session's prompt is a labelled card, never the developer's bubble.
+        let origin = item.message.flatMap { originLabel($0.origin) }
         // Streaming rows keep their text until they finish; user prompts never link.
         let linksInlineCode = item.message.map { $0.role != .user } == true && !isStreaming(item: index)
-        var message = render(id: item.id, role: role, markdown: markdown, linksInlineCode: linksInlineCode)
+        var message = render(id: item.id, role: origin ?? role, markdown: markdown, linksInlineCode: linksInlineCode)
         message.isNotice = item.message == nil
         if let source = item.message {
             switch source.role {
             case .user:
-                message.kind = .user
+                message.kind = origin == nil ? .user : .card
                 message.caption = source.notSent ? "not sent" : source.sentTogether ? "sent together" : nil
             case .assistant: message.kind = .agent
             case .thought: message.kind = .thought
@@ -660,6 +664,8 @@ final class LiveTranscriptSource: TranscriptSource {
 struct LiveTranscript: NSViewRepresentable {
     let session: SessionController
     let pathIndex: TranscriptPathIndex
+    /// Labels a prompt the user did not send (ADR-0049).
+    var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
     var find = TranscriptFindState()
     /// Where an unseen result ends; the table watches the viewport for it only while it is set (ADR-0026's amendment).
     var unseenResult: Int64?
@@ -695,6 +701,7 @@ struct LiveTranscript: NSViewRepresentable {
             coordinator.table.reportPosition()
         }
         coordinator.source.pathIndex = pathIndex
+        coordinator.source.originLabel = originLabel
         coordinator.source.update(session)
         var row: Int?
         if let reveal = find.reveal, reveal.id != coordinator.revealed {

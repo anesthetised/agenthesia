@@ -74,6 +74,16 @@ public final class SessionManager {
 
     public func owner(of id: UUID) -> LiveSession? { owners.first { $0.isLive && $0.sessionID == id } }
 
+    /// The label of a turn the user did not send (ADR-0049), naming a source session by its title and agent.
+    // ponytail: only sessions open in this launch are named; a saved source reads `From another session` until
+    // history keeps agent names at hand.
+    public func originLabel(_ origin: QueuedPrompt.Origin) -> String? {
+        guard case .session(let id, _) = origin, let source = owners.last(where: { $0.sessionID == id }) else {
+            return origin.label(title: nil, agent: nil)
+        }
+        return origin.label(title: (source.controller?.session ?? source.resuming)?.title, agent: source.agentName)
+    }
+
     /// Records the session a window shows in the key window of the active app, or `nil` once it does not.
     public func setShown(_ sessionID: UUID?, in window: AnyObject) {
         shown[ObjectIdentifier(window)] = sessionID
@@ -323,6 +333,7 @@ public final class SessionManager {
         let owner = LiveSession(library: library)
         if let environment { owner.environment = environment }
         owner.catalog = catalog
+        owner.originLabel = { [weak self] in self?.originLabel($0) ?? $0.label(title: nil, agent: nil) }
         owners.append(owner)
         owner.begin(launch, after: previous, initialPrompt: initialPrompt)
         return owner

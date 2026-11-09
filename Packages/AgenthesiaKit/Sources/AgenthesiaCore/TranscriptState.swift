@@ -16,6 +16,8 @@ public struct TranscriptState: Equatable, Sendable {
         public var localPromptID: UUID?
         public var sentTogether = false
         public var notSent = false
+        /// Who sent a user-role message: the user, or another session (ADR-0049).
+        public var origin = QueuedPrompt.Origin.user
 
         public var text: String {
             content.compactMap { if case .text(let block) = $0 { block.text } else { nil } }.joined()
@@ -137,6 +139,8 @@ public struct TranscriptState: Equatable, Sendable {
     public private(set) var queuedPrompts: [QueuedPrompt] = []
     public private(set) var queuePaused = false
     public private(set) var activeTurn: UUID?
+    /// Who started the latest turn; the sidebar names it while the turn runs.
+    public private(set) var turnOrigin = QueuedPrompt.Origin.user
     public private(set) var stopRequested = false
     public private(set) var lastStopReason: ACP.StopReason?
     /// The agent rejected the last turn's prompt; a new turn or a continued session clears it.
@@ -210,6 +214,7 @@ public struct TranscriptState: Equatable, Sendable {
             items.append(Item(id: sequence, reopenedAt: timestamp))
         case .prompt(let id, let content):
             activeTurn = id
+            turnOrigin = .user
             stopRequested = false
             lastStopReason = nil
             lastTurnFailed = false
@@ -235,6 +240,7 @@ public struct TranscriptState: Equatable, Sendable {
         case .promptMessage(let prompt, let turnID, let startsTurn, let sentTogether):
             if startsTurn {
                 activeTurn = turnID
+                turnOrigin = prompt.origin
                 stopRequested = false
                 lastStopReason = nil
                 lastTurnFailed = false
@@ -249,7 +255,8 @@ public struct TranscriptState: Equatable, Sendable {
                         content: prompt.content,
                         isLocalPrompt: true,
                         localPromptID: prompt.id,
-                        sentTogether: sentTogether
+                        sentTogether: sentTogether,
+                        origin: prompt.origin
                     )
                 )
             )

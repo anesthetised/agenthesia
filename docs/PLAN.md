@@ -976,6 +976,14 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 3 | #320 `task_run`, `task_output`, `task_stop` | `agent:strong` | #311, #317 |
 | 4 | #321 Verify in the running app | `agent:light` | all |
 
+Progress:
+
+- #311 (turn origins): `QueuedPrompt.Origin` in the event log, the labelled transcript row, the sidebar reason and the
+  wrapper the agent receives, covered by Swift Testing and a hosted row test. No tool produces another origin yet, so
+  the running-app check in light and dark waits for #321, together with `docs/behavior/tools.md` (#312). A source
+  session that is not open in this launch is labelled `From another session`; naming saved sources needs agent names
+  kept with history.
+
 Pitfalls known so far:
 
 - The spike (#308) ran on 2026-11-09 with `claude-agent-acp` 0.101.0 (Claude Haiku 5.5) and `codex-acp` 2.5.0

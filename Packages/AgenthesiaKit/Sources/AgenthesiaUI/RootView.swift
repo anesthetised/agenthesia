@@ -245,6 +245,7 @@ public struct RootView: View {
                 LiveTranscript(
                     session: session,
                     pathIndex: pathIndex(for: session),
+                    originLabel: model.sessions.originLabel,
                     find: model.find,
                     unseenResult: model.unseenResult(appearsActive: appearsActive),
                     onResultShown: { [weak owner = model.owner] in owner?.markSeen(reaching: $0) },

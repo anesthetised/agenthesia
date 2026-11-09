@@ -399,7 +399,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                     try await self.record([try SessionEvent.injectionPrepared(prompts).storedEvent()])
                     guard self.stopGeneration == generation, self.status == .running else { throw CancellationError() }
                     guard self.turnID == turnID, self.promptStarted else { return false }
-                    try await connection.inject(prompts.flatMap(\.content), in: agentID)
+                    try await connection.inject(prompts.flatMap { $0.origin.wrapped($0.content) }, in: agentID)
                     try await self.record(
                         self.promptEvents(
                             prompts,
@@ -541,7 +541,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let events = try promptEvents(prompts, turnID: id, startsTurn: true, removingQueued: removingQueued)
         let (_, committed) = startTurn(
             id: id,
-            content: prompts.flatMap(\.content),
+            content: prompts.flatMap { $0.origin.wrapped($0.content) },
             events: events,
             connection: connection,
             agentID: agentID,

@@ -23,8 +23,8 @@ struct TranscriptMessage {
     /// What Copy returns instead of `markdown`, built only when asked: a folded group's tool cards.
     var copyText: (() -> String)?
 
-    /// How a row presents its role: users get a bubble, agent text no label, thoughts a `Thinking` caption,
-    /// a group of tool calls, or a folded permission record, only a header.
+    /// How a row presents its role: users get a bubble, agent text no label, expanded thoughts dimmed text below their
+    /// header, a group of tool calls, collapsed thoughts or a folded permission record only a header.
     enum Kind: Equatable { case card, user, agent, thought, group }
 }
 
@@ -115,6 +115,7 @@ final class LiveTranscriptSource: TranscriptSource {
         rows = TranscriptRow.fold(
             count: items.count,
             isToolCall: { items[$0].toolCall != nil },
+            isThought: { items[$0].message?.role == .thought },
             isExpanded: { expandedGroups.contains(items[$0].id) }
         )
     }
@@ -135,8 +136,11 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     func isStreaming(at row: Int) -> Bool {
-        guard case .item(let index) = rows[row] else { return false }
-        return isStreaming(item: index)
+        switch rows[row] {
+        case .item(let index): isStreaming(item: index)
+        case .group: false
+        case .thoughts(let first): isThinking(first: first)
+        }
     }
 
     private func isStreaming(item index: Int) -> Bool {
@@ -148,7 +152,38 @@ final class LiveTranscriptSource: TranscriptSource {
         switch rows[row] {
         case .item(let index): message(item: index)
         case .group(let first): groupMessage(first: first)
+        case .thoughts(let first): thoughtMessage(first: first)
         }
+    }
+
+    private func thoughtItems(first: Int) -> ArraySlice<TranscriptState.Item> {
+        let items = state.items
+        let end = TranscriptRow.groupEnd(from: first, count: items.count) { items[$0].message?.role == .thought }
+        return items[first..<end]
+    }
+
+    /// Thoughts are still coming while they end the running turn's transcript.
+    private func isThinking(first: Int) -> Bool {
+        let end = thoughtItems(first: first).endIndex
+        return end == state.items.count && isStreaming(item: end - 1)
+    }
+
+    private func thoughtMessage(first: Int) -> TranscriptMessage {
+        let run = thoughtItems(first: first)
+        let latest: String = if case .text(let block)? = run.last?.message?.content.last { block.text } else { "" }
+        let id = state.items[first].id
+        return thoughts(
+            id: id,
+            latest: latest,
+            thinking: isThinking(first: first),
+            duration: run.reduce(0) { $0 + ($1.message?.thoughtDuration ?? 0) },
+            expanded: expanded.contains(id)
+        ) { [weak self] in self?.thoughtMarkdown(first: first) ?? "" }
+    }
+
+    private func thoughtMarkdown(first: Int) -> String {
+        thoughtItems(first: first).compactMap { $0.message.map { Self.markdown(of: $0.content) } }
+            .joined(separator: "\n\n")
     }
 
     private func groupItems(first: Int) -> ArraySlice<TranscriptState.Item> {
@@ -287,9 +322,14 @@ final class LiveTranscriptSource: TranscriptSource {
             while first > 0, items[first - 1].toolCall != nil { first -= 1 }
             if groupItems(first: first).count > 1 { expandedGroups.insert(items[first].id) }
         }
-        expanded.insert(items[index].id)
+        // Thoughts expand as one row, keyed by the first of them.
+        var first = index
+        while items[first].message?.role == .thought, first > 0, items[first - 1].message?.role == .thought {
+            first -= 1
+        }
+        expanded.insert(items[first].id)
         revision += 1
-        return rows.firstIndex(of: .item(index))
+        return TranscriptRow.row(showing: index, in: rows)
     }
 
     var end: TranscriptState.End? { state.end }
@@ -311,6 +351,9 @@ final class LiveTranscriptSource: TranscriptSource {
         case .group(let first):
             let id = state.items[first].id
             if expandedGroups.remove(id) == nil { expandedGroups.insert(id) }
+        case .thoughts(let first):
+            let id = state.items[first].id
+            if expanded.remove(id) == nil { expanded.insert(id) }
         }
         revision += 1
     }

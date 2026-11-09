@@ -4,14 +4,28 @@ import Testing
 @testable import AgenthesiaUI
 
 @MainActor @Suite struct ToolGroupsTests {
-    /// `t` is a tool call, `x` anything else.
+    /// `t` is a tool call, `h` a thought, `x` anything else.
     private func fold(_ pattern: String, expanded: Set<Int> = []) -> [TranscriptRow] {
         let items = Array(pattern)
         return TranscriptRow.fold(
             count: items.count,
             isToolCall: { items[$0] == "t" },
+            isThought: { items[$0] == "h" },
             isExpanded: expanded.contains
         )
+    }
+
+    @Test func thoughtsFoldIntoOneRowEvenAlone() {
+        #expect(fold("h") == [.thoughts(first: 0)])
+        #expect(fold("hhh") == [.thoughts(first: 0)])
+        #expect(fold("xhhx") == [.item(0), .thoughts(first: 1), .item(3)])
+        // Thoughts end a group of tool calls, and tool calls end a run of thoughts.
+        #expect(fold("htth") == [.thoughts(first: 0), .group(first: 1), .thoughts(first: 3)])
+        #expect(fold("tht") == [.item(0), .thoughts(first: 1), .item(2)])
+        // A thought row holds its text; expanding it adds no rows.
+        #expect(fold("hh", expanded: [0]) == [.thoughts(first: 0)])
+        let rows = fold("xhhtt", expanded: [3])
+        #expect((0..<6).map { TranscriptRow.row(showing: $0, in: rows) } == [0, 1, 1, 3, 4, 4])
     }
 
     @Test func consecutiveToolCallsFoldAndOneStaysACard() {

@@ -189,12 +189,13 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
             let message = session.message(at: row)
             let finished = !session.isStreaming(at: row)
             let keepsSelection = visible.streamingCell?.textView.selectedRange().length ?? 0 > 0
-            if visible.markdown == message.markdown, visible.links == message.links, visible.tool == message.tool,
-                visible.input == message.input, visible.caption == message.caption,
-                !(finished && visible.streamingCell != nil && !keepsSelection)
-            {
-                continue
-            }
+            let sameBody =
+                visible.markdown == message.markdown && visible.links == message.links
+                && visible.input == message.input && visible.caption == message.caption
+                && !(finished && visible.streamingCell != nil && !keepsSelection)
+            // Only a one-line header's text changed, as a collapsed thought's does with every chunk: the row keeps its
+            // views and its height, so it is not measured again.
+            if sameBody, visible.tool == message.tool || message.tool.map(visible.retitle) == true { continue }
             if visible.input != message.input || visible.caption != message.caption {
                 visible.show(
                     message,
@@ -204,6 +205,14 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
                 )
             } else if visible.tool != message.tool, visible.markdown == message.markdown {
                 visible.showHeader(message, controller: self)
+                // Thoughts that end change their header with the text they streamed.
+                if finished, visible.streamingCell != nil, !keepsSelection {
+                    visible.showFinished(
+                        message,
+                        width: TranscriptColumn.width(inRowOfWidth: table.tableColumns[0].width),
+                        controller: self
+                    )
+                }
             } else if visible.tool != message.tool {
                 // The header and body changed; rebuild the row's content in place.
                 visible.show(
@@ -460,6 +469,7 @@ private final class TranscriptMessageRow: NSTableCellView {
     /// Shown only while the pointer is over the row; Copy stays available as an accessibility action.
     private var copyButton: NSButton?
     private weak var statusLabel: NSTextField?
+    private weak var roleLabel: NSTextField?
     /// The field showing the message, with its text before find marked it. A streaming row has none.
     private weak var messageField: LinkTextField?
     private var messageText = NSAttributedString()
@@ -665,6 +675,16 @@ private final class TranscriptMessageRow: NSTableCellView {
         )
     }
 
+    /// Replaces the text of a truncating header label in place when nothing else in the header changed; false otherwise.
+    func retitle(_ header: ToolCardHeader) -> Bool {
+        guard var shown = tool, let roleLabel, roleLabel.lineBreakMode == .byTruncatingTail else { return false }
+        shown.kind = header.kind
+        guard shown == header else { return false }
+        roleLabel.stringValue = header.kind
+        tool = header
+        return true
+    }
+
     /// Keep the text field and its field editor attached when only native metadata changes.
     func showHeader(_ message: TranscriptMessage, controller: TranscriptTableController) {
         guard let stack, let old = stack.arrangedSubviews.first else { return }
@@ -680,6 +700,7 @@ private final class TranscriptMessageRow: NSTableCellView {
         let role = NSTextField(labelWithString: message.tool?.kind ?? message.role)
         role.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         role.textColor = .secondaryLabelColor
+        roleLabel = role
         let copy = NSButton(title: "Copy", target: self, action: #selector(copyMessage(_:)))
         // The inline bezel draws light text on a light fill, unreadable on the selection in light mode; the textured
         // one is a proper control that keeps the label color in light, dark and Increase Contrast.

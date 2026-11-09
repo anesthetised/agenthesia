@@ -6,15 +6,28 @@ enum TranscriptRow: Hashable {
     case item(Int)
     /// A summary of two or more consecutive tool calls, the first of them at this item.
     case group(first: Int)
+    /// One or more consecutive thoughts, the first of them at this item (ADR-0039's amendment).
+    case thoughts(first: Int)
 
     /// One tool call stays a plain card; any other item, such as a permission request or input form, ends a group.
-    /// An expanded group's calls follow its summary as plain cards.
-    static func fold(count: Int, isToolCall: (Int) -> Bool, isExpanded: (Int) -> Bool) -> [TranscriptRow] {
+    /// An expanded group's calls follow its summary as plain cards. Thoughts always fold, into one row that holds
+    /// them all.
+    static func fold(
+        count: Int,
+        isToolCall: (Int) -> Bool,
+        isThought: (Int) -> Bool,
+        isExpanded: (Int) -> Bool
+    ) -> [TranscriptRow] {
         var rows: [TranscriptRow] = []
         rows.reserveCapacity(count)
         var index = 0
         while index < count {
-            let end = groupEnd(from: index, count: count, isToolCall: isToolCall)
+            if isThought(index) {
+                rows.append(.thoughts(first: index))
+                index = groupEnd(from: index, count: count, while: isThought)
+                continue
+            }
+            let end = groupEnd(from: index, count: count, while: isToolCall)
             guard end - index > 1 else {
                 rows.append(.item(index))
                 index += 1
@@ -27,20 +40,20 @@ enum TranscriptRow: Hashable {
         return rows
     }
 
-    /// The row that shows item `index`: its own, or the summary of the folded group it is in.
+    /// The row that shows item `index`: its own, or the summary of the folded group or thoughts it is in.
     static func row(showing index: Int, in rows: [TranscriptRow]) -> Int? {
         rows.lastIndex { row in
             switch row {
             case .item(let item): item <= index
-            case .group(let first): first <= index
+            case .group(let first), .thoughts(let first): first <= index
             }
         }
     }
 
-    /// The end of the run of tool calls at `first`.
-    static func groupEnd(from first: Int, count: Int, isToolCall: (Int) -> Bool) -> Int {
+    /// The end of the run of items at `first` that `matches` accepts.
+    static func groupEnd(from first: Int, count: Int, while matches: (Int) -> Bool) -> Int {
         var end = first
-        while end < count, isToolCall(end) { end += 1 }
+        while end < count, matches(end) { end += 1 }
         return end
     }
 }

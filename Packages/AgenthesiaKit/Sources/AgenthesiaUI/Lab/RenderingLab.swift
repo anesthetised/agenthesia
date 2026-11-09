@@ -27,6 +27,7 @@
                     Button("S7: Tool updates") { Task { await lab.runStream(toolUpdates: true) } }
                     Button("S8: Group toggles") { Task { await lab.runStream(toolUpdates: true, groupToggles: true) } }
                     Button("S9: Tools, 10k") { Task { await lab.runStream(toolUpdates: true, history: 10_000) } }
+                    Button("S10: Thoughts") { Task { await lab.runStream(thoughts: true) } }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
                     Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
@@ -165,6 +166,7 @@
                 case "S7": await runStream(toolUpdates: true)
                 case "S8": await runStream(toolUpdates: true, groupToggles: true)
                 case "S9": await runStream(toolUpdates: true, history: 10_000)
+                case "S10": await runStream(thoughts: true)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
                 default:
@@ -187,20 +189,33 @@
         /// S7 adds five tool calls above the answer, which fold into one row; every 100 ms one changes status and
         /// gains an output line. S8 also expands or collapses the group with each change, inserting and removing rows.
         /// S9 is S7 below a 10 000-item history, where folding the whole transcript on every update would show.
+        /// S10 streams two ~1000-token thoughts, which fold into one collapsed row whose header shows the last line,
+        /// before the S1 answer.
         func runStream(
             longCode: Bool = false,
             toolUpdates: Bool = false,
             groupToggles: Bool = false,
-            history: Int = 200
+            history: Int = 200,
+            thoughts: Bool = false
         ) async {
-            if toolUpdates { prototype = .app }
+            if toolUpdates || thoughts { prototype = .app }
             var generator = TranscriptGenerator(seed: 1)
             let transcript = LabTranscript(items: generator.items(history))
+            // Where each streamed item starts in `chunks`: the thoughts, then the answer.
+            var starts: [Int] = []
+            var chunks: [String] = []
+            if thoughts {
+                for _ in 0..<2 {
+                    starts.append(chunks.count)
+                    chunks += generator.chunks(of: generator.answer(tokens: 1000))
+                }
+            }
+            let answerStart = chunks.count
             let answer =
                 longCode
                 ? "```swift\n" + TranscriptGenerator.swiftFile(lines: 400)
                 : generator.answer(tokens: 4000)
-            let chunks = generator.chunks(of: answer)
+            chunks += generator.chunks(of: answer)
             var schedule = StreamSchedule(chunks: chunks, interval: 0.01)
             let view = await present(prototype.make())
             view.show(transcript)
@@ -210,27 +225,39 @@
             var toolTicks = 0
             (view as? AppTranscriptPrototype)?.appendTools(cards)
             transcript.startStreaming()
-            view.didAppend()
+            let app = view as? AppTranscriptPrototype
+            if thoughts { app?.didAppendThought() } else { view.didAppend() }
+            var next = (starts + [answerStart]).dropFirst()
             // The virtual producer emits 100 chunks/s even when the UI stalls. No timer can silently slow it.
             let start = ContinuousClock.now
             let name =
                 longCode
                 ? "S6 Long unclosed code"
-                : history > 200
-                    ? "S9 Tool updates, 10k items"
-                    : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
+                : thoughts
+                    ? "S10 Thoughts"
+                    : history > 200
+                        ? "S9 Tool updates, 10k items"
+                        : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
             await measure("\(name), \(prototype.title), warm", in: view.view) {
                 guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
                 let batch = schedule.due(at: milliseconds(since: start) / 1000)
                 guard !batch.isEmpty else { return true }
-                if let app = view as? AppTranscriptPrototype {
+                if let app {
                     while !cards.isEmpty, toolTicks < batch.upperBound / 10 {
                         Self.advance(&cards[toolTicks % cards.count], tick: toolTicks)
                         app.replaceTool(cards[toolTicks % cards.count])
                         if groupToggles { app.toggleGroups() }
                         toolTicks += 1
                     }
-                    app.append(chunks[batch].joined())
+                    // A batch that reaches the next thought or the answer streams the rest into it.
+                    var lower = batch.lowerBound
+                    while let start = next.first, start < batch.upperBound {
+                        if start > lower { app.append(chunks[lower..<start].joined()) }
+                        next.removeFirst()
+                        if start == answerStart { app.didAppend() } else { app.didAppendThought() }
+                        lower = start
+                    }
+                    if lower < batch.upperBound { app.append(chunks[lower..<batch.upperBound].joined()) }
                 } else {
                     view.didStream(transcript.stream(chunks[batch].joined()))
                 }
@@ -239,7 +266,7 @@
             }
             results[results.count - 1].measurements.merge([
                 "chunkIntervalMS": schedule.interval * 1000,
-                "chunks": Double(chunks.count), "characters": Double(answer.count),
+                "chunks": Double(chunks.count), "characters": Double(chunks.joined().count),
                 "elapsedMS": milliseconds(since: start), "peakBacklogChunks": Double(schedule.peakBacklog),
                 "applyLatencyP95MS": schedule.p95Latency, "applyLatencyMaxMS": schedule.latencies.max() ?? 0,
                 "toolUpdates": Double(toolTicks),

@@ -240,6 +240,25 @@ import os
             composerDrafts[id] = newValue == ComposerDraft() ? nil : newValue
         }
     }
+    /// The answers to each session's docked form, by session ID; one is replaced when another form docks. Never
+    /// written to the event log (ADR-0020), and not observed: the views observe the `InputDraft` itself.
+    @ObservationIgnored private var inputDrafts: [UUID: (request: UUID, draft: InputDraft)] = [:]
+
+    /// The session's oldest pending form, which docks in its composer (#326); nil while none waits.
+    func dockedInput(_ session: SessionController) -> DockedInput? {
+        let id = session.session.id
+        guard let input = session.pendingInputs.first, case .form(let schema) = input.request.mode else {
+            inputDrafts[id] = nil
+            return nil
+        }
+        let kept = inputDrafts[id].flatMap { $0.request == input.id ? $0.draft : nil }
+        let draft = kept ?? InputDraft(schema: schema)
+        inputDrafts[id] = (input.id, draft)
+        return DockedInput(input: input, schema: schema, draft: draft) { [weak session] response in
+            session?.answerInput(input.id, with: response) == true
+        }
+    }
+
     var find = TranscriptFindState()
     /// Counts the requests (⌘L) to focus the composer's text.
     var composerFocusRequests = 0

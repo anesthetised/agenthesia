@@ -1210,9 +1210,18 @@ Dependencies are added when the milestone that needs them starts, not up front.
 
 ### Native elicitation forms
 
-Live sessions advertise form elicitation and render matching session-scoped requests as native
-transcript cards. Requests and final responses are committed before display and delivery; drafts
-remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
+Live sessions advertise form elicitation and answer matching session-scoped requests in the composer (#326).
+`SessionWindowModel.dockedInput(_:)` builds a `DockedInput` for the oldest of `SessionController.pendingInputs`,
+keeping its `InputDraft` (values, text and the current step) per session until another form docks; `InputDock` shows
+it at the top of the composer card. `InputStep.steps(_:)`, a pure function of the schema, groups the fields into steps:
+a choice followed by an optional plain string is one step, any other field its own, in the order of the names with
+numbers compared by value, since the decoded schema keeps no order. While a form docks, `RootView` binds the
+composer's text to the step's text field instead of `ComposerDraft`, which is left untouched and so comes back
+afterwards; `ComposerInput.keyAction(answering:)` and `choiceIndex` route Return (advance), Escape (decline), ↑ ↓ and
+1–9 (pick), and `ComposerPrimaryAction` reads `next` or `answer`, so Return never queues behind the turn that waits
+for the answer. The transcript shows a waiting form as a compact row (`LiveTranscriptSource.waitingInput`) and an
+answered or cancelled one as `InputForm`'s record. Requests and final responses are committed before display and
+delivery; drafts remain temporary UI state. Stop, withdrawal, failure, turn completion and close cancel pending forms.
 Saved forms have no active controls; Continue records cancellation of interrupted requests.
 Agent-provided regular expressions share a 20 ms budget of thread CPU time spent matching. Other
 field validation and time spent descheduled do not consume it; regex compilation is outside this budget.

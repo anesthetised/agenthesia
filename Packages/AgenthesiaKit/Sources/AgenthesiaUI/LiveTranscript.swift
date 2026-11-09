@@ -105,7 +105,6 @@ final class LiveTranscriptSource: TranscriptSource {
         return markdown
     }
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
-    private var inputDrafts: [UUID: InputDraft] = [:]
     private var expanded: Set<Int64> = []
     /// Keyed by the group's first item, so that a growing group keeps its expansion.
     private var expandedGroups: Set<Int64> = [] { didSet { fold() } }
@@ -124,10 +123,15 @@ final class LiveTranscriptSource: TranscriptSource {
         self.controller = controller
         root = URL(filePath: controller.session.workingDirectory)
         state = controller.transcript
-        inputDrafts = inputDrafts.filter { id, _ in controller.pendingInputs.contains { $0.id == id } }
         pending = controller.pendingPermissions
         running = controller.status == .running || controller.status == .stopping
         revision += 1
+    }
+
+    /// The row of a form waiting in the composer: `Asked 2 questions · answer below`.
+    static func waitingInput(_ schema: ACP.ElicitationSchema) -> String {
+        let count = InputStep.steps(schema).count
+        return "Asked \(count) question\(count == 1 ? "" : "s") · answer below"
     }
 
     func isStreaming(at row: Int) -> Bool {
@@ -193,17 +197,15 @@ final class LiveTranscriptSource: TranscriptSource {
     private func message(item index: Int) -> TranscriptMessage {
         let item = state.items[index]
         if let input = item.input, case .form(let schema) = input.request.mode {
-            let active = controller?.pendingInputs.contains { $0.id == input.requestID } == true
-            let draft = inputDrafts[input.requestID] ?? InputDraft(schema: schema)
-            if active { inputDrafts[input.requestID] = draft } else { inputDrafts.removeValue(forKey: input.requestID) }
+            // A waiting form is answered in the composer (#326); the transcript only says so.
+            if controller?.pendingInputs.contains(where: { $0.id == input.requestID }) == true {
+                return render(id: item.id, role: "Input", markdown: Self.waitingInput(schema))
+            }
             var message = render(id: item.id, role: "Input", markdown: input.request.message)
             let recording =
-                !active && input.response == nil
+                input.response == nil
                 && (controller?.status == .running || controller?.status == .idle || controller?.status == .stopping)
-            message.input = InputCard(input: input, active: active, recording: recording, draft: draft) {
-                [weak controller] response in
-                controller?.answerInput(input.requestID, with: response)
-            }
+            message.input = InputCard(input: input, recording: recording)
             return message
         }
         if let tool = item.toolCall {

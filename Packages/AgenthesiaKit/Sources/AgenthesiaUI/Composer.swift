@@ -17,6 +17,8 @@ struct ComposerInput: View {
     var focusRequests = 0
     /// Text to put at the caret, such as an Ask agent quote; each one is inserted once.
     var insertion: ComposerInsertion?
+    /// The form docked above the text, whose current step the text answers (#326).
+    var form: DockedInput?
     @State private var selection = 0
     /// Escape hides the commands until the draft leaves command mode.
     @State private var dismissed = false
@@ -28,16 +30,19 @@ struct ComposerInput: View {
             if !attachments.isEmpty { chips.disabled(!attachmentsEditable || !isEnabled) }
             ComposerTextView(
                 text: $text,
-                isEditable: isEnabled,
+                isEditable: isEnabled && form?.takesText != false,
                 onCommand: { handle($0, matches: matches) },
                 onFiles: { if isEnabled && attachmentsEditable { Self.add($0, to: &attachments) } },
                 onShortcut: { handleShortcut($0, matches: matches) },
+                onKey: pickChoice,
                 focusRequests: focusRequests,
-                insertion: insertion
+                insertion: insertion,
+                label: form == nil ? "Message" : "Answer"
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text("Message the agent…").foregroundStyle(Color(nsColor: .placeholderTextColor))
+                    Text(form?.placeholder ?? "Message the agent…")
+                        .foregroundStyle(Color(nsColor: .placeholderTextColor)).lineLimit(1)
                         .padding(.leading, ComposerTextView.padding).allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -125,7 +130,8 @@ struct ComposerInput: View {
                 lineBreak: lineBreak,
                 command: modifiers.contains(.command),
                 shift: modifiers.contains(.shift),
-                empty: text.isEmpty && attachments.isEmpty
+                empty: text.isEmpty && attachments.isEmpty,
+                answering: form != nil
             )
         else { return false }
         switch action {
@@ -137,11 +143,43 @@ struct ComposerInput: View {
         case .sendAllNow: onSubmit(.allNow)
         case .recall: onRecall()
         case .stop: onStop()
+        case .decline: form?.decline()
+        case .movePick(let offset): form?.movePick(by: offset)
+        case .ignore: break
         }
         return true
     }
 
-    enum KeyAction: Equatable { case select(Int), complete(Int), dismiss, submit, sendNow, sendAllNow, recall, stop }
+    /// 1–9 in an empty composer pick the docked form's choices.
+    private func pickChoice(_ event: NSEvent) -> Bool {
+        guard isEnabled, let form,
+            let index = Self.choiceIndex(
+                event.charactersIgnoringModifiers,
+                modifiers: event.modifierFlags,
+                empty: text.isEmpty,
+                choices: form.choices.count
+            )
+        else { return false }
+        form.pick(index)
+        return true
+    }
+
+    /// The choice a digit key picks: 1–9 without ⌘, ⌃ or ⌥, while the composer is empty, so a typed answer can still
+    /// hold digits.
+    static func choiceIndex(_ characters: String?, modifiers: NSEvent.ModifierFlags, empty: Bool, choices: Int) -> Int?
+    {
+        guard empty, modifiers.intersection([.command, .control, .option]).isEmpty,
+            let characters, characters.count == 1, let digit = Int(characters), (1...9).contains(digit),
+            digit <= choices
+        else { return nil }
+        return digit - 1
+    }
+
+    enum KeyAction: Equatable {
+        case select(Int), complete(Int), dismiss, submit, sendNow, sendAllNow, recall, stop
+        /// Only while a form is docked (#326).
+        case decline, movePick(Int), ignore
+    }
 
     /// What a key command does with `matches` commands listed; nil leaves it to the text view.
     static func keyAction(
@@ -151,8 +189,19 @@ struct ComposerInput: View {
         lineBreak: Bool,
         command: Bool = false,
         shift: Bool = false,
-        empty: Bool = false
+        empty: Bool = false,
+        answering: Bool = false
     ) -> KeyAction? {
+        // While a form is docked, Return answers and never queues, Escape declines and ↑ ↓ move a choice (#326).
+        if answering {
+            switch selector {
+            case #selector(NSResponder.cancelOperation(_:)): return command ? .stop : .decline
+            case #selector(NSResponder.insertNewline(_:)): return command ? .ignore : lineBreak ? nil : .submit
+            case #selector(NSResponder.moveUp(_:)) where empty: return .movePick(-1)
+            case #selector(NSResponder.moveDown(_:)) where empty: return .movePick(1)
+            default: return nil
+            }
+        }
         if command {
             if selector == #selector(NSResponder.insertNewline(_:)) { return shift ? .sendAllNow : .sendNow }
             if selector == #selector(NSResponder.cancelOperation(_:)) { return .stop }
@@ -207,8 +256,11 @@ struct ComposerTextView: NSViewRepresentable {
     var onCommand: (Selector) -> Bool
     var onFiles: ([URL]) -> Void
     var onShortcut: (NSEvent) -> Bool = { _ in false }
+    /// Return true to consume a key before the text view types it.
+    var onKey: (NSEvent) -> Bool = { _ in false }
     var focusRequests = 0
     var insertion: ComposerInsertion?
+    var label = "Message"
 
     static let font = NSFont.preferredFont(forTextStyle: .body)
     private static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
@@ -233,7 +285,6 @@ struct ComposerTextView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
         textView.maxSize = CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
-        textView.setAccessibilityLabel("Message")
         let scrollView = NSScrollView()
         scrollView.documentView = textView
         scrollView.drawsBackground = false
@@ -261,7 +312,9 @@ struct ComposerTextView: NSViewRepresentable {
         coordinator.parent = self
         textView.onFiles = onFiles
         textView.onShortcut = onShortcut
+        textView.onKey = onKey
         textView.isEditable = isEditable
+        textView.setAccessibilityLabel(label)
         if textView.string != text {
             textView.string = text
             textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
@@ -313,9 +366,14 @@ struct ComposerTextView: NSViewRepresentable {
 final class FileTextView: NSTextView {
     var onFiles: ([URL]) -> Void = { _ in }
     var onShortcut: (NSEvent) -> Bool = { _ in false }
+    var onKey: (NSEvent) -> Bool = { _ in false }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         onShortcut(event) || super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if !onKey(event) { super.keyDown(with: event) }
     }
 
     override func viewDidMoveToWindow() {

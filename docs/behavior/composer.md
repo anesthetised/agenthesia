@@ -1,8 +1,8 @@
 # Composer
 
 The composer is the card at the bottom of a live session's transcript column, where the user writes the next message,
-attaches files, picks an agent command, changes the session's settings and sends or stops. Above it sit the docked
-permission request, errors and the status line. A session that cannot take a prompt shows a compact card with Continue
+attaches files, picks an agent command, changes the session's settings and sends or stops, and where the agent's
+questions are answered. Above it sit the docked permission request, errors and the status line. A session that cannot take a prompt shows a compact card with Continue
 instead. The draft before a session exists is described in [session-start.md](session-start.md), and the prompt queue
 (Send or Queue, steering, pause, editing queued messages) in [queue.md](queue.md).
 
@@ -11,8 +11,8 @@ instead. The draft before a session exists is described in [session-start.md](se
 - From the top of the transcript pane down: the transcript, the docked permission request, errors, the status line,
   and the composer card. The dock, errors, status line and card share the transcript column (at most 720 pt wide,
   16 pt side and 12 pt bottom margins); the card has rounded corners, bar material and a hairline border.
-- Inside the card, top to bottom: the queue and its editing hint ([queue.md](queue.md)), the command list, the
-  attachment chips, the text, and the bottom row.
+- Inside the card, top to bottom: the docked questions (below), the queue and its editing hint ([queue.md](queue.md)),
+  the command list, the attachment chips, the text, and the bottom row.
 - The bottom row, left to right: Attach (paperclip), the control row with the session's settings, then on the
   trailing edge the context ring (from 70 %, see below), the Send options menu (chevron) and the round primary button. The draft's card has the same row
   ([session-start.md](session-start.md)).
@@ -22,7 +22,8 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 - A plain-text editor with the placeholder `Message the agent…` (accessibility label `Message`). It grows from two to
   six lines, then scrolls. Smart quotes and dashes are off.
-- Return sends or queues the draft; ⇧Return and ⌥Return insert a line break. Escape never inserts anything (it closes
+- Return sends or queues the draft (while questions are docked, it answers them instead; see below); ⇧Return and
+  ⌥Return insert a line break. Escape never inserts anything (it closes
   the command list when one shows). ⌘Return and ⇧⌘Return are the Send options below; ⌘. stops the turn.
 - The text takes keyboard focus when the card appears. Session → Focus Composer (⌘L) moves focus back to it from any
   pane. Ask agent in the review inserts the selected diff lines at the caret, after any selected text, on lines of
@@ -44,10 +45,12 @@ instead. The draft before a session exists is described in [session-start.md](se
   added, never the contents; a path in the main checkout points to the same file in the session's worktree when it
   exists there ([ADR-0018](../adr/0018-composer-attachments.md)).
 - While a queued message is being edited, Attach is disabled, chips cannot be removed and drops are refused.
+- While questions are docked, the chips are hidden, Attach is disabled and drops are refused; the draft's attachments
+  come back with it.
 
 ## Slash commands
 
-- The list exists only when the agent has announced commands, and shows while the whole draft is a bare `/word` (no
+- The list exists only when the agent has announced commands and no questions are docked, and shows while the whole draft is a bare `/word` (no
   whitespace): the commands whose names start with the typed word, ignoring case. A lone `/` lists them all.
 - Each row shows `/name`, the description and, if the command takes input, its hint. The list is at most 180 pt tall
   and scrolls.
@@ -100,14 +103,18 @@ instead. The draft before a session exists is described in [session-start.md](se
 
 - The round button shows an arrow for Send, `Queue` with the arrow when the draft would wait behind a running turn or
   other queued messages, and `Save` while a queued message is edited. It becomes Stop (square) while a turn runs or
-  stops, or an input form waits, and the draft is empty. Which of Send and Queue applies is in [queue.md](queue.md).
+  stops and the draft is empty. While questions are docked it reads `Next` with the arrow, or `Answer` on the last
+  step, whatever the draft. Which of Send and Queue applies is in [queue.md](queue.md).
 - Tooltips: `Send the message (Return)`, `Queue the message until the agent is ready (Return)`, `Save the queued
-  message (Return)`, `Stop the current turn (⌘.)`.
+  message (Return)`, `Stop the current turn (⌘.)`, `Answer this question and go to the next (Return)`, `Send the
+  answers to the agent (Return)`.
+- Next and Answer are disabled while the step, or on the last step the whole form, has errors.
 - Send, Queue and Save are disabled for an empty draft (whitespace only and no attachments), while a send is being
   accepted, and while a settings change is pending. Stop is disabled once the turn is stopping and the queue is paused.
 - The Send options menu (chevron, `Send options`) holds `Send Draft Now` (or `Send Queue Now` when the draft is empty)
   with ⌘Return, and `Send Whole Queue Now` with ⇧⌘Return; while a turn runs both names end in ` (Interrupts Turn)`.
-  When the turn can be stopped, `Stop Turn` follows a divider. Their rules are in [queue.md](queue.md).
+  When the turn can be stopped, `Stop Turn` follows a divider. Their rules are in [queue.md](queue.md). Both send items
+  are disabled while questions are docked.
 - Stop is also Session → Stop (⌘.).
 
 ## Status line
@@ -137,6 +144,40 @@ instead. The draft before a session exists is described in [session-start.md](se
   which appears under the same pointer.
 - VoiceOver announces `Permission request: <kind> · <paths>`, with `, 3 pending` when several are.
 
+## Docked questions
+
+An agent's form ([ADR-0020](../adr/0020-native-elicitation-forms.md), [ADR-0022](../adr/0022-session-scoped-elicitation.md)),
+such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (#326).
+
+- The oldest pending form docks at the top of the composer card, above the queue; others wait behind it and dock in
+  turn. The transcript shows each waiting form as a compact row ([transcript.md](transcript.md#questions-from-the-agent)).
+- The form is asked one step at a time. A choice field followed by an optional text field is one step: the choices,
+  and the composer's text as the "Other" answer, which joins or replaces the pick as the agent reads it. Any other
+  field is a step of its own. Steps are grouped from the form's schema alone, never from an agent's field names
+  (VISION principle 8), in the order of the field names with numbers compared by value (`q_2` before `q_10`).
+- The dock shows, top to bottom: the form's message in small secondary text when the step has a question of its own;
+  the step's title (the field's title, else its name, with ` (required)`), `1 of 3` while the form has several steps,
+  and `Skip`; the step's question (the field's description, else the form's message); its choices; its errors in red
+  (on the last step also those of fields no step shows, as `<name>: <error>`).
+- A choice is a row with its number (1–9), a radio or checkbox mark, the title and the agent's description in secondary
+  text; the picked one has a tinted background. A click picks it; a multiple choice toggles. A field that is neither a
+  choice nor text (a toggle) shows its control instead.
+- **The composer's text is the step's text answer.** Its placeholder is that field's description (else its title, else
+  `Your answer`); on a step without a text field it is read-only and reads `Return continues`. The accessibility label
+  is `Answer` instead of `Message`. An optional text left empty is left out of the response. The draft the user had,
+  text and attachments, is set aside and comes back when the form is answered, declined or cancelled; a queued
+  message cannot be edited meanwhile.
+- **Keys.** Return answers the step and moves to the next; on the last step it sends the response (Next and Answer).
+  Return never queues while a form waits ([queue.md](queue.md)). ⇧Return and ⌥Return insert a line break. In an
+  empty composer, 1–9 pick a choice and ↑ ↓ move a single choice (from none, ↓ picks the first and ↑ the last); once
+  text is typed, digits and arrows edit it. Escape declines the form, as Skip does. ⌘. still stops the turn, which
+  cancels the form. ⌘Return and ⇧⌘Return do nothing.
+- Skip and Escape decline the form (the agent reads that the user skipped); Stop, a withdrawn request, a failure and
+  the end of the turn cancel it. Validation (patterns, limits, required fields) is the form's as before.
+- The dock never takes focus. VoiceOver reads it as `Question 1 of 3 <title>: <question>` and announces that when a
+  step appears; each choice is a button read as its title and description, marked selected when picked, with the hint
+  `Press 1 to choose`.
+
 ## Errors
 
 - An error of a send, a queue action or a settings change shows above the card in red: a short sentence with a warning
@@ -164,6 +205,9 @@ instead. The draft before a session exists is described in [session-start.md](se
   [queue.md](queue.md#recovery).
 
 ## Changes
+
+- 2026-11-09, #326: an agent's questions dock in the composer and are answered one step at a time; Return reads Next
+  or Answer and never queues while a form waits; Stop no longer replaces the round button while a form waits.
 
 - 2026-11-09, #222: the context ring before the Send options, from 70 % of the context window.
 - 2026-11-09, #221: the status line counts the plan's completed entries and names the one in progress.

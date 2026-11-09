@@ -395,7 +395,10 @@ public struct RootView: View {
     }
 
     private func editorCard(_ session: SessionController) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let form = model.dockedInput(session)
+        return VStack(alignment: .leading, spacing: 8) {
+            // A new identity per form resets the dock and announces its first step.
+            if let form { InputDock(form: form).id(form.input.id) }
             if !session.queuedPrompts.isEmpty {
                 PromptQueue(
                     session: session,
@@ -404,44 +407,56 @@ public struct RootView: View {
                     onError: { model.errorMessage = $0.localizedDescription }
                 )
             }
-            if model.composer.editingQueueID != nil {
+            if model.composer.editingQueueID != nil, form == nil {
                 HStack {
                     Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("Cancel Edit") { model.composer.finishEditing() }
                 }
             }
+            // While a form waits, the text is its answer and the draft waits in `model.composer` (#326).
             ComposerInput(
-                text: Bindable(model).composer.message.text,
-                attachments: Bindable(model).composer.message.attachments,
-                commands: session.transcript.commands,
+                text: form.map { form in
+                    Binding {
+                        form.text
+                    } set: {
+                        form.text = $0
+                    }
+                }
+                    ?? Bindable(model).composer.message.text,
+                attachments: form == nil ? Bindable(model).composer.message.attachments : .constant([]),
+                commands: form == nil ? session.transcript.commands : [],
                 isEnabled: !submitting,
                 onSubmit: submit,
-                attachmentsEditable: model.composer.editingQueueID == nil,
+                attachmentsEditable: model.composer.editingQueueID == nil && form == nil,
                 onRecall: recallQueuedPrompt,
                 onStop: { Task { await model.stop() } },
                 focusRequests: model.composerFocusRequests,
-                insertion: model.composerInsertion
+                insertion: model.composerInsertion,
+                form: form
             )
-            composerControls(session)
+            composerControls(session, form: form)
         }
         .padding(12)
         .background(.bar, in: .rect(cornerRadius: 16))
         .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.separator) }
         .dropDestination(for: URL.self) { urls, _ in
-            guard model.composer.editingQueueID == nil, !submitting else { return false }
+            guard model.composer.editingQueueID == nil, !submitting, model.dockedInput(session) == nil else {
+                return false
+            }
             ComposerInput.add(urls, to: &model.composer.message.attachments)
             return true
         }
     }
 
     /// The card's bottom row: attach and the session's settings, then the round Send/Stop button.
-    private func composerControls(_ session: SessionController) -> some View {
+    private func composerControls(_ session: SessionController, form: DockedInput?) -> some View {
         HStack(spacing: 8) {
             Button("Attach Files…", systemImage: "paperclip", action: chooseAttachments)
                 .labelStyle(.iconOnly).buttonStyle(.borderless)
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help("Attach files or folders (⇧⌘A)").disabled(model.composer.editingQueueID != nil || submitting)
+                .help("Attach files or folders (⇧⌘A)")
+                .disabled(model.composer.editingQueueID != nil || submitting || form != nil)
             SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let usage = ContextUsage(session.transcript.usage) { ContextRing(usage: usage) }
@@ -451,8 +466,15 @@ public struct RootView: View {
                 turnActive: turnActive,
                 hasDraft: hasDraft,
                 editingQueued: model.composer.editingQueueID != nil,
-                idleWithEmptyQueue: session.status == .idle && session.queuedPrompts.isEmpty
+                idleWithEmptyQueue: session.status == .idle && session.queuedPrompts.isEmpty,
+                answering: form?.isLast
             )
+            let disabled =
+                switch action {
+                case .stop: session.status == .stopping && session.queuePaused
+                case .next, .answer: form?.canAdvance != true
+                default: !hasDraft || submitting || session.isChangingConfig
+                }
             Menu("Send options", systemImage: "chevron.down") {
                 Button(ComposerPrimaryAction.sendNowTitle(hasDraft: hasDraft, turnActive: turnActive)) {
                     submit(.now)
@@ -462,14 +484,14 @@ public struct RootView: View {
                 )
                 .disabled(
                     (!hasDraft && session.queuedPrompts.isEmpty) || submitting || model.composer.editingQueueID != nil
-                        || session.isChangingConfig
+                        || session.isChangingConfig || form != nil
                 )
                 Button("Send Whole Queue Now") { submit(.allNow) }
                     .keyboardShortcut(.return, modifiers: [.command, .shift])
                     .disabled(
                         (!hasDraft && session.queuedPrompts.isEmpty) || submitting
                             || model.composer.editingQueueID != nil
-                            || session.isChangingConfig
+                            || session.isChangingConfig || form != nil
                     )
                 if model.canStop {
                     Divider()
@@ -477,7 +499,11 @@ public struct RootView: View {
                 }
             }.labelStyle(.iconOnly).menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Button {
-                if action == .stop { Task { await model.stop() } } else { send() }
+                switch action {
+                case .stop: Task { await model.stop() }
+                case .next, .answer: form?.advance()
+                default: send()
+                }
             } label: {
                 if action.showsTitle {
                     Label(action.title, systemImage: action.symbol)
@@ -488,11 +514,7 @@ public struct RootView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(action.showsTitle ? .capsule : .circle)
             .help(action.help)
-            .disabled(
-                action == .stop
-                    ? session.status == .stopping && session.queuePaused
-                    : !hasDraft || submitting || session.isChangingConfig
-            )
+            .disabled(disabled)
         }
     }
 
@@ -511,6 +533,11 @@ public struct RootView: View {
     private func send() { submit(.whenReady) }
 
     private func submit(_ intent: SessionController.SubmissionIntent) {
+        // While a form waits, Return answers it and never queues; nothing is sent now (#326).
+        if let form = model.displayed.flatMap(model.dockedInput) {
+            if intent == .whenReady { form.advance() }
+            return
+        }
         guard model.composer.editingQueueID == nil || intent == .whenReady else { return }
         guard model.restored == nil, !submitting, let owner = model.owner,
             let session = owner.controller, !session.isChangingConfig,
@@ -537,7 +564,8 @@ public struct RootView: View {
     }
 
     private func editQueuedPrompt(_ entry: QueuedPrompt) {
-        guard !submitting, model.composer.editingQueueID == nil else { return }
+        guard !submitting, model.composer.editingQueueID == nil, model.displayed.flatMap(model.dockedInput) == nil
+        else { return }
         model.composer.edit(entry)
     }
 

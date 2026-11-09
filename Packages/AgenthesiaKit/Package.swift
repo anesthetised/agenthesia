@@ -57,6 +57,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "JSONRPC", swiftSettings: swiftSettings),
+        .target(name: "MCP", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .target(name: "ACP", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
         .systemLibrary(name: "CLibArchive"),
         .target(name: "AgentRuntime", dependencies: ["ACP", "CLibArchive"], swiftSettings: swiftSettings),
@@ -126,6 +127,7 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
+        .testTarget(name: "MCPTests", dependencies: ["MCP", "JSONRPC"], swiftSettings: swiftSettings),
         .testTarget(
             name: "ACPTests",
             dependencies: ["ACP", "ACPTesting"],

@@ -19,6 +19,12 @@ struct AgenthesiaApp: App {
             .commands { RenderingLabCommands() }
         #endif
 
+        MenuBarExtra {
+            SessionMenuBarContent(sessions: lifecycle.sessions)
+        } label: {
+            SessionMenuBarLabel(sessions: lifecycle.sessions)
+        }
+
         Settings {
             SettingsView(catalog: .shared)
         }

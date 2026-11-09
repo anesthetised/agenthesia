@@ -954,6 +954,22 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #228 (menu bar item) landed: a `MenuBarExtra` scene (`App/`) with `SessionMenuBarLabel` (template symbol `sparkles`,
+  the Needs You count while above zero) and `SessionMenuBarContent` (Needs You as `title · reason` with a permission
+  submenu, Working as `title · plan step` or `Working 1m 12s`, New Session, Open Agenthesia while no window is open),
+  `SessionMenu` (entries derived from `SessionSidebar`), `WindowPresence`, and `PermissionChoice` in Core, the pure
+  Open-first rule #227 reuses. Tested: the Core rule, the entries against MockAgent (a permission request answered from
+  an entry, the shelf time, the plan step, a failed start) and the two views by their measured size; a hosted view
+  exposes no accessibility tree without an assistive client, so labels are not asserted. **Not checked in the running
+  app (the owner was using the machine); the check must cover**, with MockAgent in light and dark: the item is in the
+  menu bar, template-tinted in both appearances, and the count appears beside it with a permission pending and goes with
+  the answer; the Needs You and Working items read as the sidebar rows do and the Working text ticks to a new time when
+  the menu reopens; the submenu of a pending permission lists Open and the agent's options, an option answers without
+  a window coming forward and Open selects the session; an item opens its session in the window that shows it, or in a
+  new one with every window closed; Open Agenthesia appears after the last window closes and disappears once one opens
+  (`WindowPresence` is driven by window notifications, so check minimizing too); New Session opens the draft; ⌘-drag
+  removes the item; VoiceOver reads the label with and without a count. Also unverified: whether the label's HStack
+  keeps the count visible in the status item.
 - #233 (pull request with `gh`) landed: `SessionManager.pullRequestTarget`/`openPullRequest`/`push`, the
   `session.pullRequestOpened` event kind (its own kind, so older builds skip it), `PullRequestSheet` with its three
   steps, the inspector's `Pull request #12` link and Push, Merge hidden once a pull request is open, and Discard's

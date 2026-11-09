@@ -73,6 +73,7 @@ extension SessionManager {
         }
         for owner in owners where owner.sessionID == id { await end(owner) }
         try await library.store().deleteSession(id)
+        deletedIDs.insert(id)
     }
 
     /// The folder of a session without a project, only when it lies directly in the scratch root: a stored path

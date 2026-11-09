@@ -915,6 +915,32 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 
 Pitfalls known so far:
 
+- M16 wave-1 running-app check (2026-11-09; issue #334). Scripted (no computer use) on a test copy with bundle
+  identifier `io.github.anesthetised.Agenthesia.m16test`, an isolated `CFFIXED_USER_HOME`, `MockAgent` with a combined
+  demo (`scripts/app-check/demos/plan.json` + `usage.json` + one written file) and a throwaway repository with a local
+  bare remote; main at 4d1085d plus #331 (push) and #330 (held message). **Checked, light:** draft → Send shows the held
+  message, `Starting demo-agent in a new worktree…` and the `Starting…` card, and the message keeps its position when
+  the transcript arrives; the Plan section is open during the turn with checkmark, dot and circle rows, `Working for 1s
+  · 1 of 4 · Write the failing test` and the Working row's reason `agh-… · Write th…`; the ring at 75 % (secondary) and
+  92 % (orange) with the accessibility label `Context 184k of 200k · 92 %, cost 1,23 US$`; the Plan collapses to `Plan
+  · 4 of 4` after the turn; Merge into main… shows `Push main to origin` off the first time, ticking it and merging
+  pushed the commit to the bare remote (local and remote at the same commit) and the choice was remembered; Delete
+  Session… on the merged session said `This session was merged. Its history will be deleted. This cannot be undone.`,
+  deleted it (0 sessions, 0 events) and returned the window to the draft. **Checked, dark:** a session without a
+  project: `Starting demo-agent in a new folder…`, the inspector's Context `184k of 200k · 92 %` and Cost `1,23 US$`
+  (system currency format), Delete Session… disabled while live and enabled after End Session, the confirmation named
+  the folder and `1 file … moved to the Trash`, the folder went to the Trash and the history was deleted. **Findings,
+  fixed in #334's pull request:** (1) a window that ended a session and then deleted it kept showing the transcript
+  with `Session ended`, because `refresh()` only compared the restored or selected session with history; now
+  `SessionManager.deletedIDs` lets the window leave the session it displays, which also drops the ended owner (a
+  starting session, not in history yet, is never bounced); (2) while a session without a project was starting the
+  inspector showed `Change tracking requires Git.`, Review, Merge… and Discard Worktree…;
+  `displaysSessionWithoutProject` now knows the project from `LiveSession.startPlace == .newFolder` before the history
+  has it. Both have tests. **Not checked:** a failed push's alert in the app (covered by tests), deleting a session
+  with a live worktree with changes, VoiceOver, Reduce Motion, sign-in during start. For the next check script: the
+  merge sheet and alerts are separate windows (`wintool winid`), so `sheet 1 of window 1` does not reach them; moving
+  to the Trash ignores `CFFIXED_USER_HOME` and uses the real `~/.Trash`, and the `UserDefaults` of the test bundle
+  identifier land in the real preferences (`defaults delete <bundle id>` afterwards).
 - `RootView.swift` and `TranscriptTable.swift` are the collision points with M18, which is done. In `RootView`,
   `DraftSendTransition` moves the draft's card to the bottom at Send; #225 (landed) kept it and #230 (the landing place
   after a delete) may adapt it. In `TranscriptTable`, the quiet row selection (#269) and the row height (since #302 row stacks hold their

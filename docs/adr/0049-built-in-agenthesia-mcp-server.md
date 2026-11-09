@@ -46,7 +46,9 @@ chose on 2026-11-09 what to port and how.
 - **One helper per session, one socket per app.** The app bundle carries a small executable, `agenthesia-mcp`, in
   `Contents/Helpers`. Every `session/new`, `session/load` and `session/resume` passes it as a stdio server named
   `agenthesia`, for every agent (stdio support is mandatory in ACP). Each agent process (one per session, ADR-0004)
-  starts its own helper. The helper relays newline-delimited JSON-RPC between its stdio and the app's Unix socket
+  starts its own helper; a Codex subagent starts one more with the same `env` (spike, #308), so a token may open
+  several connections. The helper reads nothing but its two `env` entries, since Codex passes MCP servers only a short
+  environment. The helper relays newline-delimited JSON-RPC between its stdio and the app's Unix socket
   verbatim; it parses nothing but its first line, a hello with the token. MCP itself is served by the app.
 - **Socket.** One listening socket per app instance, at a short per-user path (`$TMPDIR`, which is per user and `0700`)
   named from a hash of the app's data folder, so the `.dev` build, the installed app and a check under
@@ -71,9 +73,10 @@ Three layers, all through standard mechanisms (principle 8):
    tools. Authored as self-contained sections under 4,000 bytes each.
 2. **`environment`**, a tool that returns the same facts fresh: agents and models change during a session, and
    `delegate` needs the current list.
-3. **A prompt prefix for agents that do not pass `instructions` to the model**, decided per agent by the spike below:
-   a short `<runtime_info>` block with each prompt and the rules wrapped around the first one, as T3 does for ACP agents.
-   Native slash commands are left untouched. The transcript shows the prefix as a collapsed *Context from Agenthesia*
+3. **A prompt prefix for agents that do not pass `instructions` to the model**: Codex, which shows them only inside
+   tool descriptions once its tools are loaded, and Gemini until it is tested; not Claude, which puts them in the system
+   prompt (spike, #308). They get a short `<runtime_info>` block with each prompt and the rules wrapped around the
+   first one, as T3 does for ACP agents. Native slash commands are left untouched. The transcript shows the prefix as a collapsed *Context from Agenthesia*
    block, never hides it (principle 5), and the event log records it with the prompt.
 
 Every tool also carries a full description, which is all an agent sees when it reads neither.
@@ -86,17 +89,18 @@ Every tool also carries a full description, which is all an agent sees when it r
 | `ready_for_review` | Records the agent's summary and opens the review pane (ADR-0041) | One notification, as for a finished turn (principle 7) |
 | `screenshot` | A PNG of a Simulator (`xcrun simctl io <udid> screenshot`) or of a window (ScreenCaptureKit) | The Simulator needs no permission; a window needs Screen Recording, asked at the first window capture, not at launch |
 | `html_render` | Renders a self-contained HTML page offscreen (`WKWebView`) and shows the PNG in the transcript; returns the PNG and the page's console output to the agent | Replaces T3's `html_preview` and `html_render` pair. No network loads; theme variables from system colors; light and dark PNGs so the row never re-renders; a click opens the live page in the file pane |
-| `delegate`, `delegate_status`, `delegate_cancel` | Starts a session with another (or the same) agent in a new worktree or the parent's checkout and returns its task; `mode: wait` blocks until the result or a timeout, which does not cancel the child | Agents come from `environment`, replacing T3's `orchestrator_capabilities`. The child is an ordinary session in the sidebar; its permissions are answered by the user |
+| `delegate`, `delegate_status`, `delegate_cancel` | Starts a session with another (or the same) agent in a new worktree or the parent's checkout and returns its task; `mode: wait` blocks until the result or at most 240 s (Codex drops an MCP call at 300 s), then returns `still running`; the timeout does not cancel the child | Agents come from `environment`, replacing T3's `orchestrator_capabilities`. The child is an ordinary session in the sidebar; its permissions are answered by the user |
 | `session_list`, `session_read`, `session_send` | Lists and reads sessions of the same project, and sends a message to one | `session_send` starts a turn at once (steers or queues behind a running one, ADR-0010); the receiver sees it as a message from another agent session, the developer sees which |
 | `request_secret` | A private card with a secure field; returns the path of a one-time file, never the value | File `0600` in a `0700` folder, removed after its timeout (10 minutes by default, at most 60) or with the session; the event log records the request and its outcome, never the value |
-| `worktree_handoff` | Moves a session in the project folder (ADR-0043) into a new worktree on a new branch | Runs after the turn ends; the session reopens in the worktree. Uncommitted changes stay in the folder, and the result says so. If the agent refuses the new working directory, the worktree is removed and the session stays where it was |
+| `worktree_handoff` | Moves a session in the project folder (ADR-0043) into a new worktree on a new branch | Runs after the turn ends; the session reopens in the worktree with `session/resume`, which Claude and Codex accept with a new working directory. Uncommitted changes stay in the folder, and the result says so. If the agent refuses the new working directory, the worktree is removed and the session stays where it was |
 | `task_run`, `task_output`, `task_stop` | Runs a shell command in the background in a PTY the app owns, reads its output tail, stops it | A fallback for agents without their own background commands; Claude's and Codex's own come from `asyncTasks` (#131). Both kinds share the panel of #61 |
 | `environment` | The facts of the instructions, fresh | See above |
 
 Each call goes through the agent's own permission flow and shows in the transcript (ADR-0009). The server executes the
 call, so the app writes its own event for it and draws a card from that event (the screenshot, the rendered page, the
-delegated task with its status); the agent's generic row for the same call is matched by tool name and arguments and
-folded into the card, and an unmatched row stays an ordinary tool row.
+delegated task with its status). The agent's generic row for the same call is matched by its ACP `toolCallId`, which
+both agents send in `tools/call`'s `_meta` (Claude `claudecode/toolUseId`, Codex `callId`), and folded into the card; an
+unmatched row stays an ordinary tool row. A Codex subagent's calls never reach ACP, so their card stands alone.
 
 **Background commands from `task_run`.** `/bin/sh -c` with the session's resolved environment; the working directory
 must lie inside the session's roots, as for `terminal/*` (ADR-0015). Output is kept in a 1 MiB buffer; the exit event
@@ -179,7 +183,8 @@ session (process group, SIGTERM, then SIGKILL). Its end is delivered to the agen
   exits); a parent link on session records; rendered pages and screenshots as files in a per-session folder of the data
   folder, removed with the session (ADR-0044). Older builds skip unknown event kinds, as the decoder does today.
 - **Turns without a human.** With *Always allow* on our tools, or an agent that does not ask for MCP calls, two agents
-  can drive each other until the user presses Stop. The origin labels and the sidebar make this visible; the cost is
+  can drive each other until the user presses Stop. This is the default: in the spike, Claude's *Auto* and Codex's
+  *Auto review* modes ran every call without asking. The origin labels and the sidebar make this visible; the cost is
   real tokens.
 - **No ceiling on a child's permissions.** T3 refuses a child with broader runtime modes than its parent; Agenthesia has
   no runtime modes of its own (the agents define them) and no permission policy (ADR-0042, deferred), so a child runs in
@@ -190,19 +195,21 @@ session (process group, SIGTERM, then SIGKILL). Its end is delivered to the agen
   decides with the owner whether a window capture needs a confirmation in the app on top of the agent's permission.
 - **Tokens sit in the agent's environment** and may appear in its logs. Their reach is one session for as long as it is
   live.
-- **A slow helper start** delays `session/new`; the spike measures it, and it must not show in the start time
-  (principle 9).
+- **A slow helper start** would delay a session's first tool call, not its start: `session/new` does not wait for the
+  server (spike, #308).
 
-### Spike before the tools
+### Spike (2026-11-09, #308)
 
-With the owner's consent, since it runs real agents and spends tokens, a throwaway branch passes a minimal server to
-Claude, Codex and Gemini and records:
+A throwaway branch passed a minimal server to Claude (`claude-agent-acp` 0.101.0) and Codex (`codex-acp` 2.5.0) with the
+owner's consent; Gemini was not installed. The answers are in #308 and shaped the decisions above:
 
-1. which agents pass `instructions` to the model (decides layer 3 per agent);
-2. how each reports our tool calls (title, kind, raw input), for matching them to our cards;
-3. whether MCP servers start inside the agent's sandbox and can reach the socket;
-4. whether `session/load` or `session/resume` accepts a different working directory (for `worktree_handoff`);
-5. whether native subagents inherit the server, and with which token;
-6. each agent's timeout for an MCP call, which bounds `delegate`'s `wait`;
-7. whether image content in a tool result reaches the model;
-8. the helper's start latency.
+1. Claude shows `instructions` to the model on the first turn; Codex does not (layer 3).
+2. Both send the ACP `toolCallId` in `tools/call`'s `_meta` (card matching); a Codex subagent's calls never reach ACP.
+3. Neither runs MCP servers in its sandbox; both reach a socket in `$TMPDIR`. Codex passes only a short environment.
+4. Both accept `session/resume` with a new working directory (`worktree_handoff`); `session/load` was not tried.
+5. Claude's subagents share the parent's server; each Codex subagent starts its own with the same `env`.
+6. Codex drops an MCP call at 300 s; Claude had no limit up to 660 s (`delegate`'s `wait` at most 240 s).
+7. Image content reaches both models.
+8. `session/new` does not wait for the server; `initialize` follows within 0.1 s warm and about 1 s cold.
+
+Still open: Gemini, and the shape of a permission request for our tools (both agents' auto modes asked none).

@@ -978,9 +978,13 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 
 Pitfalls known so far:
 
-- The spike (#308) runs real agents and spends tokens: the owner agrees to it before it runs. Its answers decide the
-  prompt prefix (#313), the matching of tool rows (#312), `worktree_handoff` (#319) and the bound of `delegate`'s
-  `wait` (#317); record them here with the agent versions.
+- The spike (#308) ran on 2026-11-09 with `claude-agent-acp` 0.101.0 (Claude Haiku 5.5) and `codex-acp` 2.5.0
+  (`codex` 0.165.0), six prompts each, through `acp-cli` on a throwaway branch; Gemini was not installed. The answers
+  are in #308 and in ADR-0049's *Spike* section. For the issues: the prefix goes to Codex and Gemini, not Claude
+  (#313); rows match cards by the `toolCallId` in `tools/call`'s `_meta`, and a Codex subagent's calls have no row
+  (#312); `session/resume` takes the worktree as the new working directory (#319); `wait` stops at 240 s (#317); a
+  token may open several connections, one per Codex subagent (#56, #71). Neither agent asked permission for our tools
+  in its auto mode, so the shape of that request is still unseen; #321 checks it with a supervised mode.
 - MockAgent's `mcp` verb (#71) is what lets every tool be tested without a real agent; land it before the tools.
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.

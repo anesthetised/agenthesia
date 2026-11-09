@@ -24,10 +24,10 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0006](0006-worktree-isolation.md) | Worktree isolation | Accepted; merge and discard detailed by [0032](0032-worktree-merge-and-discard.md); a folder choice added by [0043](0043-sessions-in-the-project-folder.md) |
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
-| [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted |
+| [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted; the built-in server's tool list superseded by [0049](0049-built-in-agenthesia-mcp-server.md) |
 | [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted; empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
 | [0011](0011-cross-agent-memory.md) | Cross-agent memory | Superseded by [0012](0012-defer-cross-agent-memory.md) |
-| [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted |
+| [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted; the built-in MCP server scheduled by [0049](0049-built-in-agenthesia-mcp-server.md) |
 | [0013](0013-source-highlight-attributes.md) | Apply SourceView highlighting as attribute edits | Accepted |
 | [0014](0014-window-bound-live-sessions.md) | Window-bound live sessions | Accepted; disconnected saved history superseded by [0017](0017-continue-saved-sessions.md); window ownership superseded by [0026](0026-app-wide-session-manager.md) |
 | [0015](0015-agent-terminals.md) | Agent terminals | Accepted; ACP semantics, lifecycle and history superseded by [0016](0016-agent-reported-command-output.md) |
@@ -64,5 +64,6 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
 | [0047](0047-worktrees-from-the-fetched-upstream.md) | Worktrees start from the fetched upstream | Accepted |
 | [0048](0048-sessions-without-a-project.md) | Sessions without a project | Accepted |
+| [0049](0049-built-in-agenthesia-mcp-server.md) | The built-in agenthesia MCP server | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

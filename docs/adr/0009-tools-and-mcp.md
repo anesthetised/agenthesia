@@ -1,7 +1,8 @@
 # 0009. Tools and MCP
 
 - Status: Accepted; original MCP scope restored by [0012](0012-defer-cross-agent-memory.md),
-  superseding the amendment in [0011](0011-cross-agent-memory.md)
+  superseding the amendment in [0011](0011-cross-agent-memory.md); the built-in server's tool list superseded and
+  its transport detailed by [0049](0049-built-in-agenthesia-mcp-server.md)
 - Date: 2026-10-05
 
 ## Context

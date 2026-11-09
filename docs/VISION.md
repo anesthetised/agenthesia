@@ -60,10 +60,12 @@ behavior outside UI/UX, T3 Code is a comparison, not a template, as in
 
 - Cross-agent memory, after the core session and review workflow is reliable
   ([ADR-0012](adr/0012-defer-cross-agent-memory.md)).
+- Built-in tools for agents through the `agenthesia` MCP server: show, review, screenshots, rendered pages,
+  delegation, messages between sessions, secrets, worktree handoff and background commands
+  ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)).
 
 ## After 1.0
 
 - Basic editing in the viewer.
 - Shared MCP servers configured once for every agent.
-- Built-in tools for agents (show, screenshot, ready for review, delegate).
 - User-launched background tasks next to agent sessions.

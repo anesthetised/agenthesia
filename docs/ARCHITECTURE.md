@@ -34,10 +34,11 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked), `DiffLine` (its output parsed into lines with old and new numbers) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
-| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)), local agents and the ACP initialize probe ([ADR-0037](adr/0037-local-agents.md)). | all of the above except `Rendering` |
+| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)), local agents and the ACP initialize probe ([ADR-0037](adr/0037-local-agents.md)), the `agenthesia-mcp` socket and session tokens ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
 | `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
 | `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
+| `agenthesia-mcp` | The stdio end of the built-in MCP server, copied into `Contents/Helpers`: connects to the app's socket, sends the session's token and relays bytes both ways ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). System frameworks only. | — |
 | `rendering-bench` | Release-build timings of Markdown rendering, highlighting and diffs (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
 | `session-bench` | Release-build transcript reduction and snapshot publication (`just bench-session`). | `AgenthesiaCore` |
@@ -500,6 +501,30 @@ for idle/failed owners), the delegate uses `terminateLater` and closes every own
 closes ACP and drains controller writes, terminates the process group, and waits for startup if it was
 in flight. Unexpected process exit and observable controller failure also
 trigger cleanup.
+
+## The agenthesia MCP socket
+
+[ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md) serves Agenthesia's tools to every agent as a stdio MCP server,
+`agenthesia-mcp`, which the app target copies from the package into `Contents/Helpers` and signs (an *Embed Helpers*
+copy phase with *Code Sign On Copy*). The helper reads `AGENTHESIA_MCP_SOCKET` and `AGENTHESIA_MCP_TOKEN`, connects,
+writes the token and a newline as its hello, then copies bytes between its stdio and the socket on two threads without
+parsing them; either side reaching end of file ends the process (status 0; a missing variable or a failed connection
+exits 1).
+
+`SessionApplicationDelegate` opens one `MCPSocket` per app instance at launch (only in an app bundle, so package tests
+never do) at `MCPSocket.path(dataFolder: AppSupport.directory)`: `$TMPDIR/agenthesia-<16 hex digits>.sock`, the digits
+the start of a SHA-256 of the data folder, so the installed app, the `.dev` build and a run under `CFFIXED_USER_HOME`
+each get their own, and the path stays under `sun_path`'s 104 bytes. `init` first connects to the path: when another
+instance with the same data folder answers (two `.dev` builds from different worktrees), it throws `EADDRINUSE` and the
+second app runs without the server, logged; otherwise it unlinks whatever is there (a stale socket of an instance that
+did not close it), binds, sets mode `0600` before `listen` and accepts on a Dispatch source.
+Each connection's hello is read a byte at a time on a global queue (at most 256 bytes and 5 seconds), so nothing after
+it is consumed. `SessionManager.mcpTokens` (`MCPTokens`) maps tokens, 256 bits from `SystemRandomNumberGenerator` as 64
+hex digits, to session ids; `revoke` drops every token of a session. A known token hands the connection, as a
+`FileHandleTransport` over the socket, with its session id to the socket's `serve` closure, and the connection closes
+when `serve` returns; any other hello closes it. Until #71 the app's `serve` returns at once and no session issues a
+token: #71 issues one per live session for `session/new`, `load` and `resume`, revokes it when the session ends, and
+serves the `MCP` module's server on the transport.
 
 ## Session filesystem
 

@@ -23,6 +23,8 @@ public final class SessionManager {
     @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
     /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
     @ObservationIgnored public var catalog: AgentCatalog?
+    /// The tokens the `agenthesia-mcp` helper presents to the app's socket (ADR-0049).
+    @ObservationIgnored public let mcpTokens = MCPTokens()
     private let worktreesRoot: URL
     private let scratchRoot: URL
     /// The root of the project that sessions without a project belong to (ADR-0048), for `ProjectRecord.isScratch`.

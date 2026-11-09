@@ -8,7 +8,22 @@
 
 /* Begin PBXBuildFile section */
 		A6E5D0010000000000000011 /* AgenthesiaUI in Frameworks */ = {isa = PBXBuildFile; productRef = A6E5D0010000000000000031 /* AgenthesiaUI */; };
+		A6E5D0010000000000000012 /* agenthesia-mcp in Embed Helpers */ = {isa = PBXBuildFile; productRef = A6E5D0010000000000000032 /* agenthesia-mcp */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A6E5D0010000000000000054 /* Embed Helpers */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				A6E5D0010000000000000012 /* agenthesia-mcp in Embed Helpers */,
+			);
+			name = "Embed Helpers";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A6E5D0010000000000000021 /* Agenthesia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Agenthesia.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -73,10 +88,12 @@
 				A6E5D0010000000000000051 /* Sources */,
 				A6E5D0010000000000000052 /* Frameworks */,
 				A6E5D0010000000000000053 /* Resources */,
+				A6E5D0010000000000000054 /* Embed Helpers */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A6E5D0010000000000000062 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A6E5D0010000000000000041 /* App */,
@@ -84,6 +101,7 @@
 			name = Agenthesia;
 			packageProductDependencies = (
 				A6E5D0010000000000000031 /* AgenthesiaUI */,
+				A6E5D0010000000000000032 /* agenthesia-mcp */,
 			);
 			productName = Agenthesia;
 			productReference = A6E5D0010000000000000021 /* Agenthesia.app */;
@@ -145,6 +163,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A6E5D0010000000000000062 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = A6E5D0010000000000000032 /* agenthesia-mcp */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A6E5D0010000000000000091 /* Debug */ = {
@@ -277,6 +302,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A6E5D0010000000000000081 /* XCLocalSwiftPackageReference "Packages/AgenthesiaKit" */;
 			productName = AgenthesiaUI;
+		};
+		A6E5D0010000000000000032 /* agenthesia-mcp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6E5D0010000000000000081 /* XCLocalSwiftPackageReference "Packages/AgenthesiaKit" */;
+			productName = "agenthesia-mcp";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

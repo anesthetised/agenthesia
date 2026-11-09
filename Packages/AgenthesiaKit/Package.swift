@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "AgenthesiaUI", targets: ["AgenthesiaUI"]),
         .executable(name: "acp-cli", targets: ["acp-cli"]),
         .executable(name: "MockAgent", targets: ["MockAgent"]),
+        .executable(name: "agenthesia-mcp", targets: ["agenthesia-mcp"]),
         .executable(name: "rendering-bench", targets: ["rendering-bench"]),
         .executable(name: "persistence-bench", targets: ["persistence-bench"]),
         .executable(name: "session-bench", targets: ["session-bench"]),
@@ -116,6 +117,8 @@ let package = Package(
         ),
         .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
+        // The stdio end of the agenthesia MCP server (ADR-0049); system frameworks only, copied into Contents/Helpers.
+        .executableTarget(name: "agenthesia-mcp", swiftSettings: swiftSettings),
 
         .testTarget(
             name: "acp-cliTests",
@@ -148,7 +151,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgenthesiaCoreTests",
-            dependencies: ["AgenthesiaCore", "AgentRuntime", "ACPTesting", "JSONRPC", "MockAgent"],
+            dependencies: ["AgenthesiaCore", "AgentRuntime", "ACPTesting", "JSONRPC", "MockAgent", "agenthesia-mcp"],
             swiftSettings: swiftSettings
         ),
         .testTarget(

@@ -63,6 +63,15 @@ disabled: the app does not install or explain `gh`, and projects without GitHub 
 - **The branch name** is the stored name of ADR-0039's amendment; sessions without one (started before #208) push
   `agenthesia/<uuid>`, which is valid, only ugly.
 
+### Implementation notes (2026-11-09, #232)
+
+- The push sends the base branch to the branch its upstream names (`git push <remote> refs/heads/<base>:<upstream
+  branch>`), which is `git push <remote> <base>` whenever the names match.
+- It cannot ask for credentials (`GIT_TERMINAL_PROMPT=0`) and is stopped after 2 minutes (the owner's choice), so the
+  sheet never hangs.
+- The failure is shown in an alert after the sheet closes, like the merge's other after-commit failures, rather than
+  in the sheet itself: the merge is done, so the sheet has nothing left to act on.
+
 ## Alternatives
 
 - **Push only, no pull request.** No `gh`, works with every host; but the common GitHub flow then still ends in a

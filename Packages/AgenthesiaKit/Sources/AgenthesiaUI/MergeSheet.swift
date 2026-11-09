@@ -5,6 +5,8 @@ struct MergeSheet: View {
     @Bindable var request: MergeRequest
     let onMerge: () -> Void
     @Environment(\.dismiss) private var dismiss
+    /// The last choice, a default rather than a setting; off the first time (ADR-0045).
+    @AppStorage(MergeRequest.pushDefaultsKey) private var pushAfterMerge = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -15,8 +17,11 @@ struct MergeSheet: View {
             case .blocked(let explanation):
                 Label(explanation, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            case .ready(let base, let files, let commits):
+            case .ready(let base, let files, let commits, let remote):
                 Text(Self.summary(base: base, files: files, commits: commits)).foregroundStyle(.secondary)
+                if let remote {
+                    Toggle("Push \(base) to \(remote)", isOn: $pushAfterMerge).disabled(request.isMerging)
+                }
             }
             if !request.isBlocked {
                 Text("Commit message").font(.subheadline)
@@ -31,7 +36,7 @@ struct MergeSheet: View {
             HStack {
                 if request.isMerging {
                     ProgressView().controlSize(.small)
-                    Text("Merging…").foregroundStyle(.secondary)
+                    Text(request.pushes ? "Merging and pushing…" : "Merging…").foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }

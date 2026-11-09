@@ -938,6 +938,11 @@ Pitfalls known so far:
   disabled `No Session` items; ⌘1 and ⌘2 switched the window, also from the composer; a sidebar search for one title
   left only it under ⌘1, and clearing the search brought both back. Not checked: Settled rows (none were live), light
   mode, VoiceOver.
+- #232 (push after merge) landed: `SessionWorkspace.pushRemote`/`push` (2-minute timeout, no prompts, never forces),
+  the merge sheet's `Push <base> to <remote>` remembered in `UserDefaults`, `MergeError.notPushed` after the merge is
+  recorded and the worktree removed. Tests with a local bare remote: pushed, rejected after the remote moved, no or a
+  local upstream, a hanging `ext::` transport stopped by the timeout. Running-app check deferred with wave 1 (needs a
+  test repository with a bare remote).
 - #230 (delete) landed: migration `v8-session-deletion` keeps the append-only guard and lets `deleteSession` remove
   one session's events in its transaction; `SessionManager.delete` removes a worktree (ADR-0032's checks) or moves a
   scratch folder to the Trash (owner's choice) first and deletes nothing when that fails. Real-repository tests cover

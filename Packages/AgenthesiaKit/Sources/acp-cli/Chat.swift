@@ -16,8 +16,13 @@ struct Chat: AsyncParsableCommand {
     @Option(help: "Authenticate with this agent auth method before starting.")
     var auth: String?
 
+    @Flag(help: "Pass the agenthesia MCP server to the session, served by this process.")
+    var agenthesiaMcp = false
+
     func run() async throws {
         let console = Console.standard()
+        let mcp = agenthesiaMcp ? try AgenthesiaMCP() : nil
+        defer { mcp?.close() }
         let input = LineReader.standardInput()
         let turns = TurnState()
         let connected = try await ConnectedAgent.launch(
@@ -34,7 +39,7 @@ struct Chat: AsyncParsableCommand {
             if let auth {
                 try await connected.connection.authenticate(methodId: auth)
             }
-            let session = try await openSession(connected, console: console)
+            let session = try await openSession(connected, mcpServers: mcp.map { [$0.server] } ?? [])
             await console.line("Session \(session.sessionId) in \(agent.directory.path(percentEncoded: false))")
             if !session.configOptions.isEmpty {
                 await console.line("Options: " + Renderer.describe(session.configOptions))
@@ -51,13 +56,24 @@ struct Chat: AsyncParsableCommand {
         await connected.shutDown()
     }
 
-    private func openSession(_ connected: ConnectedAgent, console: Console) async throws -> ACP.SessionState {
+    private func openSession(
+        _ connected: ConnectedAgent,
+        mcpServers: [ACP.MCPServer]
+    ) async throws -> ACP.SessionState {
         let cwd = agent.directory.path(percentEncoded: false)
         guard let resume else {
-            return try await connected.connection.newSession(cwd: cwd, additionalDirectories: [], mcpServers: [])
+            return try await connected.connection.newSession(
+                cwd: cwd,
+                additionalDirectories: [],
+                mcpServers: mcpServers
+            )
         }
-        switch try await connected.connection.reopenSession(resume, cwd: cwd, additionalDirectories: [], mcpServers: [])
-        {
+        switch try await connected.connection.reopenSession(
+            resume,
+            cwd: cwd,
+            additionalDirectories: [],
+            mcpServers: mcpServers
+        ) {
         case .resumed(let state), .loaded(let state):
             return state
         case .unavailable:

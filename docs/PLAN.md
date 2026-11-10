@@ -190,6 +190,14 @@ Pitfalls known so far:
   (the session id exists there, before `session/new`) and for `load`/`resume`, revokes it when the owner closes, and
   replaces the app delegate's empty `serve` with the `MCP` server. The hello is the bare token and a newline; the socket
   reads it a byte at a time so the first JSON-RPC line is never consumed with it.
+- #71 (2026-11-10): sessions pass the `agenthesia` stdio server in `session/new`, `load` and `resume` and serve each
+  connection with `MCP.server`; the gate is `MCPCaller.requiringTurn`, which the tools of #318 and #320 and `delegate`
+  (#60) wrap themselves with, and tools are added to `SessionManager.mcpTools`. MockAgent starts the servers it is
+  given and has the verb `mcp <tool> <json>`; `acp-cli chat --agenthesia-mcp` serves the server for its one session
+  (no tools yet). Tests start a real MockAgent, helper and socket for new, resume and load, and check the gate with a
+  tool registered in the test. Not checked in the running app (needs the app build and the helper in the bundle; #321
+  does it) and `docs/behavior/tools.md` waits for #312, since nothing is visible yet. Still open: the socket's checks
+  on every call and closing connections on revoke (#360), the tool-call context and cancellation (#361).
 - The app target embeds the helper through an *Embed Helpers* copy phase (`Contents/Helpers`, *Code Sign On Copy*) that
   references the package product, plus a target dependency on it; the copy is signed with the app's identity.
 - #56, running app (2026-11-09, scripted without UI input, Debug `.dev` build, `CFFIXED_USER_HOME` in a temporary
@@ -198,7 +206,7 @@ Pitfalls known so far:
   `Cannot listen for agenthesia-mcp: … Address already in use` and the first kept answering; after SIGTERM the socket
   file stayed, and the next launch replaced it and listened. `codesign --verify --deep --strict` passed, and the helper
   links only system libraries. Not checked: a quit through the menu (the socket is not closed on quit either, which is
-  harmless since the next launch replaces it), and a connection with a live token, which needs #71.
+  harmless since the next launch replaces it), and a connection with a live token (checked by #71's tests with a real helper).
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with

@@ -306,7 +306,8 @@ and chose a second set of UI/UX changes, several of them against accepted ADRs. 
 sidebar (#352, #353) and attention (#376) changes build on what it checks; the README screenshots are #400, after
 them. The board and the menu bar item have not been checked in the running app; the review of 2026-11-10 found from
 the code that they show stale text for sessions that no window displays (#368) and that the menu bar can answer a
-request it did not list (#374).
+request it did not list (#374, fixed: the entry answers the request id it listed; tested with two requests, the first
+answered elsewhere while the menu is open; the running-app check in light and dark is the parent's).
 
 | Decision | Where | Status |
 |---|---|---|

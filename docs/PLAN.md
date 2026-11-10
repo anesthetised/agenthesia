@@ -80,6 +80,15 @@ The first step is the head of each lane: #373 and #354; #396, then #97 and #372;
 cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
 instability is not specific to CI.
 
+**#134 (the CI test log).** `coverage.py` ran `swift test` with the inherited standard output, a pipe on CI, so the test
+process block-buffered it: the log came in bursts, and what was still buffered at the 120-second kill was lost. A local
+check reproduced it: 358 lines of an `AgentRuntimeTests` run arrived at two timestamps. `run_test_process` now runs the
+tests on a pseudo-terminal and relays their output line by line, which makes them line-buffered (the output has no
+colour codes). At the process timeout it first prints the tests that started and did not finish, then takes the stack
+sample. Tests: `scripts/test_coverage.py`, including a check that a pipe reader sees a line while the child still runs.
+Open: look at a CI log, where each `started`, `passed` and `failed` line should carry its own time, and the list after a
+timeout should name the stuck tests.
+
 Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
 

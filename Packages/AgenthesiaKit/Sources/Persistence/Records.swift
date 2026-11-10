@@ -49,8 +49,8 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID
     public let agentInstallID: UUID
-    public let agentSessionID: String?
-    public let protocolVersion: Int
+    public var agentSessionID: String?
+    public var protocolVersion: Int
     public var title: String?
     public let workingDirectory: String
     /// Initial Git HEAD for new sessions: the worktree's, or the project folder's for a session that works there

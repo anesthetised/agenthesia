@@ -5,8 +5,8 @@ GitHub stay the source of truth for scope; this file records order, dependencies
 so far. Update it when a step lands or the order changes. Finished milestones are in
 [plan-archive.md](plan-archive.md).
 
-Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request after the
-owner's approval. Architectural choices are presented to the owner as options with a recommendation
+Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request; the
+owner approves the merge. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
 ## State (2026-11-10)
@@ -44,9 +44,9 @@ before implementation.
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
-| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
+| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049 with [ADR-0051](adr/0051-turns-between-sessions.md) (#354); a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
-| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
+| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row |
 | M10 Release | After M13 |
 | M5 Terminals | #61 and #67 wait for an agent that calls `terminal/create` (#104); #131 is open |
 | M9, M11, M12, M14, M17 | Not scheduled |
@@ -67,13 +67,13 @@ order". Tiers are on the issues.
 
 | Lane | Sequence |
 |---|---|
-| Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
+| Core (M13) | #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
 | Interface (M20) | #234, #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
 | Test stability (M10) | #134 → #133, before #355 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
+The first step is the head of each lane: #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
 #397; #134.
 
 #134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
@@ -89,14 +89,14 @@ sample. Tests: `scripts/test_coverage.py`, including a check that a pipe reader 
 Open: look at a CI log, where each `started`, `passed` and `failed` line should carry its own time, and the list after a
 timeout should name the stuck tests.
 
-Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
+Dependencies across lanes: #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
 
 **Where the lanes meet.** These files are changed by more than one lane; the order below avoids rebasing large changes.
 
 | Files | Order |
 |---|---|
-| `SessionController.swift` and the queue | #373, then #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
+| `SessionController.swift` and the queue | #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
 | `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
 | `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
@@ -149,10 +149,12 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 4 | #321 Verify in the running app | `agent:light` | all |
 
 **Session core, before wave 3 (2026-11-10).** The owner's review of 2026-11-10 changed several decisions of ADR-0049's
-*Turns started by agents*; ADR-0051 (#354) records them. `session_send` works only inside a delegation tree and can
-ask for a reply, delivered like a delegated result; the user's Stop is sticky, with Stop Tree and Stop All Agents;
-chains get a counter per tree, no limit and no pause; the queue takes several authors. Not taken and kept on record:
-#344 (a pause), #345 (sending beyond the tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
+*Turns started by agents*; [ADR-0051](adr/0051-turns-between-sessions.md) (#354) records them. `session_send` works
+only along a delegation edge (a parent and its children) and can ask for a reply, delivered like a delegated result;
+every outcome of a task is delivered; a paused queue holds what the user did not send, so the user's Stop is sticky and
+reaches the stopped session's subtree, with Stop Tree and Stop All Agents; chains get a counter per tree, no limit and
+no pause; the queue takes several authors. Not taken and kept on record: #344 (a pause), #345 (sending beyond the
+tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
@@ -174,6 +176,9 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
+  and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
+  3 were aligned with it.
 - #311 (turn origins): `QueuedPrompt.Origin` in the event log, the labelled transcript row, the sidebar reason and the
   wrapper the agent receives, covered by Swift Testing and a hosted row test. No tool produces another origin yet, so
   the running-app check in light and dark waits for #321, together with `docs/behavior/tools.md` (#312). A source
@@ -206,7 +211,8 @@ Pitfalls known so far:
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with
-  no limit on chains (ADR-0049), Stop is the only brake, so #317 tests Stop depth first carefully.
+  no limit on chains, the sticky Stop is the only brake (ADR-0051), so #358 and #317 test that a paused queue holds
+  every message the user did not send, in the stopped session's whole subtree, and that a held result is never lost.
 - New event kinds and a migration of the sessions table (#60); older builds skip unknown kinds, and the migration gets a
   test on the previous schema file, as #231 did.
 - `html_render` (#315) must not put a web view in the transcript table; the streaming benchmarks are the gate, run with
@@ -247,7 +253,7 @@ the first-run, text-size and VoiceOver items.
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
-| 1 | #373 fix: store `fallbackUpstream` with the session record | `agent:light` | — |
+| 1 | #373 fix: store `fallbackUpstream` with the session record (landed) | `agent:light` | — |
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |

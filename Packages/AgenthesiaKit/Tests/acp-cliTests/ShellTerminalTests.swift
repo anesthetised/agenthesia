@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import Synchronization
+import TestSupport
 import Testing
 
 @Suite(.timeLimit(.minutes(1)), .enabled(if: Binaries.available, "acp-cli and MockAgent have not been built"))
@@ -61,7 +62,7 @@ struct ShellTerminalTests {
             if process.isRunning { kill(pid, SIGKILL) }
             output.fileHandleForReading.readabilityHandler = nil
         }
-        let deadline = ContinuousClock.now + .seconds(12)
+        let deadline = ContinuousClock.now + waitLimit
         while process.isRunning && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -73,7 +74,7 @@ struct ShellTerminalTests {
             Issue.record("PTY CLI did not exit. Output: \(collected.text)")
             return
         }
-        let outputDeadline = ContinuousClock.now + .seconds(1)
+        let outputDeadline = ContinuousClock.now + waitLimit
         while !outputEnded.withLock({ $0 }) && ContinuousClock.now < outputDeadline {
             try await Task.sleep(for: .milliseconds(10))
         }

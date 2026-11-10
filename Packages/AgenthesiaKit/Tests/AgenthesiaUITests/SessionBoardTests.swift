@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -43,17 +44,6 @@ import Testing
             model.close()
             await sessions.closeAll()
             try? FileManager.default.removeItem(at: directory)
-        }
-    }
-
-    private func eventually(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("Timed out waiting for the condition", sourceLocation: sourceLocation)
-                return
-            }
-            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 

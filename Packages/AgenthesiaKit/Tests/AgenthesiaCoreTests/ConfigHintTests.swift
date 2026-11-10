@@ -1,6 +1,7 @@
 import ACP
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -120,14 +121,6 @@ import Testing
     private func current(_ id: ACP.ConfigOptionID, in options: [ACP.ConfigOption]) -> String? {
         guard case .select(let value, _) = options.first(where: { $0.id == id })?.value else { return nil }
         return value
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out")
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 
     @Test func theModelHintIsAppliedBeforeTheRecordAndCached() async throws {

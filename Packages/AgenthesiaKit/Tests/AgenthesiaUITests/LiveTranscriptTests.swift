@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import JSONRPC
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -1551,13 +1552,10 @@ extension LiveTranscriptTests {
         controller.update(source)
         // New rows measure themselves during layout, and the table follows them on the next main queue turn.
         func reachesEnd() async throws -> Bool {
-            let deadline = ContinuousClock.now + .seconds(5)
-            while ContinuousClock.now < deadline {
+            await eventually {
                 controller.table.layoutSubtreeIfNeeded()
-                if controller.table.frame.height - controller.scroll.contentView.bounds.maxY < 2 { return true }
-                try await Task.sleep(for: .milliseconds(10))
+                return controller.table.frame.height - controller.scroll.contentView.bounds.maxY < 2
             }
-            return false
         }
         #expect(try await reachesEnd())
         for id in ["b", "c"] {

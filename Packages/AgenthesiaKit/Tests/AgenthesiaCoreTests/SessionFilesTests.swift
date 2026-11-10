@@ -1,5 +1,6 @@
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 import Workspace
 
@@ -147,13 +148,12 @@ import Workspace
         files.setQuery("nm")
         #expect(files.matches.isEmpty)
         #expect(files.isSearching)
-        let searchDeadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while files.matches != ["note.md"] && ContinuousClock.now < searchDeadline { await Task.yield() }
+        await eventually { files.matches == ["note.md"] }
         #expect(files.matches == ["note.md"])
         #expect(!files.isSearching)
         try "initial".write(to: file, atomically: true, encoding: .utf8)
         try "new".write(to: root.appending(path: "second.txt"), atomically: true, encoding: .utf8)
-        let refreshDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let refreshDeadline = ContinuousClock.now.advanced(by: waitLimit)
         while files.changedPaths != ["second.txt"] && ContinuousClock.now < refreshDeadline {
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -217,8 +217,8 @@ import Workspace
         continuation?.resume()
         var emptied = false
         var showedProgress = false
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-        while files.matches != ["help.txt", "hello.txt"] && ContinuousClock.now < deadline {
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
+        while files.matches != ["help.txt", "hello.txt"] && ContinuousClock.now < deadline && !Task.isCancelled {
             if files.matches.isEmpty { emptied = true }
             if files.isLoadingIndex || files.isSearching { showedProgress = true }
             await Task.yield()
@@ -252,7 +252,7 @@ import Workspace
         // and with it the allowance; it must not make the test count scans that had no time to start.
         #expect(scans <= Int((ContinuousClock.now - began) / files.scanInterval) + 1)
         // Sustained invalidations are paced, not starved: a scan still comes, however late.
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while scans == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(scans >= 1)
         // A new attachment and its explicit refresh are not delayed by the previous scans.

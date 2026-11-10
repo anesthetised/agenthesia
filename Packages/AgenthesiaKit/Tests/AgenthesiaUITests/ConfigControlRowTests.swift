@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -77,14 +78,6 @@ import Testing
 
     private func popups(in view: NSView) -> [NSPopUpButton] {
         ((view as? NSPopUpButton).map { [$0] } ?? []) + view.subviews.flatMap(popups)
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out")
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 
     /// A MockAgent session offering a mode, a model, an effort and `Fast mode`.

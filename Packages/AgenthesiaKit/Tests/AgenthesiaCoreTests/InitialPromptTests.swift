@@ -1,6 +1,7 @@
 import ACP
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -36,15 +37,6 @@ import Testing
             let owner = LiveSession(library: library)
             owner.environment = { (ProcessInfo.processInfo.environment, nil) }
             return owner
-        }
-    }
-
-    /// Polls until the condition holds, failing after a few seconds instead of hanging the suite.
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out")
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 

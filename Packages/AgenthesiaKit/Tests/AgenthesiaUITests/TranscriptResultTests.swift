@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -355,12 +356,7 @@ import Testing
     /// Checks run on a later main-queue turn, which is slower on CI. It does not lay out, so that only the table's own
     /// observers trigger them.
     private func eventually(_ controller: TranscriptTableController, _ condition: () -> Bool) async throws -> Bool {
-        let deadline = ContinuousClock.now + .seconds(5)
-        while ContinuousClock.now < deadline {
-            if condition() { return true }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        return false
+        await TestSupport.eventually { condition() }
     }
 
     private func host(_ controller: TranscriptTableController) -> NSWindow {

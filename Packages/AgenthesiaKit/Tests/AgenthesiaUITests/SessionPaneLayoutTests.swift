@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Rendering
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -72,10 +73,9 @@ import Testing
     }
 
     private func waitUntil(_ fixture: Fixture, _ condition: () -> Bool) async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while !condition() && ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+        await eventually {
             fixture.view.layoutSubtreeIfNeeded()
+            return condition()
         }
     }
 

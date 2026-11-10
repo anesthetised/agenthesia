@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaUI
@@ -148,9 +149,7 @@ struct DemoSessionTests {
         let session = DemoSession()
         session.send("Hello")
         #expect(session.isStreaming)
-        for _ in 0..<100 where session.messages.last?.markdown.isEmpty == true {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await eventually { session.messages.last?.markdown.isEmpty == false }
         #expect(session.messages.last?.markdown.isEmpty == false)
         session.stop()
         let stopped = session.messages.last?.markdown

@@ -69,10 +69,10 @@ order". Tiers are on the issues.
 |---|---|
 | Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #374, #351, #375, #395, #390 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
+| Interface (M20) | #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #374, #351, #375, #395 and #390.
+The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #374, #351, #375, #395, #390 and #397.
 
 Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
@@ -81,7 +81,7 @@ needs #357 and #60.
 
 | Files | Order |
 |---|---|
-| `SessionController.swift` and the queue | #373, then #390, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
+| `SessionController.swift` and the queue | #373, then #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
 | `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
 | `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
@@ -245,6 +245,7 @@ the first-run, text-size and VoiceOver items.
 | 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
 | 2 | #387 Transcript: move between prompts | `agent:light` | — |
 | 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue) | `agent:strong` | — |
+| 2 | #397 Session settings during a turn: the mode at once, model and reasoning level from the next turn (an amendment of ADR-0019) | `agent:strong` | — |
 | 2 | #391 Queue: change attachments while editing a queued message | `agent:light` | — |
 | 2 | #393 Queue: reorder by dragging; two buttons on a row | `agent:light` | — |
 | 3 | #392 Queue: step through queued messages, move and delete them from the keyboard | `agent:light` | #390 |

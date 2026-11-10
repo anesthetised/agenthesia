@@ -14,7 +14,9 @@
 # (CFFIXED_USER_HOME), so it reads nothing of the installed app's.
 #
 # It needs `just lab-build` and `just app-check-tools`. It drives the app through scripts/app-check/lib.sh: leave the
-# machine alone while it runs (about a minute); it aborts when another app comes to the front.
+# machine alone while it runs (about a minute); it aborts when another app comes to the front. While it records,
+# Instruments keeps a kernel trace of up to about 20 GB in the user's temporary directory, which the script deletes when
+# it exits.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -40,6 +42,9 @@ recorder=
 cleanup() {
     [ -n "$recorder" ] && kill -INT "$recorder" 2>/dev/null && wait "$recorder" 2>/dev/null || true
     [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    # The recorder leaves its kernel trace, gigabytes for each run, in the user's temporary directory, whatever TMPDIR.
+    [ -e "$tmp/recording" ] && find "$(getconf DARWIN_USER_TEMP_DIR)" -maxdepth 1 -name 'instruments*.ktrace' \
+        -newer "$tmp/recording" -delete
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -71,6 +76,7 @@ y=$((top + height / 2))
 
 # Job control gives the recorder its own process group, where SIGINT, which ends the recording, is not ignored as it is
 # for background jobs of a script. The time limit is a backstop only.
+touch "$tmp/recording"
 set -m
 xcrun xctrace record --template 'Animation Hitches' --instrument 'Points of Interest' --attach "$pid" \
     --time-limit "$((2 * seconds + 60))s" --output "$out" --no-prompt >"$tmp/xctrace.log" 2>&1 &

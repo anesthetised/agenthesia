@@ -71,7 +71,39 @@ below one finished turn or four; that test fails when the folder starts over on 
 
 ## Second run (after the fix)
 
-TODO (the parent, with the owner's approval): `just lab-run S1:App,S9:App,S11:App --runs 1` per side and round, three
-rounds with the sides interleaved as above. *Before* is the same `f089e49` with the S11 patch; *after* is #343's head
-with `TranscriptFolder`. Record the load, free memory and free plus inactive memory, save the reports as
-`fix-before.json` and `fix-after.json` (three reports each, in round order) and add the tables and a reading here.
+Command: `just lab-run S1:App,S9:App,S11:App --runs 1` per side and round, three rounds with the sides interleaved
+(before, after; after, before; before, after), 2026-11-10 03:17–03:23, approved by the owner, who left the Mac alone.
+*Before* is the same `f089e49` with the S11 patch (the same build as the first run); *after* is `0c7557e`, #343's head
+with `TranscriptFolder`. The 1-minute load average stayed at 3.9–5.7, free memory at 75–77 % on every run, free plus
+inactive memory at 38–39 %. The raw reports are `fix-before.json` and `fix-after.json` (three reports each, in round
+order). Missed frames (`estimatedMissed`) and excess time are added, since S11's frame p95 sits between two modes and
+jumps when a few dozen frames change class (a point raised by an independent review of the first run).
+
+## S1:App
+
+| | Hitches | Missed frames | Excess, s | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms | Load | Free memory, % | Frames |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 8, 8, 8 | 9, 8, 9 | 0.08, 0.07, 0.08 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 20.9, 19.9, 29.1 | 9.6, 9.9, 10.2 | 4.3, 5.3, 3.9 | 76, 76, 77 | 1479, 1480, 1483 |
+| After | 8, 12, 9 | 8, 14, 11 | 0.07, 0.12, 0.09 | 8.3, 8.3, 8.3 / 8.3, 8.3, 8.3 | 19.7, 30.3, 29.2 | 10.3, 10.4, 9.6 | 4.7, 5.7, 4.4 | 76, 76, 77 | 1480, 1478, 1481 |
+
+## S9:App
+
+| | Hitches | Missed frames | Excess, s | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms | Load | Free memory, % | Frames |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 87, 113, 115 | 165, 189, 190 | 1.37, 1.58, 1.59 | 16.1, 19.4, 18.9 / 22.4, 22.8, 22.1 | 119.6, 112.4, 107.6 | 15.6, 16.7, 16.4 | 3.9, 4.7, 4.0 | 76, 76, 76 | 1365, 1340, 1339 |
+| After | 91, 102, 128 | 170, 181, 185 | 1.42, 1.51, 1.56 | 17.9, 19.5, 18.9 / 23.0, 22.5, 21.9 | 100.2, 113.0, 113.3 | 15.3, 17.0, 16.5 | 4.7, 5.2, 4.5 | 76, 76, 76 | 1360, 1348, 1344 |
+
+## S11:App
+
+| | Hitches | Missed frames | Excess, s | p95 / p99 frame, ms | Max frame, ms | Apply p95, ms | Load | Free memory, % | Frames |
+|---|---|---|---|---|---|---|---|---|---|
+| Before | 103, 125, 133 | 187, 197, 200 | 1.56, 1.64, 1.68 | 12.3, 13.3, 13.7 / 22.2, 21.9, 21.4 | 107.0, 116.1, 114.3 | 14.4, 14.7, 14.9 | 4.5, 4.6, 4.5 | 76, 77, 76 | 2104, 2096, 2091 |
+| After | 93, 112, 129 | 142, 193, 152 | 1.20, 1.61, 1.27 | 12.1, 12.7, 13.5 / 21.4, 22.1, 20.5 | 82.1, 136.6, 71.6 | 11.3, 13.8, 13.6 | 5.5, 4.6, 4.2 | 75, 76, 76 | 2148, 2098, 2140 |
+
+### Reading
+
+The regression is gone. S11 now does better than before #341: 142–193 missed frames against 187–200, 1.20–1.61 s of
+excess against 1.56–1.68 s, apply p95 11.3–13.8 ms against 14.4–14.9 ms and more frames delivered (2098–2148 against
+2091–2104); a streamed chunk in the running turn folds only that turn instead of the whole history. S9 (no fold) and S1
+are within the run-to-run spread on every measure. The first run's S9 drift was round 1's *before* being an outlier
+across scenarios, not the change.

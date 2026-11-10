@@ -69,10 +69,10 @@ order". Tiers are on the issues.
 |---|---|
 | Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #97 → #372 → #367 → #370 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #374, #351, #375, #390 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
+| Interface (M20) | #374, #351, #375, #395, #390 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #97 and #372; #374, #351, #375 and #390.
+The first step is the head of each lane: #373 and #354; #97 and #372; #374, #351, #375, #395 and #390.
 
 Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
@@ -231,7 +231,8 @@ the first-run, text-size and VoiceOver items.
 | 1 | #373 fix: store `fallbackUpstream` with the session record | `agent:light` | — |
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
-| 1 | #375 Board: show the command on a permission card | `agent:light` | — |
+| 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
+| 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; a short ADR) | `agent:strong` | — |
 | 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) | `agent:strong` | — |
 | 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
 | 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |

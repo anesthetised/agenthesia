@@ -204,6 +204,11 @@ public struct TranscriptState: Equatable, Sendable {
 
     public init() {}
 
+    /// The tool call as reported so far, or `nil` for one that has no row.
+    public func toolCall(_ id: ACP.ToolCallID) -> ACP.ToolCall? {
+        toolIndices[id].flatMap { items[$0].toolCall }
+    }
+
     /// The default merge commit message: the agent's session title, or else the first line of the first prompt.
     public var mergeMessage: String {
         if let title = title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }

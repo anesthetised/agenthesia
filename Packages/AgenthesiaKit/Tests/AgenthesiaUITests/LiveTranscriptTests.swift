@@ -188,6 +188,22 @@ import Testing
         #expect(LiveTranscriptSource.content(item).0 == "Permission")
     }
 
+    @Test func anExpandedRequestShowsItsWholeCommand() {
+        let command = (1...20).map { "echo \($0)" }.joined(separator: "\n")
+        let call = ACP.ToolCall(toolCallId: "t", title: "Bash", kind: .execute)
+        func card(expanded: Bool, command: String?) -> String {
+            LiveTranscriptSource.permissionCard(
+                .init(requestID: UUID(), toolCall: call, options: [], outcome: nil),
+                phase: .choosing,
+                expanded: expanded,
+                command: command
+            ).markdown
+        }
+        #expect(card(expanded: true, command: command).contains("```\n\(command)\n```"))
+        #expect(!card(expanded: false, command: command).contains("echo 20"))
+        #expect(!card(expanded: true, command: nil).contains("```"))
+    }
+
     @Test func commandOutputShowsItsLastLinesAndExitStatus() throws {
         func output(_ text: String, exit: TranscriptState.CommandOutput.Exit? = nil) -> TranscriptState.CommandOutput {
             .init(output: .init(bytes: Data(text.utf8)), exit: exit)

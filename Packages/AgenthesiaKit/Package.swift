@@ -88,7 +88,7 @@ let package = Package(
         ),
         .target(
             name: "AgenthesiaCore",
-            dependencies: ["ACP", "AgentRuntime", "JSONRPC", "Workspace", "Persistence"],
+            dependencies: ["ACP", "AgentRuntime", "JSONRPC", "MCP", "Workspace", "Persistence"],
             swiftSettings: swiftSettings
         ),
         .target(
@@ -102,7 +102,7 @@ let package = Package(
         .executableTarget(
             name: "acp-cli",
             dependencies: [
-                "ACP", "AgentRuntime", "JSONRPC", "Workspace",
+                "ACP", "AgenthesiaCore", "AgentRuntime", "JSONRPC", "MCP", "Workspace",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             swiftSettings: swiftSettings
@@ -116,7 +116,7 @@ let package = Package(
             dependencies: ["AgenthesiaUI", "Rendering"],
             swiftSettings: swiftSettings
         ),
-        .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC"], swiftSettings: swiftSettings),
+        .target(name: "ACPTesting", dependencies: ["ACP", "JSONRPC", "MCP"], swiftSettings: swiftSettings),
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
         // The stdio end of the agenthesia MCP server (ADR-0049); system frameworks only, copied into Contents/Helpers.
         .executableTarget(name: "agenthesia-mcp", swiftSettings: swiftSettings),
@@ -125,7 +125,7 @@ let package = Package(
 
         .testTarget(
             name: "acp-cliTests",
-            dependencies: ["acp-cli", "ACP", "ACPTesting", "JSONRPC", "MockAgent", "TestSupport"],
+            dependencies: ["acp-cli", "ACP", "ACPTesting", "JSONRPC", "MockAgent", "agenthesia-mcp", "TestSupport"],
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
@@ -157,7 +157,8 @@ let package = Package(
         .testTarget(
             name: "AgenthesiaCoreTests",
             dependencies: [
-                "AgenthesiaCore", "AgentRuntime", "ACPTesting", "JSONRPC", "MockAgent", "agenthesia-mcp", "TestSupport",
+                "AgenthesiaCore", "AgentRuntime", "ACPTesting", "JSONRPC", "MCP", "MockAgent", "agenthesia-mcp",
+                "TestSupport",
             ],
             swiftSettings: swiftSettings
         ),

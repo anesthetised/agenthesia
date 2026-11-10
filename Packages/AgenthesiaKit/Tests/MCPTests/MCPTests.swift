@@ -1,6 +1,7 @@
 import Foundation
 import JSONRPC
 import MCP
+import Synchronization
 import Testing
 
 private struct Greeting: Decodable, Sendable {
@@ -105,5 +106,22 @@ private let tools = [
         #expect(throws: DecodingError.self) {
             try (["type": "audio", "data": "AQID"] as JSONValue).decode(as: MCP.Content.self)
         }
+    }
+
+    @Test func gatedToolsAreRefusedWithTheMessageWhileTheRefusalHolds() async throws {
+        let open = Mutex(false)
+        let gated = tools[0].gated { open.withLock { $0 } ? nil : "not now" }
+        let router = MCP.server(info: info, tools: [gated])
+        let params: JSONValue = ["name": "greet", "arguments": ["name": "Ada"]]
+        #expect(
+            try await router.handleRequest(method: "tools/call", params: params).decode(as: MCP.CallToolResult.self)
+                == .error("not now")
+        )
+        open.withLock { $0 = true }
+        #expect(
+            try await router.handleRequest(method: "tools/call", params: params).decode(as: MCP.CallToolResult.self)
+                == MCP.CallToolResult(content: [.text("Hello, Ada")])
+        )
+        #expect(gated.tool == tools[0].tool)
     }
 }

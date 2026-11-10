@@ -35,11 +35,11 @@ Listed bottom-up. A module may only depend on modules above it in this list.
 | `Workspace` | Git (CLI wrapper), worktrees, scoped file access, file index for Quick Open, FSEvents watcher. | — |
 | `Persistence` | SQLite via GRDB: projects, agent installs, sessions and the append-only event log. | — |
 | `Rendering` | Text rendering shared by the transcript, diffs and the file viewer: tree-sitter highlighting, incremental Markdown, `SourceView` (STTextView, TextKit 2), `UnifiedDiff` (unified hunks from `CollectionDifference`, highlighted in ```` ```diff ```` blocks with changed words marked), `DiffLine` (its output parsed into lines with old and new numbers) ([ADR-0007](adr/0007-transcript-rendering.md)). Source highlighting updates only color attributes ([ADR-0013](adr/0013-source-highlight-attributes.md)). | — |
-| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)), local agents and the ACP initialize probe ([ADR-0037](adr/0037-local-agents.md)), the `agenthesia-mcp` socket and session tokens ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). | all of the above except `Rendering` |
+| `AgenthesiaCore` | Domain: sessions, transcript reducer, permission queue, fs path policy, session manager, worktree lifecycle, the agent catalog of registry installs and their session leases ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)), local agents and the ACP initialize probe ([ADR-0037](adr/0037-local-agents.md)), the `agenthesia-mcp` socket, session tokens and the serving of the agenthesia server to sessions ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). | all of the above except `Rendering` |
 | `AgenthesiaUI` | SwiftUI and AppKit views. | `ACP`, `AgentRuntime`, `Persistence`, `AgenthesiaCore`, `Rendering` |
-| `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. | `ACP`, `AgentRuntime`, `Workspace` |
+| `acp-cli` | Headless debug driver: `chat`, `sessions` and `login` against any ACP agent from a terminal. `chat --agenthesia-mcp` also serves the agenthesia server for its one session (the helper must sit beside `acp-cli`). | `ACP`, `AgenthesiaCore`, `AgentRuntime`, `MCP`, `Workspace` |
 | `TestSupport` | Waits for test conditions, shared by the test targets (`eventually`, `waitUntil`, `waitLimit`): a wait ends at the running test's own time limit, never before it (#133). Lives in `Tests/TestSupport`, imports Swift Testing, and no product depends on it. | — |
-| `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. | `ACPTesting` |
+| `MockAgent` | ACP agent over stdio: the echo agent, which announces its verbs as slash commands, or a JSON scenario with `--scenario`. `--reopen` resumes sessions of earlier processes; `--no-resume` and `--no-load` remove those capabilities. It starts the stdio MCP servers a client passes in `session/new`, `load` and `resume`, and its verb `mcp <tool> <json>` calls a tool on the one that lists it and echoes the result. | `ACPTesting` |
 | `agenthesia-mcp` | The stdio end of the built-in MCP server, copied into `Contents/Helpers`: connects to the app's socket, sends the session's token and relays bytes both ways ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). System frameworks only. | — |
 | `rendering-bench` | Release-build timings of Markdown rendering, highlighting and diffs (`just bench`). | `Rendering` |
 | `persistence-bench` | Release-build append throughput and latency (`just bench-persistence`). | `Persistence` |
@@ -389,7 +389,10 @@ so it stays on screen whatever the scroll position. `DockedPermission` builds it
 `SessionController.pendingPermissions`, which carry the tool call as known when the agent asked: the kind and the
 paths (locations, then the diffs' files), the title as secondary text, the first diff with `+n more files` that
 expands in place, and `1 of 3` while several are pending. The card is at most 40 % of the column's height and its diff
-scrolls inside it. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
+scrolls inside it. A shell call's command (`PermissionCommand`, Core, pure: `rawInput.command`, an argument array
+shell-quoted without its shell wrapper, the first text content, the title) follows the title in monospaced selectable
+text that scrolls beyond about six lines; `SessionController` merges later `rawInput` and content of the call into the
+pending request when it publishes the transcript. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
 (`WrappingLayout`) instead of truncating; none is the default, and Return and Escape stay with the composer. The card
 never takes focus. Each request gets a new card identity, so `PermissionArming` ignores clicks and shortcuts for
 400 ms after a request appears, including the next one after an answer, and the buttons look disabled meanwhile.
@@ -538,7 +541,7 @@ a session; any assignment to `showingSetup` leaves the board), `showBoard()` (�
 `SessionBoard` builds `SessionCard.Content` for each live row of an unfiltered `SessionSidebar`: the row's title,
 project and reason (`SessionWindowModel.reason(of:)`, shared with the row), `SessionSidebar.shelfTime`, the agent's last
 line (`TranscriptState.agentLastLine`, Core, pure) and the oldest pending permission with `PermissionChoice.choices`
-under the plain rule. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
+under the plain rule. A card shows the command in up to four lines. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
 `WrappingLayout`, and answer through `SessionController.answerPermission`; its context menu is `SessionRowMenu`, the
 rows' own.
 
@@ -598,7 +601,8 @@ The menu bar item ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior
 Working sections (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
 its `WindowTarget` URL as a notification does, and an option answers through `SessionController.answerPermission`.
 `PermissionChoice` (Core, pure) is the Open-first rule: a request that edits files offers Open before the agent's
-options; the session board reuses it without `openAlways`. `WindowPresence` counts the visible main-capable windows from AppKit's
+options, and so does a command the board cuts (`PermissionCommand.isCutOnBoard`); the session board reuses it without
+`openAlways`. `WindowPresence` counts the visible main-capable windows from AppKit's
 window notifications, so that Open Agenthesia shows only when none is open. Hosted views cannot test a `MenuBarExtra`:
 the views are tested by their size and the entries as data, and the item itself in the running app.
 Windows report the session they show while their scene appears active. A tap opens
@@ -632,9 +636,24 @@ Each connection's hello is read a byte at a time on a global queue (at most 256 
 it is consumed. `SessionManager.mcpTokens` (`MCPTokens`) maps tokens, 256 bits from `SystemRandomNumberGenerator` as 64
 hex digits, to session ids; `revoke` drops every token of a session. A known token hands the connection, as a
 `FileHandleTransport` over the socket, with its session id to the socket's `serve` closure, and the connection closes
-when `serve` returns; any other hello closes it. Until #71 the app's `serve` returns at once and no session issues a
-token: #71 issues one per live session for `session/new`, `load` and `resume`, revokes it when the session ends, and
-serves the `MCP` module's server on the transport.
+when `serve` returns; any other hello closes it.
+
+**Sessions and the server.** Once the socket listens, the app delegate sets `SessionManager.mcp`, an `MCPEndpoint`
+(the tokens, the helper at `Contents/Helpers/agenthesia-mcp` and the socket path); without it, sessions pass no server.
+`LiveSession` copies it, and when it has its `SessionController` (a new session, or a saved one for Continue) and before
+the agent is asked for anything, it issues a token for the session and sets `controller.mcpServers` to the stdio server
+`agenthesia` with `AGENTHESIA_MCP_SOCKET` and `AGENTHESIA_MCP_TOKEN` in its `env`. The controller sends it in
+`session/new`, `session/load` and `session/resume`. The token is revoked when the owner stops its agent for good
+(`cleanup`, on close, failure or the agent's exit); Continue is a new owner and so a new token. The socket's `serve`
+calls `SessionManager.serveMCP(session:over:)`, which starts a `Connection` on the transport with `MCP.server` and the
+tools made for that connection's `MCPCaller` by `SessionManager.mcpTools` (empty until the tools of M13 land); a token
+may open several connections, one per Codex subagent.
+
+**The running-turn gate.** A tool that starts work wraps itself with `MCPCaller.requiringTurn(_:)`: while the caller's
+controller is not `.running` (no turn, or stopping), the call returns an `isError` result saying that the tool works
+only during a turn, instead of running. Reading tools do not wrap themselves and work whenever the session is live.
+`MCP.ServedTool.gated(by:)` is the mechanism, so the `MCP` module still knows nothing about sessions. The socket's own
+checks on every call (a revoked token, closing connections) are #360.
 
 ## Session filesystem
 

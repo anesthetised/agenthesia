@@ -38,13 +38,15 @@ struct SessionMenu {
                             lastActivity: row.lastActivity,
                             now: now
                         )
+                let request = kind == .needsYou ? owner.controller?.pendingPermissions.first : nil
                 return Entry(
                     id: row.id,
                     sessionID: owner.sessionID,
                     text: [row.title, detail].compactMap(\.self).joined(separator: " · "),
-                    request: kind == .needsYou ? owner.controller?.pendingPermissions.first : nil,
+                    request: request,
+                    // The request the entry listed: one answered or replaced meanwhile makes the click do nothing.
                     answer: { [weak owner] option in
-                        guard let request = owner?.controller?.pendingPermissions.first else { return }
+                        guard let request else { return }
                         owner?.controller?.answerPermission(request.id, with: option)
                     }
                 )

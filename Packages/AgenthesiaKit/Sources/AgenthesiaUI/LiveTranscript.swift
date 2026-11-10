@@ -270,8 +270,18 @@ final class LiveTranscriptSource: TranscriptSource {
     /// A record with its details, whether or not it is folded on screen.
     private func fullPermissionMarkdown(_ index: Int) -> String {
         guard let permission = state.items[index].permission else { return "" }
-        return Self.permissionCard(permission, phase: permissionPhase(permission), expanded: true, diff: cachedDiff)
-            .markdown
+        return Self.permissionCard(
+            permission,
+            phase: permissionPhase(permission),
+            expanded: true,
+            command: command(of: permission),
+            diff: cachedDiff
+        ).markdown
+    }
+
+    /// The command a request runs; a waiting one follows its call, which the agent may still be filling in.
+    private func command(of permission: TranscriptState.Permission) -> String? {
+        PermissionCommand.of(pending.first { $0.id == permission.requestID }?.toolCall ?? permission.toolCall)
     }
 
     private func message(item index: Int) -> TranscriptMessage {
@@ -305,6 +315,7 @@ final class LiveTranscriptSource: TranscriptSource {
                 permission,
                 phase: permissionPhase(permission),
                 expanded: isExpanded,
+                command: command(of: permission),
                 diff: cachedDiff
             )
             // Folded, a record is only its header, as a group is; Details shows the call.
@@ -626,11 +637,13 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     /// The record of a request: a header that reads `Allowed once · Edit · Write note.txt`, and the call with its
-    /// outcome as its details. States only the recorded response, never an inferred approval or decline.
+    /// outcome as its details, and the whole `command` of a shell call. States only the recorded response, never an
+    /// inferred approval or decline.
     static func permissionCard(
         _ permission: TranscriptState.Permission,
         phase: PermissionPhase,
         expanded: Bool,
+        command: String? = nil,
         diff: (ACP.Diff) -> String = diff
     ) -> (header: ToolCardHeader, markdown: String) {
         let tool = permission.toolCall
@@ -643,6 +656,7 @@ final class LiveTranscriptSource: TranscriptSource {
             record: true
         )
         var sections = ["\(kind(tool.kind).label) · \(title(tool))"]
+        if expanded, let command { sections.append(fenced(command)) }
         if let body = body(tool, header: &header, expanded: expanded, diff: diff) { sections.append(body) }
         // Details always has the call and the outcome to show; `body` judged only the bound of its own text.
         (header.expandable, header.expanded) = (true, expanded)

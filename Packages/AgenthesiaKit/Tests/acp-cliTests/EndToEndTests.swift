@@ -119,6 +119,24 @@ final class EndToEndTests: Sendable {
         #expect(await run.waitForExit() == 0)
     }
 
+    @Test func passesTheAgenthesiaServerOnlyWhenAsked() async throws {
+        try #require(Binaries.find("agenthesia-mcp"), "agenthesia-mcp has not been built")
+        let neutral = try CLIRun(["chat"], cwd: directory)
+        try await neutral.waitFor("Connected")
+        try neutral.type("mcp peek {}")
+        try await neutral.waitFor("mcp: no stdio MCP server was given")
+        try neutral.type("/quit")
+        #expect(await neutral.waitForExit() == 0)
+
+        // MockAgent starts the helper, which reaches this process's socket; there are no tools to list yet.
+        let served = try CLIRun(["chat", "--agenthesia-mcp"], cwd: directory)
+        try await served.waitFor("Connected")
+        try served.type("mcp peek {}")
+        try await served.waitFor("mcp: no server offers peek")
+        try served.type("/quit")
+        #expect(await served.waitForExit() == 0)
+    }
+
     @Test func ctrlCCancelsTheTurnThenQuits() async throws {
         let run = try CLIRun(["chat"], cwd: directory)
         try await run.waitFor("Connected")

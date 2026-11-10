@@ -71,6 +71,45 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func anEntryAnswersTheRequestItListedNotTheOneThatIsFirstNow() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        await eventually { controller.status == .running }
+        let agentID = try #require(controller.session.agentSessionID)
+        let options: [ACP.PermissionOption] = [
+            .init(optionId: "allow", name: "Allow once", kind: .allowOnce),
+            .init(optionId: "no", name: "Reject", kind: .rejectOnce),
+        ]
+        let firstCall = ACP.ToolCallUpdate(toolCallId: "first", title: "swift build", kind: .execute)
+        let first = Task { await controller.requestPermission(for: firstCall, options: options, in: agentID) }
+        await eventually { controller.pendingPermissions.count == 1 }
+        let firstID = try #require(controller.pendingPermissions.first?.id)
+        let secondCall = ACP.ToolCallUpdate(toolCallId: "second", title: "swift test", kind: .execute)
+        let second = Task { await controller.requestPermission(for: secondCall, options: options, in: agentID) }
+        await eventually { controller.pendingPermissions.count == 2 }
+
+        // The menu lists the first request; it is answered elsewhere while the menu is open.
+        let entry = try #require(SessionMenu(owners: manager.owners).needsYou.first)
+        #expect(entry.request?.id == firstID)
+        #expect(controller.answerPermission(firstID, with: "no"))
+        #expect(await first.value == .selected("no"))
+        let remaining = try #require(controller.pendingPermissions.first)
+        #expect(remaining.id != firstID)
+
+        // The click on the gone request does nothing: the second one is still pending.
+        entry.answer("allow")
+        #expect(controller.pendingPermissions.map(\.id) == [remaining.id])
+
+        await owner.stop()
+        _ = await second.value
+        await turn.value
+        await manager.closeAll()
+    }
+
     @Test func aRunningTurnIsAWorkingEntryWithItsShelfTime() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

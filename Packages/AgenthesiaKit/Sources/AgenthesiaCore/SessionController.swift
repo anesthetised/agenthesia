@@ -20,8 +20,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         public let toolTitle: String?
         /// ``toolTitle``, or else the title the agent reported when it announced the call; the sidebar's reason.
         public let callTitle: String?
-        /// The tool call as known when the agent asked, which the docked card shows (ADR-0039).
-        public let toolCall: ACP.ToolCall
+        /// The tool call as known when the agent asked, which the docked card shows (ADR-0039). Later updates of the
+        /// call, such as `rawInput` that arrives after the request, are merged in as they are published.
+        public internal(set) var toolCall: ACP.ToolCall
     }
 
     /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
@@ -89,6 +90,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Receives each confirmed list of settings once it is recorded, and the agent's list when a hint fails the
     /// start, so `AgentCatalog` can keep them as the next draft's hints (ADR-0040).
     @ObservationIgnored public var onConfigOptions: (([ACP.ConfigOption]) -> Void)?
+    /// Passed to the agent in `session/new`, `session/load` and `session/resume`: the agenthesia server (ADR-0049).
+    @ObservationIgnored public var mcpServers: [ACP.MCPServer] = []
 
     func fileDidChange() { fileRevision &+= 1 }
 
@@ -197,7 +200,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let remote = try await connection.newSession(
             cwd: session.workingDirectory,
             additionalDirectories: additionalDirectories,
-            mcpServers: []
+            mcpServers: mcpServers
         )
         guard status == .starting else { throw SessionError.invalidState }
         let options = try await applyHints(to: remote.configOptions, in: remote.sessionId, connection: connection)
@@ -257,7 +260,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             agentID,
             cwd: session.workingDirectory,
             additionalDirectories: additionalDirectories,
-            mcpServers: []
+            mcpServers: mcpServers
         )
         guard status == .starting else { throw SessionError.invalidState }
         let state: ACP.SessionState
@@ -794,6 +797,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         guard transcript.sequence != reduced.sequence else { return }
         transcript = reduced
         if title != reduced.title { title = reduced.title }
+        refreshPendingCalls()
+    }
+
+    /// An agent may send a call's `rawInput` or content after it asked for permission; the card shows them.
+    private func refreshPendingCalls() {
+        for index in pendingPermissions.indices {
+            var call = pendingPermissions[index].toolCall
+            guard let live = reduced.toolCall(call.toolCallId) else { continue }
+            if let rawInput = live.rawInput { call.rawInput = rawInput }
+            if let content = live.content { call.content = content }
+            if call != pendingPermissions[index].toolCall { pendingPermissions[index].toolCall = call }
+        }
     }
 
     @MainActor public func sessionUpdate(_ update: ACP.SessionUpdate, in sessionId: ACP.SessionID) async {

@@ -1,6 +1,9 @@
 # 0049. The built-in agenthesia MCP server
 
 - Status: Accepted (2026-11-09)
+- Amended by: [0051](0051-turns-between-sessions.md) (2026-11-10: `session_send` along delegation edges, with
+  replies; a sticky Stop, Stop Tree and Stop All Agents; every outcome delivered, held rather than dropped after Stop;
+  checks on every socket call; a named source in the wrapper)
 - Date: 2026-11-09
 - Decider: Project owner
 - Supersedes in part: [0009](0009-tools-and-mcp.md) (the built-in server's tool list; its transport is kept and

@@ -201,19 +201,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         )
         guard status == .starting else { throw SessionError.invalidState }
         let options = try await applyHints(to: remote.configOptions, in: remote.sessionId, connection: connection)
-        session = SessionRecord(
-            id: session.id,
-            projectID: session.projectID,
-            agentInstallID: session.agentInstallID,
-            agentSessionID: remote.sessionId,
-            protocolVersion: profile.protocolVersion,
-            title: session.title,
-            workingDirectory: session.workingDirectory,
-            baseRevision: session.baseRevision,
-            baseBranch: session.baseBranch,
-            branch: session.branch,
-            createdAt: session.createdAt
-        )
+        session.agentSessionID = remote.sessionId
+        session.protocolVersion = profile.protocolVersion
         do {
             try await createSession(session)
         } catch {

@@ -54,16 +54,17 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0036](0036-agent-settings-and-installed-sessions.md) | Agent settings and sessions of installed agents | Accepted; UI behavior, current state in [docs/behavior/agents-settings.md](../behavior/agents-settings.md) |
 | [0037](0037-local-agents.md) | Local agents | Accepted; UI behavior, current state in [docs/behavior/agents-settings.md](../behavior/agents-settings.md) |
 | [0038](0038-pre-session-sign-in.md) | Sign in before a session | Accepted; UI behavior, current state in [docs/behavior/agents-settings.md](../behavior/agents-settings.md) |
-| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amended (sidebar row, inspector, docked permission); amended (user blocks, collapsed thoughts, plan, context usage); UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md), [docs/behavior/composer.md](../behavior/composer.md) |
+| [0039](0039-t3-style-window-layout.md) | A window layout after T3 Code | Accepted; amended (sidebar row, inspector, docked permission); amended (user blocks, collapsed thoughts, plan, context usage); what Settled means superseded by [0050](0050-settled-is-the-users-decision.md); UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md), [docs/behavior/composer.md](../behavior/composer.md) |
 | [0040](0040-composer-first-session-start.md) | Start a session from the composer | Accepted; amended (mode and model hints); amended (first message shows at once); checkout choice added by [0043](0043-sessions-in-the-project-folder.md); UI behavior, current state in [docs/behavior/session-start.md](../behavior/session-start.md) |
 | [0041](0041-review-pane.md) | Review as a pane, with Ask agent | Accepted |
 | [0042](0042-allow-edits-in-this-worktree.md) | Allow edits in this worktree | Proposed, deferred |
 | [0043](0043-sessions-in-the-project-folder.md) | Sessions in the project folder | Accepted |
-| [0044](0044-delete-and-archive-sessions.md) | Delete and archive sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
+| [0044](0044-delete-and-archive-sessions.md) | Delete and archive sessions | Accepted; settling by hand added by [0050](0050-settled-is-the-users-decision.md); UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
 | [0045](0045-push-and-pull-requests.md) | Push after merge, and pull requests from a session | Accepted |
 | [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
 | [0047](0047-worktrees-from-the-fetched-upstream.md) | Worktrees start from the fetched upstream | Accepted |
 | [0048](0048-sessions-without-a-project.md) | Sessions without a project | Accepted |
 | [0049](0049-built-in-agenthesia-mcp-server.md) | The built-in agenthesia MCP server | Accepted |
+| [0050](0050-settled-is-the-users-decision.md) | Settled is the user's decision | Accepted; not implemented yet (#353) |
 
 Template: Status, Date, Context, Decision, Consequences.

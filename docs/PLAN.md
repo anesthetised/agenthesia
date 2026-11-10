@@ -5,8 +5,8 @@ GitHub stay the source of truth for scope; this file records order, dependencies
 so far. Update it when a step lands or the order changes. Finished milestones are in
 [plan-archive.md](plan-archive.md).
 
-Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request after the
-owner's approval. Architectural choices are presented to the owner as options with a recommendation
+Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request; the
+owner approves the merge. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
 ## State (2026-11-10)

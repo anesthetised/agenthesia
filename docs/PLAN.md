@@ -1218,6 +1218,30 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 3 | #320 `task_run`, `task_output`, `task_stop` | `agent:strong` | #311, #317 |
 | 4 | #321 Verify in the running app | `agent:light` | all |
 
+**Session core, before wave 3 (2026-11-10).** The owner's review of 2026-11-10 changed several decisions of ADR-0049's
+*Turns started by agents*; ADR-0051 (#354) records them. `session_send` works only inside a delegation tree and can
+ask for a reply, delivered like a delegated result; the user's Stop is sticky, with Stop Tree and Stop All Agents;
+chains get a counter per tree, no limit and no pause; the queue takes several authors. Not taken and kept on record:
+#344 (a pause), #345 (sending beyond the tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
+
+| Order | Issue | Tier | Depends on |
+|---|---|---|---|
+| 2.5 | #354 ADR-0051: turns between sessions | `agent:strong` | — |
+| 2.5 | #355 Session log: one writer per session | `agent:strong` | — |
+| 2.5 | #356 Turn router: turn-ended events, Stop through the manager, one end path for a live session | `agent:strong` | #355 |
+| 2.5 | #357 Prompt queue for several authors | `agent:strong` | #354, #355 |
+| 2.5 | #358 Sticky Stop and Stop All Agents | `agent:strong` | #356, #357 |
+| 2.5 | #359 Remove the legacy `send` path and the unreachable inject steering | `agent:strong` | #356 |
+| 2.5 | #360 Harden the MCP socket | `agent:strong` | #71 |
+| 2.5 | #361 `MCP` module: a tool-call context, cancellation, safe reads | `agent:light` | before #312 |
+| 2.5 | #362 Message wrapper: a named source and a delimiter per message | `agent:light` | #354 |
+| 3 | #363 Session trees in the sidebar and on the board | `agent:strong` | #60, #352 |
+| 3 | #364 A child's permission request on its root | `agent:strong` | #363 |
+| 3 | #365 Agent turns and cost per tree | `agent:light` | #60 |
+| 3 | #366 Origins in the queue and after a relaunch | `agent:light` | #357, #60 |
+
+Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #317, #356 and #357.
+
 Progress:
 
 - #311 (turn origins): `QueuedPrompt.Origin` in the event log, the labelled transcript row, the sidebar reason and the
@@ -1262,17 +1286,56 @@ Pitfalls known so far:
   separate client type: a `Connection` with the `MCP.Method` types is the client, which is what MockAgent's `mcp` verb
   (#71) uses. Tests cover the module fully.
 
-## M20: Review findings (2026-11-10)
+## M19: Performance (2026-11-10)
 
-The owner reviewed the codebase, the issues, the UI and performance on 2026-11-10 (with Claude Fable) and compared the
-sidebar with T3 Code again. This section records the sidebar decisions; the milestone's other issues are added here as
-they are filed.
+From the performance pass of the same review. Measuring comes first: the Rendering Lab drives the table from a synthetic
+source, without `TranscriptState`, SwiftUI observation, SQLite or ACP, no scenario has more than one session, and launch
+and peak memory are not measured. Every benchmark run needs the owner's approval of the workload.
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
-| 1 | #351 The `Run interrupted` divider is not drawn across the column (a defect against `docs/behavior/transcript.md`) | `agent:light` | — |
+| 1 | #97 End-to-end streaming bench: the real controller, store and table with 1, 4 and 8 sessions | `agent:strong` | — |
+| 1 | #372 Count-based performance invariants in `just test` | `agent:light` | — |
+| 1 | #367 Update the transcript table only on change | `agent:strong` | — |
+| 1 | #370 Load highlight grammars off the main actor | `agent:light` | — |
+| 2 | #368 Session summary fields, apart from the per-frame transcript | `agent:strong` | — |
+| 2 | #369 Cache tool cards by their last event | `agent:strong` | — |
+| 2 | #371 Group commit for the event log | `agent:strong` | #355, #97 |
+| — | #77, #78, #83 (open research, moved here) | `agent:strong` | — |
+
+Not taken and kept on record: #348 (copies of the item array, repeated decoding, replay on the main actor), #349
+(workspace scans, unbounded memory, queries that grow with the number of sessions), #350 (WAL).
+
+## M20: Review findings (2026-11-10)
+
+The owner reviewed the codebase, the issues, the UI and performance on 2026-11-10 (with Claude Fable) and compared the
+sidebar with T3 Code again. What was taken is in three places: the session core of M13 (above), M19 (below) and this
+milestone, which holds the UI/UX findings, the fixes and the documentation. M10 (Release) follows M13; #45 and #46 got
+the first-run, text-size and VoiceOver items.
+
+| Order | Issue | Tier | Depends on |
+|---|---|---|---|
+| 1 | #373 fix: store `fallbackUpstream` with the session record | `agent:light` | — |
+| 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
+| 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
+| 1 | #375 Board: show the command on a permission card | `agent:light` | — |
 | 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) | `agent:strong` | — |
-| 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352 |
+| 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
+| 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |
+| 2 | #376 One attention level for every surface | `agent:strong` | #368 |
+| 2 | #377 Keyboard: the gaps that need the mouse today | `agent:light` | — |
+| 2 | #379 Review: revert a file | `agent:light` | — |
+| 2 | #381 Sidebar: the agent on a row and a card | `agent:light` | #352 |
+| 2 | #383 Composer: paste images, keep drafts | `agent:light` | — |
+| 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
+| 2 | #387 Transcript: move between prompts | `agent:light` | — |
+| 3 | #378 Command registry, a ⌘K palette and a shortcut sheet | `agent:strong` | #377 |
+| 3 | #380 ADR: checkpoints per turn and Rewind | `agent:strong` | #379 |
+| 3 | #382 Review: open at the file, move by hunk, ask about a hunk | `agent:strong` | — |
+| 3 | #384 Composer: @file completion | `agent:strong` | — |
+| 3 | #386 Full-text search over session history | `agent:strong` | — |
+
+The issues of this milestone touch views, not the session core, so they run beside M13's waves.
 
 Pitfalls known so far:
 

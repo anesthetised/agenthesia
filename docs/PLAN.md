@@ -1262,6 +1262,30 @@ Pitfalls known so far:
   separate client type: a `Connection` with the `MCP.Method` types is the client, which is what MockAgent's `mcp` verb
   (#71) uses. Tests cover the module fully.
 
+## M20: Review findings (2026-11-10)
+
+The owner reviewed the codebase, the issues, the UI and performance on 2026-11-10 (with Claude Fable) and compared the
+sidebar with T3 Code again. This section records the sidebar decisions; the milestone's other issues are added here as
+they are filed.
+
+| Order | Issue | Tier | Depends on |
+|---|---|---|---|
+| 1 | #351 The `Run interrupted` divider is not drawn across the column (a defect against `docs/behavior/transcript.md`) | `agent:light` | — |
+| 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) | `agent:strong` | — |
+| 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352 |
+
+Pitfalls known so far:
+
+- #352 changes which rows ⌘1…⌘9, Previous and Next Session and the board visit; `SessionSidebar` is the one place that
+  orders them, and the menu bar, the Dock badge and `Next Session Needing Input` must keep reading "the rows that need
+  the user", not a section.
+- #353 adds `session.settledAt` and fills it for every existing session, so the sidebar looks the same after the
+  update; the migration gets a test on the previous schema file, as #231 did. `SessionController.createRemote` rebuilds
+  the record field by field and already loses `fallbackUpstream`: fix that first, or `settledAt` is lost the same way.
+- Unsettle appends an event to the log of a session that is not live. Until M13's single log writer lands, it is
+  refused while a Continue of the same session is starting.
+- Session trees in the sidebar (M13) build on #352's sections; a delegated session settles with its parent.
+
 ## Next steps
 
 The rest of M5 (#61, #67) waits for an agent that calls `terminal/create` (#104). Then #126 (the CI

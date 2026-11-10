@@ -84,9 +84,9 @@ struct SessionCard: View {
                 TimelineView(.everyMinute) { summary(now: $0.date) }
             }
             if let request = content.request, let session = content.session {
-                // A new identity per request restarts arming.
+                // A new identity per request, or per command, restarts arming.
                 BoardPermission(request: request, session: session, choices: content.choices, open: open)
-                    .id(request.id)
+                    .id(DockedPermission([request])?.identity)
             }
         }
         .padding(12)

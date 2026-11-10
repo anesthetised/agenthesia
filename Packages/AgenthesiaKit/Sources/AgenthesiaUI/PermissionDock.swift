@@ -17,6 +17,9 @@ struct DockedPermission: Equatable {
     }
 
     var id: UUID { request.id }
+    /// The card's identity: a new request, or a command the agent filled in or changed while the card was shown,
+    /// restarts arming, so a click meant for what was shown before does not approve what is shown now.
+    var identity: [String] { [request.id.uuidString, command ?? ""] }
     var options: [ACP.PermissionOption] { request.options }
     /// `1 of 3` while several requests are pending; there is no navigation between them.
     var counter: String? { count > 1 ? "1 of \(count)" : nil }
@@ -93,8 +96,8 @@ struct PermissionDock: View {
 
     var body: some View {
         if let docked = DockedPermission(session.pendingPermissions) {
-            // A new identity per request restarts arming and collapses the extra files.
-            PermissionCard(docked: docked, session: session, maxHeight: maxHeight).id(docked.id)
+            // A new identity per request, or per command, restarts arming and collapses the extra files.
+            PermissionCard(docked: docked, session: session, maxHeight: maxHeight).id(docked.identity)
         }
     }
 }

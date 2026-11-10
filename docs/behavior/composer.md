@@ -145,9 +145,10 @@ instead. The draft before a session exists is described in [session-start.md](se
   they wrap instead of truncating, and none is the default. An "always" option's tooltip is `“Always” is remembered by
   the agent, not by Agenthesia.`
 - The card never takes focus: Return and Escape stay with the composer. Only a click or ⌥⌘1…⌥⌘9 answers.
-- For 400 ms after a request appears, including the next one after an answer, the buttons look disabled and ignore
-  clicks and shortcuts. *Why:* a double click or a held ⌥⌘1 meant for one request would otherwise answer the next,
-  which appears under the same pointer.
+- For 400 ms after a request appears, including the next one after an answer, and after its command arrives or
+  changes, the buttons look disabled and ignore clicks and shortcuts. *Why:* a double click or a held ⌥⌘1 meant for
+  one request would otherwise answer the next, which appears under the same pointer, and a click meant for one command
+  would approve another.
 - VoiceOver announces `Permission request: <kind> · <paths>`, then `: ` and the first line of the command (at most 200
   characters) for a shell call, with `, 3 pending` when several are.
 

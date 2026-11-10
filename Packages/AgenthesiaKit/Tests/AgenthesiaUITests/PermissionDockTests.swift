@@ -80,6 +80,18 @@ import Testing
         #expect(try #require(DockedPermission([request(long)])).announcement.count < 260)
     }
 
+    /// A command that arrives or changes while the card is shown gives the card a new identity, which restarts arming.
+    @Test func aChangedCommandRestartsArming() throws {
+        var pending = request(.init(toolCallId: "run", title: "Bash", kind: .execute))
+        let titled = try #require(DockedPermission([pending]))
+        pending.toolCall.rawInput = ["command": "rm -rf build"]
+        let filled = try #require(DockedPermission([pending]))
+        #expect(filled.id == titled.id)
+        #expect(filled.identity != titled.identity)
+        let same = try #require(DockedPermission([pending]))
+        #expect(same.identity == filled.identity)
+    }
+
     /// The card shows a long command whole and scrolls beyond about six lines, so it grows with the command only up to
     /// a bound; exact heights depend on the system's fonts, so only the relations are checked.
     @Test func theCardGrowsWithACommandOnlyUpToAboutSixLines() async throws {

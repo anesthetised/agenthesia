@@ -52,7 +52,7 @@ and answers a command's permission request without opening the session
   more than four lines, a line counting for each 50 characters in it; the lines the card cuts end in `…`.
 - A request with a diff, or with a command that is cut, offers **Open** first (prominent), which selects the session
   to read it whole; any other request (a short command, a fetch) is answered in place (`PermissionChoice.choices`).
-- The buttons are disabled for 400 ms after the request appears, as on the docked card, because cards move when a
+- The buttons are disabled for 400 ms after the request appears or its command changes, as on the docked card, because cards move when a
   session changes section. An answer goes through `answerPermission`, so a card and a window on the same request are
   safe: a stale answer does nothing.
 - An input form is not answered on the board: its card reads `Question` and opens the session.

@@ -52,6 +52,13 @@ bubble, the label being where it came from:
   indented by two spaces, the steps separated by a blank line, then `Declined` or `Cancelled` when the form was not
   submitted.
 
+## Permission records
+
+- A permission request is a one-line record in the transcript, folded to its header (the outcome, then what was asked)
+  with a `Details` disclosure. Expanded, it shows the call with its outcome, and for a shell call the whole command in a
+  code block below the title, while the request is waiting too (#375). A waiting request shows the command of its
+  call as it is now, which includes a `rawInput` that arrived after the request.
+
 ## Interruptions and errors
 
 - A turn the user stopped (Stop, ⌘.) ends with a thin centered divider, as in T3 Code: a hairline, an X symbol,
@@ -162,6 +169,7 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-10, #375: an expanded permission record shows a shell call's whole command.
 - 2026-11-10, #341: a finished turn's work (calls, thoughts, permission records, earlier agent messages) folds into
   one `Worked for 1m 3s` row with a chevron above its answer; previously every row of a turn stayed open.
 - 2026-11-09, #340: an answered, declined or cancelled form is one question row with its answers behind a disclosure

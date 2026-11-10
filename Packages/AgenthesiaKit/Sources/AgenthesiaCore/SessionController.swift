@@ -20,8 +20,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         public let toolTitle: String?
         /// ``toolTitle``, or else the title the agent reported when it announced the call; the sidebar's reason.
         public let callTitle: String?
-        /// The tool call as known when the agent asked, which the docked card shows (ADR-0039).
-        public let toolCall: ACP.ToolCall
+        /// The tool call as known when the agent asked, which the docked card shows (ADR-0039). Later updates of the
+        /// call, such as `rawInput` that arrives after the request, are merged in as they are published.
+        public internal(set) var toolCall: ACP.ToolCall
     }
 
     /// A committed form awaiting an answer, oldest first. Draft values belong to the view.
@@ -805,6 +806,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         guard transcript.sequence != reduced.sequence else { return }
         transcript = reduced
         if title != reduced.title { title = reduced.title }
+        refreshPendingCalls()
+    }
+
+    /// An agent may send a call's `rawInput` or content after it asked for permission; the card shows them.
+    private func refreshPendingCalls() {
+        for index in pendingPermissions.indices {
+            var call = pendingPermissions[index].toolCall
+            guard let live = reduced.toolCall(call.toolCallId) else { continue }
+            if let rawInput = live.rawInput { call.rawInput = rawInput }
+            if let content = live.content { call.content = content }
+            if call != pendingPermissions[index].toolCall { pendingPermissions[index].toolCall = call }
+        }
     }
 
     @MainActor public func sessionUpdate(_ update: ACP.SessionUpdate, in sessionId: ACP.SessionID) async {

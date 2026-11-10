@@ -1105,6 +1105,36 @@ extension SessionControllerTests {
         await controller.close()
     }
 
+    @Test func aPendingRequestFollowsLaterUpdatesOfItsCall() async throws {
+        let fixture = try Fixture()
+        let controller = try await fixture.live()
+        let turn = Task { try await controller.send([.init(text: "write /tmp/unwritten.txt content")]) }
+        let agentRequest = try #require(await pending(controller).first)
+        let agentID = try #require(controller.session.agentSessionID)
+        let answer = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "run", title: "Bash", kind: .execute),
+                options: choices,
+                in: agentID
+            )
+        }
+        let request = await pending(controller, count: 2)[1]
+        #expect(PermissionCommand.of(request.toolCall) == "Bash")
+        // The agent sends the input after it asked.
+        let update = ACP.SessionUpdate.toolCallUpdate(.init(toolCallId: "run", rawInput: ["command": "ls -la"]))
+        await controller.sessionUpdate(update, in: agentID, rawNotification: try rawUpdate(update, session: agentID))
+        controller.publishTranscript()
+        let followed = try #require(controller.pendingPermissions.last)
+        #expect(followed.id == request.id && PermissionCommand.of(followed.toolCall) == "ls -la")
+        #expect(followed.toolCall.title == "Bash" && followed.toolCall.kind == .execute)
+        #expect(controller.pendingPermissions.first == agentRequest)
+        #expect(controller.answerPermission(request.id, with: "allow"))
+        #expect(await answer.value == .selected("allow"))
+        #expect(controller.answerPermission(agentRequest.id, with: "reject"))
+        try await turn.value
+        await controller.close()
+    }
+
     @Test(arguments: ["stop", "close", "withdraw"]) func pendingRequestsSettleWithoutHanging(
         ending: String
     ) async throws {

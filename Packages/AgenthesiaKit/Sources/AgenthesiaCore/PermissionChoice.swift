@@ -2,7 +2,7 @@ public import ACP
 
 /// What a surface that shows no transcript offers for a pending permission request (ADR-0046): the agent's options in
 /// the agent's order, behind **Open** when the request edits files. Answering without reading the transcript is safe
-/// for a command or a fetch; an edit is looked at first. The menu bar item reads it, and so will the session board.
+/// for a command or a fetch; an edit, or a command the surface cannot show whole, is looked at first. The menu bar item reads it, and so will the session board.
 public enum PermissionChoice: Identifiable, Equatable, Sendable {
     case open
     case option(ACP.PermissionOption)
@@ -21,6 +21,7 @@ public enum PermissionChoice: Identifiable, Equatable, Sendable {
         openAlways: Bool = false
     ) -> [PermissionChoice] {
         let hasDiff = (request.toolCall.content ?? []).contains { if case .diff = $0 { true } else { false } }
-        return (hasDiff || openAlways ? [.open] : []) + request.options.map(PermissionChoice.option)
+        let cut = PermissionCommand.of(request.toolCall).map(PermissionCommand.isCutOnBoard) ?? false
+        return (hasDiff || cut || openAlways ? [.open] : []) + request.options.map(PermissionChoice.option)
     }
 }

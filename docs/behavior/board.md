@@ -47,8 +47,11 @@ and answers a command's permission request without opening the session
 - A card whose session has a pending permission request shows the oldest request's operation line (its kind's symbol,
   the kind and the paths or the command, as on the docked card) and the agent's options as buttons in the agent's
   order, without the diff and without shortcuts.
-- A request with a diff offers **Open** first (prominent), which selects the session to read the diff; a request
-  without one (a command, a fetch) is answered in place (`PermissionChoice.choices`).
+- A shell call's command (`PermissionCommand`, as on the docked card) follows the operation line in monospaced type,
+  wrapping, in up to four lines. The card cannot tell the core how it wraps, so the command counts as cut when it has
+  more than four lines, a line counting for each 50 characters in it; the lines the card cuts end in `…`.
+- A request with a diff, or with a command that is cut, offers **Open** first (prominent), which selects the session
+  to read it whole; any other request (a short command, a fetch) is answered in place (`PermissionChoice.choices`).
 - The buttons are disabled for 400 ms after the request appears, as on the docked card, because cards move when a
   session changes section. An answer goes through `answerPermission`, so a card and a window on the same request are
   safe: a stale answer does nothing.
@@ -56,4 +59,5 @@ and answers a command's permission request without opening the session
 
 ## Changes
 
+- 2026-11-10, #375: a card shows a shell call's command in up to four lines; a command it cuts offers Open first.
 - 2026-11-09, #227: the board, the Overview row and ⌘0; a deleted session's window goes to the board.

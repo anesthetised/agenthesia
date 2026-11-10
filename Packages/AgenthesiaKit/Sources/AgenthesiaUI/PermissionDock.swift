@@ -33,15 +33,23 @@ struct DockedPermission: Equatable {
         return paths.isEmpty ? kind : "\(kind) · \(paths.joined(separator: ", "))"
     }
 
-    /// Agent-authored text, shown after the operation as secondary text.
-    var title: String? { request.toolCall.title.isEmpty ? nil : request.toolCall.title }
+    /// What an `execute` request runs, whole (#375); the card and the board show it in monospaced type.
+    var command: String? { PermissionCommand.of(request.toolCall) }
+
+    /// Agent-authored text, shown after the operation as secondary text; not again when it is the command itself.
+    var title: String? {
+        let title = request.toolCall.title
+        return title.isEmpty || title == command ? nil : title
+    }
 
     var diffs: [ACP.Diff] {
         (request.toolCall.content ?? []).compactMap { if case .diff(let diff) = $0 { diff } else { nil } }
     }
 
+    /// The command's first line is part of it, so that VoiceOver says what is asked; the card has the rest.
     var announcement: String {
-        "Permission request: \(operation)" + (count > 1 ? ", \(count) pending" : "")
+        "Permission request: \(operation)" + (command.map { ": \(PermissionCommand.firstLine($0).prefix(200))" } ?? "")
+            + (count > 1 ? ", \(count) pending" : "")
     }
 
     /// ⌥⌘1…⌥⌘9 for the first nine options.
@@ -118,6 +126,9 @@ private struct PermissionCard: View {
             if let title = docked.title {
                 Text(title).foregroundStyle(.secondary)
             }
+            if let command = docked.command {
+                CommandText(command: command)
+            }
             if let first = docked.diffs.first {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
@@ -184,6 +195,22 @@ private struct PermissionCard: View {
 
     private func answer(_ index: Int) {
         docked.answer(option: index, in: session, arming: arming)
+    }
+}
+
+/// A command whole, in monospaced selectable type that wraps, and scrolls beyond about six lines as a diff does.
+private struct CommandText: View {
+    let command: String
+    @ScaledMetric(relativeTo: .caption) private var lineHeight = 13
+
+    var body: some View {
+        let text = Text(command).font(.caption.monospaced()).textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        ViewThatFits(in: .vertical) {
+            text
+            ScrollView { text }
+        }
+        .frame(maxHeight: 6 * lineHeight)
     }
 }
 

@@ -135,6 +135,12 @@ instead. The draft before a session exists is described in [session-start.md](se
   agent's title as secondary text, and `1 of 3` while several requests are pending; there is no navigation between
   them. The first diff follows with its path (` (new file)` when it creates one); `+1 more file`, `+2 more files`
   expands the others in place. The card is at most 40 % of the column's height; the diff scrolls inside it.
+- A shell call (kind `execute`) shows its command below the title, whole, in monospaced selectable text that wraps. It
+  scrolls inside the card beyond about six lines, as the diff does. The command is `rawInput.command` when that is a
+  string; when it is an argument array, the arguments joined with shell quoting, without a leading `bash -lc` or
+  `sh -c`; else the call's first text content; else its title (`PermissionCommand`). A title that is the command is
+  not shown twice. The card follows the tool call: a `rawInput` or content that arrives after the request replaces
+  what the card shows (#375).
 - Buttons follow the agent's order and names, each with its shortcut beside it (`⌥⌘1` to `⌥⌘9` for the first nine);
   they wrap instead of truncating, and none is the default. An "always" option's tooltip is `“Always” is remembered by
   the agent, not by Agenthesia.`
@@ -142,7 +148,8 @@ instead. The draft before a session exists is described in [session-start.md](se
 - For 400 ms after a request appears, including the next one after an answer, the buttons look disabled and ignore
   clicks and shortcuts. *Why:* a double click or a held ⌥⌘1 meant for one request would otherwise answer the next,
   which appears under the same pointer.
-- VoiceOver announces `Permission request: <kind> · <paths>`, with `, 3 pending` when several are.
+- VoiceOver announces `Permission request: <kind> · <paths>`, then `: ` and the first line of the command (at most 200
+  characters) for a shell call, with `, 3 pending` when several are.
 
 ## Docked questions
 
@@ -209,6 +216,8 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
 
 ## Changes
 
+- 2026-11-10, #375: the docked card shows a shell call's command whole in monospaced selectable text (scrolling beyond
+  about six lines) and follows `rawInput` that arrives later; VoiceOver's announcement includes its first line.
 - 2026-11-09, #326: an agent's questions dock in the composer and are answered one step at a time; Return reads Next
   or Answer and never queues while a form waits; Stop no longer replaces the round button while a form waits.
 - 2026-11-09, #326: Back returns to the previous question of a docked form, keeping every step's answers.

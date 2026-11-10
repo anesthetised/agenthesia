@@ -269,6 +269,15 @@ the first-run, text-size and VoiceOver items.
 
 The issues of this milestone touch views, not the session core, so they run beside M13's waves.
 
+Progress:
+
+- #375 (a command's permission request) landed: `PermissionCommand` (Core, pure) gives an `execute` request's command
+  (`rawInput.command`, an argument array shell-quoted without its `bash -lc` wrapper, the first text content, the
+  title); the docked card, the board card and the expanded transcript record show it, and a pending request follows
+  `rawInput` and content sent after it asked. No recorded traffic of Claude, Codex or Kimi is in the repository, so
+  the test fixtures are the shapes those agents are known to send, built from the ACP schema. The running-app check
+  in light and dark is pending.
+
 Pitfalls known so far:
 
 - #352 changes which rows ⌘1…⌘9, Previous and Next Session and the board visit; `SessionSidebar` is the one place that

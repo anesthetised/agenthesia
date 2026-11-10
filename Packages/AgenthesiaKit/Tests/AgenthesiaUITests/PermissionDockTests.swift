@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import JSONRPC
 import SwiftUI
 import Testing
 
@@ -48,6 +49,78 @@ import Testing
         #expect(several.operation == "Execute" && several.title == nil && several.diffs.isEmpty)
         #expect(several.announcement == "Permission request: Execute, 3 pending")
         #expect(DockedPermission([]) == nil)
+    }
+
+    @Test func theCardShowsACommandAndAnnouncesItsFirstLine() throws {
+        let raw = ACP.ToolCall(
+            toolCallId: "run",
+            title: "Bash",
+            kind: .execute,
+            rawInput: ["command": "for n in 1 2\ndo echo $n\ndone"]
+        )
+        let docked = try #require(DockedPermission([request(raw), request(raw)]))
+        #expect(docked.command == "for n in 1 2\ndo echo $n\ndone")
+        #expect(docked.title == "Bash")
+        #expect(docked.announcement == "Permission request: Execute: for n in 1 2, 2 pending")
+        // A title that is the command is not shown twice.
+        let titled = try #require(
+            DockedPermission([request(.init(toolCallId: "run", title: "swift test", kind: .execute))])
+        )
+        #expect(titled.command == "swift test" && titled.title == nil)
+        #expect(titled.announcement == "Permission request: Execute: swift test")
+        // Only a shell call has one.
+        let edit = try #require(DockedPermission([request(.init(toolCallId: "e", title: "Write", kind: .edit))]))
+        #expect(edit.command == nil && edit.title == "Write")
+        let long = ACP.ToolCall(
+            toolCallId: "l",
+            title: "",
+            kind: .execute,
+            rawInput: ["command": .string(String(repeating: "x", count: 500))]
+        )
+        #expect(try #require(DockedPermission([request(long)])).announcement.count < 260)
+    }
+
+    /// The card shows a long command whole and scrolls beyond about six lines, so it grows with the command only up to
+    /// a bound; exact heights depend on the system's fonts, so only the relations are checked.
+    @Test func theCardGrowsWithACommandOnlyUpToAboutSixLines() async throws {
+        _ = NSApplication.shared
+        let fixture = try await Fixture()
+        let controller = fixture.controller
+        try await controller.submit([.init(text: "slow")])
+        try await waitUntil { controller.status == .running }
+        let agentID = try #require(controller.session.agentSessionID)
+        let window = OffscreenWindow(size: .init(width: 500, height: 900))
+        defer { window.close() }
+        func height(of command: String) async throws -> CGFloat {
+            let call = ACP.ToolCallUpdate(
+                toolCallId: UUID().uuidString,
+                title: "Bash",
+                kind: .execute,
+                rawInput: ["command": .string(command)]
+            )
+            let answer = Task { await controller.requestPermission(for: call, options: options, in: agentID) }
+            try await waitUntil { !controller.pendingPermissions.isEmpty }
+            let host = NSHostingView(rootView: PermissionDock(session: controller, maxHeight: 800))
+            window.contentView = host
+            window.orderFront(nil)
+            for _ in 0..<10 {
+                try await Task.sleep(for: .milliseconds(10))
+                host.layoutSubtreeIfNeeded()
+            }
+            let height = host.fittingSize.height
+            let request = try #require(controller.pendingPermissions.first)
+            #expect(controller.answerPermission(request.id, with: "reject"))
+            _ = await answer.value
+            return height
+        }
+        let one = try await height(of: "swift test")
+        let six = try await height(of: (1...6).map { "echo \($0)" }.joined(separator: "\n"))
+        let twenty = try await height(of: (1...20).map { "echo \($0)" }.joined(separator: "\n"))
+        #expect(six > one)
+        // Twenty lines show as six: the rest scrolls.
+        #expect(twenty > one && twenty < six + 4 * 13)
+        try await controller.stop()
+        await fixture.remove()
     }
 
     @Test func shortcutsNumberTheFirstNineOptions() {

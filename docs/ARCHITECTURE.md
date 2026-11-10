@@ -337,7 +337,9 @@ and, while it is collapsed, only the kept items after it; expanded, the turn's i
 turn's first prompt (items only append, and an earlier turn's end, time and item kinds are final) and folds again only
 the last turn's items on each state change, so a streamed chunk costs the running turn, not the history (S11 found the
 full fold on every chunk costly). A change of group or turn expansion starts it over; another session's transcript
-too. The source keys turn expansion by turn, and `reveal(item:)` expands a turn that hides the item. The row
+too. It finds a fold by its row or by an item it holds with a binary search over the folds, which are sorted by first
+item, since the table asks for every row it shows on each update. The source keys turn expansion by turn, and
+`reveal(item:)` expands a turn that hides the item. The row
 (`TranscriptMessage.Kind.turn`) is a borderless button with the label and a trailing chevron over a separator, built by
 `TranscriptMessageRow.showTurn`; it has no Markdown and no Copy. A running turn never folds, so streamed chunks leave
 its rows as they were. The Rendering Lab's S11 streams S10's thoughts with S9's tool updates in a new turn

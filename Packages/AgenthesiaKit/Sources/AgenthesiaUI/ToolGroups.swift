@@ -155,8 +155,9 @@ struct TranscriptFolder {
     /// The first item of the last turn: items before it, and their first `settledRows` rows, are final.
     private(set) var settled = 0
     private var settledRows = 0
-    /// The final turns' folds by their first item, and the last turn's.
-    private var settledTurns: [Int: TurnFold] = [:]
+    /// The final turns' folds and the last turn's, each in transcript order: their items never overlap, so both are
+    /// sorted by first item and searched in halves.
+    private var settledTurns: [TurnFold] = []
     private var lastTurns: [TurnFold] = []
     /// How many items the last update folded, so tests can see that it does not grow with the history.
     private(set) var foldedItems = 0
@@ -193,7 +194,7 @@ struct TranscriptFolder {
                 isExpanded: isExpanded,
                 turns: turns
             )
-            for turn in turns { settledTurns[turn.items.lowerBound] = turn }
+            settledTurns += turns
             (settled, settledRows) = (last, rows.count)
         }
         lastTurns = TranscriptRow.turnFolds(settled..<count, part: part, finished: finished, isExpanded: isTurnExpanded)
@@ -206,14 +207,24 @@ struct TranscriptFolder {
         )
     }
 
-    /// The fold whose row is at item `first`.
+    /// The fold whose row is at item `first`. The table asks for every row it shows on each update.
     func turn(at first: Int) -> TurnFold? {
-        settledTurns[first] ?? lastTurns.first { $0.items.lowerBound == first }
+        turn(containing: first).flatMap { $0.items.lowerBound == first ? $0 : nil }
     }
 
-    /// The fold that holds item `index`; it searches every turn, so only for a user's step such as Find.
+    /// The fold that holds item `index`.
     func turn(containing index: Int) -> TurnFold? {
-        lastTurns.first { $0.items.contains(index) } ?? settledTurns.values.first { $0.items.contains(index) }
+        Self.turn(containing: index, in: index < settled ? settledTurns : lastTurns)
+    }
+
+    /// The last of `turns` that starts at or before `index`, if it holds it.
+    private static func turn(containing index: Int, in turns: [TurnFold]) -> TurnFold? {
+        var (low, high) = (0, turns.count)
+        while low < high {
+            let middle = (low + high) / 2
+            if turns[middle].items.lowerBound <= index { low = middle + 1 } else { high = middle }
+        }
+        return low > 0 && turns[low - 1].items.contains(index) ? turns[low - 1] : nil
     }
 }
 

@@ -135,6 +135,45 @@ import Testing
         #expect(folder.turn(containing: 12) == nil)
     }
 
+    @Test func theFolderFindsATurnByItsRowOrItemsInHalves() {
+        // 200 turns of five shapes, one without a fold, the last one finished too.
+        let shapes = ["pwa", "pqwqa", "pa", "pwwo", "opPwta"]
+        var parts: [TranscriptRow.TurnPart] = []
+        for index in 0..<200 {
+            let turn = UUID()
+            for item in shapes[index % shapes.count] {
+                switch item {
+                case "p", "P": parts.append(.prompt(turn))
+                case "a": parts.append(.answer)
+                case "q": parts.append(.question)
+                case "o": parts.append(.other)
+                default: parts.append(.work)
+                }
+            }
+        }
+        var folder = TranscriptFolder()
+        folder.update(
+            count: parts.count,
+            part: { parts[$0] },
+            isToolCall: { _ in false },
+            isThought: { _ in false },
+            isExpanded: { _ in false },
+            finished: { _ in true },
+            isTurnExpanded: { _ in false }
+        )
+        let all = TranscriptRow.turnFolds(
+            count: parts.count,
+            part: { parts[$0] },
+            finished: { _ in true },
+            isExpanded: { _ in false }
+        )
+        #expect(all.count == 160 && folder.settled > 0)
+        for index in 0..<parts.count {
+            #expect(folder.turn(at: index) == all.first { $0.items.lowerBound == index }, "row at \(index)")
+            #expect(folder.turn(containing: index) == all.first { $0.items.contains(index) }, "item \(index)")
+        }
+    }
+
     // MARK: - The live transcript
 
     private static let start = Date(timeIntervalSinceReferenceDate: 1_000)

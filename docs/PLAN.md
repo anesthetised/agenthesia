@@ -68,11 +68,11 @@ order". Tiers are on the issues.
 | Lane | Sequence |
 |---|---|
 | Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
-| Performance (M19) | #97 → #372 → #367 → #370 → #368 → #369 → #371 → #77, #78, #83 |
+| Performance (M19) | #396 → #97 → #372 → #367 → #370 → #368 → #369 → #371 → #77, #78, #83 |
 | Interface (M20) | #374, #351, #375, #395, #390 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #97 and #372; #374, #351, #375, #395 and #390.
+The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #374, #351, #375, #395 and #390.
 
 Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
@@ -83,7 +83,7 @@ needs #357 and #60.
 |---|---|
 | `SessionController.swift` and the queue | #373, then #390, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
-| `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #367, then #369, then #312 (the typed row model) |
+| `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
 | `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
 | `SessionSidebar.swift` and the sidebar's views | #352, #353, #381, #385, then #363 and #364 |
 | `PromptQueue.swift` and the composer | #390, #391, #393, #392, #394, then #366 |
@@ -207,6 +207,7 @@ and peak memory are not measured. Every benchmark run needs the owner's approval
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
+| 1 | #396 fix: scrolling a transcript drops frames (reported by the owner from a Release build; profile first, then row reuse, cached heights, Markdown prepared off the main actor) | `agent:strong` | — |
 | 1 | #97 End-to-end streaming bench: the real controller, store and table with 1, 4 and 8 sessions | `agent:strong` | — |
 | 1 | #372 Count-based performance invariants in `just test` | `agent:light` | — |
 | 1 | #367 Update the transcript table only on change | `agent:strong` | — |

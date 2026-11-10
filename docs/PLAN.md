@@ -44,7 +44,7 @@ before implementation.
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
-| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
+| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3; #373 landed (`createRemote` copies the session record, so `fallbackUpstream` reaches the row; a test reads every column of a started session's row) |
 | M19 Performance | Planned on 2026-11-10 |
 | M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
 | M10 Release | After M13 |
@@ -67,27 +67,27 @@ order". Tiers are on the issues.
 
 | Lane | Sequence |
 |---|---|
-| Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
+| Core (M13) | #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
 | Interface (M20) | #234, #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
 | Test stability (M10) | #134 → #133, before #355 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
+The first step is the head of each lane: #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
 #397; #134.
 
 #134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
 cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
 instability is not specific to CI.
 
-Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
+Dependencies across lanes: #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
 
 **Where the lanes meet.** These files are changed by more than one lane; the order below avoids rebasing large changes.
 
 | Files | Order |
 |---|---|
-| `SessionController.swift` and the queue | #373, then #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
+| `SessionController.swift` and the queue | #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
 | `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
 | `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
@@ -238,7 +238,7 @@ the first-run, text-size and VoiceOver items.
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
-| 1 | #373 fix: store `fallbackUpstream` with the session record | `agent:light` | — |
+| 1 | #373 fix: store `fallbackUpstream` with the session record (landed) | `agent:light` | — |
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |

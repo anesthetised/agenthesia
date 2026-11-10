@@ -73,8 +73,9 @@ This ADR records the owner's decisions of 2026-11-10. ADR-0049 stays in force wh
 - **Results are held, not dropped.** ADR-0049 dropped the deliveries owed to a stopped session, as T3 Code does. Under
   the hold a delivery waits in the queue, visible and deletable, and the agent learns what happened when the user lets
   it go on.
-- **The hold is released per session.** Resuming a parent leaves its held children held; a message the parent sends to
-  one of them gets `held`, and `next` tells the agent that the user holds that session.
+- **Resume reaches the subtree.** Resume Queue on a session resumes its queue and the paused queues of all its
+  descendants, as Stop paused them. The user's message releases only the session it is sent in: until the user resumes,
+  a message the parent sends to a held child gets `held`, and `next` tells the agent that the user holds that session.
 
 ### Chains are counted, not limited
 
@@ -167,6 +168,9 @@ cost (#365).
   Stop stops it. It can still be added from the stored origins without a migration.
 - **A hold separate from the pause**: a second stored state for the same thing. The pause already ends with the user's
   send or Resume (ADR-0029), which is the release the owner chose.
+- **Releasing the hold one session at a time**: Resume on a parent would leave its held children held, so after a Stop
+  each child waits for the user separately. Rejected by the owner on 2026-11-10 in favour of a Resume that reaches the
+  subtree, which mirrors Stop.
 - **Dropping deliveries on Stop**, as T3 Code and ADR-0049 do: no turn starts either way, but a dropped result leaves
   the agent unaware of what its children did.
 
@@ -183,8 +187,9 @@ cost (#365).
   and routes Stop through the session manager (#356), the queue (#357), the sticky Stop (#358) and the removal of the
   legacy `send` path (#359) land before `delegate` and `session_send`; the socket (#360), the `MCP` module's tool-call
   context and cancellation (#361) and the wrapper (#362) beside them. The order is in [PLAN.md](../PLAN.md).
-- **Held children are released one by one.** After a Stop on a parent, each child waits for the user. If that proves
-  tedious, Resume on a parent can reach its subtree; that is a UI change.
+- **Resume also releases a child that paused on its own.** A descendant whose queue paused after its own error or
+  refusal is resumed with the rest of the subtree; Resume on that child alone is the way to release only part of a
+  tree.
 - **A held queue has no bound** (#346); with edges and Stop Tree, only the tree can fill it.
 - **The process-group check may fail for a real agent** that starts its MCP servers in a group of their own; the check
   is then dropped, and a token in the agent's environment is again enough to act as the session.

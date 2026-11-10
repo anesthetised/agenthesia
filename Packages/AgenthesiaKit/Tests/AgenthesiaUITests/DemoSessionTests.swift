@@ -110,6 +110,71 @@ struct DemoSessionTests {
         session.stop()
     }
 
+    /// An `NSScrollView` subclass that overrides `scrollWheel(with:)` loses responsive scrolling (#396).
+    @Test func theTranscriptScrollsResponsively() {
+        let controller = TranscriptTableController()
+        #expect(type(of: controller.scroll).isCompatibleWithResponsiveScrolling)
+        #expect(type(of: controller.scroll.contentView).isCompatibleWithResponsiveScrolling)
+        #expect(type(of: controller.table).isCompatibleWithResponsiveScrolling)
+    }
+
+    /// A mouse wheel without the phases of a trackpad's gestures still stops the transcript from following its end:
+    /// AppKit animates its scroll as a live scroll. The animation runs on the display link, so the window is on a screen.
+    @Test func aLegacyWheelStopsFollowingTheStreamingEnd() async throws {
+        let session = DemoSession()
+        let token = try #require(session.begin("Hello"))
+        session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
+        let controller = TranscriptTableController()
+        let window = host(controller, drivesDisplayLink: true)
+        defer { window.close() }
+        controller.update(session)
+        _ = controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true)
+        controller.table.noteHeightOfRows(withIndexesChanged: [3])
+        controller.table.layoutSubtreeIfNeeded()
+        controller.scrollToEnd()
+        #expect(controller.followsEnd)
+
+        // Ten lines up, more than `followsBottom`'s tolerance.
+        let cgEvent = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .line,
+            wheelCount: 1,
+            wheel1: 10,
+            wheel2: 0,
+            wheel3: 0
+        )
+        let event = try #require(cgEvent.flatMap(NSEvent.init(cgEvent:)))
+        let end = LiveScrollEnd(of: controller.scroll)
+        controller.scroll.scrollWheel(with: event)
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !end.ended, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(end.ended)
+        #expect(!controller.followsEnd)
+
+        let origin = controller.scroll.contentView.bounds.origin
+        session.receive("Another paragraph.\n\n", for: token)
+        controller.update(session)
+        await nextMainTurn()
+        #expect(abs(controller.scroll.contentView.bounds.origin.y - origin.y) < 1)
+        session.stop()
+    }
+
+    /// Whether a scroll view posted the end of a live scroll since it was made.
+    @MainActor private final class LiveScrollEnd {
+        private(set) var ended = false
+        private var observer: (any NSObjectProtocol)?
+
+        init(of scroll: NSScrollView) {
+            observer = NotificationCenter.default.addObserver(
+                forName: NSScrollView.didEndLiveScrollNotification,
+                object: scroll,
+                queue: .main
+            ) { [weak self] _ in MainActor.assumeIsolated { self?.ended = true } }
+        }
+
+        isolated deinit { observer.map(NotificationCenter.default.removeObserver) }
+    }
+
     @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() async throws {
         let session = DemoSession()
         let controller = TranscriptTableController()
@@ -331,8 +396,8 @@ struct DemoSessionTests {
         }
     }
 
-    private func host(_ controller: TranscriptTableController) -> NSWindow {
-        let window = OffscreenWindow(size: .init(width: 600, height: 300))
+    private func host(_ controller: TranscriptTableController, drivesDisplayLink: Bool = false) -> NSWindow {
+        let window = OffscreenWindow(size: .init(width: 600, height: 300), drivesDisplayLink: drivesDisplayLink)
         controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = 600
         window.contentView = controller.scroll

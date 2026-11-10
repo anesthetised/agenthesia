@@ -103,8 +103,6 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         }
         table.willNavigate = { [weak self] in self?.followingBottom = false }
         table.didNavigate = { [weak self] in self?.userDidScroll(nil) }
-        scroll.willNavigate = { [weak self] in self?.followingBottom = false }
-        scroll.didNavigate = { [weak self] in self?.userDidScroll(nil) }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(userWillScroll),
@@ -452,16 +450,9 @@ final class TranscriptTableView: NSTableView {
     }
 }
 
-final class TranscriptScrollView: NSScrollView {
-    var willNavigate: (() -> Void)?
-    var didNavigate: (() -> Void)?
-
-    override func scrollWheel(with event: NSEvent) {
-        willNavigate?()
-        super.scrollWheel(with: event)
-        didNavigate?()
-    }
-}
+/// The transcript's scroll view. It overrides no event method, so it stays compatible with responsive scrolling (#396):
+/// the controller follows the reader through the live-scroll notifications, which wheel, trackpad and scroller all post.
+final class TranscriptScrollView: NSScrollView {}
 
 /// How firmly a row's content keeps its own height: above the height AppKit gives a row (priority 500), so a row last
 /// measured at another width shrinks to its content instead of stretching it.

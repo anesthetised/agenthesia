@@ -44,7 +44,7 @@ before implementation.
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
-| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
+| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049 with [ADR-0051](adr/0051-turns-between-sessions.md) (#354); a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
 | M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
 | M10 Release | After M13 |
@@ -140,10 +140,12 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 4 | #321 Verify in the running app | `agent:light` | all |
 
 **Session core, before wave 3 (2026-11-10).** The owner's review of 2026-11-10 changed several decisions of ADR-0049's
-*Turns started by agents*; ADR-0051 (#354) records them. `session_send` works only inside a delegation tree and can
-ask for a reply, delivered like a delegated result; the user's Stop is sticky, with Stop Tree and Stop All Agents;
-chains get a counter per tree, no limit and no pause; the queue takes several authors. Not taken and kept on record:
-#344 (a pause), #345 (sending beyond the tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
+*Turns started by agents*; [ADR-0051](adr/0051-turns-between-sessions.md) (#354) records them. `session_send` works
+only along a delegation edge (a parent and its children) and can ask for a reply, delivered like a delegated result;
+every outcome of a task is delivered; a paused queue holds what the user did not send, so the user's Stop is sticky and
+reaches the stopped session's subtree, with Stop Tree and Stop All Agents; chains get a counter per tree, no limit and
+no pause; the queue takes several authors. Not taken and kept on record: #344 (a pause), #345 (sending beyond the
+tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
@@ -165,6 +167,9 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
+  and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
+  3 were aligned with it.
 - #311 (turn origins): `QueuedPrompt.Origin` in the event log, the labelled transcript row, the sidebar reason and the
   wrapper the agent receives, covered by Swift Testing and a hosted row test. No tool produces another origin yet, so
   the running-app check in light and dark waits for #321, together with `docs/behavior/tools.md` (#312). A source
@@ -197,7 +202,8 @@ Pitfalls known so far:
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with
-  no limit on chains (ADR-0049), Stop is the only brake, so #317 tests Stop depth first carefully.
+  no limit on chains, the sticky Stop is the only brake (ADR-0051), so #358 and #317 test that a paused queue holds
+  every message the user did not send, in the stopped session's whole subtree, and that a held result is never lost.
 - New event kinds and a migration of the sessions table (#60); older builds skip unknown kinds, and the migration gets a
   test on the previous schema file, as #231 did.
 - `html_render` (#315) must not put a web view in the transcript table; the streaming benchmarks are the gate, run with

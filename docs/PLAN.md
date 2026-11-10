@@ -44,9 +44,9 @@ before implementation.
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
-| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3; #373 landed (`createRemote` copies the session record, so `fallbackUpstream` reaches the row; a test reads every column of a started session's row) |
+| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
-| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
+| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row |
 | M10 Release | After M13 |
 | M5 Terminals | #61 and #67 wait for an agent that calls `terminal/create` (#104); #131 is open |
 | M9, M11, M12, M14, M17 | Not scheduled |

@@ -33,8 +33,10 @@ system; the app has no setting for it.
 - Choosing an option answers the request in place and does not open a window. Open comes first in the submenu even for
   a request without a diff, because the submenu replaces the item that would open the session; the [board](board.md) offers Open
   first only for a request with a diff (`PermissionChoice.choices`).
-- A request answered elsewhere meanwhile is gone: a stale choice does nothing.
+- A choice answers the request the submenu listed. If that request was answered elsewhere meanwhile, the choice does
+  nothing, even when another request is now the oldest.
 
 ## Changes
 
+- 2026-11-10, #374: an option answers the request the submenu listed, not whichever is oldest when it is clicked.
 - 2026-11-09, #228: the menu bar item, its menu and the count.

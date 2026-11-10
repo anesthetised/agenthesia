@@ -180,9 +180,9 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
 - Pull requests are squash-merged, so each lands on `main` as one commit. Commits on a branch are
   working history: commit freely, and write the pull request title and description in Conventional
   Commits form with `Closes`/`Refs`, because they become the squashed commit's message.
-- Committing is fine at any time. **Never push** unless explicitly asked to.
-- Track substantial changes in issues and implement them on separate branches. Obtain the user's
-  approval before opening a pull request; pushing still requires an explicit request.
+- Committing is fine at any time. Push a branch and open its pull request without asking; merging a pull
+  request and pushing to `main` need the owner's go-ahead.
+- Track substantial changes in issues and implement them on separate branches.
 - Keep issues accurate: apply labels and a milestone, tick checkboxes as their items land, and link
   commits and pull requests with `Closes`/`Refs`.
 - When planning work, label each issue with its model tier (`agent:light` or `agent:strong`).

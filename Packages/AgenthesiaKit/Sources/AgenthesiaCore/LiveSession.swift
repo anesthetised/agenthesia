@@ -80,6 +80,8 @@ public final class LiveSession {
     /// Keeps the agent's confirmed mode and model as the next draft's hints (ADR-0040) and whether its start met
     /// sign-in; set by `SessionManager`.
     @ObservationIgnored var catalog: AgentCatalog?
+    /// How the session's agent reaches the agenthesia server (ADR-0049); set by `SessionManager`.
+    @ObservationIgnored var mcp: MCPEndpoint?
     // Test seam for a suspended environment lookup; production shares the login-shell resolver.
     @ObservationIgnored var environment = LiveSession.shellEnvironment
 
@@ -276,6 +278,9 @@ public final class LiveSession {
             checkout = await SessionWorkspace.linkedCheckout(of: URL(filePath: controller.session.workingDirectory))
             guard !isClosed else { return }
             self.controller = controller
+            // A token for the session's agent, revoked when the agent stops for good; Continue is a new owner and
+            // gets a new one.
+            if let mcp { controller.mcpServers = [mcp.server(for: controller.session.id)] }
             controller.onConfigOptions = { [weak self] options in
                 guard let self, let agent = self.agent else { return }
                 self.catalog?.rememberHints(options, for: agent)
@@ -687,6 +692,7 @@ public final class LiveSession {
         guard releasingLease else { return }
         lease?.release()
         lease = nil
+        if let mcp, let id = sessionID { mcp.tokens.revoke(id) }
     }
 
     private func observeFailure() {

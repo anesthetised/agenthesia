@@ -1,5 +1,6 @@
 public import ACP
 public import Foundation
+public import MCP
 import Observation
 public import Persistence
 import Workspace
@@ -37,6 +38,10 @@ public final class SessionManager {
     @ObservationIgnored public var catalog: AgentCatalog?
     /// The tokens the `agenthesia-mcp` helper presents to the app's socket (ADR-0049).
     @ObservationIgnored public let mcpTokens = MCPTokens()
+    /// How agents reach the server; nil until the app's socket listens, and then sessions pass no server (ADR-0049).
+    @ObservationIgnored public var mcp: MCPEndpoint?
+    /// The tools of the agenthesia server, made for each connection's caller (ADR-0049).
+    @ObservationIgnored public var mcpTools: [MCPToolFactory] = []
     private let worktreesRoot: URL
     let scratchRoot: URL
     /// The root of the project that sessions without a project belong to (ADR-0048), for `ProjectRecord.isScratch`.
@@ -389,6 +394,7 @@ public final class SessionManager {
         let owner = LiveSession(library: library)
         if let environment { owner.environment = environment }
         owner.catalog = catalog
+        owner.mcp = mcp
         owner.originLabel = { [weak self] in self?.originLabel($0) ?? $0.label(title: nil, agent: nil) }
         owners.append(owner)
         owner.begin(launch, after: previous, initialPrompt: initialPrompt)

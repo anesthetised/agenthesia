@@ -5,8 +5,8 @@ GitHub stay the source of truth for scope; this file records order, dependencies
 so far. Update it when a step lands or the order changes. Finished milestones are in
 [plan-archive.md](plan-archive.md).
 
-Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request after the
-owner's approval. Architectural choices are presented to the owner as options with a recommendation
+Every step follows [AGENTS.md](../AGENTS.md): issue → branch → tests and docs → pull request; the
+owner approves the merge. Architectural choices are presented to the owner as options with a recommendation
 before implementation.
 
 ## State (2026-11-10)
@@ -44,9 +44,9 @@ before implementation.
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
-| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
+| M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049 with [ADR-0051](adr/0051-turns-between-sessions.md) (#354); a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
-| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
+| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row |
 | M10 Release | After M13 |
 | M5 Terminals | #61 and #67 wait for an agent that calls `terminal/create` (#104); #131 is open |
 | M9, M11, M12, M14, M17 | Not scheduled |
@@ -67,27 +67,36 @@ order". Tiers are on the issues.
 
 | Lane | Sequence |
 |---|---|
-| Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
+| Core (M13) | #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #234, #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
-| Test stability (M10) | #134 → #133, before #355 |
+| Interface (M20) | #234, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
+| Test stability (M10) | #133, before #355 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
-#397; #134.
+The first step is the head of each lane: #355 (after #133); #396, then #97 and #372; #234, #395, #390 and #397; #133.
+Landed from the lane heads on 2026-11-10: #373, #354, #71, #134, #374, #351, #375.
 
 #134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
 cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
 instability is not specific to CI.
 
-Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
+**#134 (the CI test log).** `coverage.py` ran `swift test` with the inherited standard output, a pipe on CI, so the test
+process block-buffered it: the log came in bursts, and what was still buffered at the 120-second kill was lost. A local
+check reproduced it: 358 lines of an `AgentRuntimeTests` run arrived at two timestamps. `run_test_process` now runs the
+tests on a pseudo-terminal and relays their output line by line, which makes them line-buffered (the output has no
+colour codes). At the process timeout it first prints the tests that started and did not finish, then takes the stack
+sample. Tests: `scripts/test_coverage.py`, including a check that a pipe reader sees a line while the child still runs.
+Open: look at a CI log, where each `started`, `passed` and `failed` line should carry its own time, and the list after a
+timeout should name the stuck tests.
+
+Dependencies across lanes: #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
 
 **Where the lanes meet.** These files are changed by more than one lane; the order below avoids rebasing large changes.
 
 | Files | Order |
 |---|---|
-| `SessionController.swift` and the queue | #373, then #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
+| `SessionController.swift` and the queue | #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
 | `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
 | `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
@@ -140,10 +149,12 @@ Issues, in order. Within a wave the issues are independent apart from the listed
 | 4 | #321 Verify in the running app | `agent:light` | all |
 
 **Session core, before wave 3 (2026-11-10).** The owner's review of 2026-11-10 changed several decisions of ADR-0049's
-*Turns started by agents*; ADR-0051 (#354) records them. `session_send` works only inside a delegation tree and can
-ask for a reply, delivered like a delegated result; the user's Stop is sticky, with Stop Tree and Stop All Agents;
-chains get a counter per tree, no limit and no pause; the queue takes several authors. Not taken and kept on record:
-#344 (a pause), #345 (sending beyond the tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
+*Turns started by agents*; [ADR-0051](adr/0051-turns-between-sessions.md) (#354) records them. `session_send` works
+only along a delegation edge (a parent and its children) and can ask for a reply, delivered like a delegated result;
+every outcome of a task is delivered; a paused queue holds what the user did not send, so the user's Stop is sticky and
+reaches the stopped session's subtree, with Stop Tree and Stop All Agents; chains get a counter per tree, no limit and
+no pause; the queue takes several authors. Not taken and kept on record: #344 (a pause), #345 (sending beyond the
+tree), #346 (a queue cap), #347 (`session_read` limited to the tree).
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
@@ -165,6 +176,9 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
+  and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
+  3 were aligned with it.
 - #311 (turn origins): `QueuedPrompt.Origin` in the event log, the labelled transcript row, the sidebar reason and the
   wrapper the agent receives, covered by Swift Testing and a hosted row test. No tool produces another origin yet, so
   the running-app check in light and dark waits for #321, together with `docs/behavior/tools.md` (#312). A source
@@ -185,6 +199,14 @@ Pitfalls known so far:
   (the session id exists there, before `session/new`) and for `load`/`resume`, revokes it when the owner closes, and
   replaces the app delegate's empty `serve` with the `MCP` server. The hello is the bare token and a newline; the socket
   reads it a byte at a time so the first JSON-RPC line is never consumed with it.
+- #71 (2026-11-10): sessions pass the `agenthesia` stdio server in `session/new`, `load` and `resume` and serve each
+  connection with `MCP.server`; the gate is `MCPCaller.requiringTurn`, which the tools of #318 and #320 and `delegate`
+  (#60) wrap themselves with, and tools are added to `SessionManager.mcpTools`. MockAgent starts the servers it is
+  given and has the verb `mcp <tool> <json>`; `acp-cli chat --agenthesia-mcp` serves the server for its one session
+  (no tools yet). Tests start a real MockAgent, helper and socket for new, resume and load, and check the gate with a
+  tool registered in the test. Not checked in the running app (needs the app build and the helper in the bundle; #321
+  does it) and `docs/behavior/tools.md` waits for #312, since nothing is visible yet. Still open: the socket's checks
+  on every call and closing connections on revoke (#360), the tool-call context and cancellation (#361).
 - The app target embeds the helper through an *Embed Helpers* copy phase (`Contents/Helpers`, *Code Sign On Copy*) that
   references the package product, plus a target dependency on it; the copy is signed with the app's identity.
 - #56, running app (2026-11-09, scripted without UI input, Debug `.dev` build, `CFFIXED_USER_HOME` in a temporary
@@ -193,11 +215,12 @@ Pitfalls known so far:
   `Cannot listen for agenthesia-mcp: … Address already in use` and the first kept answering; after SIGTERM the socket
   file stayed, and the next launch replaced it and listened. `codesign --verify --deep --strict` passed, and the helper
   links only system libraries. Not checked: a quit through the menu (the socket is not closed on quit either, which is
-  harmless since the next launch replaces it), and a connection with a live token, which needs #71.
+  harmless since the next launch replaces it), and a connection with a live token (checked by #71's tests with a real helper).
 - The socket path must stay under `sun_path`'s 104 bytes, also under `CFFIXED_USER_HOME` in a `mktemp -d` folder; and
   the `.dev` build, the installed app and a check build must never share a socket.
 - Calls that start work (`delegate`, `session_send`, `task_run`) are refused without a running turn in the caller; with
-  no limit on chains (ADR-0049), Stop is the only brake, so #317 tests Stop depth first carefully.
+  no limit on chains, the sticky Stop is the only brake (ADR-0051), so #358 and #317 test that a paused queue holds
+  every message the user did not send, in the stopped session's whole subtree, and that a held result is never lost.
 - New event kinds and a migration of the sessions table (#60); older builds skip unknown kinds, and the migration gets a
   test on the previous schema file, as #231 did.
 - `html_render` (#315) must not put a web view in the transcript table; the streaming benchmarks are the gate, run with
@@ -238,7 +261,7 @@ the first-run, text-size and VoiceOver items.
 
 | Order | Issue | Tier | Depends on |
 |---|---|---|---|
-| 1 | #373 fix: store `fallbackUpstream` with the session record | `agent:light` | — |
+| 1 | #373 fix: store `fallbackUpstream` with the session record (landed) | `agent:light` | — |
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
@@ -271,12 +294,30 @@ The issues of this milestone touch views, not the session core, so they run besi
 
 Progress:
 
+- Running-app check of #374, #351, #375 and #71 (2026-11-10): one Debug build with the four branches merged, a fresh
+  bundle identifier, `CFFIXED_USER_HOME` in a temporary folder, MockAgent, light and dark, scripted with
+  `scripts/app-check`. Seen: the menu bar submenu lists the request and Reject answers it; the `Run interrupted`
+  divider spans the column at 1300 and 820 pt; the docked card, the board card (four lines, Open first when cut) and
+  the expanded record show the command, and the card picks up a command sent a second after the request;
+  `mcp environment {}` answers `no server offers environment`, so the bundled helper connected with the session's
+  token. Not driven by script: the stale menu click (AppKit tracks the open menu; the hosted test covers it),
+  VoiceOver's announcement, `showNotice`.
 - #375 (a command's permission request) landed: `PermissionCommand` (Core, pure) gives an `execute` request's command
   (`rawInput.command`, an argument array shell-quoted without its `bash -lc` wrapper, the first text content, the
   title); the docked card, the board card and the expanded transcript record show it, and a pending request follows
   `rawInput` and content sent after it asked. No recorded traffic of Claude, Codex or Kimi is in the repository, so
-  the test fixtures are the shapes those agents are known to send, built from the ACP schema. The running-app check
-  in light and dark is pending.
+  the test fixtures are the shapes those agents are known to send, built from the ACP schema; compare them with the
+  first real requests in #321. The review found two defects, fixed here: a command that arrived while the card was
+  shown left the buttons armed (the card's identity now includes the command, so arming restarts), and the command
+  block took six lines' height for any command (a scroll view sized to its text replaced `ViewThatFits`). MockAgent's
+  `run <command>` asks for a shell command and sends its `rawInput` a second later.
+- #351 (the `Run interrupted` divider) landed: the divider's stack fills its row (`distribution = .fill`) and the two
+  hairlines have the lowest horizontal hugging, so they take the width the X and the caption leave; before, they
+  collapsed to their smallest width and the X and the text sat at the leading edge. `docs/behavior/transcript.md`
+  already described the intended row and is unchanged. Tested in `OffscreenWindow` at 600 and 1200 pt without exact
+  widths (each hairline wider than the caption is tall, the two equal, the X and caption centred on the row); the test
+  fails on the previous layout. The session notice (`showNotice`) builds the same stack without it; no scenario of the
+  check below showed one.
 
 Pitfalls known so far:
 
@@ -300,7 +341,8 @@ and chose a second set of UI/UX changes, several of them against accepted ADRs. 
 sidebar (#352, #353) and attention (#376) changes build on what it checks; the README screenshots are #400, after
 them. The board and the menu bar item have not been checked in the running app; the review of 2026-11-10 found from
 the code that they show stale text for sessions that no window displays (#368) and that the menu bar can answer a
-request it did not list (#374).
+request it did not list (#374, fixed: the entry answers the request id it listed; tested with two requests, the first
+answered elsewhere while the menu is open; checked in the running app, see below).
 
 | Decision | Where | Status |
 |---|---|---|

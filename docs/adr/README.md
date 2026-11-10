@@ -25,7 +25,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0007](0007-transcript-rendering.md) | Transcript and text rendering | Accepted; SourceView highlight completion superseded by [0013](0013-source-highlight-attributes.md) |
 | [0008](0008-viewer-not-ide.md) | A viewer, not an IDE | Accepted |
 | [0009](0009-tools-and-mcp.md) | Tools and MCP | Accepted; the built-in server's tool list superseded by [0049](0049-built-in-agenthesia-mcp-server.md) |
-| [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted; empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
+| [0010](0010-prompt-queue-and-steering.md) | Prompt queue and steering | Accepted; empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); messages the user did not send added by [0051](0051-turns-between-sessions.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
 | [0011](0011-cross-agent-memory.md) | Cross-agent memory | Superseded by [0012](0012-defer-cross-agent-memory.md) |
 | [0012](0012-defer-cross-agent-memory.md) | Defer cross-agent memory until after the MVP | Accepted; the built-in MCP server scheduled by [0049](0049-built-in-agenthesia-mcp-server.md) |
 | [0013](0013-source-highlight-attributes.md) | Apply SourceView highlighting as attribute edits | Accepted |
@@ -36,7 +36,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted; UI behavior, current state in [docs/behavior/composer.md](../behavior/composer.md) |
 | [0019](0019-session-config-controls.md) | Session config controls | Accepted; UI behavior, current state in [docs/behavior/composer.md](../behavior/composer.md) |
 | [0020](0020-native-elicitation-forms.md) | Native elicitation forms | Accepted |
-| [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
+| [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); held messages and the queue's format amended by [0051](0051-turns-between-sessions.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
 | [0022](0022-session-scoped-elicitation.md) | Session-scoped elicitation first | Accepted |
 | [0023](0023-session-files.md) | Session files and their initial Git revision | Accepted; committed changed paths superseded by [0024](0024-changed-files-session-base.md) |
 | [0024](0024-changed-files-session-base.md) | Compare changed files with the session base | Accepted; base pin settled by [0032](0032-worktree-merge-and-discard.md) |
@@ -64,7 +64,8 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0046](0046-session-board-and-menu-bar.md) | A session board, a menu bar item, and numbered sessions | Accepted; UI behavior, current state in [docs/behavior/sidebar.md](../behavior/sidebar.md) |
 | [0047](0047-worktrees-from-the-fetched-upstream.md) | Worktrees start from the fetched upstream | Accepted |
 | [0048](0048-sessions-without-a-project.md) | Sessions without a project | Accepted |
-| [0049](0049-built-in-agenthesia-mcp-server.md) | The built-in agenthesia MCP server | Accepted |
+| [0049](0049-built-in-agenthesia-mcp-server.md) | The built-in agenthesia MCP server | Accepted; turns started by agents amended by [0051](0051-turns-between-sessions.md) |
 | [0050](0050-settled-is-the-users-decision.md) | Settled is the user's decision | Accepted; not implemented yet (#353) |
+| [0051](0051-turns-between-sessions.md) | Turns between sessions | Accepted; not implemented yet (#355–#366, #317, #318) |
 
 Template: Status, Date, Context, Decision, Consequences.

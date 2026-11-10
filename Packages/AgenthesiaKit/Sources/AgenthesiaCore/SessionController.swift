@@ -90,6 +90,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Receives each confirmed list of settings once it is recorded, and the agent's list when a hint fails the
     /// start, so `AgentCatalog` can keep them as the next draft's hints (ADR-0040).
     @ObservationIgnored public var onConfigOptions: (([ACP.ConfigOption]) -> Void)?
+    /// Passed to the agent in `session/new`, `session/load` and `session/resume`: the agenthesia server (ADR-0049).
+    @ObservationIgnored public var mcpServers: [ACP.MCPServer] = []
 
     func fileDidChange() { fileRevision &+= 1 }
 
@@ -198,23 +200,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let remote = try await connection.newSession(
             cwd: session.workingDirectory,
             additionalDirectories: additionalDirectories,
-            mcpServers: []
+            mcpServers: mcpServers
         )
         guard status == .starting else { throw SessionError.invalidState }
         let options = try await applyHints(to: remote.configOptions, in: remote.sessionId, connection: connection)
-        session = SessionRecord(
-            id: session.id,
-            projectID: session.projectID,
-            agentInstallID: session.agentInstallID,
-            agentSessionID: remote.sessionId,
-            protocolVersion: profile.protocolVersion,
-            title: session.title,
-            workingDirectory: session.workingDirectory,
-            baseRevision: session.baseRevision,
-            baseBranch: session.baseBranch,
-            branch: session.branch,
-            createdAt: session.createdAt
-        )
+        session.agentSessionID = remote.sessionId
+        session.protocolVersion = profile.protocolVersion
         do {
             try await createSession(session)
         } catch {
@@ -269,7 +260,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             agentID,
             cwd: session.workingDirectory,
             additionalDirectories: additionalDirectories,
-            mcpServers: []
+            mcpServers: mcpServers
         )
         guard status == .starting else { throw SessionError.invalidState }
         let state: ACP.SessionState

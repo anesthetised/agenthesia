@@ -1082,10 +1082,19 @@ public final class SessionApplicationDelegate: NSObject, NSApplicationDelegate {
         // Notification Center and the helper's socket need an app bundle, so package tests and the CLI never reach
         // them.
         guard Bundle.main.bundleURL.pathExtension == "app" else { return }
-        // The agenthesia-mcp helper's socket (ADR-0049); serving MCP on its connections comes with #71.
+        // The agenthesia-mcp helper's socket (ADR-0049); sessions pass the helper to their agents once it listens.
         do {
             let path = MCPSocket.path(dataFolder: AppSupport.directory)
-            mcpSocket = try MCPSocket(path: path, tokens: sessions.mcpTokens, serve: { _, _ in })
+            let sessions = sessions
+            mcpSocket = try MCPSocket(path: path, tokens: sessions.mcpTokens) { session, transport in
+                await sessions.serveMCP(session: session, over: transport)
+            }
+            sessions.mcp = MCPEndpoint(
+                tokens: sessions.mcpTokens,
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/agenthesia-mcp")
+                    .path(percentEncoded: false),
+                socket: path
+            )
         } catch {
             Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "MCP")
                 .error("Cannot listen for agenthesia-mcp: \(error, privacy: .public)")

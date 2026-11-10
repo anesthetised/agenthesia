@@ -1329,6 +1329,11 @@ the first-run, text-size and VoiceOver items.
 | 2 | #383 Composer: paste images, keep drafts | `agent:light` | — |
 | 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
 | 2 | #387 Transcript: move between prompts | `agent:light` | — |
+| 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue) | `agent:strong` | — |
+| 2 | #391 Queue: change attachments while editing a queued message | `agent:light` | — |
+| 2 | #393 Queue: reorder by dragging; two buttons on a row | `agent:light` | — |
+| 3 | #392 Queue: step through queued messages, move and delete them from the keyboard | `agent:light` | #390 |
+| 3 | #394 Queue: undo for delete, move and edit | `agent:light` | #390 |
 | 3 | #378 Command registry, a ⌘K palette and a shortcut sheet | `agent:strong` | #377 |
 | 3 | #380 ADR: checkpoints per turn and Rewind | `agent:strong` | #379 |
 | 3 | #382 Review: open at the file, move by hunk, ask about a hunk | `agent:strong` | — |

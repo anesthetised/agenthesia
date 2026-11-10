@@ -14,6 +14,8 @@ public import JSONRPC
 /// - `tools` streams a long answer while earlier tool calls change: an update before its call,
 ///   several calls, a failure, long output, and diff, terminal and unknown content. The test run reports
 ///   its output in `_meta` chunks (`terminal_output_delta`) and an exit status, as Codex does.
+/// - `mcp <tool> <json>` calls `tool` with the JSON arguments on the stdio MCP server that lists it, among those the
+///   client passed in `session/new`, `session/load` or `session/resume`, and echoes the result.
 /// - `slow` streams slowly, so the turn can be cancelled.
 /// - `fail` fails the turn with an internal error.
 /// - `exit` closes the connection without replying, ending MockAgent's process.
@@ -122,6 +124,7 @@ public final class EchoAgent: Sendable {
                 throw RPCError(code: RPCError.authRequiredCode, message: "Authentication required")
             }
             let id = await state.createSession(cwd: request.cwd)
+            await state.startServers(request.mcpServers, for: id)
             if options.announcesCommands {
                 try? await connection.notify(
                     ACP.V1.Method.SessionUpdate.self,
@@ -150,6 +153,7 @@ public final class EchoAgent: Sendable {
             else {
                 throw RPCError(code: RPCError.resourceNotFoundCode, message: "Unknown session")
             }
+            await state.startServers(request.mcpServers, for: request.sessionId)
             for update in history {
                 try? await connection.notify(M.SessionUpdate.self, .init(sessionId: request.sessionId, update: update))
             }
@@ -170,6 +174,7 @@ public final class EchoAgent: Sendable {
             else {
                 throw RPCError(code: RPCError.resourceNotFoundCode, message: "Unknown session")
             }
+            await state.startServers(request.mcpServers ?? [], for: request.sessionId)
             return .init(
                 modes: options.modes ? Self.modes(current: "ask") : nil,
                 configOptions: options.configOptions
@@ -237,6 +242,7 @@ public final class EchoAgent: Sendable {
         .init(name: "plan", description: "Report a plan"),
         .init(name: "think", description: "Report a thought"),
         .init(name: "ask", description: "Ask two questions in a form"),
+        .init(name: "mcp", description: "Call a tool of a stdio MCP server", input: .init(hint: "tool json")),
         .init(name: "slow", description: "Stream slowly until cancelled"),
         .init(name: "fail", description: "Fail the turn"),
         .init(name: "exit", description: "Exit without replying"),
@@ -312,6 +318,7 @@ extension EchoAgent {
         private var cancelled: Set<ACP.SessionID> = []
         private var nextSession = 1
         private var chosen: [ACP.SessionID: [String: String]] = [:]
+        private var servers: [ACP.SessionID: [StdioMCPServer]] = [:]
 
         var capabilities: ACP.V1.ClientCapabilities { clientCapabilities }
 
@@ -335,6 +342,18 @@ extension EchoAgent {
             chosen[id, default: [:]][option] = value
             return chosen[id] ?? [:]
         }
+
+        /// Starts the stdio servers given for the session, replacing those an earlier request started.
+        func startServers(_ given: [ACP.MCPServer], for id: ACP.SessionID) async {
+            for server in servers.removeValue(forKey: id) ?? [] { await server.stop() }
+            // A server that cannot start is left out, as an agent leaves out one it cannot connect to.
+            servers[id] = given.compactMap { server in
+                guard case .stdio(let stdio) = server else { return nil }
+                return try? StdioMCPServer(stdio)
+            }
+        }
+
+        func servers(of id: ACP.SessionID) -> [StdioMCPServer] { servers[id] ?? [] }
 
         func deleteSession(_ id: ACP.SessionID) {
             sessions.removeAll { $0.id == id }
@@ -419,6 +438,9 @@ extension EchoAgent {
                     return try await group.reduce(into: []) { $0.append($1) }
                 }
                 if outcomes.contains(.cancelled) { return .init(stopReason: .cancelled) }
+            case "mcp" where words.count >= 2:
+                let text = await mcp(tool: words[1], json: words.count > 2 ? words[2] : "{}")
+                await send(.agentMessageChunk(.init(content: .init(text: text + "\n\n"))))
             case "tools":
                 return .init(stopReason: await tools())
             case "plan":
@@ -534,6 +556,31 @@ extension EchoAgent {
             case .cancel: "cancelled"
             case .unknown(let action): action
             }
+        }
+
+        /// Calls `tool` on the first server of the session that lists it and describes the outcome.
+        private func mcp(tool: String, json: String) async -> String {
+            guard let arguments = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) else {
+                return "mcp \(tool): the arguments are not JSON"
+            }
+            let servers = await state.servers(of: sessionID)
+            if servers.isEmpty { return "mcp: no stdio MCP server was given" }
+            for server in servers {
+                do {
+                    guard try await server.tools().contains(where: { $0.name == tool }) else { continue }
+                    let result = try await server.call(tool, arguments: arguments)
+                    let content = result.content.map { block in
+                        switch block {
+                        case .text(let text): text
+                        case .image(let data, let mimeType): "[image \(mimeType), \(data.count) bytes]"
+                        }
+                    }
+                    return "mcp \(tool)\(result.isError == true ? " failed" : ""): " + content.joined(separator: "\n")
+                } catch {
+                    return "mcp \(tool) failed: \(error)"
+                }
+            }
+            return "mcp: no server offers \(tool)"
         }
 
         private func send(_ update: ACP.SessionUpdate) async {

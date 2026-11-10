@@ -18,6 +18,10 @@ import JSONRPC
 //     MockAgent --effort             echo agent that also offers an effort (thought_level) config option
 //     MockAgent --fast               echo agent that also offers a boolean `Fast mode` config option
 //     MockAgent --reject-config      echo agent that refuses every mode and config change
+//
+// The stdio MCP servers a client passes in session/new, session/load or session/resume are started, and the prompt verb
+// `mcp <tool> <json>` calls a tool on them (see EchoAgent).
+//
 //     MockAgent --demo <file>        echo agent that plays the canned turn in <file> on every prompt (see
 //                                    EchoAgent.Options.demo); scripts/readme-screenshot.sh uses it
 

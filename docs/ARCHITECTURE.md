@@ -326,6 +326,25 @@ thoughts' `thoughtDuration`. Copy returns the run's Markdown through `copyText`,
 thought item and `reveal(item:)` expands the run that holds it. The Rendering Lab's S10 streams two folding thoughts
 before the S1 answer.
 
+A finished turn's work folds under one row (#341, as T3 Code does). The reducer records
+`TranscriptState.finishedTurns`, each turn that ended on its own with its time from the event that started it to its
+`finished` event; a stopped, steered or failed turn has none, so it never folds. `TranscriptRow.turnFolds` reads the
+items as `TurnPart`s (prompt, answer, question, work, other) and returns a `TurnFold` for each finished turn with
+something to hide: the items from the one after its prompts up to the next prompt or other item, with the answer (the
+last agent message) and the questions `kept`. `TranscriptRow.fold` puts a `.turn(first:)` row at the fold's first item
+and, while it is collapsed, only the kept items after it; expanded, the turn's items fold as before below it.
+`LiveTranscriptSource` folds through a `TranscriptFolder`, which keeps the rows and folds of everything before the last
+turn's first prompt (items only append, and an earlier turn's end, time and item kinds are final) and folds again only
+the last turn's items on each state change, so a streamed chunk costs the running turn, not the history (S11 found the
+full fold on every chunk costly). A change of group or turn expansion starts it over; another session's transcript
+too. It finds a fold by its row or by an item it holds with a binary search over the folds, which are sorted by first
+item, since the table asks for every row it shows on each update. The source keys turn expansion by turn, and
+`reveal(item:)` expands a turn that hides the item. The row
+(`TranscriptMessage.Kind.turn`) is a borderless button with the label and a trailing chevron over a separator, built by
+`TranscriptMessageRow.showTurn`; it has no Markdown and no Copy. A running turn never folds, so streamed chunks leave
+its rows as they were. The Rendering Lab's S11 streams S10's thoughts with S9's tool updates in a new turn
+below a 10,000-item history of finished, folded turns, and folds the new turn at its end.
+
 Session notices (continued, ended, merged, discarded) render as a centered caption between two hairlines, without
 role label or Copy. A turn that ends `cancelled` after `stopRequested` (Stop or steering) gets an item of its own
 (`TranscriptState.Item.interruption`, reduced from the stored events, which do not change; `interrupted` adds no

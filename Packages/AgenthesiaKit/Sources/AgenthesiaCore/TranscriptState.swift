@@ -171,10 +171,17 @@ public struct TranscriptState: Equatable, Sendable {
     /// The turn the steering prompt started; every message sent together with it is a steer too.
     private var steerTurn: UUID?
 
-    /// Starts a turn's bookkeeping for steering: the turn is the steer when one was pending.
-    private mutating func startTurn(_ id: UUID) {
+    /// When the running turn's prompt was recorded.
+    private var turnStart: Date?
+    /// How long each turn that ended on its own took, from its prompt to its end, by event timestamps; a failed or
+    /// interrupted turn has none. A finished turn's work folds under one row (#341).
+    public private(set) var finishedTurns: [UUID: TimeInterval] = [:]
+
+    /// Starts a turn's bookkeeping for steering and timing: the turn is the steer when one was pending.
+    private mutating func startTurn(_ id: UUID, at timestamp: Date) {
         steerTurn = steerPending ? id : nil
         steerPending = false
+        turnStart = timestamp
     }
     public private(set) var lastStopReason: ACP.StopReason?
     /// The agent rejected the last turn's prompt; a new turn or a continued session clears it.
@@ -263,7 +270,7 @@ public struct TranscriptState: Equatable, Sendable {
             lastTurnFailed = false
             items.append(Item(id: sequence, reopenedAt: timestamp))
         case .prompt(let id, let content):
-            startTurn(id)
+            startTurn(id, at: timestamp)
             activeTurn = id
             turnOrigin = .user
             plan = nil
@@ -301,7 +308,7 @@ public struct TranscriptState: Equatable, Sendable {
             }
         case .promptMessage(let prompt, let turnID, let startsTurn, let sentTogether):
             if startsTurn {
-                startTurn(turnID)
+                startTurn(turnID, at: timestamp)
                 activeTurn = turnID
                 turnOrigin = prompt.origin
                 plan = nil
@@ -334,6 +341,8 @@ public struct TranscriptState: Equatable, Sendable {
             guard id == activeTurn else { return }
             if stopRequested, reason == .cancelled {
                 items.append(Item(id: sequence, interruption: steeredTurn == id ? .steered : .stopped))
+            } else {
+                finishedTurns[id] = max(0, timestamp.timeIntervalSince(turnStart ?? timestamp))
             }
             activeTurn = nil
             stopRequested = false

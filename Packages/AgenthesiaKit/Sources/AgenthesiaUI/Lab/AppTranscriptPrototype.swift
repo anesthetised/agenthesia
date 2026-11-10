@@ -13,6 +13,11 @@
         private var tools: [Int: ACP.ToolCall] = [:]
         private var streaming = false
         private var groupExpanded = false
+        /// S11: every prompt starts a turn, and each turn but the running one has finished, so its work folds.
+        var foldsTurns = false
+        private var prompts: [Int: UUID] = [:]
+        private var runningTurn: UUID?
+        private var folder = TranscriptFolder()
         private(set) var rows: [TranscriptRow] = []
         var revision = 0
         var messageCount: Int { rows.count }
@@ -28,25 +33,62 @@
                 case .diff(let path, let patch): ("Diff", path + "\n\n```diff\n" + patch + "\n```")
                 }
             }
+            if foldsTurns {
+                for index in items.indices where items[index].0 == "You" { prompts[index] = UUID() }
+            }
+            folder.reset()
             fold()
             revision += 1
             table.update(self)
         }
 
         /// Folds consecutive tool cards and thoughts as the live transcript does; every group shares `groupExpanded`,
-        /// and thoughts stay collapsed.
+        /// and thoughts stay collapsed. With turns, only the last turn is folded again, as in the live transcript.
         private func fold() {
-            rows = TranscriptRow.fold(
+            guard foldsTurns else {
+                rows = TranscriptRow.fold(
+                    count: items.count,
+                    isToolCall: { tools[$0] != nil },
+                    isThought: { items[$0].0 == "Thought" },
+                    isExpanded: { _ in groupExpanded }
+                )
+                return
+            }
+            folder.update(
                 count: items.count,
+                part: { index in
+                    if let turn = prompts[index] { return .prompt(turn) }
+                    return items[index].0 == "Agent" ? .answer : .work
+                },
                 isToolCall: { tools[$0] != nil },
                 isThought: { items[$0].0 == "Thought" },
-                isExpanded: { _ in groupExpanded }
+                isExpanded: { _ in groupExpanded },
+                finished: { $0 != runningTurn },
+                isTurnExpanded: { _ in false }
             )
+            rows = folder.rows
+        }
+
+        /// Adds the prompt of a running turn; call before ``appendTools(_:)``, the next update publishes it.
+        func startTurn() {
+            let turn = UUID()
+            if foldsTurns { (prompts[items.count], runningTurn) = (turn, turn) }
+            items.append(("You", "Go on"))
+        }
+
+        /// Ends the running turn, whose work then folds.
+        func finishTurn() {
+            runningTurn = nil
+            streaming = false
+            fold()
+            revision += 1
+            table.update(self)
         }
 
         /// Expands or collapses the groups without updating the table; the next ``append(_:)`` publishes it.
         func toggleGroups() {
             groupExpanded.toggle()
+            folder.reset()
             fold()
         }
 
@@ -92,6 +134,7 @@
             let index: Int
             switch rows[row] {
             case .item(let item): index = item
+            case .turn: return TurnFold.message(duration: 0, expanded: false)
             case .group(let first):
                 let end = TranscriptRow.groupEnd(from: first, count: items.count) { tools[$0] != nil }
                 return TranscriptMessage(
@@ -128,7 +171,7 @@
         func isStreaming(at row: Int) -> Bool {
             switch rows[row] {
             case .item(let index): streaming && index == items.count - 1
-            case .group: false
+            case .group, .turn: false
             case .thoughts(let first):
                 streaming
                     && TranscriptRow.groupEnd(from: first, count: items.count) { items[$0].0 == "Thought" }

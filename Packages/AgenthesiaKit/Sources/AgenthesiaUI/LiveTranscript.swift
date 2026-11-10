@@ -28,8 +28,8 @@ struct TranscriptMessage {
     /// header, a group of tool calls, collapsed thoughts or a folded permission record only a header. An answered
     /// question, an interrupted turn and a failed one have kinds of their own, which a turn's fold recognises (#340):
     /// `question` is a header with its answers below while expanded, `interruption` a red divider, `failure` a red
-    /// error with the message below.
-    enum Kind: Equatable { case card, user, agent, thought, group, question, interruption, failure }
+    /// error with the message below. `turn` is a finished turn's fold: its label and a chevron over a hairline (#341).
+    enum Kind: Equatable { case card, user, agent, thought, group, question, interruption, failure, turn }
 }
 
 /// The native part of a tool row; its body remains Markdown so selection and copying work as for messages.
@@ -75,7 +75,11 @@ extension TranscriptSource {
 /// Attributed text is cached only for rows requested by NSTableView.
 final class LiveTranscriptSource: TranscriptSource {
     var state = TranscriptState() { didSet { fold() } }
-    private(set) var rows: [TranscriptRow] = []
+    /// Folds only the last turn on each update (#341).
+    private(set) var folder = TranscriptFolder()
+    var rows: [TranscriptRow] { folder.rows }
+    /// The item before the folder's settled ones, to tell another transcript from a longer one.
+    private var settledID: Int64?
     var running = false
     var revision = 0
     /// Answers go to the controller, which owns the request's lifetime.
@@ -111,20 +115,48 @@ final class LiveTranscriptSource: TranscriptSource {
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
     private var expanded: Set<Int64> = []
     /// Keyed by the group's first item, so that a growing group keeps its expansion.
-    private var expandedGroups: Set<Int64> = [] { didSet { fold() } }
+    private var expandedGroups: Set<Int64> = [] { didSet { refold() } }
+    /// Finished turns whose work is shown, by turn.
+    private var expandedTurns: Set<UUID> = [] { didSet { refold() } }
     var messageCount: Int { rows.count }
+
+    /// Folds every row again, after a change that can touch any of them.
+    private func refold() {
+        folder.reset()
+        fold()
+    }
 
     private func fold() {
         let items = state.items
-        rows = TranscriptRow.fold(
+        let settled = folder.settled
+        if settled > 0, settled > items.count || items[settled - 1].id != settledID { folder.reset() }
+        folder.update(
             count: items.count,
+            part: { Self.turnPart(items[$0]) },
             isToolCall: { items[$0].toolCall != nil },
             isThought: { items[$0].message?.role == .thought },
-            isExpanded: { expandedGroups.contains(items[$0].id) }
+            isExpanded: { expandedGroups.contains(items[$0].id) },
+            finished: { state.finishedTurns[$0] != nil },
+            isTurnExpanded: expandedTurns.contains
         )
+        settledID = folder.settled > 0 ? items[folder.settled - 1].id : nil
+    }
+
+    private static func turnPart(_ item: TranscriptState.Item) -> TranscriptRow.TurnPart {
+        if let message = item.message {
+            switch message.role {
+            case .user: return message.turnID.map { .prompt($0) } ?? .other
+            case .assistant: return .answer
+            case .thought: return .work
+            }
+        }
+        if item.input != nil { return .question }
+        return item.toolCall != nil || item.permission != nil ? .work : .other
     }
 
     func update(_ controller: SessionController) {
+        // Another session's transcript shares nothing with the folded one.
+        if self.controller !== controller { folder.reset() }
         self.controller = controller
         root = URL(filePath: controller.session.workingDirectory)
         state = controller.transcript
@@ -142,7 +174,7 @@ final class LiveTranscriptSource: TranscriptSource {
     func isStreaming(at row: Int) -> Bool {
         switch rows[row] {
         case .item(let index): isStreaming(item: index)
-        case .group: false
+        case .group, .turn: false
         case .thoughts(let first): isThinking(first: first)
         }
     }
@@ -157,7 +189,16 @@ final class LiveTranscriptSource: TranscriptSource {
         case .item(let index): message(item: index)
         case .group(let first): groupMessage(first: first)
         case .thoughts(let first): thoughtMessage(first: first)
+        case .turn(let first): turnMessage(first: first)
         }
+    }
+
+    private func turnMessage(first: Int) -> TranscriptMessage {
+        let turn = folder.turn(at: first)
+        return TurnFold.message(
+            duration: turn.flatMap { state.finishedTurns[$0.turn] } ?? 0,
+            expanded: turn?.expanded == true
+        )
     }
 
     private func thoughtItems(first: Int) -> ArraySlice<TranscriptState.Item> {
@@ -401,6 +442,9 @@ final class LiveTranscriptSource: TranscriptSource {
             first -= 1
         }
         expanded.insert(items[first].id)
+        if let turn = folder.turn(containing: index), !turn.expanded, !turn.kept.contains(index) {
+            expandedTurns.insert(turn.turn)
+        }
         revision += 1
         return TranscriptRow.row(showing: index, in: rows)
     }
@@ -427,6 +471,9 @@ final class LiveTranscriptSource: TranscriptSource {
         case .thoughts(let first):
             let id = state.items[first].id
             if expanded.remove(id) == nil { expanded.insert(id) }
+        case .turn(let first):
+            guard let turn = folder.turn(at: first)?.turn else { break }
+            if expandedTurns.remove(turn) == nil { expandedTurns.insert(turn) }
         }
         revision += 1
     }

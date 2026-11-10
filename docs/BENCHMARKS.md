@@ -109,6 +109,14 @@ shows them; the answer then follows as in S1. To compare, run S10 against a comm
 added by hand, where the thoughts are two rows streaming their full text. Results:
 [2026-11-09](benchmarks/2026-11-09/collapsed-thoughts/README.md).
 
+`just lab-run S11:App --runs 3` (#341) streams a new turn below a 10,000-item history of finished turns: a prompt,
+S7's five tool calls with their updates, S10's two thoughts and the S1 answer. Every history turn (prompt, answer, a
+tool call and a diff) folds its work into a `Worked for` row, and the prototype computes the folds on every appended
+chunk, as the live transcript does on every state change; when the answer is complete the turn ends and folds too,
+inside the measured interval. To compare, run S11 against a commit from before #341 with the scenario added by hand,
+where nothing folds. Results: [2026-11-10](benchmarks/2026-11-10/turn-fold/README.md); the first run found folding
+the whole history on every chunk costly, and the fold now redoes only the last turn.
+
 Results for #19 on an M1 Pro (MacBookPro18,2, 120 Hz display), macOS 27.0.1, optimized Debug lab, fresh
 process per run, 1-minute load 2.6–4.9 and 80–81% free memory throughout. Hitches are callbacks over one
 frame interval:

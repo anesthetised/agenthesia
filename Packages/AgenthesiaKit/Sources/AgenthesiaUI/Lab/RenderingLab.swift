@@ -28,6 +28,9 @@
                     Button("S8: Group toggles") { Task { await lab.runStream(toolUpdates: true, groupToggles: true) } }
                     Button("S9: Tools, 10k") { Task { await lab.runStream(toolUpdates: true, history: 10_000) } }
                     Button("S10: Thoughts") { Task { await lab.runStream(thoughts: true) } }
+                    Button("S11: Turns, 10k") {
+                        Task { await lab.runStream(toolUpdates: true, history: 10_000, thoughts: true, turns: true) }
+                    }
                     Button("S2: 10k items") { Task { await lab.runScroll() } }
                     Button("S3: Selection") { Task { await lab.showForSelection() } }
                     Button("S5: Appearance") { Task { await lab.runAppearance() } }
@@ -167,6 +170,7 @@
                 case "S8": await runStream(toolUpdates: true, groupToggles: true)
                 case "S9": await runStream(toolUpdates: true, history: 10_000)
                 case "S10": await runStream(thoughts: true)
+                case "S11": await runStream(toolUpdates: true, history: 10_000, thoughts: true, turns: true)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
                 default:
@@ -191,12 +195,15 @@
         /// S9 is S7 below a 10 000-item history, where folding the whole transcript on every update would show.
         /// S10 streams two ~1000-token thoughts, which fold into one collapsed row whose header shows the last line,
         /// before the S1 answer.
+        /// S11 is S9 with S10's thoughts in a new turn below a history of finished turns, whose work folds into
+        /// `Worked for` rows (#341); the streamed turn folds too once its answer is complete.
         func runStream(
             longCode: Bool = false,
             toolUpdates: Bool = false,
             groupToggles: Bool = false,
             history: Int = 200,
-            thoughts: Bool = false
+            thoughts: Bool = false,
+            turns: Bool = false
         ) async {
             if toolUpdates || thoughts { prototype = .app }
             var generator = TranscriptGenerator(seed: 1)
@@ -218,14 +225,16 @@
             chunks += generator.chunks(of: answer)
             var schedule = StreamSchedule(chunks: chunks, interval: 0.01)
             let view = await present(prototype.make())
+            let app = view as? AppTranscriptPrototype
+            app?.foldsTurns = turns
             view.show(transcript)
             view.view.layoutSubtreeIfNeeded()
             if let scrollView = view.scrollView { scrollToEnd(scrollView) }
             var cards = toolUpdates ? Self.toolCards() : []
             var toolTicks = 0
-            (view as? AppTranscriptPrototype)?.appendTools(cards)
+            if turns { app?.startTurn() }
+            app?.appendTools(cards)
             transcript.startStreaming()
-            let app = view as? AppTranscriptPrototype
             if thoughts { app?.didAppendThought() } else { view.didAppend() }
             var next = (starts + [answerStart]).dropFirst()
             // The virtual producer emits 100 chunks/s even when the UI stalls. No timer can silently slow it.
@@ -233,13 +242,21 @@
             let name =
                 longCode
                 ? "S6 Long unclosed code"
-                : thoughts
-                    ? "S10 Thoughts"
-                    : history > 200
-                        ? "S9 Tool updates, 10k items"
-                        : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
+                : turns
+                    ? "S11 Turns, 10k items"
+                    : thoughts
+                        ? "S10 Thoughts"
+                        : history > 200
+                            ? "S9 Tool updates, 10k items"
+                            : groupToggles ? "S8 Group toggles" : toolUpdates ? "S7 Tool updates" : "S1 Stream"
+            var turnFinished = !turns
             await measure("\(name), \(prototype.title), warm", in: view.view) {
-                guard !schedule.isComplete else { return false }  // Observe a callback after the final update.
+                guard !schedule.isComplete else {
+                    guard !turnFinished else { return false }  // Observe a callback after the final update.
+                    turnFinished = true
+                    app?.finishTurn()
+                    return true
+                }
                 let batch = schedule.due(at: milliseconds(since: start) / 1000)
                 guard !batch.isEmpty else { return true }
                 if let app {

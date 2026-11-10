@@ -956,6 +956,38 @@ Pitfalls known so far:
 - A `MenuBarExtra` has no hosted-view test; #228 tests its content view and records the running-app check in this file.
 - #234 creates test sessions; with #230 landed they are deleted before the pull request, which replaces AGENTS.md's
   warning that they stay forever.
+- #341 (finished turns fold into `Worked for …`) landed: `TranscriptState.finishedTurns` holds each turn that ended on
+  its own with its time from event timestamps (none for a stopped, steered or failed turn); `TranscriptRow.turnFolds`
+  finds each finished turn's work (after its prompts, up to the next prompt or other item) and keeps the answer (the
+  last agent message) and answered questions outside; `TranscriptRow.fold` adds a `.turn(first:)` row with only the
+  kept items after it while collapsed. `LiveTranscriptSource` keys expansion by turn and `reveal(item:)` expands a turn
+  that hides the item; the row is `TranscriptMessageRow.showTurn` (a borderless button with a trailing chevron over a
+  separator, no Copy). Stored data and the protocol are unchanged. Tested: the reduction (a turn of prompts sent
+  together, Stop, steer, failure); the fold as pure functions (answer, questions, no answer, prompts together, running
+  turns, expanded turns, `row(showing:)`); the source (label `Worked for 1m 3s`, expansion surviving a streamed and
+  then finished next turn, stopped and failed turns unfolded); hosted `OffscreenWindow` tests of the table folding a
+  turn in place with the answer's view kept, the chevron and its accessibility, Find expanding, Copy skipping the row,
+  and every row's height after folding, expanding, resizing and collapsing (it fails without `rowContentHugging`).
+  Rendering Lab **S11** (new): a 10,000-item history of finished turns, then a new turn with S7's tool updates, S10's
+  thoughts and the S1 answer, which folds at the end (`foldsTurns`, `startTurn()`, `finishTurn()` in
+  `AppTranscriptPrototype`; `scripts/bench.py` accepts `S11:App`). First benchmark run (2026-11-10, `just lab-run
+  S1:App,S7:App,S9:App,S10:App,S11:App --runs 1`, three interleaved rounds, before = `f089e49` with S11 patched in,
+  [results](benchmarks/2026-11-10/turn-fold/README.md)): S1, S7 and S10 within noise, **S11 regressed** (94–153
+  hitches per run before, 176–227 after, apply p95 up 3–4 ms) and S9 drifted, because every update folded the whole
+  history again and scanned it once more for the turns. Fixed: `TranscriptFolder` keeps everything before the last
+  turn's first prompt and folds only the last turn per update; tests check it against a full fold after every item and
+  that a chunk's folded items do not grow with the number of finished turns. **Do not merge before the second run**
+  (S1, S9 and S11, with the owner's approval, recorded in the same README). **Running-app check deferred** (MockAgent `--demo`
+  turns with tools and thoughts, isolated home, light and dark): (1) while a turn runs every row stays open; when it
+  ends, its calls, groups, thoughts and permission records fold into `Worked for <time>` with a chevron and a hairline
+  below the prompt, and the answer stays open below it, with no jump of the following-bottom position; (2) clicking the
+  label or chevron expands and collapses it, its expansion holds while the next turn streams; (3) a turn stopped with
+  Stop keeps its rows and the red divider, a steered turn keeps its rows and its hairline, `fail` keeps its rows and
+  the error; (4) an answered question (`ask`) stays visible outside the folded turn; (5) Find on a word in a folded
+  tool call expands the turn and selects the row; (6) ⌘C on the selected fold row and the answer pastes only the
+  answer, and inner rows copy as before when expanded; (7) a reopened saved session shows its turns folded with their
+  times; (8) VoiceOver reads `Worked for …` as a collapsed or expanded disclosure triangle; (9) the chevron and label
+  are legible in light, dark and Increase Contrast.
 - #340 (answered questions, interruptions and errors as T3 Code shows them) landed: `InputAnswer` pairs the
   composer's `InputStep.steps` with the stored response (question = description, else title, else name; a choice by
   its title; the step's text replaces the pick; multiple picks joined with `, `; `Declined`, `Cancelled`, `Recording

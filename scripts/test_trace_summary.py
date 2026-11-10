@@ -33,6 +33,17 @@ class TraceSummaryTests(unittest.TestCase):
         })
         self.assertEqual(unmatched, 1)  # The Draw end without its begin.
 
+    def test_rows_in_nodes_after_the_schemas_node_use_its_columns(self):
+        # As `xctrace export` writes a large os-signpost table: the schema alone in one node, the rows in the next.
+        document = """<trace-query-result>
+<node><schema name="os-signpost"><col><mnemonic>time</mnemonic></col><col><mnemonic>name</mnemonic></col></schema></node>
+<node><row><event-time fmt="00:01">1000</event-time><signpost-name id="1" fmt="Cell">Cell</signpost-name></row>
+<row><event-time fmt="00:02">2000</event-time><signpost-name ref="1"/></row></node>
+</trace-query-result>"""
+        rows = trace_summary.rows(document)
+        self.assertEqual([(trace_summary.number(row["time"]), trace_summary.label(row["name"])) for row in rows],
+                         [(1000, "Cell"), (2000, "Cell")])
+
     def test_report(self):
         hitches = trace_summary.rows((FIXTURES / "trace-hitches.xml").read_text())
         signposts = trace_summary.rows((FIXTURES / "trace-signposts.xml").read_text())

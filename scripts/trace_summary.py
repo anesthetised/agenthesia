@@ -41,11 +41,12 @@ def rows(document):
     root = ET.fromstring(document)
     ids = {element.get("id"): element for element in root.iter() if element.get("id") is not None}
     result = []
+    # A real export may give the schema in a node of its own and the rows in later nodes without one.
+    columns = []
     for node in root.iter("node"):
         schema = node.find("schema")
-        if schema is None:
-            continue
-        columns = [column.findtext("mnemonic") for column in schema.findall("col")]
+        if schema is not None:
+            columns = [column.findtext("mnemonic") for column in schema.findall("col")]
         for row in node.findall("row"):
             values = {}
             for column, element in zip(columns, row):

@@ -67,14 +67,14 @@ order". Tiers are on the issues.
 
 | Lane | Sequence |
 |---|---|
-| Core (M13) | #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
+| Core (M13) | #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #234, #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
-| Test stability (M10) | #134 → #133, before #355 |
+| Interface (M20) | #234, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
+| Test stability (M10) | #133, before #355 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
-#397; #134.
+The first step is the head of each lane: #355 (after #133); #396, then #97 and #372; #234, #395, #390 and #397; #133.
+Landed from the lane heads on 2026-11-10: #373, #354, #71, #134, #374, #351, #375.
 
 #134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
 cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
@@ -294,13 +294,30 @@ The issues of this milestone touch views, not the session core, so they run besi
 
 Progress:
 
+- Running-app check of #374, #351, #375 and #71 (2026-11-10): one Debug build with the four branches merged, a fresh
+  bundle identifier, `CFFIXED_USER_HOME` in a temporary folder, MockAgent, light and dark, scripted with
+  `scripts/app-check`. Seen: the menu bar submenu lists the request and Reject answers it; the `Run interrupted`
+  divider spans the column at 1300 and 820 pt; the docked card, the board card (four lines, Open first when cut) and
+  the expanded record show the command, and the card picks up a command sent a second after the request;
+  `mcp environment {}` answers `no server offers environment`, so the bundled helper connected with the session's
+  token. Not driven by script: the stale menu click (AppKit tracks the open menu; the hosted test covers it),
+  VoiceOver's announcement, `showNotice`.
+- #375 (a command's permission request) landed: `PermissionCommand` (Core, pure) gives an `execute` request's command
+  (`rawInput.command`, an argument array shell-quoted without its `bash -lc` wrapper, the first text content, the
+  title); the docked card, the board card and the expanded transcript record show it, and a pending request follows
+  `rawInput` and content sent after it asked. No recorded traffic of Claude, Codex or Kimi is in the repository, so
+  the test fixtures are the shapes those agents are known to send, built from the ACP schema; compare them with the
+  first real requests in #321. The review found two defects, fixed here: a command that arrived while the card was
+  shown left the buttons armed (the card's identity now includes the command, so arming restarts), and the command
+  block took six lines' height for any command (a scroll view sized to its text replaced `ViewThatFits`). MockAgent's
+  `run <command>` asks for a shell command and sends its `rawInput` a second later.
 - #351 (the `Run interrupted` divider) landed: the divider's stack fills its row (`distribution = .fill`) and the two
   hairlines have the lowest horizontal hugging, so they take the width the X and the caption leave; before, they
   collapsed to their smallest width and the X and the text sat at the leading edge. `docs/behavior/transcript.md`
   already described the intended row and is unchanged. Tested in `OffscreenWindow` at 600 and 1200 pt without exact
   widths (each hairline wider than the caption is tall, the two equal, the X and caption centred on the row); the test
-  fails on the previous layout. The running-app check in light and dark, narrow and wide, is not done yet. The
-  session notice (`showNotice`) builds the same stack without it and was not checked.
+  fails on the previous layout. The session notice (`showNotice`) builds the same stack without it; no scenario of the
+  check below showed one.
 
 Pitfalls known so far:
 
@@ -325,7 +342,7 @@ sidebar (#352, #353) and attention (#376) changes build on what it checks; the R
 them. The board and the menu bar item have not been checked in the running app; the review of 2026-11-10 found from
 the code that they show stale text for sessions that no window displays (#368) and that the menu bar can answer a
 request it did not list (#374, fixed: the entry answers the request id it listed; tested with two requests, the first
-answered elsewhere while the menu is open; the running-app check in light and dark is the parent's).
+answered elsewhere while the menu is open; checked in the running app, see below).
 
 | Decision | Where | Status |
 |---|---|---|

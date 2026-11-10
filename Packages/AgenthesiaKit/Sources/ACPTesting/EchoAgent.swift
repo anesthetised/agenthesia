@@ -8,6 +8,8 @@ public import JSONRPC
 /// - `write <path> <text>` asks for permission, then writes through `fs/write_text_file`.
 /// - `writes <count> <text>` does the same for `note1.txt` … `note<count>.txt` at once, so up to nine
 ///   requests are pending together.
+/// - `run <command>` asks for permission to run a shell command, whose `rawInput` arrives a second after the request,
+///   as some agents send it, and runs nothing.
 /// - `plan` reports a plan, `think` reports a thought.
 /// - `ask` asks two questions in one form shaped like `claude-agent-acp`'s AskUserQuestion (a `question_<n>` choice
 ///   and an optional `question_<n>_custom` text each), then echoes the answer.
@@ -239,6 +241,7 @@ public final class EchoAgent: Sendable {
             input: .init(hint: "count text")
         ),
         .init(name: "tools", description: "Report tool calls"),
+        .init(name: "run", description: "Ask to run a shell command", input: .init(hint: "command")),
         .init(name: "plan", description: "Report a plan"),
         .init(name: "think", description: "Report a thought"),
         .init(name: "ask", description: "Ask two questions in a form"),
@@ -438,6 +441,10 @@ extension EchoAgent {
                     return try await group.reduce(into: []) { $0.append($1) }
                 }
                 if outcomes.contains(.cancelled) { return .init(stopReason: .cancelled) }
+            case "run" where words.count >= 2:
+                if try await run(command: String(text.dropFirst(words[0].count + 1))) == .cancelled {
+                    return .init(stopReason: .cancelled)
+                }
             case "mcp" where words.count >= 2:
                 let text = await mcp(tool: words[1], json: words.count > 2 ? words[2] : "{}")
                 await send(.agentMessageChunk(.init(content: .init(text: text + "\n\n"))))
@@ -707,6 +714,30 @@ extension EchoAgent {
             } catch {
                 await send(.toolCallUpdate(.init(toolCallId: id, status: .failed)))
             }
+        }
+
+        private func run(command: String) async throws -> ACP.PermissionOutcome {
+            let id = "run-\(UUID().uuidString)"
+            await send(.toolCall(.init(toolCallId: id, title: "Bash", kind: .execute, status: .pending)))
+            let update = Task {
+                try? await Task.sleep(for: .seconds(1))
+                await send(.toolCallUpdate(.init(toolCallId: id, rawInput: ["command": .string(command)])))
+            }
+            defer { update.cancel() }
+            let response = try await connection.request(
+                ACP.V1.Method.RequestPermission.self,
+                .init(
+                    sessionId: sessionID,
+                    toolCall: .init(toolCallId: id),
+                    options: [
+                        .init(optionId: "allow", name: "Allow", kind: .allowOnce),
+                        .init(optionId: "reject", name: "Reject", kind: .rejectOnce),
+                    ]
+                )
+            )
+            let ran = response.outcome == .selected("allow")
+            await send(.toolCallUpdate(.init(toolCallId: id, status: ran ? .completed : .failed)))
+            return response.outcome
         }
 
         private func write(path: String, content: String) async throws -> ACP.PermissionOutcome {

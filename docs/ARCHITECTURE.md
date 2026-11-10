@@ -388,7 +388,10 @@ so it stays on screen whatever the scroll position. `DockedPermission` builds it
 `SessionController.pendingPermissions`, which carry the tool call as known when the agent asked: the kind and the
 paths (locations, then the diffs' files), the title as secondary text, the first diff with `+n more files` that
 expands in place, and `1 of 3` while several are pending. The card is at most 40 % of the column's height and its diff
-scrolls inside it. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
+scrolls inside it. A shell call's command (`PermissionCommand`, Core, pure: `rawInput.command`, an argument array
+shell-quoted without its shell wrapper, the first text content, the title) follows the title in monospaced selectable
+text that scrolls beyond about six lines; `SessionController` merges later `rawInput` and content of the call into the
+pending request when it publishes the transcript. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
 (`WrappingLayout`) instead of truncating; none is the default, and Return and Escape stay with the composer. The card
 never takes focus. Each request gets a new card identity, so `PermissionArming` ignores clicks and shortcuts for
 400 ms after a request appears, including the next one after an answer, and the buttons look disabled meanwhile.
@@ -537,7 +540,7 @@ a session; any assignment to `showingSetup` leaves the board), `showBoard()` (�
 `SessionBoard` builds `SessionCard.Content` for each live row of an unfiltered `SessionSidebar`: the row's title,
 project and reason (`SessionWindowModel.reason(of:)`, shared with the row), `SessionSidebar.shelfTime`, the agent's last
 line (`TranscriptState.agentLastLine`, Core, pure) and the oldest pending permission with `PermissionChoice.choices`
-under the plain rule. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
+under the plain rule. A card shows the command in up to four lines. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
 `WrappingLayout`, and answer through `SessionController.answerPermission`; its context menu is `SessionRowMenu`, the
 rows' own.
 
@@ -597,7 +600,8 @@ The menu bar item ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior
 Working sections (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
 its `WindowTarget` URL as a notification does, and an option answers through `SessionController.answerPermission`.
 `PermissionChoice` (Core, pure) is the Open-first rule: a request that edits files offers Open before the agent's
-options; the session board reuses it without `openAlways`. `WindowPresence` counts the visible main-capable windows from AppKit's
+options, and so does a command the board cuts (`PermissionCommand.isCutOnBoard`); the session board reuses it without
+`openAlways`. `WindowPresence` counts the visible main-capable windows from AppKit's
 window notifications, so that Open Agenthesia shows only when none is open. Hosted views cannot test a `MenuBarExtra`:
 the views are tested by their size and the entries as data, and the item itself in the running app.
 Windows report the session they show while their scene appears active. A tap opens

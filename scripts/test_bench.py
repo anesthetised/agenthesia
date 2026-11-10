@@ -82,6 +82,30 @@ class BenchmarkRunnerTests(unittest.TestCase):
             self.assertEqual([row["repetition"] for row in report["results"]], [1, 1, 2, 2])
             self.assertEqual(len({row["log"] for row in report["results"]}), 4)
 
+    def test_each_lab_process_gets_a_fresh_home_that_is_removed_afterwards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(mode="lab", runs=1, timeout=7, output=Path(directory) / "results",
+                                      scenarios=["S1:A2", "S2:App"])
+            homes = []
+            def run_once(command, environment, log, timeout):
+                home = Path(environment["CFFIXED_USER_HOME"])
+                self.assertTrue(home.is_dir())
+                self.assertEqual(list(home.iterdir()), [])
+                (home / "Library").mkdir()  # What the app leaves behind goes with the home.
+                homes.append(home)
+                return [{"scenario": "test"}]
+            def capture(*command):
+                return "1024" if "hw.memsize" in command else "test"
+            with patch.dict(bench.os.environ, {"AGENTHESIA_LAB_SNAPSHOTS": "/tmp/shots"}), \
+                 patch.object(bench, "capture", side_effect=capture), \
+                 patch.object(bench.subprocess, "run"), \
+                 patch.object(bench, "run_once", side_effect=run_once) as run:
+                bench.run(args)
+            self.assertEqual(len(set(homes)), 2)
+            self.assertFalse(any(home.exists() for home in homes))
+            self.assertNotEqual(homes[0].parent, Path.home())
+            self.assertTrue(all("AGENTHESIA_LAB_SNAPSHOTS" not in call.args[1] for call in run.call_args_list))
+
     def test_persistence_matrix_uses_release_binary_and_separate_processes(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "results"

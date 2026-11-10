@@ -245,15 +245,27 @@ the implementation choices that remain to be discussed.
 The [SourceView scroll-wait investigation](benchmarks/2026-10-07/source-scroll/README.md) correlates long
 callback gaps with Core Animation synchronization waits and includes AppKit and native TextKit 2 controls.
 
-### Wheel scrolling of a recorded session (#396)
+### Wheel scrolling (#396)
 
 S2 moves the clip view itself, so it never goes through AppKit's event handling and cannot show responsive
-scrolling. `just lab-wheel wheel .build/wheel.trace` and `just lab-wheel gesture .build/gesture.trace` scroll a
-session from the owner's history in the lab build with real events from `wintool`: mouse wheel lines without phases,
-or trackpad-like drags with gesture phases and no momentum. Each scrolls up for 15 seconds from the end, then down as
-long, in a 1480 x 860 pt window, under Instruments' Animation Hitches template with Points of Interest. The script,
-`scripts/app-check/wheel-scroll.sh`, copies the history into a temporary home and prunes the copy to one session,
-so the owner's data and repositories are not touched; its header lists the settings.
+scrolling. `just lab-wheel wheel .build/wheel.trace` and `just lab-wheel gesture .build/gesture.trace` scroll lab
+scenario S12 with real events from `wintool`: mouse wheel lines without phases, or trackpad-like drags with gesture
+phases and no momentum. S12 (`AGENTHESIA_LAB_RUNS=S12:App:<seconds>`) shows S2's 10,000 items in the app's transcript
+table, from the end, in a 1240 x 760 pt window titled `S12 Wheel` (a session window's transcript column), and keeps it
+for the given seconds; `S12:A2` shows the prototype table instead. Each run scrolls up for 15 seconds, then down as
+long, under Instruments' Animation Hitches template with Points of Interest attached to the lab. The recording starts
+before the first event and is stopped after the last. The script, `scripts/app-check/wheel-scroll.sh`, lists its
+settings (speeds, seconds, prototype) in its header; it aborts when another app comes to the front. A session from the
+owner's history no longer serves: since #341 a finished turn folds into one row, so a session is a few screens tall and
+AppKit has prepared every row before the wheel reaches the top.
+
+The script ends with `scripts/trace_summary.py <trace> <seconds of scrolling>`, which exports the trace's hitches table
+and its `os-signpost` table with `xctrace export` and prints the hitch time ratio (ms of hitches of the app's process per
+second of scrolling; the target of #396 is under 5 ms/s, 10 ms/s at worst), the count and the longest hitch, each
+signpost interval's count, total and longest time, and the `Cell` intervals per 5 seconds of the trace, which show
+whether new rows were made throughout the scroll. The ratio counts every hitch of the recording, including the second
+before the first event and after the last, over the time spent scrolling. Run it again on a saved trace with the
+seconds the script printed.
 
 The transcript's signposts are intervals: `RowView` and `Cell` (making a row view and a cell), and inside `Cell`,
 `Message` (the row's text, rendered from Markdown the first time) and `Show` (building the cell's views);
@@ -261,6 +273,16 @@ The transcript's signposts are intervals: `RowView` and `Cell` (making a row vie
 layout, where AppKit measures the heights of new rows) and `Draw` (a text field drawing). The hitches come from the
 render server, so unlike S2's display-link intervals they also count frames a responsive scroll presents while the
 main thread is busy. Like profiling, it needs the owner's approval and a quiet machine.
+
+### Lab isolation
+
+`just lab-build` gives the lab build its own bundle identifier, `io.github.anesthetised.Agenthesia.lab`: its own
+settings domain, saved windows and data folder (`Agenthesia-lab`). `scripts/bench.py lab`, `just lab-profile` and
+`wheel-scroll.sh` also run each lab process with `CFFIXED_USER_HOME` set to a new temporary folder, removed afterwards,
+so a lab process reads nothing of the installed app's history, settings or saved state. With `AGENTHESIA_LAB_RUNS`
+the app opens only the Rendering Lab and restores no window; a lab that has not started 30 seconds after launch quits
+with exit status 3 and `AGENTHESIA_LAB_RUNS: the Rendering Lab did not start …` on standard error, instead of waiting
+for the runner's timeout.
 
 ## Session transcript reduction
 

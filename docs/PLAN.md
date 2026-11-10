@@ -252,6 +252,15 @@ and peak memory are not measured. Every benchmark run needs the owner's approval
 Not taken and kept on record: #348 (copies of the item array, repeated decoding, replay on the main actor), #349
 (workspace scans, unbounded memory, queries that grow with the number of sessions), #350 (WAL).
 
+Progress:
+
+- #396 (2026-11-10): the measurement setup of step 0. The lab build has its own bundle identifier and every lab process
+  a temporary home; with `AGENTHESIA_LAB_RUNS` the app opens only the Rendering Lab, restores no window and quits after
+  30 seconds if the lab did not start (the runs of 2026-11-10 hung behind the main window with the installed app's
+  history). The wheel scenario scrolls the new lab scenario S12, S2's content in a session-sized window, and
+  `scripts/trace_summary.py` prints the hitch time ratio and the signposts. Not yet run on screen; the before and after
+  numbers of step 1 come next.
+
 ## M20: Review findings (2026-11-10)
 
 The owner reviewed the codebase, the issues, the UI and performance on 2026-11-10 (with Claude Fable) and compared the

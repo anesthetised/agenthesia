@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import re
 import subprocess
+import tempfile
 import time
 
 
@@ -117,18 +118,21 @@ def run(args):
             binary = ROOT / ".build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia"
         for repetition in range(1, args.runs + 1):
             for index, scenario in enumerate(metadata["scenarios"], start=1):
-                environment = dict(os.environ)
-                environment.pop("AGENTHESIA_LAB_RUNS", None)
-                environment.pop("AGENTHESIA_LAB_SNAPSHOTS", None)
-                if args.mode == "lab":
-                    environment["AGENTHESIA_LAB_RUNS"] = scenario  # One scenario per process, including cold runs.
                 log = directory / f"run-{repetition}-{index}.log"
                 print(f"Run {repetition}/{args.runs}: {scenario}", flush=True)
                 start = time.monotonic()
                 command = [str(binary)]
                 if args.mode == "persistence":
                     command += scenario.split(":")
-                results = run_once(command, environment, log, args.timeout)
+                environment = {key: value for key, value in os.environ.items()
+                               if key not in ("AGENTHESIA_LAB_RUNS", "AGENTHESIA_LAB_SNAPSHOTS")}
+                # A fresh home per lab process keeps the installed app's history, settings and saved windows out,
+                # beside the lab build's own bundle identifier; it is removed afterwards.
+                with tempfile.TemporaryDirectory(prefix="agh-lab-") as home:
+                    if args.mode == "lab":
+                        # One scenario per process, including cold runs.
+                        environment |= {"AGENTHESIA_LAB_RUNS": scenario, "CFFIXED_USER_HOME": home}
+                    results = run_once(command, environment, log, args.timeout)
                 metadata["results"].append({
                     "repetition": repetition, "scenario": scenario, "log": log.name,
                     "wallSeconds": time.monotonic() - start, "samples": results,

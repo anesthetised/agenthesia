@@ -103,6 +103,7 @@ import Testing
         let agentID = try #require(controller.session.agentSessionID)
         let window = OffscreenWindow(size: .init(width: 500, height: 900))
         defer { window.close() }
+        var offered: [CGFloat] = []
         func height(of command: String) async throws -> CGFloat {
             let call = ACP.ToolCallUpdate(
                 toolCallId: UUID().uuidString,
@@ -120,6 +121,9 @@ import Testing
                 host.layoutSubtreeIfNeeded()
             }
             let height = host.fittingSize.height
+            // Offered the room the card has above the composer, it keeps its own height.
+            let sizing = NSHostingController(rootView: PermissionDock(session: controller, maxHeight: 800))
+            offered.append(sizing.sizeThatFits(in: CGSize(width: 500, height: 800)).height - height)
             let request = try #require(controller.pendingPermissions.first)
             #expect(controller.answerPermission(request.id, with: "reject"))
             _ = await answer.value
@@ -131,6 +135,7 @@ import Testing
         #expect(six > one)
         // Twenty lines show as six: the rest scrolls.
         #expect(twenty > one && twenty < six + 4 * 13)
+        #expect(offered.allSatisfy { $0 < 2 }, "Extra height when offered room: \(offered)")
         try await controller.stop()
         await fixture.remove()
     }

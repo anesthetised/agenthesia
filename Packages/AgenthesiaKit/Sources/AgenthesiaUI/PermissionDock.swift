@@ -207,13 +207,14 @@ private struct CommandText: View {
     @ScaledMetric(relativeTo: .caption) private var lineHeight = 13
 
     var body: some View {
-        let text = Text(command).font(.caption.monospaced()).textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        ViewThatFits(in: .vertical) {
-            text
-            ScrollView { text }
+        // Sized to the text up to six lines whatever room the card is offered; `ViewThatFits` took all of it.
+        ScrollView {
+            Text(command).font(.caption.monospaced()).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxHeight: 6 * lineHeight)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

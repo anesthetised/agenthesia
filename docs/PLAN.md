@@ -43,7 +43,7 @@ before implementation.
 | Milestone | State |
 |---|---|
 | M1–M4, M6–M8, M15, M18 | Closed. How they were built and verified is in [plan-archive.md](plan-archive.md) |
-| M16 Multi-agent workflow | Everything landed except #234 (verification in the running app, README screenshots) and its tracker #220. The owner decided on 2026-11-10 that #234 runs once, after M20's sidebar and attention changes; M16 stays open until then |
+| M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
 | M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049: ADR-0051 is to be written (#354), and a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
 | M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353) |
@@ -68,11 +68,17 @@ order". Tiers are on the issues.
 | Lane | Sequence |
 |---|---|
 | Core (M13) | #373 → #354 → #71 → #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
-| Performance (M19) | #396 → #97 → #372 → #367 → #370 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #378, #380, #382, #384, #386 → #234 |
+| Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
+| Interface (M20) | #234, #374, #351, #375, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
+| Test stability (M10) | #134 → #133, before #355 |
 | Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
 
-The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #374, #351, #375, #395, #390 and #397.
+The first step is the head of each lane: #373 and #354; #396, then #97 and #372; #234, #374, #351, #375, #395, #390 and
+#397; #134.
+
+#134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
+cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
+instability is not specific to CI.
 
 Dependencies across lanes: #353 needs #373; #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
@@ -93,11 +99,13 @@ Rules that hold for every lane:
 
 - Benchmarks (#97, and the before and after runs of #367–#371) need the owner's approval of the workload, and nothing
   is built on the machine while one runs.
-- A check in the running app asks the owner to leave the machine alone (AGENTS.md). The two full passes are #321 (M13)
-  and #234 (M16 and M20 together).
+- A check in the running app asks the owner to leave the machine alone (AGENTS.md). The full passes are #234 (M16,
+  before the sidebar changes) and #321 (M13); #400 regenerates the README screenshots at the end.
 - An issue that says "options for the owner first" stops for that consultation before any view is written.
+- A pull request that changes the session core, persistence, permissions or the transcript table, or adds more than
+  about 1,000 lines, gets an independent review recorded on it before it is merged (AGENTS.md, *Git*).
 
-After the lanes: M10 (Release) once M13's wave 3 has landed: #45, #46, #47, #48, #49, #66, with #133, #126 and #134.
+After the lanes: M10 (Release) once M13's wave 3 has landed: #45, #46, #47, #48, #49, #66, with #126.
 The milestones that are not scheduled follow by the owner's choice.
 
 ## M13: Agenthesia tools (2026-11-09)
@@ -210,6 +218,7 @@ and peak memory are not measured. Every benchmark run needs the owner's approval
 | 1 | #396 fix: scrolling a transcript drops frames (reported by the owner from a Release build; profile first, then row reuse, cached heights, Markdown prepared off the main actor) | `agent:strong` | — |
 | 1 | #97 End-to-end streaming bench: the real controller, store and table with 1, 4 and 8 sessions | `agent:strong` | — |
 | 1 | #372 Count-based performance invariants in `just test` | `agent:light` | — |
+| 2 | #398 Permission card: compute the diff once, off the main actor, and show its first lines | `agent:light` | — |
 | 1 | #367 Update the transcript table only on change | `agent:strong` | — |
 | 1 | #370 Load highlight grammars off the main actor | `agent:light` | — |
 | 2 | #368 Session summary fields, apart from the per-frame transcript | `agent:strong` | — |
@@ -241,7 +250,9 @@ the first-run, text-size and VoiceOver items.
 | 2 | #377 Keyboard: the gaps that need the mouse today | `agent:light` | — |
 | 2 | #379 Review: revert a file | `agent:light` | — |
 | 2 | #381 Sidebar: the agent on a row and a card | `agent:light` | #352 |
-| 2 | #383 Composer: paste images, keep drafts | `agent:light` | — |
+| 2 | #383 Composer: paste images as attachments | `agent:light` | — |
+| 3 | #399 Composer: keep drafts across a relaunch (an ADR first: ADR-0026 says drafts are not restored) | `agent:strong` | — |
+| 3 | #400 Refresh the README screenshots after the sidebar and attention changes | `agent:light` | #352, #353, #376 |
 | 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
 | 2 | #387 Transcript: move between prompts | `agent:light` | — |
 | 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue) | `agent:strong` | — |
@@ -276,10 +287,11 @@ Tracking issue #220. After M15, the owner reviewed the codebase and the open iss
 and chose a second set of UI/UX changes, several of them against accepted ADRs. The owner accepted all of them on
 2026-11-07; the documentation landed in #235.
 
-**Open (2026-11-10).** #234, the verification in the running app and the README screenshots, and the tracker #220.
-The owner decided that #234 runs once, after M20's sidebar (#352, #353) and attention (#376) changes, which would
-outdate it. The board and the menu bar item have not been checked in the running app; the review of 2026-11-10 found
-from the code that they show stale text for sessions that no window displays (#368).
+**Open (2026-11-10).** #234, the verification in the running app, and the tracker #220. #234 runs now, before M20's
+sidebar (#352, #353) and attention (#376) changes build on what it checks; the README screenshots are #400, after
+them. The board and the menu bar item have not been checked in the running app; the review of 2026-11-10 found from
+the code that they show stale text for sessions that no window displays (#368) and that the menu bar can answer a
+request it did not list (#374).
 
 | Decision | Where | Status |
 |---|---|---|

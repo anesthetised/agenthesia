@@ -189,6 +189,11 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
 - A pull request refers to the issue it belongs to and takes that issue's milestone and its type labels
   (`enhancement`, `bug`, `documentation`, …); the model-tier labels stay on issues. When the change
   delivers only part of an issue, use `Refs` and leave the issue open. When no issue fits, open one first.
+- **Independent review.** A pull request that changes the session core (sessions, the queue, turns), persistence,
+  permissions or the transcript table, or that adds more than about 1,000 lines, is reviewed before it is merged by a
+  strong-tier model other than the one that wrote it. The findings and what was done about each are posted as a
+  comment on the pull request. Split a large vertical change into a chain of pull requests (the model and its
+  reducer, then the source and its cache, then the views, then the verification) rather than one.
 
 ## Code
 

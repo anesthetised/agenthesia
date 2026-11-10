@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-05
+- Amended by: [0051](0051-turns-between-sessions.md) (messages the user did not send: their origin, draining by author,
+  no interruption of the user's turn, held while the queue is paused)
 
 ## Context
 

@@ -242,6 +242,34 @@ import Testing
         #expect(element.accessibilityCustomActions()?.map(\.name) == ["Copy", "Details"])
     }
 
+    /// #351: the divider is drawn across the column, not bunched at its leading edge. No exact widths: only that each
+    /// hairline is longer than the caption is tall, that the two match, and that the X and the caption sit in the middle.
+    @Test(arguments: [1200.0, 600.0]) func theDividerSpansTheColumnWithItsCaptionInTheMiddle(width: Double) async throws
+    {
+        let recorded = try await rows()
+        let source = LiveTranscriptSource()
+        source.state = recorded.state
+        let controller = TranscriptTableController()
+        let window = host(controller, width: width)
+        defer { window.close() }
+        controller.update(source)
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let divider = try cell(controller, row: 2)
+        let lines = views(NSBox.self, in: divider)
+        let caption = try #require(views(NSTextField.self, in: divider).first)
+        #expect(lines.count == 2)
+        let icon = try #require(views(NSImageView.self, in: divider).first)
+        let captionFrame = caption.convert(caption.bounds, to: divider)
+        let middle = icon.convert(icon.bounds, to: divider).union(captionFrame).midX
+        for line in lines {
+            #expect(line.convert(line.bounds, to: divider).width > captionFrame.height)
+        }
+        let widths = lines.map { $0.convert($0.bounds, to: divider).width }
+        #expect(abs(widths[0] - widths[1]) <= 2)
+        #expect(abs(middle - divider.bounds.midX) <= 4)
+    }
+
     /// Rows keep their own height since #302: each of the three fits its content after a resize, and the question's
     /// row grows with its answers and shrinks back.
     @Test func theRowsFitTheirContentAfterAResize() async throws {

@@ -36,7 +36,8 @@ struct SessionCard: View {
             request = session?.pendingPermissions.first
         }
 
-        /// The plain rule (ADR-0046): Open leads only for a request with a diff; the card itself opens the session.
+        /// The plain rule (ADR-0046): Open leads only for a request with a diff or a command the card cuts; the card
+        /// itself opens the session.
         var choices: [PermissionChoice] { request.map { PermissionChoice.choices(for: $0) } ?? [] }
 
         /// The running turn's `Working 1m 12s`, or an idle session's `Idle 20m`, as on the Working shelf
@@ -83,9 +84,9 @@ struct SessionCard: View {
                 TimelineView(.everyMinute) { summary(now: $0.date) }
             }
             if let request = content.request, let session = content.session {
-                // A new identity per request restarts arming.
+                // A new identity per request, or per command, restarts arming.
                 BoardPermission(request: request, session: session, choices: content.choices, open: open)
-                    .id(request.id)
+                    .id(DockedPermission([request])?.identity)
             }
         }
         .padding(12)
@@ -134,8 +135,8 @@ struct SessionCard: View {
     }
 }
 
-/// A pending permission on a card: the operation line and the agent's options, without the diff or shortcuts
-/// (ADR-0046). Like the docked card, the buttons arm 400 ms after the request appears, since cards move when a session
+/// A pending permission on a card: the operation line, a command in up to four lines and the agent's options, without
+/// the diff or shortcuts (ADR-0046). Like the docked card, the buttons arm 400 ms after the request appears, since cards move when a session
 /// changes section.
 private struct BoardPermission: View {
     let request: SessionController.PendingPermission
@@ -150,6 +151,10 @@ private struct BoardPermission: View {
         VStack(alignment: .leading, spacing: 8) {
             if let docked = DockedPermission([request]) {
                 Label(docked.operation, systemImage: docked.symbol).fontWeight(.semibold).lineLimit(2)
+                if let command = docked.command {
+                    Text(command).font(.caption.monospaced()).lineLimit(PermissionCommand.boardLines)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             WrappingLayout(spacing: 8) {
                 ForEach(choices) { choice in

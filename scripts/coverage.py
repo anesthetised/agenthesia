@@ -12,10 +12,12 @@ covers a single binary. `report` merges every raw profile and exports coverage a
 import glob
 import json
 import os
+import pty
 import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections import defaultdict
 
@@ -108,6 +110,24 @@ def test(package: str) -> int:
     return result
 
 
+STARTED = re.compile(r"^◇ Test (?!run |case )(.+) started\.$")
+FINISHED = re.compile(r"^[✔✘➜] Test (.+?)(?: with \d+ test cases?)? (?:passed|failed|skipped)\b")
+
+
+def relay(master: int, running: dict[str, None]) -> None:
+    """Copies the test output to ours line by line and tracks the tests that started and did not finish."""
+    try:
+        with open(master, encoding="utf-8", errors="replace") as lines:
+            for line in lines:
+                print(line, end="", flush=True)
+                if started := STARTED.match(line.rstrip()):
+                    running[started[1]] = None
+                elif finished := FINISHED.match(line):
+                    running.pop(finished[1], None)
+    except OSError:
+        pass  # EIO: every writer closed the terminal
+
+
 def sample_test_processes(parent: int) -> None:
     """Capture the blocked test runner, including when its main actor cannot process test time limits."""
     output = subprocess.check_output(["ps", "-axo", "pid=,ppid=,comm="], text=True, timeout=5)
@@ -127,12 +147,26 @@ def sample_test_processes(parent: int) -> None:
 
 
 def run_test_process(command: list[str], env: dict[str, str], timeout: float = 120) -> int:
-    """Keep a test deadlock from consuming the entire CI job; preserve a stack before terminating it."""
-    with subprocess.Popen(command, env=env, start_new_session=True) as process:
+    """Keep a test deadlock from consuming the entire CI job; preserve a stack before terminating it.
+
+    The tests run on a pseudo-terminal: with a pipe for output, as on CI, they buffer it, so the log showed bursts
+    that said nothing about when a test ran (#134).
+    """
+    master, slave = pty.openpty()
+    running: dict[str, None] = {}
+    with subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=slave, stderr=slave,
+                          start_new_session=True) as process:
+        os.close(slave)
+        reader = threading.Thread(target=relay, args=(master, running), daemon=True)
+        reader.start()
         try:
             return process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             print(f"Test process exceeded {timeout:g} seconds; collecting stacks before termination.", file=sys.stderr)
+            print(f"Tests started and not finished ({len(running)}):", file=sys.stderr)
+            for name in list(running):
+                print(f"  {name}", file=sys.stderr)
+            sys.stderr.flush()
             try:
                 sample_test_processes(process.pid)
             except (OSError, subprocess.SubprocessError) as error:
@@ -155,6 +189,9 @@ def run_test_process(command: list[str], env: dict[str, str], timeout: float = 1
                     pass
                 process.wait()
             return 124
+        finally:
+            # A descendant that outlives the runner may keep the terminal open; the thread is a daemon.
+            reader.join(timeout=2)
 
 
 def report(package: str, args: list[str]) -> int:

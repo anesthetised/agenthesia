@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -37,6 +38,46 @@ class CoverageTestProcessTests(unittest.TestCase):
                     [sys.executable, "-c", f"raise SystemExit({status})"], dict(os.environ), timeout=5
                 )
                 self.assertEqual(actual, status)
+
+    def test_output_reaches_a_pipe_line_by_line_while_the_process_runs(self):
+        # A pipe makes a child block-buffer its output unless it sees a terminal (#134).
+        child = ("import time; print('first'); time.sleep(2); print('second')")
+        driver = [sys.executable, "-c",
+                  "import sys, coverage; sys.exit(coverage.run_test_process("
+                  f"[sys.executable, '-c', {child!r}], {{}}, 10))"]
+        with subprocess.Popen(driver, cwd=Path(__file__).parent, stdout=subprocess.PIPE, text=True) as process:
+            started = time.monotonic()
+            first = process.stdout.readline()
+            first_at = time.monotonic() - started
+            rest = process.stdout.read()
+        self.assertEqual(first, "first\n")
+        self.assertLess(first_at, 1.5)
+        self.assertEqual(rest, "second\n")
+
+    def test_timeout_names_the_tests_that_started_and_did_not_finish_before_sampling(self):
+        output = "\n".join([
+            "◇ Test run started.",
+            "◇ Test done() started.",
+            "◇ Test stuck() started.",
+            "◇ Test params(_:) started.",
+            "◇ Test case passing 1 argument 1 to params(_:) started.",
+            "✔ Test done() passed after 0.001 seconds.",
+            "✔ Test params(_:) with 2 test cases passed after 0.002 seconds.",
+            "◇ Test failing() started.",
+            "✘ Test failing() failed after 0.001 seconds with 1 issue.",
+            "◇ Test hung(_:) started.",
+        ])
+        command = [sys.executable, "-c", f"import time; print({output!r}, flush=True); time.sleep(60)"]
+        calls = []
+        with patch.object(coverage, "sample_test_processes", side_effect=lambda pid: calls.append(errors.getvalue())), \
+             contextlib.redirect_stdout(io.StringIO()) as shown, \
+             contextlib.redirect_stderr(io.StringIO()) as errors:
+            status = coverage.run_test_process(command, dict(os.environ), timeout=2)
+        self.assertEqual(status, 124)
+        self.assertIn("◇ Test stuck() started.", shown.getvalue())
+        # The list is already printed when the stack sample starts.
+        self.assertIn("Tests started and not finished (2):\n  stuck()\n  hung(_:)\n", calls[0])
+        self.assertNotIn("done()", calls[0])
 
     def test_timeout_reports_failure_and_reaps_the_test_process_even_if_sampling_fails(self):
         with tempfile.TemporaryDirectory() as directory:

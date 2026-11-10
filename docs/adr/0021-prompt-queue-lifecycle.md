@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-10-16
+- Amended by: [0051](0051-turns-between-sessions.md) (a paused queue holds messages the user did not send; an
+  appended-entry event beside the whole-queue snapshots; a disposition from `submit`)
 - Decider: Project owner
 - Scope: prompt queue and steering (#65); clarifies ADR-0010 and builds on ADR-0017 and ADR-0018
 

@@ -17,6 +17,9 @@ struct DockedPermission: Equatable {
     }
 
     var id: UUID { request.id }
+    /// The card's identity: a new request, or a command the agent filled in or changed while the card was shown,
+    /// restarts arming, so a click meant for what was shown before does not approve what is shown now.
+    var identity: [String] { [request.id.uuidString, command ?? ""] }
     var options: [ACP.PermissionOption] { request.options }
     /// `1 of 3` while several requests are pending; there is no navigation between them.
     var counter: String? { count > 1 ? "1 of \(count)" : nil }
@@ -33,15 +36,23 @@ struct DockedPermission: Equatable {
         return paths.isEmpty ? kind : "\(kind) · \(paths.joined(separator: ", "))"
     }
 
-    /// Agent-authored text, shown after the operation as secondary text.
-    var title: String? { request.toolCall.title.isEmpty ? nil : request.toolCall.title }
+    /// What an `execute` request runs, whole (#375); the card and the board show it in monospaced type.
+    var command: String? { PermissionCommand.of(request.toolCall) }
+
+    /// Agent-authored text, shown after the operation as secondary text; not again when it is the command itself.
+    var title: String? {
+        let title = request.toolCall.title
+        return title.isEmpty || title == command ? nil : title
+    }
 
     var diffs: [ACP.Diff] {
         (request.toolCall.content ?? []).compactMap { if case .diff(let diff) = $0 { diff } else { nil } }
     }
 
+    /// The command's first line is part of it, so that VoiceOver says what is asked; the card has the rest.
     var announcement: String {
-        "Permission request: \(operation)" + (count > 1 ? ", \(count) pending" : "")
+        "Permission request: \(operation)" + (command.map { ": \(PermissionCommand.firstLine($0).prefix(200))" } ?? "")
+            + (count > 1 ? ", \(count) pending" : "")
     }
 
     /// ⌥⌘1…⌥⌘9 for the first nine options.
@@ -85,8 +96,8 @@ struct PermissionDock: View {
 
     var body: some View {
         if let docked = DockedPermission(session.pendingPermissions) {
-            // A new identity per request restarts arming and collapses the extra files.
-            PermissionCard(docked: docked, session: session, maxHeight: maxHeight).id(docked.id)
+            // A new identity per request, or per command, restarts arming and collapses the extra files.
+            PermissionCard(docked: docked, session: session, maxHeight: maxHeight).id(docked.identity)
         }
     }
 }
@@ -117,6 +128,9 @@ private struct PermissionCard: View {
             }
             if let title = docked.title {
                 Text(title).foregroundStyle(.secondary)
+            }
+            if let command = docked.command {
+                CommandText(command: command)
             }
             if let first = docked.diffs.first {
                 ScrollView {
@@ -184,6 +198,23 @@ private struct PermissionCard: View {
 
     private func answer(_ index: Int) {
         docked.answer(option: index, in: session, arming: arming)
+    }
+}
+
+/// A command whole, in monospaced selectable type that wraps, and scrolls beyond about six lines as a diff does.
+private struct CommandText: View {
+    let command: String
+    @ScaledMetric(relativeTo: .caption) private var lineHeight = 13
+
+    var body: some View {
+        // Sized to the text up to six lines whatever room the card is offered; `ViewThatFits` took all of it.
+        ScrollView {
+            Text(command).font(.caption.monospaced()).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxHeight: 6 * lineHeight)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

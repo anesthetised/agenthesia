@@ -28,6 +28,19 @@ extension MCP {
                 }
             }
         }
+
+        /// The same tool, refused with an `isError` result carrying `refusal()`'s message whenever that returns one.
+        public func gated(by refusal: @escaping @Sendable () async -> String?) -> ServedTool {
+            ServedTool(tool: tool) { arguments in
+                if let message = await refusal() { return .error(message) }
+                return await call(arguments)
+            }
+        }
+
+        private init(tool: Tool, call: @escaping @Sendable (JSONValue?) async -> CallToolResult) {
+            self.tool = tool
+            self.call = call
+        }
     }
 
     /// A `Router` that serves `initialize`, `ping`, `tools/list` and `tools/call` for `tools`.

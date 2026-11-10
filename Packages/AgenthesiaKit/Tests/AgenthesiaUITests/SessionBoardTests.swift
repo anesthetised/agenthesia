@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import JSONRPC
 import Persistence
 import SwiftUI
 import Testing
@@ -224,6 +225,45 @@ import Testing
         let request = try #require(asking.request)
         controller.answerPermission(request.id, with: "no")
         _ = await answer.value
+        await owner.stop()
+        await turn.value
+        await fixture.close()
+    }
+
+    /// The card shows a command in up to four lines, so a twenty-line command makes it taller than a one-line one, but
+    /// not by sixteen lines; a cut command puts Open first.
+    @Test func aCardShowsACommandInUpToFourLines() async throws {
+        _ = NSApplication.shared
+        let fixture = try Fixture()
+        let window = OffscreenWindow(size: .init(width: 320, height: 800))
+        defer { window.close() }
+        let (owner, controller) = try await fixture.start()
+        let turn = Task { await owner.send("slow") }
+        await eventually { controller.status == .running }
+        let agentID = try #require(controller.session.agentSessionID)
+        func card(of command: String) async throws -> (height: CGFloat, choices: [PermissionChoice]) {
+            let call = ACP.ToolCallUpdate(
+                toolCallId: UUID().uuidString,
+                title: "Bash",
+                kind: .execute,
+                rawInput: ["command": .string(command)]
+            )
+            let answer = Task { await controller.requestPermission(for: call, options: options, in: agentID) }
+            await eventually { !controller.pendingPermissions.isEmpty }
+            let asking = try #require(SessionBoard.cards(fixture.model).first)
+            let height = await host(SessionCard(content: asking) {}, in: window).fittingSize.height
+            controller.answerPermission(try #require(asking.request).id, with: "no")
+            _ = await answer.value
+            return (height, asking.choices)
+        }
+        let one = try await card(of: "swift test")
+        let four = try await card(of: (1...4).map { "echo \($0)" }.joined(separator: "\n"))
+        let twenty = try await card(of: (1...20).map { "echo \($0)" }.joined(separator: "\n"))
+        #expect(four.height > one.height)
+        // Twenty lines show as four; Open's button may change the height of the buttons a little.
+        #expect(twenty.height > one.height && twenty.height < four.height + 4 * 13)
+        #expect(one.choices.first == .option(options[0]) && four.choices.first == .option(options[0]))
+        #expect(twenty.choices == [.open] + options.map(PermissionChoice.option))
         await owner.stop()
         await turn.value
         await fixture.close()

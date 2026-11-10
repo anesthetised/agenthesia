@@ -1,5 +1,6 @@
 import ACP
 import Foundation
+import JSONRPC
 import Testing
 
 @testable import AgenthesiaCore
@@ -44,6 +45,18 @@ struct PermissionChoiceTests {
             content: [.content(.init(content: .init(text: "https://example.com")))]
         )
         #expect(PermissionChoice.choices(for: request(described)).first == .option(allow))
+    }
+
+    @Test func aCommandTheBoardCutsOffersOpenFirst() {
+        let long = ACP.ToolCall(
+            toolCallId: "run",
+            title: "Bash",
+            kind: .execute,
+            rawInput: ["command": .string(String(repeating: "echo\n", count: 5))]
+        )
+        #expect(PermissionChoice.choices(for: request(long)).first == .open)
+        let short = ACP.ToolCall(toolCallId: "run", title: "Bash", kind: .execute, rawInput: ["command": "echo"])
+        #expect(PermissionChoice.choices(for: request(short)).first == .option(allow))
     }
 
     @Test func aSurfaceWithNoOtherWayToOpenAsksForOpenEvenWithoutADiff() {

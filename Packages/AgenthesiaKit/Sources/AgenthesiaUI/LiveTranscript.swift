@@ -75,7 +75,11 @@ extension TranscriptSource {
 /// Attributed text is cached only for rows requested by NSTableView.
 final class LiveTranscriptSource: TranscriptSource {
     var state = TranscriptState() { didSet { fold() } }
-    private(set) var rows: [TranscriptRow] = []
+    /// Folds only the last turn on each update (#341).
+    private(set) var folder = TranscriptFolder()
+    var rows: [TranscriptRow] { folder.rows }
+    /// The item before the folder's settled ones, to tell another transcript from a longer one.
+    private var settledID: Int64?
     var running = false
     var revision = 0
     /// Answers go to the controller, which owns the request's lifetime.
@@ -111,28 +115,31 @@ final class LiveTranscriptSource: TranscriptSource {
     /// Keyed by row identity, so streamed updates and replay keep a card's expansion.
     private var expanded: Set<Int64> = []
     /// Keyed by the group's first item, so that a growing group keeps its expansion.
-    private var expandedGroups: Set<Int64> = [] { didSet { fold() } }
+    private var expandedGroups: Set<Int64> = [] { didSet { refold() } }
     /// Finished turns whose work is shown, by turn.
-    private var expandedTurns: Set<UUID> = [] { didSet { fold() } }
-    /// The finished turns' folds, in transcript order.
-    private var turns: [TurnFold] = []
+    private var expandedTurns: Set<UUID> = [] { didSet { refold() } }
     var messageCount: Int { rows.count }
+
+    /// Folds every row again, after a change that can touch any of them.
+    private func refold() {
+        folder.reset()
+        fold()
+    }
 
     private func fold() {
         let items = state.items
-        turns = TranscriptRow.turnFolds(
+        let settled = folder.settled
+        if settled > 0, settled > items.count || items[settled - 1].id != settledID { folder.reset() }
+        folder.update(
             count: items.count,
             part: { Self.turnPart(items[$0]) },
-            finished: { state.finishedTurns[$0] != nil },
-            isExpanded: expandedTurns.contains
-        )
-        rows = TranscriptRow.fold(
-            count: items.count,
             isToolCall: { items[$0].toolCall != nil },
             isThought: { items[$0].message?.role == .thought },
             isExpanded: { expandedGroups.contains(items[$0].id) },
-            turns: turns
+            finished: { state.finishedTurns[$0] != nil },
+            isTurnExpanded: expandedTurns.contains
         )
+        settledID = folder.settled > 0 ? items[folder.settled - 1].id : nil
     }
 
     private static func turnPart(_ item: TranscriptState.Item) -> TranscriptRow.TurnPart {
@@ -148,6 +155,8 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     func update(_ controller: SessionController) {
+        // Another session's transcript shares nothing with the folded one.
+        if self.controller !== controller { folder.reset() }
         self.controller = controller
         root = URL(filePath: controller.session.workingDirectory)
         state = controller.transcript
@@ -185,7 +194,7 @@ final class LiveTranscriptSource: TranscriptSource {
     }
 
     private func turnMessage(first: Int) -> TranscriptMessage {
-        let turn = turns.first { $0.items.lowerBound == first }
+        let turn = folder.turn(at: first)
         return TurnFold.message(
             duration: turn.flatMap { state.finishedTurns[$0.turn] } ?? 0,
             expanded: turn?.expanded == true
@@ -433,7 +442,7 @@ final class LiveTranscriptSource: TranscriptSource {
             first -= 1
         }
         expanded.insert(items[first].id)
-        if let turn = turns.first(where: { $0.items.contains(index) }), !turn.expanded, !turn.kept.contains(index) {
+        if let turn = folder.turn(containing: index), !turn.expanded, !turn.kept.contains(index) {
             expandedTurns.insert(turn.turn)
         }
         revision += 1
@@ -463,7 +472,7 @@ final class LiveTranscriptSource: TranscriptSource {
             let id = state.items[first].id
             if expanded.remove(id) == nil { expanded.insert(id) }
         case .turn(let first):
-            guard let turn = turns.first(where: { $0.items.lowerBound == first })?.turn else { break }
+            guard let turn = folder.turn(at: first)?.turn else { break }
             if expandedTurns.remove(turn) == nil { expandedTurns.insert(turn) }
         }
         revision += 1

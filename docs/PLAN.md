@@ -970,9 +970,14 @@ Pitfalls known so far:
   and every row's height after folding, expanding, resizing and collapsing (it fails without `rowContentHugging`).
   Rendering Lab **S11** (new): a 10,000-item history of finished turns, then a new turn with S7's tool updates, S10's
   thoughts and the S1 answer, which folds at the end (`foldsTurns`, `startTurn()`, `finishTurn()` in
-  `AppTranscriptPrototype`; `scripts/bench.py` accepts `S11:App`). **Do not merge before the benchmark run**
-  (`just lab-run S1:App,S7:App,S9:App,S10:App,S11:App --runs 1`, three interleaved rounds, before = the PR's base with
-  S11 patched in, results in `docs/benchmarks/<date>/turn-fold/`). **Running-app check deferred** (MockAgent `--demo`
+  `AppTranscriptPrototype`; `scripts/bench.py` accepts `S11:App`). First benchmark run (2026-11-10, `just lab-run
+  S1:App,S7:App,S9:App,S10:App,S11:App --runs 1`, three interleaved rounds, before = `f089e49` with S11 patched in,
+  [results](benchmarks/2026-11-10/turn-fold/README.md)): S1, S7 and S10 within noise, **S11 regressed** (94–153
+  hitches per run before, 176–227 after, apply p95 up 3–4 ms) and S9 drifted, because every update folded the whole
+  history again and scanned it once more for the turns. Fixed: `TranscriptFolder` keeps everything before the last
+  turn's first prompt and folds only the last turn per update; tests check it against a full fold after every item and
+  that a chunk's folded items do not grow with the number of finished turns. **Do not merge before the second run**
+  (S1, S9 and S11, with the owner's approval, recorded in the same README). **Running-app check deferred** (MockAgent `--demo`
   turns with tools and thoughts, isolated home, light and dark): (1) while a turn runs every row stays open; when it
   ends, its calls, groups, thoughts and permission records fold into `Worked for <time>` with a chevron and a hairline
   below the prompt, and the answer stays open below it, with no jump of the following-bottom position; (2) clicking the

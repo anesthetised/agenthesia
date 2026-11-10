@@ -1,0 +1,662 @@
+[
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261109T234847.389590Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "952f7a0092543e0e9aa3ea1fad8977c5739112d7",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S1:App",
+   "S7:App",
+   "S9:App",
+   "S10:App",
+   "S11:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S1:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 14.644548625,
+    "samples": [
+     {
+      "id": "86B4903B-BE0E-4CBE-928B-7716AD402ADD",
+      "scenario": "S1 Stream, App: production transcript, warm",
+      "report": {
+       "max": 21.53958333656192,
+       "freeMemory": 75,
+       "frames": 1479,
+       "hitches": 8,
+       "excessMilliseconds": 79.53108660876751,
+       "memory": 79.4698257446289,
+       "p50": 8.333333302289248,
+       "p95": 8.333333767950535,
+       "estimatedMissed": 9,
+       "p99": 8.333333767950535,
+       "load": 7.0859375
+      },
+      "measurements": {
+       "applyLatencyP95MS": 10.104999999999364,
+       "viewportWidth": 868,
+       "chunkIntervalMS": 10,
+       "backingScale": 2,
+       "screenMaximumFPS": 120,
+       "toolUpdates": 0,
+       "peakBacklogChunks": 4,
+       "viewportHeight": 340,
+       "chunks": 1244,
+       "elapsedMS": 12440.98975,
+       "characters": 16249,
+       "applyLatencyMaxMS": 34.21375
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S7:App",
+    "log": "run-1-2.log",
+    "wallSeconds": 14.4198275,
+    "samples": [
+     {
+      "report": {
+       "hitches": 74,
+       "p99": 23.060749750584364,
+       "excessMilliseconds": 1053.630537353456,
+       "max": 34.08012492582202,
+       "p95": 12.989125214517117,
+       "frames": 1366,
+       "memory": 78.00102996826172,
+       "freeMemory": 75,
+       "load": 5.87255859375,
+       "estimatedMissed": 126,
+       "p50": 8.333333302289248
+      },
+      "measurements": {
+       "chunkIntervalMS": 10,
+       "toolUpdates": 124,
+       "backingScale": 2,
+       "chunks": 1244,
+       "applyLatencyMaxMS": 25.373499999999996,
+       "characters": 16249,
+       "applyLatencyP95MS": 12.502792000000262,
+       "viewportWidth": 868,
+       "elapsedMS": 12444.3515,
+       "screenMaximumFPS": 120,
+       "peakBacklogChunks": 3,
+       "viewportHeight": 340
+      },
+      "scenario": "S7 Tool updates, App: production transcript, warm",
+      "id": "7976F68C-6724-4B7F-824A-33A56A9643C6"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S9:App",
+    "log": "run-1-3.log",
+    "wallSeconds": 14.787044082999998,
+    "samples": [
+     {
+      "report": {
+       "p95": 20.643708296120167,
+       "p50": 8.333333302289248,
+       "freeMemory": 75,
+       "load": 6.2685546875,
+       "excessMilliseconds": 1672.274164389819,
+       "frames": 1329,
+       "p99": 23.850583471357822,
+       "memory": 89.7979507446289,
+       "estimatedMissed": 200,
+       "hitches": 100,
+       "max": 129.828916862607
+      },
+      "measurements": {
+       "viewportWidth": 868,
+       "elapsedMS": 12784.244625,
+       "toolUpdates": 127,
+       "chunks": 1278,
+       "peakBacklogChunks": 13,
+       "backingScale": 2,
+       "applyLatencyP95MS": 17.862374999999986,
+       "characters": 16387,
+       "chunkIntervalMS": 10,
+       "applyLatencyMaxMS": 124.6884589999997,
+       "viewportHeight": 340,
+       "screenMaximumFPS": 120
+      },
+      "id": "245D8123-91CE-4844-9059-D4DA029D666B",
+      "scenario": "S9 Tool updates, 10k items, App: production transcript, warm"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S10:App",
+    "log": "run-1-4.log",
+    "wallSeconds": 21.093583709,
+    "samples": [
+     {
+      "measurements": {
+       "screenMaximumFPS": 120,
+       "toolUpdates": 0,
+       "peakBacklogChunks": 4,
+       "backingScale": 2,
+       "chunks": 1918,
+       "characters": 24674,
+       "viewportHeight": 340,
+       "applyLatencyMaxMS": 30.570042,
+       "elapsedMS": 19180.56475,
+       "viewportWidth": 868,
+       "chunkIntervalMS": 10,
+       "applyLatencyP95MS": 9.532291999999387
+      },
+      "id": "7A3E3957-DF60-4804-B8EB-BB97DEE9AF2B",
+      "report": {
+       "load": 6.03662109375,
+       "p99": 12.680541723966599,
+       "hitches": 26,
+       "excessMilliseconds": 256.0497778467834,
+       "p50": 8.333333302289248,
+       "max": 32.42845833301544,
+       "estimatedMissed": 31,
+       "memory": 72.95415496826172,
+       "freeMemory": 75,
+       "frames": 2267,
+       "p95": 8.333333767950535
+      },
+      "scenario": "S10 Thoughts, App: production transcript, warm"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S11:App",
+    "log": "run-1-5.log",
+    "wallSeconds": 21.178467166999994,
+    "samples": [
+     {
+      "scenario": "S11 Turns, 10k items, App: production transcript, warm",
+      "report": {
+       "excessMilliseconds": 2415.089210961014,
+       "frames": 2007,
+       "p99": 23.978250101208687,
+       "p95": 19.63970810174942,
+       "estimatedMissed": 286,
+       "hitches": 176,
+       "memory": 96.37605285644531,
+       "max": 128.58045799657702,
+       "freeMemory": 75,
+       "load": 4.95703125,
+       "p50": 8.333333302289248
+      },
+      "id": "CA6EC8E3-32C3-439C-B484-B65744A5C1E8",
+      "measurements": {
+       "chunks": 1910,
+       "elapsedMS": 19146.566625,
+       "chunkIntervalMS": 10,
+       "applyLatencyP95MS": 16.92279199999902,
+       "applyLatencyMaxMS": 122.43483299999802,
+       "characters": 24688,
+       "viewportHeight": 340,
+       "viewportWidth": 868,
+       "screenMaximumFPS": 120,
+       "backingScale": 2,
+       "peakBacklogChunks": 13,
+       "toolUpdates": 191
+      }
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261109T235027.706920Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "952f7a0092543e0e9aa3ea1fad8977c5739112d7",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S1:App",
+   "S7:App",
+   "S9:App",
+   "S10:App",
+   "S11:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S1:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 14.351324667,
+    "samples": [
+     {
+      "id": "6806C4D0-ECA3-4EE4-8F50-11EBF05A86CB",
+      "scenario": "S1 Stream, App: production transcript, warm",
+      "report": {
+       "p99": 8.333333767950535,
+       "hitches": 11,
+       "frames": 1477,
+       "excessMilliseconds": 95.36633733659983,
+       "max": 20.46112483367324,
+       "memory": 78.00102996826172,
+       "freeMemory": 76,
+       "load": 4.12744140625,
+       "p95": 8.333333767950535,
+       "p50": 8.333333302289248,
+       "estimatedMissed": 11
+      },
+      "measurements": {
+       "viewportHeight": 340,
+       "applyLatencyMaxMS": 36.367834,
+       "backingScale": 2,
+       "toolUpdates": 0,
+       "chunkIntervalMS": 10,
+       "screenMaximumFPS": 120,
+       "chunks": 1244,
+       "viewportWidth": 868,
+       "applyLatencyP95MS": 10.585666999999077,
+       "peakBacklogChunks": 4,
+       "elapsedMS": 12443.122959,
+       "characters": 16249
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S7:App",
+    "log": "run-1-2.log",
+    "wallSeconds": 14.365999792,
+    "samples": [
+     {
+      "scenario": "S7 Tool updates, App: production transcript, warm",
+      "id": "2789B19F-6147-4104-860C-635010331D34",
+      "measurements": {
+       "viewportHeight": 340,
+       "viewportWidth": 868,
+       "chunkIntervalMS": 10,
+       "screenMaximumFPS": 120,
+       "applyLatencyMaxMS": 42.366084,
+       "chunks": 1244,
+       "toolUpdates": 124,
+       "elapsedMS": 12440.829959,
+       "applyLatencyP95MS": 12.001709,
+       "backingScale": 2,
+       "characters": 16249,
+       "peakBacklogChunks": 5
+      },
+      "report": {
+       "frames": 1359,
+       "max": 25.509708561003208,
+       "hitches": 82,
+       "load": 3.876953125,
+       "p50": 8.333333302289248,
+       "p99": 22.266666404902935,
+       "estimatedMissed": 129,
+       "memory": 80.48540496826172,
+       "excessMilliseconds": 1076.3190789148211,
+       "p95": 14.577582944184542,
+       "freeMemory": 75
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S9:App",
+    "log": "run-1-3.log",
+    "wallSeconds": 14.872295958000002,
+    "samples": [
+     {
+      "report": {
+       "freeMemory": 74,
+       "p50": 8.333333302289248,
+       "p99": 23.245458025485277,
+       "frames": 1341,
+       "excessMilliseconds": 1572.0159099437296,
+       "max": 124.41916624084115,
+       "load": 4.08154296875,
+       "hitches": 99,
+       "estimatedMissed": 187,
+       "p95": 19.79262474924326,
+       "memory": 88.28230285644531
+      },
+      "id": "526F5CB4-8830-48C2-8F1E-2CABCD0CB482",
+      "measurements": {
+       "elapsedMS": 12782.975667,
+       "toolUpdates": 127,
+       "applyLatencyMaxMS": 111.63658399999976,
+       "chunkIntervalMS": 10,
+       "viewportWidth": 868,
+       "peakBacklogChunks": 12,
+       "viewportHeight": 340,
+       "backingScale": 2,
+       "applyLatencyP95MS": 17.09366699999748,
+       "characters": 16387,
+       "chunks": 1278,
+       "screenMaximumFPS": 120
+      },
+      "scenario": "S9 Tool updates, 10k items, App: production transcript, warm"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S10:App",
+    "log": "run-1-4.log",
+    "wallSeconds": 21.116777374999998,
+    "samples": [
+     {
+      "report": {
+       "load": 6.87451171875,
+       "p95": 8.333333767950535,
+       "p50": 8.333333302289248,
+       "max": 33.150999806821346,
+       "hitches": 22,
+       "memory": 74.39167785644531,
+       "estimatedMissed": 24,
+       "p99": 8.333333767950535,
+       "frames": 2274,
+       "freeMemory": 76,
+       "excessMilliseconds": 203.96594423800707
+      },
+      "id": "FF2B8067-AA7A-4EB0-9C6B-D409C92006A9",
+      "scenario": "S10 Thoughts, App: production transcript, warm",
+      "measurements": {
+       "toolUpdates": 0,
+       "chunkIntervalMS": 10,
+       "viewportHeight": 340,
+       "screenMaximumFPS": 120,
+       "backingScale": 2,
+       "elapsedMS": 19183.055958,
+       "chunks": 1918,
+       "applyLatencyP95MS": 10.292332999998877,
+       "viewportWidth": 868,
+       "peakBacklogChunks": 4,
+       "characters": 24674,
+       "applyLatencyMaxMS": 33.177792
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S11:App",
+    "log": "run-1-5.log",
+    "wallSeconds": 21.136052250000006,
+    "samples": [
+     {
+      "id": "EB3EC5D1-25E4-43A4-84AE-2D845645EF6D",
+      "report": {
+       "freeMemory": 76,
+       "p95": 18.49079178646207,
+       "estimatedMissed": 269,
+       "memory": 96.67292785644531,
+       "load": 5.90869140625,
+       "hitches": 179,
+       "p50": 8.333333302289248,
+       "excessMilliseconds": 2271.108265966177,
+       "p99": 23.025874979794025,
+       "max": 122.66700016334653,
+       "frames": 2023
+      },
+      "measurements": {
+       "chunks": 1910,
+       "characters": 24688,
+       "viewportHeight": 340,
+       "chunkIntervalMS": 10,
+       "toolUpdates": 191,
+       "viewportWidth": 868,
+       "screenMaximumFPS": 120,
+       "elapsedMS": 19146.798333,
+       "backingScale": 2,
+       "applyLatencyP95MS": 16.84262499999889,
+       "applyLatencyMaxMS": 118.36049999999965,
+       "peakBacklogChunks": 12
+      },
+      "scenario": "S11 Turns, 10k items, App: production transcript, warm"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "startedAt": "20261109T235510.062409Z",
+  "mode": "lab",
+  "runs": 1,
+  "timeoutSeconds": 180,
+  "commit": "952f7a0092543e0e9aa3ea1fad8977c5739112d7",
+  "workingTree": "",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "machine": "MacBookPro18,2",
+  "architecture": "arm64",
+  "memoryBytes": 34359738368,
+  "cpuCount": 10,
+  "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+  "build": "Debug with -O",
+  "scenarios": [
+   "S1:App",
+   "S7:App",
+   "S9:App",
+   "S10:App",
+   "S11:App"
+  ],
+  "results": [
+   {
+    "repetition": 1,
+    "scenario": "S1:App",
+    "log": "run-1-1.log",
+    "wallSeconds": 14.277871875,
+    "samples": [
+     {
+      "measurements": {
+       "viewportHeight": 340,
+       "applyLatencyP95MS": 10.105792000000946,
+       "chunkIntervalMS": 10,
+       "chunks": 1244,
+       "applyLatencyMaxMS": 34.154542,
+       "peakBacklogChunks": 4,
+       "viewportWidth": 868,
+       "backingScale": 2,
+       "screenMaximumFPS": 120,
+       "toolUpdates": 0,
+       "characters": 16249,
+       "elapsedMS": 12440.997042
+      },
+      "report": {
+       "freeMemory": 76,
+       "p95": 8.333333767950535,
+       "excessMilliseconds": 64.18283702805638,
+       "estimatedMissed": 7,
+       "p99": 8.333333767950535,
+       "frames": 1481,
+       "max": 18.879958428442478,
+       "memory": 80.12602996826172,
+       "p50": 8.333333302289248,
+       "hitches": 7,
+       "load": 8.3505859375
+      },
+      "id": "DEC9487A-A061-4FBF-9577-EFD959D37E96",
+      "scenario": "S1 Stream, App: production transcript, warm"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S7:App",
+    "log": "run-1-2.log",
+    "wallSeconds": 14.378550083,
+    "samples": [
+     {
+      "scenario": "S7 Tool updates, App: production transcript, warm",
+      "measurements": {
+       "applyLatencyMaxMS": 26.057750000000002,
+       "backingScale": 2,
+       "chunks": 1244,
+       "applyLatencyP95MS": 13.052375000000005,
+       "viewportHeight": 340,
+       "chunkIntervalMS": 10,
+       "viewportWidth": 868,
+       "toolUpdates": 124,
+       "peakBacklogChunks": 3,
+       "elapsedMS": 12444.92475,
+       "screenMaximumFPS": 120,
+       "characters": 16249
+      },
+      "id": "22025DE9-F016-4B1E-B409-FE63B020820A",
+      "report": {
+       "p99": 20.67212527617812,
+       "max": 32.16949990019202,
+       "excessMilliseconds": 1025.4025352187455,
+       "load": 7.3115234375,
+       "memory": 78.42292785644531,
+       "freeMemory": 76,
+       "frames": 1370,
+       "estimatedMissed": 122,
+       "hitches": 107,
+       "p50": 8.333333302289248,
+       "p95": 14.215416740626097
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S9:App",
+    "log": "run-1-3.log",
+    "wallSeconds": 14.784076290999998,
+    "samples": [
+     {
+      "measurements": {
+       "toolUpdates": 127,
+       "applyLatencyP95MS": 15.562083000000726,
+       "viewportWidth": 868,
+       "chunks": 1278,
+       "elapsedMS": 12781.186083,
+       "backingScale": 2,
+       "applyLatencyMaxMS": 116.69820799999985,
+       "chunkIntervalMS": 10,
+       "viewportHeight": 340,
+       "peakBacklogChunks": 12,
+       "screenMaximumFPS": 120,
+       "characters": 16387
+      },
+      "id": "193B8E76-9547-4464-AE7A-4FDCE3246900",
+      "scenario": "S9 Tool updates, 10k items, App: production transcript, warm",
+      "report": {
+       "load": 6.44091796875,
+       "max": 125.65858336165547,
+       "frames": 1350,
+       "estimatedMissed": 178,
+       "memory": 93.00105285644531,
+       "p50": 8.333333302289248,
+       "hitches": 124,
+       "freeMemory": 76,
+       "p95": 18.418833147734404,
+       "p99": 21.744041703641415,
+       "excessMilliseconds": 1514.4757069647312
+      }
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S10:App",
+    "log": "run-1-4.log",
+    "wallSeconds": 21.081226042000004,
+    "samples": [
+     {
+      "report": {
+       "p99": 8.333333767950535,
+       "freeMemory": 76,
+       "load": 5.40185546875,
+       "estimatedMissed": 20,
+       "p50": 8.333333302289248,
+       "p95": 8.333333767950535,
+       "hitches": 17,
+       "frames": 2278,
+       "max": 32.19862515106797,
+       "excessMilliseconds": 170.51481967791915,
+       "memory": 73.25102996826172
+      },
+      "measurements": {
+       "applyLatencyMaxMS": 32.370541,
+       "screenMaximumFPS": 120,
+       "peakBacklogChunks": 4,
+       "applyLatencyP95MS": 9.59600000000016,
+       "chunks": 1918,
+       "chunkIntervalMS": 10,
+       "viewportHeight": 340,
+       "viewportWidth": 868,
+       "characters": 24674,
+       "backingScale": 2,
+       "elapsedMS": 19182.242875,
+       "toolUpdates": 0
+      },
+      "id": "64AE1E65-0C31-4145-86A5-C80B6D78A7BE",
+      "scenario": "S10 Thoughts, App: production transcript, warm"
+     }
+    ]
+   },
+   {
+    "repetition": 1,
+    "scenario": "S11:App",
+    "log": "run-1-5.log",
+    "wallSeconds": 21.184339417000004,
+    "samples": [
+     {
+      "report": {
+       "p50": 8.333333302289248,
+       "estimatedMissed": 294,
+       "frames": 1998,
+       "hitches": 227,
+       "load": 4.66796875,
+       "p99": 21.391999907791615,
+       "excessMilliseconds": 2498.619590420276,
+       "freeMemory": 76,
+       "p95": 18.40312499552965,
+       "max": 120.96895836293697,
+       "memory": 98.11042785644531
+      },
+      "id": "B92C8955-C881-4736-9756-4A5F9E5FAE82",
+      "scenario": "S11 Turns, 10k items, App: production transcript, warm",
+      "measurements": {
+       "chunkIntervalMS": 10,
+       "toolUpdates": 191,
+       "viewportHeight": 340,
+       "applyLatencyMaxMS": 117.41254200000029,
+       "screenMaximumFPS": 120,
+       "applyLatencyP95MS": 17.617124999999234,
+       "chunks": 1910,
+       "characters": 24688,
+       "peakBacklogChunks": 12,
+       "backingScale": 2,
+       "elapsedMS": 19139.891,
+       "viewportWidth": 868
+      }
+     }
+    ]
+   }
+  ]
+ }
+]

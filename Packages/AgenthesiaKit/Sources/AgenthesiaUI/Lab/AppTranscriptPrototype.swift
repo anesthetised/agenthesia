@@ -17,7 +17,7 @@
         var foldsTurns = false
         private var prompts: [Int: UUID] = [:]
         private var runningTurn: UUID?
-        private var turns: [TurnFold] = []
+        private var folder = TranscriptFolder()
         private(set) var rows: [TranscriptRow] = []
         var revision = 0
         var messageCount: Int { rows.count }
@@ -36,33 +36,37 @@
             if foldsTurns {
                 for index in items.indices where items[index].0 == "You" { prompts[index] = UUID() }
             }
+            folder.reset()
             fold()
             revision += 1
             table.update(self)
         }
 
         /// Folds consecutive tool cards and thoughts as the live transcript does; every group shares `groupExpanded`,
-        /// and thoughts stay collapsed.
+        /// and thoughts stay collapsed. With turns, only the last turn is folded again, as in the live transcript.
         private func fold() {
-            turns =
-                prompts.isEmpty
-                ? []
-                : TranscriptRow.turnFolds(
+            guard foldsTurns else {
+                rows = TranscriptRow.fold(
                     count: items.count,
-                    part: { index in
-                        if let turn = prompts[index] { return .prompt(turn) }
-                        return items[index].0 == "Agent" ? .answer : .work
-                    },
-                    finished: { $0 != runningTurn },
-                    isExpanded: { _ in false }
+                    isToolCall: { tools[$0] != nil },
+                    isThought: { items[$0].0 == "Thought" },
+                    isExpanded: { _ in groupExpanded }
                 )
-            rows = TranscriptRow.fold(
+                return
+            }
+            folder.update(
                 count: items.count,
+                part: { index in
+                    if let turn = prompts[index] { return .prompt(turn) }
+                    return items[index].0 == "Agent" ? .answer : .work
+                },
                 isToolCall: { tools[$0] != nil },
                 isThought: { items[$0].0 == "Thought" },
                 isExpanded: { _ in groupExpanded },
-                turns: turns
+                finished: { $0 != runningTurn },
+                isTurnExpanded: { _ in false }
             )
+            rows = folder.rows
         }
 
         /// Adds the prompt of a running turn; call before ``appendTools(_:)``, the next update publishes it.
@@ -84,6 +88,7 @@
         /// Expands or collapses the groups without updating the table; the next ``append(_:)`` publishes it.
         func toggleGroups() {
             groupExpanded.toggle()
+            folder.reset()
             fold()
         }
 

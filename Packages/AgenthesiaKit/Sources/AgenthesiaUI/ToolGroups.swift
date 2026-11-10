@@ -22,10 +22,22 @@ enum TranscriptRow: Hashable {
         isExpanded: (Int) -> Bool,
         turns: [TurnFold] = []
     ) -> [TranscriptRow] {
+        fold(0..<count, isToolCall: isToolCall, isThought: isThought, isExpanded: isExpanded, turns: turns)
+    }
+
+    /// The rows of `items` alone, which must start a turn or the transcript: a run never crosses a prompt.
+    static func fold(
+        _ items: Range<Int>,
+        isToolCall: (Int) -> Bool,
+        isThought: (Int) -> Bool,
+        isExpanded: (Int) -> Bool,
+        turns: [TurnFold] = []
+    ) -> [TranscriptRow] {
+        let count = items.upperBound
         var rows: [TranscriptRow] = []
-        rows.reserveCapacity(count)
+        rows.reserveCapacity(items.count)
         var turns = turns[...]
-        var index = 0
+        var index = items.lowerBound
         while index < count {
             if let turn = turns.first, turn.items.lowerBound == index {
                 turns.removeFirst()
@@ -86,8 +98,19 @@ enum TranscriptRow: Hashable {
         finished: (UUID) -> Bool,
         isExpanded: (UUID) -> Bool
     ) -> [TurnFold] {
+        turnFolds(0..<count, part: part, finished: finished, isExpanded: isExpanded)
+    }
+
+    /// The folds of the turns in `items`; a turn that `items` cuts off ends where they end.
+    static func turnFolds(
+        _ items: Range<Int>,
+        part: (Int) -> TurnPart,
+        finished: (UUID) -> Bool,
+        isExpanded: (UUID) -> Bool
+    ) -> [TurnFold] {
+        let count = items.upperBound
         var folds: [TurnFold] = []
-        var index = 0
+        var index = items.lowerBound
         while index < count {
             guard case .prompt(let turn) = part(index) else {
                 index += 1
@@ -120,6 +143,77 @@ enum TranscriptRow: Hashable {
         var end = first
         while end < count, matches(end) { end += 1 }
         return end
+    }
+}
+
+/// The transcript's rows, folded again only from the last turn's first prompt on (#341). Items only append, and a turn
+/// before the last can no longer change: its end, its time and the kinds of its items are final. So an update costs
+/// the last turn's items, not the history's; S11 measured the full fold on every chunk. A change of expansion, which
+/// can touch any row, starts over with `reset()`.
+struct TranscriptFolder {
+    private(set) var rows: [TranscriptRow] = []
+    /// The first item of the last turn: items before it, and their first `settledRows` rows, are final.
+    private(set) var settled = 0
+    private var settledRows = 0
+    /// The final turns' folds by their first item, and the last turn's.
+    private var settledTurns: [Int: TurnFold] = [:]
+    private var lastTurns: [TurnFold] = []
+    /// How many items the last update folded, so tests can see that it does not grow with the history.
+    private(set) var foldedItems = 0
+
+    mutating func reset() { self = TranscriptFolder() }
+
+    mutating func update(
+        count: Int,
+        part: (Int) -> TranscriptRow.TurnPart,
+        isToolCall: (Int) -> Bool,
+        isThought: (Int) -> Bool,
+        isExpanded: (Int) -> Bool,
+        finished: (UUID) -> Bool,
+        isTurnExpanded: (UUID) -> Bool
+    ) {
+        if count < settled { reset() }
+        foldedItems = count - settled
+        var last = settled
+        for index in settled..<count {
+            if case .prompt(let turn) = part(index), index == 0 || part(index - 1) != .prompt(turn) { last = index }
+        }
+        rows.removeSubrange(settledRows...)
+        if last > settled {
+            let turns = TranscriptRow.turnFolds(
+                settled..<last,
+                part: part,
+                finished: finished,
+                isExpanded: isTurnExpanded
+            )
+            rows += TranscriptRow.fold(
+                settled..<last,
+                isToolCall: isToolCall,
+                isThought: isThought,
+                isExpanded: isExpanded,
+                turns: turns
+            )
+            for turn in turns { settledTurns[turn.items.lowerBound] = turn }
+            (settled, settledRows) = (last, rows.count)
+        }
+        lastTurns = TranscriptRow.turnFolds(settled..<count, part: part, finished: finished, isExpanded: isTurnExpanded)
+        rows += TranscriptRow.fold(
+            settled..<count,
+            isToolCall: isToolCall,
+            isThought: isThought,
+            isExpanded: isExpanded,
+            turns: lastTurns
+        )
+    }
+
+    /// The fold whose row is at item `first`.
+    func turn(at first: Int) -> TurnFold? {
+        settledTurns[first] ?? lastTurns.first { $0.items.lowerBound == first }
+    }
+
+    /// The fold that holds item `index`; it searches every turn, so only for a user's step such as Find.
+    func turn(containing index: Int) -> TurnFold? {
+        lastTurns.first { $0.items.contains(index) } ?? settledTurns.values.first { $0.items.contains(index) }
     }
 }
 

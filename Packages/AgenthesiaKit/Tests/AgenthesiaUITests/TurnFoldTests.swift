@@ -80,6 +80,61 @@ import Testing
         #expect((0..<4).map { TranscriptRow.row(showing: $0, in: collapsed) } == [0, 1, 1, 2])
     }
 
+    @Test func theFolderFoldsOnlyTheLastTurnAndAlwaysMatchesAFullFold() {
+        // Turn 1 is stopped and never finishes; the last turn runs until the end.
+        let pattern = Array("opthatqawpPttaohhpwqtatpwwa")
+        var turns: [UUID] = []
+        var parts: [TranscriptRow.TurnPart] = []
+        for item in pattern {
+            switch item {
+            case "p":
+                turns.append(UUID())
+                parts.append(.prompt(turns[turns.count - 1]))
+            case "P": parts.append(.prompt(turns[turns.count - 1]))
+            case "a": parts.append(.answer)
+            case "q": parts.append(.question)
+            case "o": parts.append(.other)
+            default: parts.append(.work)
+            }
+        }
+        var folder = TranscriptFolder()
+        for count in 1...pattern.count + 1 {
+            let shown = min(count, pattern.count)
+            // The extra step finishes the last turn.
+            let finished = { (turn: UUID) in turn != turns[1] && (turn != turns.last || count > pattern.count) }
+            let isToolCall = { pattern[$0] == "t" }
+            let isThought = { pattern[$0] == "h" }
+            folder.update(
+                count: shown,
+                part: { parts[$0] },
+                isToolCall: isToolCall,
+                isThought: isThought,
+                isExpanded: { _ in false },
+                finished: finished,
+                isTurnExpanded: { _ in false }
+            )
+            let full = TranscriptRow.fold(
+                count: shown,
+                isToolCall: isToolCall,
+                isThought: isThought,
+                isExpanded: { _ in false },
+                turns: TranscriptRow.turnFolds(
+                    count: shown,
+                    part: { parts[$0] },
+                    finished: finished,
+                    isExpanded: { _ in false }
+                )
+            )
+            #expect(folder.rows == full, "after \(shown) items")
+        }
+        // Only the last turn, from its prompt at 23, was folded again.
+        #expect(folder.settled == 23 && folder.foldedItems == pattern.count - 23)
+        #expect(folder.turn(at: 24)?.items == 24..<27 && folder.turn(at: 2)?.items == 2..<9)
+        #expect(folder.turn(containing: 20)?.items == 18..<23)
+        // The stopped turn has no fold.
+        #expect(folder.turn(containing: 12) == nil)
+    }
+
     // MARK: - The live transcript
 
     private static let start = Date(timeIntervalSinceReferenceDate: 1_000)
@@ -245,6 +300,35 @@ import Testing
         // Inner rows copy as before.
         controller.table.selectRowIndexes([3], byExtendingSelection: false)
         #expect(controller.selectedMarkdown.contains("Call a") && controller.selectedMarkdown.contains("Call b"))
+    }
+
+    @Test func aStreamedChunkFoldsOnlyTheRunningTurnHoweverLongTheHistory() async throws {
+        var folded: [Int] = []
+        var last: LiveTranscriptSource?
+        for history in [1, 4] {
+            let recorded = try await RecordedTranscript()
+            for index in 0..<history { try await turn(recorded, at: Double(index) * 100) }
+            try await recorded.append(try event(.prompt(id: UUID(), content: [.init(text: "More")]), at: 1_000))
+            let source = source(recorded, running: true)
+            for chunk in ["All ", "done"] {
+                try await recorded.apply(.agentMessageChunk(.init(content: .init(text: chunk))))
+                source.state = recorded.state
+            }
+            folded.append(source.folder.foldedItems)
+            // The same rows as folding everything at once.
+            #expect(source.rows == self.source(recorded).rows)
+            #expect(source.rows.filter { if case .turn = $0 { true } else { false } }.count == history)
+            last = source
+        }
+        // The prompt and the answer, with one finished turn above them or four.
+        #expect(folded == [2, 2])
+
+        // Another, shorter transcript is folded from scratch.
+        let other = try await RecordedTranscript()
+        try await turn(other)
+        let source = try #require(last)
+        source.state = other.state
+        #expect(source.rows == Self.folded)
     }
 
     @Test func theTableFoldsAFinishedTurnInPlaceAndItsChevronOpensIt() async throws {

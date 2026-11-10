@@ -333,11 +333,14 @@ items as `TurnPart`s (prompt, answer, question, work, other) and returns a `Turn
 something to hide: the items from the one after its prompts up to the next prompt or other item, with the answer (the
 last agent message) and the questions `kept`. `TranscriptRow.fold` puts a `.turn(first:)` row at the fold's first item
 and, while it is collapsed, only the kept items after it; expanded, the turn's items fold as before below it.
-`LiveTranscriptSource` computes the folds in the same pass as the rows, on every state change, keys their expansion
-by turn, and `reveal(item:)` expands a turn that hides the item. The row (`TranscriptMessage.Kind.turn`) is a
-borderless button with the label and a trailing chevron over a separator, built by `TranscriptMessageRow.showTurn`; it
-has no Markdown and no Copy. A running turn never folds, so streamed chunks leave its rows as they were: the fold costs
-the scan of the items per update. The Rendering Lab's S11 streams S10's thoughts with S9's tool updates in a new turn
+`LiveTranscriptSource` folds through a `TranscriptFolder`, which keeps the rows and folds of everything before the last
+turn's first prompt (items only append, and an earlier turn's end, time and item kinds are final) and folds again only
+the last turn's items on each state change, so a streamed chunk costs the running turn, not the history (S11 found the
+full fold on every chunk costly). A change of group or turn expansion starts it over; another session's transcript
+too. The source keys turn expansion by turn, and `reveal(item:)` expands a turn that hides the item. The row
+(`TranscriptMessage.Kind.turn`) is a borderless button with the label and a trailing chevron over a separator, built by
+`TranscriptMessageRow.showTurn`; it has no Markdown and no Copy. A running turn never folds, so streamed chunks leave
+its rows as they were. The Rendering Lab's S11 streams S10's thoughts with S9's tool updates in a new turn
 below a 10,000-item history of finished, folded turns, and folds the new turn at its end.
 
 Session notices (continued, ended, merged, discarded) render as a centered caption between two hairlines, without

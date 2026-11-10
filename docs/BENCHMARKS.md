@@ -245,6 +245,23 @@ the implementation choices that remain to be discussed.
 The [SourceView scroll-wait investigation](benchmarks/2026-10-07/source-scroll/README.md) correlates long
 callback gaps with Core Animation synchronization waits and includes AppKit and native TextKit 2 controls.
 
+### Wheel scrolling of a recorded session (#396)
+
+S2 moves the clip view itself, so it never goes through AppKit's event handling and cannot show responsive
+scrolling. `just lab-wheel wheel .build/wheel.trace` and `just lab-wheel gesture .build/gesture.trace` scroll a
+session from the owner's history in the lab build with real events from `wintool`: mouse wheel lines without phases,
+or trackpad-like drags with gesture phases and no momentum. Each scrolls up for 15 seconds from the end, then down as
+long, in a 1480 x 860 pt window, under Instruments' Animation Hitches template with Points of Interest. The script,
+`scripts/app-check/wheel-scroll.sh`, copies the history into a temporary home and prunes the copy to one session,
+so the owner's data and repositories are not touched; its header lists the settings.
+
+The transcript's signposts are intervals: `RowView` and `Cell` (making a row view and a cell), and inside `Cell`,
+`Message` (the row's text, rendered from Markdown the first time) and `Show` (building the cell's views);
+`TextLayout` (a text field measuring its text, which automatic row heights ask for), `TableLayout` (the table's
+layout, where AppKit measures the heights of new rows) and `Draw` (a text field drawing). The hitches come from the
+render server, so unlike S2's display-link intervals they also count frames a responsive scroll presents while the
+main thread is busy. Like profiling, it needs the owner's approval and a quiet machine.
+
 ## Session transcript reduction
 
 `just bench-session` compares publication after each chunk with publication after every 16 chunks,

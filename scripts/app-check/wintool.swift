@@ -6,7 +6,8 @@ let args = CommandLine.arguments
 func usage() -> Never {
     FileHandle.standardError.write(
         Data(
-            "usage: wintool winid <pid> | front | click|rclick <x> <y> | drag <x> <y> <x2> <y2> | move <x> <y> | scroll <x> <y> <dy>\n"
+            ("usage: wintool winid <pid> | front | click|rclick <x> <y> | drag <x> <y> <x2> <y2> | move <x> <y>"
+                + " | scroll <x> <y> <lines> [events] [interval-ms] | gesture <x> <y> <points> <events> [interval-ms]\n")
                 .utf8))
     exit(1)
 }
@@ -77,15 +78,35 @@ case "drag":
 case "move":
     moveMouse(to: CGPoint(x: number(2), y: number(3)))
 case "scroll":
+    // A mouse wheel: events of `lines` lines without phases, 10 events 20 ms apart unless given. Positive is up.
     let lines = Int32(number(4))
+    let events = args.count > 5 ? Int(number(5)) : 10
+    let interval = useconds_t(args.count > 6 ? number(6) * 1000 : 20_000)
     moveMouse(to: CGPoint(x: number(2), y: number(3)))
     usleep(50_000)
-    for _ in 0..<10 {
+    for _ in 0..<events {
         post(
             CGEvent(
                 scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0,
                 wheel3: 0))
-        usleep(20_000)
+        usleep(interval)
+    }
+case "gesture":
+    // A trackpad drag without momentum: `events` continuous events of `points` points with the phases of a gesture
+    // (began, changed, ended), 8 ms apart unless given. Positive is up.
+    let points = Int32(number(4))
+    let events = Int(number(5))
+    let interval = useconds_t(args.count > 6 ? number(6) * 1000 : 8_000)
+    moveMouse(to: CGPoint(x: number(2), y: number(3)))
+    usleep(50_000)
+    for index in 0...events {
+        let event = CGEvent(
+            scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: index < events ? points : 0,
+            wheel2: 0, wheel3: 0)
+        // kCGScrollPhaseBegan, Changed and Ended.
+        event?.setIntegerValueField(.scrollWheelEventScrollPhase, value: index == 0 ? 1 : index < events ? 2 : 4)
+        post(event)
+        usleep(interval)
     }
 default:
     usage()

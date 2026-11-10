@@ -107,6 +107,12 @@ lab-profile scenario="S6:A2" output=".build/rendering.trace" options="": lab-bui
         --output "$2" --env "AGENTHESIA_LAB_RUNS=$1" --target-stdout - \
         --no-prompt --launch -- .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia
 
+# It drives the app's window: leave the Mac alone for about a minute.
+# Scroll a recorded session with wheel or trackpad events under Instruments (#396, scripts/app-check/wheel-scroll.sh)
+[positional-arguments]
+lab-wheel input="wheel" output=".build/wheel.trace": lab-build app-check-tools
+    scripts/app-check/wheel-scroll.sh "$1" "$2"
+
 # Export CPU samples for inspection; the trace also opens directly in Instruments
 [positional-arguments]
 lab-profile-export trace output schema="time-profile":

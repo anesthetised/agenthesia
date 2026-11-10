@@ -132,6 +132,11 @@ def run(args):
                     if args.mode == "lab":
                         # One scenario per process, including cold runs.
                         environment |= {"AGENTHESIA_LAB_RUNS": scenario, "CFFIXED_USER_HOME": home}
+                        # Started by a shell, the app presents no window; through LaunchServices it presents the
+                        # Rendering Lab (#396). Its output goes to the log, which `open -W` waits for.
+                        command = ["open", "-n", "-W", "--stdout", str(log), "--stderr", str(log),
+                                   "--env", f"AGENTHESIA_LAB_RUNS={scenario}", "--env", f"CFFIXED_USER_HOME={home}",
+                                   str(binary.parents[2])]
                     results = run_once(command, environment, log, args.timeout)
                 metadata["results"].append({
                     "repetition": repetition, "scenario": scenario, "log": log.name,

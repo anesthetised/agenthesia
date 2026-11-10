@@ -23,6 +23,7 @@ out=${2:-}
 [ "$input" = wheel ] || [ "$input" = gesture ] || { echo "usage: $0 <wheel|gesture> <new .trace path>" >&2; exit 1; }
 [ -n "$out" ] && [ ! -e "$out" ] || { echo "ABORT: give a new .trace path" >&2; exit 1; }
 app=${APP:-.build/xcode-lab/Build/Products/Debug/Agenthesia.app}
+[ -d "$app" ] && app=$(cd "$app" && pwd)   # LaunchServices runs it by its absolute path, which pgrep matches.
 seconds=${SECONDS_EACH:-15}
 lines=${WHEEL_LINES:-3}
 points=${GESTURE_POINTS:-20}
@@ -46,9 +47,15 @@ now() { python3 -c 'import time; print(time.time())'; }
 
 . scripts/app-check/lib.sh
 # S12 holds its window longer than this script needs and then quits, so the lab never outlives a failed run for long.
-AGENTHESIA_LAB_RUNS="S12:${PROTOTYPE:-App}:$((2 * seconds + 90))" CFFIXED_USER_HOME=$tmp \
-    "$app/Contents/MacOS/Agenthesia" -NSRequiresAquaSystemAppearance YES >"$tmp/lab.log" 2>&1 &
-pid=$!
+# Started by a shell, the app presents no window; through LaunchServices it presents the lab.
+open -n --stdout "$tmp/lab.log" --stderr "$tmp/lab.log" --env "AGENTHESIA_LAB_RUNS=S12:${PROTOTYPE:-App}:$((2 * seconds + 90))" \
+    --env "CFFIXED_USER_HOME=$tmp" "$app" --args -NSRequiresAquaSystemAppearance YES
+for _ in $(seq 50); do
+    pid=$(pgrep -n -f "$app/Contents/MacOS/Agenthesia" || true)
+    [ -n "$pid" ] && break
+    sleep 0.2
+done
+[ -n "$pid" ] || { echo "ABORT: the lab did not start" >&2; exit 1; }
 export APP_CHECK_PID=$pid
 
 # The window appears once the grammars are loaded and the transcript is laid out at its end.

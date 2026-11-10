@@ -269,6 +269,16 @@ the first-run, text-size and VoiceOver items.
 
 The issues of this milestone touch views, not the session core, so they run beside M13's waves.
 
+Progress:
+
+- #351 (the `Run interrupted` divider) landed: the divider's stack fills its row (`distribution = .fill`) and the two
+  hairlines have the lowest horizontal hugging, so they take the width the X and the caption leave; before, they
+  collapsed to their smallest width and the X and the text sat at the leading edge. `docs/behavior/transcript.md`
+  already described the intended row and is unchanged. Tested in `OffscreenWindow` at 600 and 1200 pt without exact
+  widths (each hairline wider than the caption is tall, the two equal, the X and caption centred on the row); the test
+  fails on the previous layout. The running-app check in light and dark, narrow and wide, is not done yet. The
+  session notice (`showNotice`) builds the same stack without it and was not checked.
+
 Pitfalls known so far:
 
 - #352 changes which rows ⌘1…⌘9, Previous and Next Session and the board visit; `SessionSidebar` is the one place that

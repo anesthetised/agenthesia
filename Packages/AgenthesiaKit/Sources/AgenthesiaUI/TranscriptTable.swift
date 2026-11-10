@@ -789,9 +789,12 @@ private final class TranscriptMessageRow: NSTableCellView {
         for line in lines {
             line.boxType = .separator
             line.heightAnchor.constraint(equalToConstant: 1).isActive = true
+            // The hairlines take what the icon and the caption leave; the default gravity areas would shrink them.
+            line.setContentHuggingPriority(.init(1), for: .horizontal)
         }
         let stack = NSStackView(views: [lines[0], icon, caption, lines[1]])
         stack.orientation = .horizontal
+        stack.distribution = .fill
         stack.alignment = .centerY
         stack.spacing = 6
         stack.setCustomSpacing(12, after: lines[0])

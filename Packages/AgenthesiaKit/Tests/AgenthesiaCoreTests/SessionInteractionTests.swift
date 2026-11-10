@@ -1,6 +1,7 @@
 import ACP
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -94,12 +95,6 @@ private actor InteractionConnection: ACP.AgentConnection {
         return (controller, connection, store, directory)
     }
 
-    private func eventually(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while !condition(), ContinuousClock.now < deadline { await Task.yield() }
-        try #require(condition())
-    }
-
     @Test func queueSubmissionCannotOvertakeAnAcceptedConfigChange() async throws {
         let (session, connection, _, directory) = try await live(holdsConfig: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -124,11 +119,11 @@ private actor InteractionConnection: ACP.AgentConnection {
         await connection.waitForPrompts(1)
         try await session.submit([.init(text: "kept during config")])
         try await session.stop()
-        try await eventually { session.status == .idle }
+        try await waitUntil { session.status == .idle }
         let changing = Task { try await session.setConfigOption("flag", to: .boolean(true)) }
         await connection.waitForConfig()
         let resuming = Task { try await session.resumeQueue() }
-        try await eventually { !session.queuePaused }
+        try await waitUntil { !session.queuePaused }
         #expect(await connection.prompts.count == 1)
         await connection.releaseConfig()
         try await changing.value
@@ -153,14 +148,14 @@ private actor InteractionConnection: ACP.AgentConnection {
             scope: .session("interaction", toolCallId: nil)
         )
         let answer = Task { await session.requestInput(request) }
-        try await eventually { !session.pendingInputs.isEmpty }
+        try await waitUntil { !session.pendingInputs.isEmpty }
         try await session.submit([.init(text: "redirect")], intent: .now)
         await connection.waitForPrompts(2)
         #expect(await answer.value.action == .cancel)
         #expect(session.pendingInputs.isEmpty)
         #expect(session.queuedPrompts.map(\.content) == [queued])
         try await session.stop()
-        try await eventually { session.status == .idle }
+        try await waitUntil { session.status == .idle }
         #expect(session.queuePaused)
         await session.close()
         let restored = try await SessionController.restore(id: session.session.id, store: store)

@@ -1,6 +1,7 @@
 import ACP
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -50,18 +51,6 @@ import Testing
                 .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
         )
         return (directory, manager, AgentInstallRecord(name: "Mock", executable: binary.path))
-    }
-
-    private func eventually(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("Timed out waiting for the condition", sourceLocation: sourceLocation)
-                return
-            }
-            // Sleep rather than spin: a busy loop starves the other suites on a small CI runner.
-            try? await Task.sleep(for: .milliseconds(5))
-        }
     }
 
     private func option(_ id: String, _ kind: ACP.PermissionOptionKind) -> ACP.PermissionOption {

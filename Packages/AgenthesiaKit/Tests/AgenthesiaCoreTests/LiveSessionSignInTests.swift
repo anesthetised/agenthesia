@@ -1,6 +1,7 @@
 import ACP
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -218,7 +219,7 @@ import Testing
     }
 
     private func waitFor<T>(_ value: () -> T?) async throws -> T {
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + waitLimit
         while ContinuousClock.now < deadline {
             if let value = value() { return value }
             try await Task.sleep(for: .milliseconds(20))

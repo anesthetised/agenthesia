@@ -21,10 +21,10 @@ public actor ScenarioAgent {
     private var deferred: [String: RequestID] = [:]
     private var nextID = 1
 
-    /// How long playback waits for each client message. A loaded CI runner can delay a main-actor client by
-    /// several seconds per message, so this only has to end playback, and close the transport so the test's
-    /// awaits fail, before a suite's one-minute time limit.
-    public static let defaultTimeout: Duration = .seconds(50)
+    /// How long playback waits for each client message. A loaded CI runner can delay a main-actor client for most
+    /// of a minute (#133), so this outlasts the one-minute time limit of the suites that play scenarios: the time
+    /// limit, which cancels the client's requests, ends a test first. It only bounds a playback nobody cancels.
+    public static let defaultTimeout: Duration = .seconds(90)
 
     public init(scenario: Scenario, transport: some MessageTransport, timeout: Duration = defaultTimeout) {
         self.scenario = scenario

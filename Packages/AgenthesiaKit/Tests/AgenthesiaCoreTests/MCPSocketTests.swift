@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import JSONRPC
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -65,7 +66,7 @@ import Testing
         for helper in helpers { try helper.closeInput() }
     }
 
-    @Test func pathIsShortPerDataFolderAndPrivate() throws {
+    @Test func pathIsShortPerDataFolderAndPrivate() async throws {
         let long = URL(filePath: "/" + String(repeating: "folder/", count: 60))
         let path = MCPSocket.path(dataFolder: long)
         #expect(path.utf8.count < 104)
@@ -79,7 +80,7 @@ import Testing
         #expect(info.st_mode & S_IFMT == S_IFSOCK)
         #expect(info.st_mode & 0o777 == 0o600)
         socket.close()
-        try waitUntil { !FileManager.default.fileExists(atPath: socket.path) }
+        try await waitUntil { !FileManager.default.fileExists(atPath: socket.path) }
     }
 
     @Test func replacesAStaleSocket() async throws {
@@ -144,13 +145,6 @@ import Testing
         MCPSocket.path(dataFolder: URL(filePath: "/agh-mcp-test/\(UUID())"))
     }
 
-    private func waitUntil(_ condition: () -> Bool) throws {
-        let deadline = Date.now.addingTimeInterval(5)
-        while !condition() {
-            try #require(Date.now < deadline)
-            usleep(10_000)
-        }
-    }
 }
 
 /// A running `agenthesia-mcp` with pipes for its standard input and output.

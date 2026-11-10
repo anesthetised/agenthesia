@@ -1,4 +1,5 @@
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -20,22 +21,12 @@ import Testing
         return fixture
     }
 
-    /// Polls without spinning: a condition that never holds fails the test instead of starving the main actor,
-    /// which every other test of the process shares.
     func waitUntil(
         _ what: String,
-        timeout: Duration = .seconds(20),
         sourceLocation: SourceLocation = #_sourceLocation,
         _ condition: () -> Bool
     ) async {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while !condition() {
-            guard !Task.isCancelled, ContinuousClock.now < deadline else {
-                Issue.record("Timed out waiting until \(what).", sourceLocation: sourceLocation)
-                return
-            }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
+        await eventually("Timed out waiting until \(what).", sourceLocation: sourceLocation, condition)
     }
 
     func write(_ text: String, to path: String, in session: SessionRecord) throws {

@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import TestSupport
 import Testing
 
 /// Executables built next to the tests.
@@ -56,8 +57,8 @@ final class CLIRun: Sendable {
         try stdin.write(contentsOf: Data((line + "\n").utf8))
     }
 
-    func waitFor(_ needle: String, timeout: Duration = .seconds(10)) async throws {
-        let deadline = ContinuousClock.now + timeout
+    func waitFor(_ needle: String) async throws {
+        let deadline = ContinuousClock.now + waitLimit
         while !text.contains(needle) {
             guard ContinuousClock.now < deadline else {
                 Issue.record("Timed out waiting for \"\(needle)\". Output:\n\(text)")

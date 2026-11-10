@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -40,14 +41,6 @@ import Testing
                     .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
             )
             return .custom(.init(executable: binary.path, arguments: arguments))
-        }
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out")
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 

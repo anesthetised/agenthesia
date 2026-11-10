@@ -1,6 +1,7 @@
 import AppKit
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -97,10 +98,9 @@ import Testing
         for _ in 0..<10 { await Task.yield(); host.layoutSubtreeIfNeeded() }
         gate.release()
         await owner.startup?.value
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !model.history.contains(where: { $0.id == controller.session.id }), ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
+        await eventually {
             host.layoutSubtreeIfNeeded()
+            return model.history.contains { $0.id == controller.session.id }
         }
         #expect(model.history.contains { $0.id == controller.session.id })
         await owner.send("exit")

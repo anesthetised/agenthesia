@@ -430,7 +430,8 @@ calls `SessionController.holdQueue()` for the displayed session while its compos
 `releaseQueue()` once it saves, cancels, shows another session or closes. `queueEdits` counts the holds in memory (one
 per window, never stored); `drainQueue` does nothing while it is nonzero, and the last release schedules the drain a
 finished turn would have. Explicit sends ignore it. An edit whose entry left the queue becomes a draft
-(`ComposerDraft.keepEditAsDraft`). Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
+(`ComposerDraft.keepEditAsDraft`), marked sent when the transcript holds the entry and removed otherwise;
+`SessionWindowModel.saveQueueEdit` does the same when Save finds the entry gone. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
 Saved entries remain paused after Continue; an empty queue resumes normal sending
 ([ADR-0029](adr/0029-empty-queue-recovery.md)). Explicitly sending the last queued entry also clears
 the pause. An ended or failed established session also offers Continue, which creates a new connection; failed connections stay closed. Continue requires a persisted session

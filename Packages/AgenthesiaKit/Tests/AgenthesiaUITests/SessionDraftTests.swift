@@ -317,7 +317,7 @@ import Testing
         model.show(first)
         model.settleQueueEdit()
         #expect(model.composer.message.text == "queued\n\ntyped" && model.composer.editingQueueID == nil)
-        #expect(model.composer.editWasSent && model.errorMessage == nil && controller.queueEdits == 0)
+        #expect(model.composer.editLeftQueue == .removed && model.errorMessage == nil && controller.queueEdits == 0)
         // An emptied draft forgets the line; a new edit starts without it.
         model.composer.message.text = ""
         #expect(model.composerDrafts[controller.session.id] == nil)
@@ -336,13 +336,14 @@ import Testing
         model.composer.edit(entry)
         model.settleQueueEdit()
         try await endTurn(controller)
-        #expect(controller.queuedPrompts.map(\.id) == [entry.id])
+        // Still idle after the yields: no drain started a turn.
+        #expect(controller.status == .idle && controller.queuedPrompts.map(\.id) == [entry.id])
         #expect(controller.queueEdits == 1)
 
         // Save writes the new text and releases the hold; the queue drains as the turn's end would have.
         model.composer.message.text = "edited"
-        try await controller.updateQueuedPrompt(entry.id, text: model.composer.message.text)
-        model.composer.finishEditing()
+        await model.saveQueueEdit(model.composer, in: controller)
+        #expect(model.composer.editingQueueID == nil && model.errorMessage == nil)
         model.settleQueueEdit()
         #expect(controller.queueEdits == 0)
         try await waitUntil { controller.queuedPrompts.isEmpty }
@@ -368,6 +369,13 @@ import Testing
         model.show(second)
         model.settleQueueEdit()
         #expect(controller.queueEdits == 0)
+        model.show(first)
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 1)
+        // So does New Session, which keeps the session behind the draft; coming back holds again.
+        model.showingSetup = true
+        model.settleQueueEdit()
+        #expect(model.showingSetup && controller.queueEdits == 0)
         model.show(first)
         model.settleQueueEdit()
         #expect(controller.queueEdits == 1)
@@ -430,10 +438,38 @@ import Testing
         try await waitUntil { controller.queuedPrompts.isEmpty }
         model.settleQueueEdit()
         #expect(model.composer.message == PromptDraft(text: "corrected"))
-        #expect(model.composer.editingQueueID == nil && model.composer.editWasSent)
+        #expect(model.composer.editingQueueID == nil && model.composer.editLeftQueue == .sent)
         #expect(controller.queueEdits == 0 && model.errorMessage == nil)
         model.composer.edit(entry)
-        #expect(!model.composer.editWasSent)
+        #expect(model.composer.editLeftQueue == nil)
+        await fixture.remove()
+    }
+
+    /// A Save that comes after the message was sent makes the same draft instead of an error; an empty one is dropped.
+    @Test(arguments: ["corrected", ""]) func aSaveAfterTheMessageWasSentKeepsTheEditAsADraft(text: String) async throws
+    {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        let entry = try #require(try await queue(["queued"], in: first).first)
+        model.composer.edit(entry)
+        model.settleQueueEdit()
+        model.composer.message.text = text
+        let draft = model.composer
+        #expect(await first.submit("", attachments: [], intent: .now))
+        try await waitUntil { controller.queuedPrompts.isEmpty }
+
+        await model.saveQueueEdit(draft, in: controller)
+        #expect(model.errorMessage == nil)
+        if text.isEmpty {
+            #expect(model.composerDrafts[controller.session.id] == nil)
+        } else {
+            #expect(model.composer.message.text == text && model.composer.editLeftQueue == .sent)
+        }
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 0)
         await fixture.remove()
     }
 
@@ -458,6 +494,12 @@ import Testing
         try await waitUntil { controller.queueEdits == 1 }
         model.composer.finishEditing()
         try await waitUntil { controller.queueEdits == 0 }
+
+        // A message removed under the edit turns it into a draft through the same observation.
+        model.composer.edit(entry)
+        try await waitUntil { controller.queueEdits == 1 }
+        try await controller.removeQueuedPrompt(entry.id)
+        try await waitUntil { model.composer.editLeftQueue == .removed && controller.queueEdits == 0 }
         await fixture.remove()
     }
 

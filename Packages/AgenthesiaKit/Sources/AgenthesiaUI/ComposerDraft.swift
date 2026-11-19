@@ -8,12 +8,23 @@ struct ComposerDraft: Equatable {
     /// The queued message being edited, shown as `message`; `saved` is the draft it replaced.
     var editingQueueID: UUID?
     var saved: PromptDraft?
-    /// The edited message was sent anyway, so the edit became this draft (#390).
-    var editWasSent = false
+    /// Why the edit became this draft: its message left the queue while it was edited (#390).
+    var editLeftQueue: LeftQueue?
+
+    enum LeftQueue: Equatable {
+        case sent, removed
+
+        var line: String {
+            switch self {
+            case .sent: "The message was already sent; your edit is now a draft"
+            case .removed: "The message was removed from the queue; your edit is now a draft"
+            }
+        }
+    }
 
     mutating func edit(_ entry: QueuedPrompt) {
         saved = message
-        editWasSent = false
+        editLeftQueue = nil
         editingQueueID = entry.id
         message = PromptDraft(
             text: entry.text,
@@ -26,8 +37,8 @@ struct ComposerDraft: Equatable {
         )
     }
 
-    /// Keeps the typed text, followed by the draft the edit replaced; the sent message's attachments went with it.
-    mutating func keepEditAsDraft() {
+    /// Keeps the typed text, followed by the draft the edit replaced; the message's attachments stay with it.
+    mutating func keepEditAsDraft(_ reason: LeftQueue) {
         let saved = saved ?? PromptDraft()
         message = PromptDraft(
             text: [message.text, saved.text].filter { !$0.isEmpty }.joined(separator: "\n\n"),
@@ -35,7 +46,7 @@ struct ComposerDraft: Equatable {
         )
         editingQueueID = nil
         self.saved = nil
-        editWasSent = true
+        editLeftQueue = reason
     }
 
     mutating func finishEditing() {

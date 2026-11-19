@@ -237,9 +237,12 @@ import os
         get { displayed.flatMap { composerDrafts[$0.session.id] } ?? ComposerDraft() }
         set {
             guard let id = displayed?.session.id else { return }
-            // An emptied draft is not kept, with or without the line that an edit became it.
-            composerDrafts[id] = newValue.message == PromptDraft() && newValue.editingQueueID == nil ? nil : newValue
+            store(newValue, for: id)
         }
+    }
+    /// An emptied draft is not kept, with or without the line that an edit became it.
+    private func store(_ draft: ComposerDraft, for id: UUID) {
+        composerDrafts[id] = draft.message == PromptDraft() && draft.editingQueueID == nil ? nil : draft
     }
     /// The answers to each session's docked form, by session ID; one is replaced when another form docks. Never
     /// written to the event log (ADR-0020), and not observed: the views observe the `InputDraft` itself.
@@ -313,7 +316,7 @@ import os
         let queued: Bool
     }
     var queueEdit: QueueEdit? {
-        guard !closed, let displayed, let id = composer.editingQueueID else { return nil }
+        guard !closed, !showingSetup, let displayed, let id = composer.editingQueueID else { return nil }
         return .init(
             session: ObjectIdentifier(displayed),
             entry: id,
@@ -323,12 +326,34 @@ import os
     /// Holds the displayed session's queue while a queued message is edited here, and releases it once the edit is
     /// saved, cancelled or no longer shown. An edit whose message was sent anyway becomes an ordinary draft.
     func settleQueueEdit() {
-        if queueEdit?.queued == false { composer.keepEditAsDraft() }
+        if queueEdit?.queued == false, let displayed { keepQueueEditAsDraft(in: displayed) }
         let wanted = queueEdit == nil ? nil : displayed
         guard wanted !== queueHold else { return }
         queueHold?.releaseQueue()
         wanted?.holdQueue()
         queueHold = wanted
+    }
+    /// Turns the edit in `session`'s composer into a draft once its message left the queue: sent, or removed.
+    private func keepQueueEditAsDraft(in session: SessionController) {
+        let id = session.session.id
+        guard var draft = composerDrafts[id], let entry = draft.editingQueueID else { return }
+        let sent = session.transcript.items.contains { $0.message?.localPromptID == entry }
+        draft.keepEditAsDraft(sent ? .sent : .removed)
+        store(draft, for: id)
+    }
+    /// Return while editing: writes the new text of the queued message `draft` edits in `session`'s composer.
+    func saveQueueEdit(_ draft: ComposerDraft, in session: SessionController) async {
+        guard let entry = draft.editingQueueID else { return }
+        let id = session.session.id
+        do {
+            try await session.updateQueuedPrompt(entry, text: draft.message.text)
+            if composerDrafts[id]?.editingQueueID == entry { composerDrafts[id]?.finishEditing() }
+        } catch SessionController.SessionError.invalidState
+            where !session.queuedPrompts.contains(where: { $0.id == entry })
+        {
+            // The message left the queue while saving: the edit becomes a draft, not an error (#390).
+            if composerDrafts[id]?.editingQueueID == entry { keepQueueEditAsDraft(in: session) }
+        } catch { errorMessage = error.localizedDescription }
     }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {

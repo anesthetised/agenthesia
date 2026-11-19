@@ -8,6 +8,8 @@ struct PromptQueue: View {
     let editable: Bool
     /// Replaces the header's text, as for a saved session's queue, which only Continue sends.
     var caption: String?
+    /// The message this window's composer edits; it cannot be deleted under the edit.
+    var editingID: UUID?
     let onEdit: (QueuedPrompt) -> Void
     let onError: (any Error) -> Void
 
@@ -55,6 +57,7 @@ struct PromptQueue: View {
                                 }
                                 .disabled(index == session.queuedPrompts.count - 1)
                                 Button("Delete queued message", systemImage: "trash") { remove(prompt.id) }
+                                    .disabled(prompt.id == editingID)
                             }
                         }
                         .labelStyle(.iconOnly).buttonStyle(.borderless).padding(8)

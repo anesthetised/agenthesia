@@ -405,6 +405,7 @@ public struct RootView: View {
                 PromptQueue(
                     session: session,
                     editable: !submitting,
+                    editingID: model.composer.editingQueueID,
                     onEdit: editQueuedPrompt,
                     onError: { model.errorMessage = $0.localizedDescription }
                 )
@@ -413,11 +414,11 @@ public struct RootView: View {
                 HStack {
                     Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Cancel Edit") { model.composer.finishEditing() }
+                    // A Save in flight would write the cancelled text afterwards.
+                    Button("Cancel Edit") { model.composer.finishEditing() }.disabled(submitting)
                 }
-            } else if model.composer.editWasSent, form == nil {
-                Text("The message was already sent; your edit is now a draft").font(.caption)
-                    .foregroundStyle(.secondary)
+            } else if let left = model.composer.editLeftQueue, form == nil {
+                Text(left.line).font(.caption).foregroundStyle(.secondary)
             }
             // While a form waits, the text is its answer and the draft waits in `model.composer` (#326).
             ComposerInput(
@@ -555,18 +556,8 @@ public struct RootView: View {
         submitting = true
         Task {
             defer { submitting = false }
-            if let editingID = draft.editingQueueID {
-                do {
-                    try await session.updateQueuedPrompt(editingID, text: draft.message.text)
-                    model.composerDrafts[id]?.finishEditing()
-                } catch SessionController.SessionError.invalidState
-                    where !session.queuedPrompts.contains(where: { $0.id == editingID })
-                {
-                    // Sent while saving: the edit becomes a draft, not an error (#390).
-                    if model.composerDrafts[id]?.editingQueueID == editingID {
-                        model.composerDrafts[id]?.keepEditAsDraft()
-                    }
-                } catch { model.errorMessage = error.localizedDescription }
+            if draft.editingQueueID != nil {
+                await model.saveQueueEdit(draft, in: session)
             } else if await owner.submit(draft.message.text, attachments: draft.message.attachments, intent: intent) {
                 // Acceptance is durable; a failed append leaves the composed draft intact. The window may show another
                 // session by now, so this clears the draft that was sent.

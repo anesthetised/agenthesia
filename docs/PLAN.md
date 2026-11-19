@@ -305,7 +305,7 @@ the first-run, text-size and VoiceOver items.
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
-| 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; [ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)) (landed; live agent check open) | `agent:strong` | — |
+| 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; [ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)) (landed; live-checked with Claude and Codex on 2026-11-19, Kimi open in #420) | `agent:strong` | — |
 | 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) (in review; running-app check open) | `agent:strong` | — |
 | 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
 | 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |
@@ -340,10 +340,11 @@ Progress:
   ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)). `ScopedFileAccess` refuses a device or a FIFO
   before opening it. Tested with Swift Testing: a read outside the roots and through a symlink that leaves them, a
   FIFO and a directory refused, a read over the cap refused, a write outside the roots, through a symlink and through
-  `..` refused with the new message. How Claude, Codex and Kimi use the
-  app's `fs` comes from their installed source, not a live session: only Kimi routes its file tools through it, and its
-  plan-mode plan file is refused. A live check with each agent (does a read outside the working directory ask; which
-  writes memory or plans through the app) needs the owner's consent.
+  `..` refused with the new message. How Kimi uses the app's `fs` comes from its installed source: it routes its file
+  tools through it and its plan-mode plan file is refused. Claude (claude-agent-acp 0.101.0) and Codex (codex-acp 2.5.0) were checked live on 2026-11-19: both
+  read and write outside the working directory with their own tools and never send `fs/*`; Claude asks in `default`
+  (Manual) but not in `auto`, Codex does not ask in its default `agent` (Auto review) mode. Kimi could not be checked
+  (no Kimi Code access in its subscription, #420).
 - Running-app check of #374, #351, #375 and #71 (2026-11-10): one Debug build with the four branches merged, a fresh
   bundle identifier, `CFFIXED_USER_HOME` in a temporary folder, MockAgent, light and dark, scripted with
   `scripts/app-check`. Seen: the menu bar submenu lists the request and Reject answers it; the `Run interrupted`

@@ -443,25 +443,17 @@ import Testing
         await manager.closeAll()
     }
 
-    @Test func shelfTimeTellsARunningTurnFromAnIdleSession() {
+    @Test func shelfTimeCountsARunningTurnOnly() {
         let now = Date(timeIntervalSince1970: 1_760_000_000)
-        func time(_ activity: Activity, turn: TimeInterval?, last: TimeInterval?) -> String? {
-            SessionSidebar.shelfTime(
-                activity: activity,
-                turnStartedAt: turn.map { now.addingTimeInterval(-$0) },
-                lastActivity: last.map { now.addingTimeInterval(-$0) },
-                now: now
-            )
+        func time(turn: TimeInterval?) -> String? {
+            SessionSidebar.shelfTime(turnStartedAt: turn.map { now.addingTimeInterval(-$0) }, now: now)
         }
-        // A running turn counts from its start, in seconds below a minute, whatever the last activity was.
-        #expect(time(.working, turn: 12, last: 600) == "Working 12s")
-        #expect(time(.working, turn: 72, last: nil) == "Working 1m 12s")
-        #expect(time(.working, turn: 3720, last: 10) == "Working 1h 2m")
-        #expect(time(.idle, turn: nil, last: 1200) == "Idle 20m")
-        #expect(time(.idle, turn: nil, last: 30) == "Idle now")
-        #expect(time(.idle, turn: nil, last: nil) == nil)
-        // A starting session has no turn yet: its spinner and `Starting` say it, not an idle time.
-        #expect(time(.working, turn: nil, last: 1200) == nil)
+        // A running turn counts from its start, in seconds below a minute.
+        #expect(time(turn: 12) == "Working 12s")
+        #expect(time(turn: 72) == "Working 1m 12s")
+        #expect(time(turn: 3720) == "Working 1h 2m")
+        // Without a turn (starting, or between queued turns) the shelf shows no time.
+        #expect(time(turn: nil) == nil)
     }
 
     @Test func theShelfHoldsTurnsAndTheListTheRestWithTheSessionsThatNeedYouFirst() async throws {
@@ -496,9 +488,7 @@ import Testing
         let started = try #require(runningController.turnStartedAt)
         #expect(
             SessionSidebar.shelfTime(
-                activity: running.activity,
                 turnStartedAt: started,
-                lastActivity: sidebar.section(.working)?.rows.first?.lastActivity,
                 now: started.addingTimeInterval(72)
             ) == "Working 1m 12s"
         )

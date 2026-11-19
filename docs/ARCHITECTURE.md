@@ -465,8 +465,8 @@ them in `@SceneStorage`, like the inspector); `SidebarShelves.isOpen` opens them
 Motion removes. A shelf grows with its own `List`, sized by a row-height estimate because a `List` does not report its
 content height: `SidebarShelves.listHeights` applies the caps. A Working shelf row's `SessionSidebar.shelfTime` is
 `Working 1m 12s` from `SessionController.turnStartedAt` (`WorkingDuration`, a one-second `TimelineView` only on running
-shelf rows; a `List` builds only the rows on screen); its `Idle 20m` remains for a board card and a row between queued
-turns.
+shelf rows; a `List` builds only the rows on screen), and nil without a turn, so a board card falls back to the last
+activity as a list row does.
 The search field is `SessionSidebarColumn`'s `.searchable` with the sidebar placement; its text is
 `SessionWindowModel.sidebarQuery`, not persisted, and `searchFocused` focuses it. `SessionSidebar(query:)` is the pure
 filter (`localizedStandardContains` on the title and project name; a starting or untitled session matches as “New

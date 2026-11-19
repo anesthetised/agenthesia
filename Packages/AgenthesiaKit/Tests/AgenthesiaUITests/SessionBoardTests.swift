@@ -137,7 +137,9 @@ import Testing
         #expect(idle.activity == .idle && idle.reason == nil)
         #expect(idle.lastLine == "Echo: hello")
         let last = try #require(idle.lastActivity)
-        #expect(idle.time(now: last.addingTimeInterval(20 * 60)) == "Idle 20m")
+        // An idle card shows the time of the last activity, as the session's row in the list does.
+        #expect(idle.time(now: last.addingTimeInterval(20 * 60)) == "20m")
+        #expect(idle.accessibilityLabel(now: last.addingTimeInterval(20 * 60)).contains("last active 20m"))
         #expect(idle.request == nil && idle.choices.isEmpty)
 
         let turn = Task { await owner.send("slow") }

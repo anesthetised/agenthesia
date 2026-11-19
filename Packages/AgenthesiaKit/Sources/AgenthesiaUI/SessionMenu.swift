@@ -32,12 +32,7 @@ struct SessionMenu {
                     needsYou
                     ? owner.reason
                     : PlanProgress(owner.controller?.transcript.plan)?.current
-                        ?? SessionSidebar.shelfTime(
-                            activity: owner.activity,
-                            turnStartedAt: owner.controller?.turnStartedAt,
-                            lastActivity: row.lastActivity,
-                            now: now
-                        )
+                        ?? SessionSidebar.shelfTime(turnStartedAt: owner.controller?.turnStartedAt, now: now)
                 let request = needsYou ? owner.controller?.pendingPermissions.first : nil
                 return Entry(
                     id: row.id,

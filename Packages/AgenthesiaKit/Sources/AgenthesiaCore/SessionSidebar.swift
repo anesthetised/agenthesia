@@ -98,17 +98,10 @@ public import Persistence
             && !controller.isMerging && !controller.queuedPrompts.isEmpty
     }
 
-    /// The trailing text of a row on the Working shelf: `Working 1m 12s` from the turn's start while one runs,
-    /// `Idle 20m` since the last activity when idle. Nil for a starting session, whose spinner and reason say it.
-    public static func shelfTime(
-        activity: LiveSession.Activity,
-        turnStartedAt: Date?,
-        lastActivity: Date?,
-        now: Date = .now
-    ) -> String? {
-        if let turnStartedAt { return "Working \(WorkingDuration.format(now.timeIntervalSince(turnStartedAt)))" }
-        guard activity == .idle, let lastActivity else { return nil }
-        return "Idle \(RelativeTime.short(from: lastActivity, to: now))"
+    /// The trailing text of a row on the Working shelf: `Working 1m 12s` from the turn's start while one runs. Nil
+    /// without a turn: a starting session's spinner and reason say it, and a row between queued turns shows no time.
+    public static func shelfTime(turnStartedAt: Date?, now: Date = .now) -> String? {
+        turnStartedAt.map { "Working \(WorkingDuration.format(now.timeIntervalSince($0)))" }
     }
 
     /// How many rows ⌘1…⌘9 reach.

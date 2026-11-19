@@ -77,7 +77,7 @@ Each row is one line of title over one line of detail, with the status and time 
 - **On the Working shelf**, the state and its time instead: `Working 1m 12s` while a turn runs (stopping included),
   counted from the turn's start, `Working 45s` below a minute and `Working 1h 2m` from an hour, updated every second
   while the row is on screen. A starting session shows no time: its spinner and `Starting` say it. A row between queued
-  turns reads `Idle now` for the moment before the next turn starts.
+  turns shows no time for the moment before the next turn starts.
 - The tooltip holds the full title and second line. The accessibility label is `title, project, reason, last active
   3m`; without a reason it names the status instead (`Working`, `Done`, …; nothing for idle or saved). On the Working
   shelf it ends with the shelf time instead, which names the state: `title, project, Working 1m 12s`.
@@ -194,7 +194,7 @@ their next refresh, and a finished deletion triggers one in every window.
 
 - 2026-11-19, #352: the list holds every open session that is not in a turn, the rows that need the user first, with
   no header; it reads `No open sessions` when empty. The Working shelf holds only the sessions in a turn (and one about
-  to start a queued turn); `Idle 20m` left it. A row's move between them animates.
+  to start a queued turn); `Idle 20m` is gone. A row's move between them animates.
 - 2026-11-09, #227: the Overview row above Needs You (⌘0) shows the session board; a window whose session was deleted
   goes to the board instead of the draft.
 - 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.

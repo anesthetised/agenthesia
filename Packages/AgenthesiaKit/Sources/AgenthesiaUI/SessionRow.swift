@@ -14,7 +14,7 @@ struct SessionRow: View {
     let activity: LiveSession.Activity?
     /// Nil while a starting session has no record yet.
     let lastActivity: Date?
-    /// A row on the Working shelf ends with `Working 1m 12s` or `Idle 20m` (`SessionSidebar.shelfTime`).
+    /// A row on the Working shelf ends with `Working 1m 12s` (`SessionSidebar.shelfTime`) instead of the time.
     var shelf = false
     /// When the running turn began; only a shelf row shows it.
     var turnStartedAt: Date?
@@ -42,12 +42,8 @@ struct SessionRow: View {
     private func row(now: Date) -> some View {
         let time =
             shelf
-            ? SessionSidebar.shelfTime(
-                activity: activity ?? .idle,
-                turnStartedAt: turnStartedAt,
-                lastActivity: lastActivity,
-                now: now
-            ) : lastActivity.map { RelativeTime.short(from: $0, to: now) }
+            ? SessionSidebar.shelfTime(turnStartedAt: turnStartedAt, now: now)
+            : lastActivity.map { RelativeTime.short(from: $0, to: now) }
         return HStack {
             ProjectBadgeView(name: project, isScratch: isScratch)
             VStack(alignment: .leading) {

@@ -101,7 +101,7 @@ public struct RootView: View {
                 .disabled(model.showingSetup || model.displayed == nil)
                 .help("Show or hide the inspector (⌥⌘I)")
                 if model.restored == nil, let owner = model.owner {
-                    Button(owner.isStarting ? "Cancel Startup" : "End Session", systemImage: "stop.circle") {
+                    Button(owner.isStarting ? "Cancel Startup" : "Settle Session", systemImage: "checkmark.circle") {
                         Task { await model.endSession() }
                     }.disabled(!model.canEnd)
                 }

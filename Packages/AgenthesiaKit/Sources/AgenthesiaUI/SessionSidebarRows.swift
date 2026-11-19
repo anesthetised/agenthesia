@@ -39,7 +39,8 @@ struct SessionSidebarRows: View {
             isScratch: model.isScratch(row.project),
             reason: SidebarReason.saved(archived: record.archivedAt != nil, outcome: model.outcomes[record.id]?.label),
             activity: nil,
-            lastActivity: row.lastActivity
+            lastActivity: row.lastActivity,
+            onSettle: model.canSettle(record) ? { Task { await model.settle(record) } } : nil
         )
         .tag(AnyHashable(record.id))
         .contextMenu { SessionRowMenu(model: model, row: row) }
@@ -71,6 +72,13 @@ struct SessionRowMenu: View {
             }
         case .saved(let record):
             windowMenu(.saved(record))
+            if record.settledAt == nil {
+                Button("Settle Session") { Task { await model.settle(record) } }
+                    .disabled(!model.canSettle(record))
+            } else {
+                Button("Unsettle Session") { Task { await model.unsettle(record) } }
+                    .disabled(!model.canUnsettle(record))
+            }
             archiveButton(record)
             Button("Delete Session…") { Task { await model.requestDelete(record) } }
             // A session without a project has no worktree (ADR-0048).

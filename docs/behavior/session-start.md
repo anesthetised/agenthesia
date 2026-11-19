@@ -164,12 +164,12 @@ replaced the launch form of [ADR-0026](../adr/0026-app-wide-session-manager.md))
 - The sidebar lists the session under Working as `New Session` with the reason `Starting` ([sidebar.md](sidebar.md)).
 - The toolbar button and the Session menu item read `Cancel Startup` (⇧⌘E).
 - If the agent asks to sign in ([ADR-0033](../adr/0033-agent-sign-in.md)), the sign-in panel replaces the card, the
-  message stays above it, and the button reads `End Session`; after sign-in succeeds the session starts and the first
+  message stays above it, and the button reads `Settle Session`; after sign-in succeeds the session starts and the first
   message is submitted.
 
 ## Failed or cancelled start
 
-- If the start fails, or is cancelled (`Cancel Startup`, or `End Session` at sign-in), the window returns to the
+- If the start fails, or is cancelled (`Cancel Startup`, or `Settle Session` at sign-in), the window returns to the
   draft with the message and its attachments, and the error in a red banner above the card (none for a
   cancellation). The banner offers `Manage Agents…` for a missing executable or agent version, and `Details` with the
   raw text when it shortens the error. The error clears on Send or when the project or agent changes.
@@ -190,6 +190,7 @@ Continuing a saved session (Continue, ⇧⌘C) does not go through the draft; se
 
 ## Changes
 
+- 2026-11-20, #353: the sign-in button reads `Settle Session`, which replaces End Session ([ADR-0050](../adr/0050-settled-is-the-users-decision.md)).
 - 2026-11-09, #227: blank and restored windows keep the draft; the session board shows on ⌘0, the Overview row and
   after the displayed session is deleted.
 - 2026-11-09, #229: the Checkout label becomes a menu for Git projects, `New worktree from <base>` or `Project folder`,

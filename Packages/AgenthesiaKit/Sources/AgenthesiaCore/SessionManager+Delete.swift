@@ -21,7 +21,7 @@ extension SessionManager {
 
         public var errorDescription: String? {
             switch self {
-            case .live: "End the session first."
+            case .live: "Settle the session first."
             case .busy: "The session is being merged, discarded or deleted. Try again once that has finished."
             }
         }

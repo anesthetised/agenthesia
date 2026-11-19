@@ -449,7 +449,8 @@ turn without an outcome, `permissionResolved(.cancelled)` for requests without a
 The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
 in the background. The sidebar ([behavior](behavior/sidebar.md), [ADR-0039](adr/0039-t3-style-window-layout.md)) is
 `SessionSidebar` in Core, which groups the sessions by status, and `SessionSidebarList` and `SidebarShelves` in the UI.
-The list (`Kind.active`) holds the live sessions that are not working, the rows that need the user first; Working holds
+The list (`Kind.active`) holds the live sessions that are not working, the rows that need the user first, and after
+them the saved sessions that are not settled, by start; Working holds
 those in a turn and those whose queue is about to start one (`SessionSidebar.isWorking`, `queueDue`), so a row does not
 bounce between queued turns. `SessionSidebar.needsYou` is the pure list of the rows that need the user, which the menu
 bar reads; `SessionSidebarColumn.liveRows` is the value its animation watches. The column reads `model.sidebar` once
@@ -487,6 +488,18 @@ Settled unless a query is entered, and `SidebarReason.saved` (`Archived`) wins o
 `SessionWindowModel.canArchive` and `archiveHelp` gate the Session menu item. **Continue** clears `archivedAt`
 (`SessionWindowModel.continueRestored`). Every write refreshes the window's history; other windows pick it up at their
 next refresh.
+
+**Settled** ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) is stored: the nullable `session.settledAt`
+(migration `v9-session-settled-at`, which fills it for every existing session with its last event's time, or its start,
+`SessionRecord.settledAt`), written by `PersistenceStore.setSettled(_:of:)`. `SessionSidebar` puts saved sessions without
+it in the list and those with it on the Settled shelf. `SessionManager.settle` ends a session's owners first, so a live
+session is never settled; Continue clears `settledAt` as it launches (`LiveSession`). `SessionManager.unsettle` appends a
+`session.unsettled` event (`SessionUnsettled`, a kind of its own that the reducer passes over and older builds skip) and
+clears `settledAt`; until each session has one log writer (#355) it is refused while the session is live, starting,
+merging, discarding or being deleted, and `resume` refuses a Continue while it runs. `SessionSettling.settles` is the
+pure rule: a session that is not live settles when the worktree's outcome is its last event or its last activity is seven
+days old. `SessionManager.settleByRule` applies it and writes the time of the check; `SessionWindowModel.refresh` runs it
+first, and refreshes follow launch, a session's end, a merge and a discard.
 
 **Delete Session…** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) removes a saved session for good. Events are
 append-only in the schema itself (`event_no_delete`); migration `v8-session-deletion` lets the guard pass only the
@@ -959,6 +972,8 @@ The event format is version 1:
   outcome, without options) is still read and shown with the option identifier only. When an adapter normalizes
   an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
   after the raw notification. Replay therefore reproduces live state without discarding original data.
+- `session.pullRequestOpened` and `session.unsettled`: kinds of their own, so that builds that do not know them skip
+  them ([ADR-0045](adr/0045-push-and-pull-requests.md), [ADR-0050](adr/0050-settled-is-the-users-decision.md)).
 
 A new session is created without a title. After each durable append `SessionController` stores one
 ([ADR-0039](adr/0039-t3-style-window-layout.md)): the agent's `session_info_update` title when there is one, otherwise,

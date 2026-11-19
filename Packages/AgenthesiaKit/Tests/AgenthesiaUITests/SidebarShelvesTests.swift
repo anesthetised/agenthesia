@@ -308,7 +308,8 @@ import Testing
                 projectID: project.id,
                 agentInstallID: agent.id,
                 title: "Session \(index)",
-                workingDirectory: project.rootPath
+                workingDirectory: project.rootPath,
+                settledAt: .now
             )
             try await store.createSession(record)
             records.append(record)

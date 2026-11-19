@@ -24,6 +24,8 @@ public final class SessionManager {
     @ObservationIgnored var gitHubCLISignedIn = false
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
+    /// Saved sessions being unsettled (ADR-0050); Continue is refused meanwhile.
+    var unsettlingIDs: Set<UUID> = []
     /// Saved sessions deleted since launch; a window still showing one of them (an ended session it ran) leaves it.
     public internal(set) var deletedIDs: Set<UUID> = []
     // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
@@ -83,9 +85,11 @@ public final class SessionManager {
 
     /// The owner that has the session live, or a new one that continues it once earlier owners of the
     /// session have closed, so one owner writes to its log at a time (ADR-0017). Nil while its worktree is
-    /// being discarded.
+    /// being discarded, merged or unsettled.
     @discardableResult public func resume(_ session: SessionRecord) -> LiveSession? {
-        guard !isDiscarding(session.id), !isMerging(session.id) else { return nil }
+        guard !isDiscarding(session.id), !isMerging(session.id), !unsettlingIDs.contains(session.id) else {
+            return nil
+        }
         if let live = owner(of: session.id) { return live }
         let previous = owners.filter { $0.sessionID == session.id }
         owners.removeAll { $0.sessionID == session.id }

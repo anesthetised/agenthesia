@@ -182,6 +182,7 @@ import Testing
                 projectID: project.id,
                 agentInstallID: UUID(),
                 workingDirectory: project.rootPath,
+                settledAt: .now,
                 createdAt: Date(timeIntervalSinceNow: -age)
             )
         }
@@ -217,7 +218,7 @@ import Testing
     @Test func emptySectionsAreOmitted() async throws {
         let none = SessionSidebar(projects: [], history: [], owners: [])
         #expect(none.sections.isEmpty && none.rows.isEmpty)
-        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
+        let record = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x", settledAt: .now)
         #expect(SessionSidebar(projects: [], history: [record], owners: []).sections.map(\.kind) == [.settled])
     }
 
@@ -229,7 +230,8 @@ import Testing
                 projectID: project.id,
                 agentInstallID: UUID(),
                 title: title,
-                workingDirectory: project.rootPath
+                workingDirectory: project.rootPath,
+                settledAt: .now
             )
         }
         let (fix, plain, untitled) = (
@@ -259,6 +261,7 @@ import Testing
                 agentInstallID: UUID(),
                 title: title,
                 workingDirectory: project.rootPath,
+                settledAt: .now,
                 createdAt: Date(timeIntervalSinceNow: -age)
             )
         }
@@ -292,7 +295,7 @@ import Testing
         let controller = try #require(running.controller)
         let turn = Task { await running.send("slow") }
         while controller.status == .idle { await Task.yield() }
-        let saved = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
+        let saved = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x", settledAt: .now)
         let owners = [running, idle, failed]
 
         // The list comes first although its sessions started later, the failed one at its top; the saved session is
@@ -445,6 +448,7 @@ import Testing
                 projectID: project.id,
                 agentInstallID: UUID(),
                 workingDirectory: project.rootPath,
+                settledAt: .now,
                 createdAt: Date(timeIntervalSinceNow: -age)
             )
         }

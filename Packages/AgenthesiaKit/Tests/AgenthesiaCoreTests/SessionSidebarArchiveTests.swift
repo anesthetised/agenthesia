@@ -7,13 +7,19 @@ import Testing
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionSidebarArchiveTests {
     private let project = ProjectRecord(name: "Project", rootPath: "/p")
 
-    private func saved(_ title: String, age: TimeInterval, archived: Bool = false) -> SessionRecord {
+    private func saved(
+        _ title: String,
+        age: TimeInterval,
+        archived: Bool = false,
+        settled: Bool = true
+    ) -> SessionRecord {
         SessionRecord(
             projectID: project.id,
             agentInstallID: UUID(),
             title: title,
             workingDirectory: project.rootPath,
             archivedAt: archived ? Date(timeIntervalSinceNow: -1) : nil,
+            settledAt: settled ? Date(timeIntervalSinceNow: -1) : nil,
             createdAt: Date(timeIntervalSinceNow: -age)
         )
     }
@@ -24,6 +30,21 @@ import Testing
         #expect(sidebar.sections.map(\.kind) == [.settled])
         #expect(sidebar.sections.first?.rows.count == 1)
         #expect(sidebar.rows.map(\.id) == [AnyHashable(kept.id)])
+    }
+
+    /// Saved sessions that are not settled are in the list, by start; settled ones on the shelf (ADR-0050).
+    @Test func savedSessionsThatAreNotSettledAreInTheList() {
+        let (older, newer) = (saved("Older", age: 30, settled: false), saved("Newer", age: 10, settled: false))
+        let (done, hidden) = (saved("Done", age: 20), saved("Hidden", age: 5, archived: true, settled: false))
+        let sidebar = SessionSidebar(projects: [project], history: [newer, done, hidden, older], owners: [])
+        #expect(sidebar.sections.map(\.kind) == [.active, .settled])
+        #expect(sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(older.id), AnyHashable(newer.id)])
+        #expect(sidebar.section(.settled)?.rows.map(\.id) == [AnyHashable(done.id)])
+        #expect(sidebar.needsYou.isEmpty)
+        #expect(sidebar.numberedRows.map(\.id) == [AnyHashable(older.id), AnyHashable(newer.id)])
+        // A search lists an archived session among the settled ones, whatever its `settledAt`.
+        let found = SessionSidebar(projects: [project], history: [newer, hidden], owners: [], query: "hidden")
+        #expect(found.sections.map(\.kind) == [.settled])
     }
 
     @Test func settledIsOmittedWhenEverySavedSessionIsArchived() {

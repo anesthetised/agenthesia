@@ -100,7 +100,7 @@ import Testing
         await owner.startup?.value
         await fixture.model.refresh()
         let record = try #require(owner.controller?.session)
-        #expect(!fixture.model.canArchive && fixture.model.archiveHelp == "End the session first")
+        #expect(!fixture.model.canArchive && fixture.model.archiveHelp == "Settle the session first")
         // Nothing is written for a live session, even when asked directly.
         await fixture.model.setArchived(true, record)
         #expect(try await fixture.store.session(id: record.id)?.archivedAt == nil)
@@ -215,7 +215,7 @@ import Testing
         await owner.startup?.value
         await fixture.model.refresh()
         let record = try #require(owner.controller?.session)
-        #expect(!fixture.model.canDelete && fixture.model.archiveHelp == "End the session first")
+        #expect(!fixture.model.canDelete && fixture.model.archiveHelp == "Settle the session first")
         await fixture.model.requestDelete(record)
         #expect(fixture.model.pendingDelete == nil)
         await #expect(throws: SessionManager.DeleteError.live) { try await fixture.sessions.delete(record) }

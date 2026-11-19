@@ -18,7 +18,7 @@ public struct SessionCommands: Commands {
             Button("New Session") { model?.showingSetup = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(model?.canStart != true)
-            Button(model?.owner?.isStarting == true ? "Cancel Startup" : "End Session") {
+            Button(model?.owner?.isStarting == true ? "Cancel Startup" : "Settle Session") {
                 Task { [model] in await model?.endSession() }
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])

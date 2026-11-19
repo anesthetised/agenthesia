@@ -457,8 +457,11 @@ import os
         Task { await owner.cancelSignIn() }
     }
 
+    /// Settle Session (Cancel Startup while starting) for the displayed live session, at any time, or for the
+    /// displayed saved session while it is in the list (ADR-0050).
     var canEnd: Bool {
-        !closed && !showingSetup && !isLoadingHistory && restored == nil
+        if let displayedSaved { return canSettle(displayedSaved) }
+        return !closed && !showingSetup && !isLoadingHistory && restored == nil
             && sessions.owners.contains { $0 === owner }
     }
     var canStop: Bool {
@@ -555,7 +558,7 @@ import os
     var archiveCommandTitle: String { Self.archiveTitle(archived: displayedSaved?.archivedAt != nil) }
     /// Why Archive is disabled for a live session.
     var archiveHelp: String? {
-        displayed != nil && !showingSetup && displayedSaved == nil ? "End the session first" : nil
+        displayed != nil && !showingSetup && displayedSaved == nil ? "Settle the session first" : nil
     }
     static func archiveTitle(archived: Bool) -> String { archived ? "Unarchive Session" : "Archive Session" }
 
@@ -698,18 +701,49 @@ import os
         }
     }
 
+    /// Settle Session in the menu and on the toolbar; Cancel Startup only ends a starting session.
     func endSession() async {
-        guard canEnd, let owner else { return }
-        await sessions.end(owner)
-        await refresh()
+        guard canEnd else { return }
+        if let displayedSaved { return await settle(displayedSaved) }
+        guard let owner else { return }
+        if owner.isStarting {
+            await sessions.end(owner)
+            await refresh()
+        } else {
+            await writeSettled { try await sessions.settle(owner) }
+        }
     }
-    /// Settling a row is End Session for that row's owner, whichever session the window shows.
+    /// A live row settles from its own menu and button, whichever session the window shows, unless a turn runs or a
+    /// permission or form waits.
     func canSettle(_ owner: LiveSession) -> Bool {
         !closed && SessionRow.canSettle(owner.activity) && sessions.owners.contains { $0 === owner }
     }
     func settle(_ owner: LiveSession) async {
         guard canSettle(owner) else { return }
-        await sessions.end(owner)
+        await writeSettled { try await sessions.settle(owner) }
+    }
+    /// A saved row in the list settles at once; archived and settled ones are not in the list (ADR-0050).
+    func canSettle(_ record: SessionRecord) -> Bool {
+        !closed && record.settledAt == nil && record.archivedAt == nil && !sessions.deletingIDs.contains(record.id)
+            && savedSessions.contains { $0.id == record.id }
+    }
+    func settle(_ record: SessionRecord) async {
+        guard canSettle(record) else { return }
+        await writeSettled { try await sessions.settle(record.id) }
+    }
+    /// Unsettle Session on a Settled row: back to the list without starting the agent. Not after a merge or a
+    /// discard, whose outcome must stay the session's last event (ADR-0032).
+    func canUnsettle(_ record: SessionRecord) -> Bool {
+        !closed && record.settledAt != nil && outcome(of: record.id) == nil && sessions.canUnsettle(record.id)
+            && savedSessions.contains { $0.id == record.id }
+    }
+    func unsettle(_ record: SessionRecord) async {
+        guard canUnsettle(record) else { return }
+        do { try await sessions.unsettle(record.id) } catch { showAlert("Cannot Unsettle the Session", error) }
+        await refresh()
+    }
+    private func writeSettled(_ write: () async throws -> Void) async {
+        do { try await write() } catch { showAlert("Cannot Settle the Session", error) }
         await refresh()
     }
     func stop() async {
@@ -868,6 +902,7 @@ import os
 
     func refresh() async {
         do {
+            try await sessions.settleByRule()
             history = try await library.history()
             if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
                 leaveDeletedSession(id)

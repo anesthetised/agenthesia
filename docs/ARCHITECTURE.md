@@ -447,6 +447,15 @@ turn without an outcome, `permissionResolved(.cancelled)` for requests without a
 The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
 in the background. The sidebar ([behavior](behavior/sidebar.md), [ADR-0039](adr/0039-t3-style-window-layout.md)) is
 `SessionSidebar` in Core, which groups the sessions by status, and `SessionSidebarList` and `SidebarShelves` in the UI.
+The list (`Kind.active`) holds the live sessions that are not working, the rows that need the user first; Working holds
+those in a turn and those whose queue is about to start one (`SessionSidebar.isWorking`, `queueDue`), so a row does not
+bounce between queued turns. `SessionSidebar.needsYou` is the pure list of the rows that need the user, which the menu
+bar reads; `SessionSidebarColumn.liveRows` is the value its animation watches. The column reads `model.sidebar` once
+and passes it to `SessionSidebarList` and `SidebarShelves`: a view that read it itself would be updated by its own
+observation, outside the column's animated transaction, and the move would not animate. The Working shelf keeps its
+`List` mounted at no height while it has no rows, so a row that moves there is inserted into a table that exists, which
+animates; a table made for the row would show it a few frames late. A query change never animates: an
+`.animation(nil, value: sidebarQuery)` sits inside the column's spring and inside the shelves' own.
 Each row carries its project (`nil` while unknown). `ProjectBadge.initials` draws a row's badge; its tint is a 64-bit
 FNV-1a hash of the name, since `hashValue` changes per launch. `SidebarReason` (Core, pure) derives a row's reason from
 `LiveSession.Activity`, so it never contradicts the status symbol; a permission request that names its call only by id
@@ -461,7 +470,8 @@ them in `@SceneStorage`, like the inspector); `SidebarShelves.isOpen` opens them
 Motion removes. A shelf grows with its own `List`, sized by a row-height estimate because a `List` does not report its
 content height: `SidebarShelves.listHeights` applies the caps. A Working shelf row's `SessionSidebar.shelfTime` is
 `Working 1m 12s` from `SessionController.turnStartedAt` (`WorkingDuration`, a one-second `TimelineView` only on running
-shelf rows; a `List` builds only the rows on screen) or `Idle 20m` from the last activity.
+shelf rows; a `List` builds only the rows on screen), and nil without a turn, so a board card falls back to the last
+activity as a list row does.
 The search field is `SessionSidebarColumn`'s `.searchable` with the sidebar placement; its text is
 `SessionWindowModel.sidebarQuery`, not persisted, and `searchFocused` focuses it. `SessionSidebar(query:)` is the pure
 filter (`localizedStandardContains` on the title and project name; a starting or untitled session matches as “New
@@ -517,7 +527,11 @@ folded group that holds it (`TranscriptRow.row(showing:in:)`, the row identity f
 a clip-view resize (the docked card and the panes resize it); the clip view is observed only while a target is set, and
 without one nothing is scheduled. Once the end was shown, the table reports the item once and stops watching;
 `markSeen(reaching:)` marks every turn seen only when the item is still the latest result. A reader following the end
-clears the mark as the turn ends.
+never sees the mark: `SessionWindowModel.watchedOwner(appearsActive:)` is the live session a window shows while it
+appears active and its `endPosition` is `.following` (not closed, not on the draft or the board, not loading or showing
+a saved session, no held first message), `RootView` hands it to `watch(_:)`, and `LiveSession.setWatched` keeps a set
+of such windows; a closed window watches nothing, and the model's `isolated deinit` releases the session too. While the set is not empty `hasUnseenResult` is false, so a turn that ends is seen in the
+same update and its row never sorts among those that need the user; the last window to leave marks every turn seen.
 
 `New response below` and Jump to Latest (ADR-0026's amendment, [behavior](behavior/transcript.md#following-the-end)): the table keeps `followingBottom`'s intent and, when it
 turns false, remembers `TranscriptState.End` (the last item's identity and how much text it holds: its content blocks,
@@ -554,8 +568,8 @@ removes it otherwise. The app icon itself is the layered
 `App/AppIcon.icon`, which the system composes for each icon style.
 The menu bar item ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior](behavior/menu-bar.md)) is a
 `MenuBarExtra` scene in `App/` holding two UI views, `SessionMenuBarLabel` and `SessionMenuBarContent`, which read
-`SessionManager` and rebuild when it changes. `SessionMenu` derives the entries from `SessionSidebar`'s Needs You and
-Working sections (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
+`SessionManager` and rebuild when it changes. `SessionMenu` derives the entries from `SessionSidebar.needsYou` and the
+Working section (`LiveSession.reason`; `PlanProgress.current` or `SessionSidebar.shelfTime`), a session opens through
 its `WindowTarget` URL as a notification does, and an option answers through `SessionController.answerPermission`.
 `PermissionChoice` (Core, pure) is the Open-first rule: a request that edits files offers Open before the agent's
 options, and so does a command the board cuts (`PermissionCommand.isCutOnBoard`); the session board reuses it without

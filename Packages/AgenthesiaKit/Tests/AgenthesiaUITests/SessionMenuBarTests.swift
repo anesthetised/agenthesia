@@ -132,6 +132,18 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func anIdleSessionIsNotListed() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        #expect(owner.activity == .idle)
+        // Working lists the sidebar's Working shelf, which holds turns only.
+        let menu = SessionMenu(owners: manager.owners)
+        #expect(menu.needsYou.isEmpty && menu.working.isEmpty)
+        await manager.closeAll()
+    }
+
     @Test func theWorkingEntryNamesThePlanStepInsteadOfTheTime() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

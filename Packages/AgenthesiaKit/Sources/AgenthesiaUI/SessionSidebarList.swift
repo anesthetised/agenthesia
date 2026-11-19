@@ -2,16 +2,18 @@ import AgenthesiaCore
 import Persistence
 import SwiftUI
 
-/// The Overview row (ADR-0046) and Needs You, the scrolling top of the sidebar (ADR-0039). Working and Settled are
-/// `SidebarShelves`.
+/// The Overview row (ADR-0046) and the open sessions that are not working, the scrolling top of the sidebar
+/// (ADR-0039). Working and Settled are `SidebarShelves`.
 struct SessionSidebarList: View {
     let model: SessionWindowModel
+    /// The list's rows, from the column's `model.sidebar`: read there, a move between the list and a shelf takes the
+    /// column's animation.
+    let section: SessionSidebar.Section?
 
     var body: some View {
         Label("Overview", systemImage: "square.grid.2x2").tag(SessionWindowModel.overviewID)
-        if let section = model.sidebar.section(.needsYou) {
-            Section(section.kind.rawValue) { SessionSidebarRows(model: model, section: section) }
-        }
+        // No section: the rows follow Overview at their own spacing.
+        if let section { SessionSidebarRows(model: model, section: section) }
     }
 }
 

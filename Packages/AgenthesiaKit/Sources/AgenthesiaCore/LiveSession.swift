@@ -57,6 +57,8 @@ public final class LiveSession {
     @ObservationIgnored public var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
     /// Turns finished when the user last saw a result on screen (ADR-0026's amendment). In memory only.
     private var seenTurns = 0
+    /// The windows that show this session's end to the user (`setWatched`). In memory only.
+    private var watchers: Set<ObjectIdentifier> = []
     @ObservationIgnored private let library: SessionLibrary
     @ObservationIgnored private var process: AgentProcess?
     @ObservationIgnored private var connection: ACP.V1.AgentConnectionAdapter?
@@ -123,8 +125,21 @@ public final class LiveSession {
         )
     }
 
-    /// A turn ended since the user last looked at the session.
-    public var hasUnseenResult: Bool { (controller?.completedTurns ?? 0) > seenTurns }
+    /// A turn ended since the user last looked at the session. A turn that ends while a window shows the end is
+    /// seen in the same update, so the session never shows as done in between.
+    public var hasUnseenResult: Bool { watchers.isEmpty && (controller?.completedTurns ?? 0) > seenTurns }
+
+    /// Records whether `window` shows this session's end to the user: key in the active app, its transcript followed
+    /// to the end. The turns that ended meanwhile stay seen once no window does.
+    public func setWatched(_ watched: Bool, by window: AnyObject) {
+        let id = ObjectIdentifier(window)
+        if watched {
+            if !watchers.contains(id) { watchers.insert(id) }
+        } else if watchers.contains(id) {
+            watchers.remove(id)
+            if watchers.isEmpty { markSeen() }
+        }
+    }
 
     /// Where the latest finished turn ends, while the user has not seen it; the transcript watches for it.
     public var unseenResult: Int64? { hasUnseenResult ? controller?.lastResultItem : nil }

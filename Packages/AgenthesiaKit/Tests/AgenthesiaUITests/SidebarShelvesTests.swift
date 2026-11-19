@@ -147,7 +147,7 @@ import Testing
     }
 
     @Test func nextSessionExpandsACollapsedWorkingShelfAndLeavesSettledAlone() async throws {
-        let fixture = try await Fixture(sessions: 2, live: 1)
+        let fixture = try await Fixture(sessions: 2, running: 1)
         defer { fixture.close() }
         await fixture.settle()
         fixture.model.showingSetup = true
@@ -178,24 +178,91 @@ import Testing
         #expect(fixture.sidebarTables().count == 1)
     }
 
-    @Test func anIdleSessionSitsOnTheWorkingShelfExpandedByDefault() async throws {
-        let fixture = try await Fixture(sessions: 0, live: 1)
+    @Test func anIdleSessionIsInTheListAndARunningOneOnTheWorkingShelf() async throws {
+        let fixture = try await Fixture(sessions: 0, live: 1, running: 1)
         defer { fixture.close() }
         // The draft selects no row, so the shelf is open by default rather than forced open by the selection.
         fixture.model.showingSetup = true
         await fixture.settle()
         let tables = fixture.sidebarTables()
         try #require(tables.count == 2)
-        // The top list holds the Overview row and Needs You, which is empty; the shelf lists the session under it.
-        #expect(tables[0].numberOfRows == 1)
+        // The top list holds the Overview row and, right after it with no section between, the idle session; the
+        // shelf lists the running one under it.
+        #expect(tables[0].numberOfRows == 2)
         #expect(tables[1].numberOfRows == 1)
+        let sidebar = fixture.model.sidebar
+        #expect(sidebar.section(.active)?.rows.count == 1 && sidebar.section(.working)?.rows.count == 1)
+        #expect(SessionSidebarColumn.placeholder(sidebar) == nil)
         let list = try #require(tables[1].enclosingScrollView)
         #expect(abs(list.frame.height - (SidebarShelves.rowHeight + SidebarShelves.listPadding)) < 2)
         await fixture.manager.closeAll()
     }
 
+    @Test func aLoneRowsMoveFromTheListToTheShelfChangesWhatTheAnimationWatches() async throws {
+        let fixture = try await Fixture(sessions: 0, live: 1)
+        defer { fixture.close() }
+        let owner = try #require(fixture.manager.owners.first)
+        let id = AnyHashable(try #require(owner.sessionID))
+        #expect(SessionSidebarColumn.liveRows(fixture.model.sidebar) == [[id], []])
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+        #expect(SessionSidebarColumn.liveRows(fixture.model.sidebar) == [[], [id]])
+        await owner.stop()
+        await turn.value
+        await fixture.manager.closeAll()
+    }
+
+    @Test func theMoveAnimatesUnlessReduceMotionIsOnOrASearchFilters() {
+        #expect(SessionSidebarColumn.moveAnimation(reduceMotion: false, filtered: false) == .spring(duration: 0.25))
+        #expect(SessionSidebarColumn.moveAnimation(reduceMotion: true, filtered: false) == nil)
+        #expect(SessionSidebarColumn.moveAnimation(reduceMotion: false, filtered: true) == nil)
+    }
+
+    @Test func aRowMovesIntoTheWorkingShelfsListThatWasThereWithoutRows() async throws {
+        let fixture = try await Fixture(sessions: 0, live: 1)
+        defer { fixture.close() }
+        fixture.model.showingSetup = true
+        await fixture.settle()
+        // The empty shelf keeps its list at no height, so the row's move is an insertion into a table that exists,
+        // which the table animates; a list made for the row would show it only a few frames later.
+        let shelf = try #require(fixture.sidebarTables(includingEmpty: true).first { $0.numberOfRows == 0 })
+        #expect(fixture.sidebarTables().count == 1)
+        let owner = try #require(fixture.manager.owners.first)
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+        try await waitUntil {
+            fixture.host.layoutSubtreeIfNeeded()
+            return shelf.numberOfRows == 1
+        }
+        #expect(fixture.sidebarTables(includingEmpty: true).contains { $0 === shelf })
+        await owner.stop()
+        await turn.value
+        await fixture.manager.closeAll()
+    }
+
+    @Test func noOpenSessionsShowsOnlyWithoutAnyOpenSession() async throws {
+        let fixture = try await Fixture(sessions: 1, running: 1)
+        defer { fixture.close() }
+        await fixture.settle()
+        // Every open session is on the shelf: the list area shows nothing.
+        #expect(fixture.model.sidebar.section(.active) == nil)
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == nil)
+        fixture.model.sidebarQuery = "nothing"
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == .noResults)
+        // A search that finds only a Settled row leaves no open session on screen.
+        fixture.model.sidebarQuery = "session"
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == .noOpenSessions)
+        fixture.model.sidebarQuery = ""
+        await fixture.manager.closeAll()
+        let settledOnly = try await Fixture(sessions: 1)
+        defer { settledOnly.close() }
+        #expect(SessionSidebarColumn.placeholder(settledOnly.model.sidebar) == .noOpenSessions)
+    }
+
     @Test func theWorkingShelfSitsAboveSettled() async throws {
-        let fixture = try await Fixture(sessions: 40, live: 1)
+        let fixture = try await Fixture(sessions: 40, running: 1)
         defer { fixture.close() }
         await fixture.settle()
         fixture.model.settledShelfExpanded = true
@@ -221,8 +288,9 @@ import Testing
     let window: NSWindow
     let records: [SessionRecord]
 
-    /// `live` sessions of the bundled `MockAgent` are started and left idle; the caller closes them.
-    init(sessions count: Int, live: Int = 0) async throws {
+    /// `live` sessions of the bundled `MockAgent` are started and left idle, then `running` more are left in a turn;
+    /// the caller closes them.
+    init(sessions count: Int, live: Int = 0, running: Int = 0) async throws {
         _ = NSApplication.shared
         directory = FileManager.default.temporaryDirectory.appending(path: "settled-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -248,17 +316,20 @@ import Testing
         self.records = records
         model = SessionWindowModel(sessions: manager)
         await model.refresh()
-        if live > 0 {
+        if live + running > 0 {
             let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
             let binary = try #require(
                 [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
                     .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
             )
-            for _ in 0..<live {
+            for index in 0..<(live + running) {
                 let owner = try #require(
                     model.start(directory: directory, agent: .init(name: "Mock", executable: binary.path))
                 )
                 await owner.startup?.value
+                guard index >= live, let controller = owner.controller else { continue }
+                Task { await owner.send("slow") }
+                while controller.status == .idle { await Task.yield() }
             }
         }
         host = NSHostingView(rootView: RootView(model: model))
@@ -275,9 +346,11 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// The sidebar's lists (the transcript has its own table).
-    func sidebarTables() -> [NSTableView] {
+    /// The sidebar's lists that take room (the transcript has its own table); an empty Working shelf keeps a list of
+    /// no height, which `includingEmpty` adds.
+    func sidebarTables(includingEmpty: Bool = false) -> [NSTableView] {
         tableViews(in: host).filter { String(describing: type(of: $0)).contains("ListView") }
+            .filter { includingEmpty || ($0.enclosingScrollView?.frame.height ?? 0) > 0 }
             .sorted { $0.convert($0.bounds, to: nil).minY > $1.convert($1.bounds, to: nil).minY }
     }
 

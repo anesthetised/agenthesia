@@ -6,7 +6,7 @@ and answers a command's permission request without opening the session
 
 ## Showing the board
 
-- **Overview**, the first row of the sidebar above Needs You (`square.grid.2x2`), and Session → `Overview` (⌘0) show
+- **Overview**, the first row of the sidebar above the list (`square.grid.2x2`), and Session → `Overview` (⌘0) show
   the board in the current window. The row is selected while the board shows. Search does not hide it.
 - A window whose displayed session was deleted ([ADR-0044](../adr/0044-delete-and-archive-sessions.md)) shows the board.
 - A window that shows no session and is not starting one (for example after a session started from Continue failed)
@@ -22,14 +22,15 @@ and answers a command's permission request without opening the session
 
 ## Cards
 
-- One card per live session, Needs You first, then Working, in the sidebar's order; the sidebar's search does not
+- One card per live session in the sidebar's order: the list (the sessions that need the user, then the idle ones),
+  then Working; the sidebar's search does not
   filter the board. Saved sessions are not on the board; they are in Settled.
 - The cards fill a grid that wraps to the column's width: as many columns of at least 280 pt as fit, one to three.
   Cards in a row align at the top; the grid scrolls when it is taller than the window.
 - A card shows, top to bottom:
   - the project badge, the title (one line), the status symbol and the time, as on the session's row: `Working 1m
-    12s` while a turn runs, counting seconds; `Idle 20m` for an idle session; otherwise the time of the last activity
-    (`5m`), updated every minute (`SessionSidebar.shelfTime`);
+    12s` while a turn runs, counting seconds (`SessionSidebar.shelfTime`); otherwise the time of the last activity
+    (`5m`), updated every minute, also for an idle session;
   - `project · reason`, the row's second line, with the plan entry in progress as the reason while the agent works
     ([sidebar.md](sidebar.md#reasons));
   - the agent's last line, at most two lines: the title of the latest tool call that still runs, or the first line of
@@ -59,5 +60,7 @@ and answers a command's permission request without opening the session
 
 ## Changes
 
+- 2026-11-19, #352: the cards follow the sidebar's new order, the list then Working, so idle sessions come before the
+  running ones; an idle card shows the time of the last activity (`20m`), like its row, instead of `Idle 20m`.
 - 2026-11-10, #375: a card shows a shell call's command in up to four lines; a command it cuts offers Open first.
 - 2026-11-09, #227: the board, the Overview row and ⌘0; a deleted session's window goes to the board.

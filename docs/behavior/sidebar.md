@@ -1,29 +1,38 @@
 # Sidebar
 
-The left column of every window lists the sessions by what they ask of the user: *Needs You* scrolls under a search
-field, and *Working* and *Settled* are shelves pinned to the bottom edge, Working above Settled. Above Needs You, a
-fixed *Overview* row shows the session board. Selecting a row shows that session in the window; the draft (new session)
+The left column of every window lists the sessions by what they ask of the user: the open sessions that are not in a
+turn scroll in a list under a search field, and *Working* and *Settled* are shelves pinned to the bottom edge, Working
+above Settled (after T3 Code's sidebar). Above the list, a fixed *Overview* row shows the session board. Selecting a row shows that session in the window; the draft (new session)
 has no selected row. The search text and the selection belong to the window.
 
 ## Sections
 
-- **Overview** — always the first row, `Overview` with `square.grid.2x2`, above Needs You and not filtered by the
+- **Overview** — always the first row, `Overview` with `square.grid.2x2`, above the list and not filtered by the
   search. Selecting it, or Session → `Overview` (⌘0), shows the session board in the window, and it is selected while
   the board shows ([board.md](board.md)).
-- **Needs You** — live sessions whose status is *needs input* (waits for sign-in, a permission or an input form),
-  *failed* (startup or the connection failed), or *done* (a turn finished and its end has not been on screen yet,
-  [ADR-0026's amendment](../adr/0026-app-wide-session-manager.md)). In start order.
-- **Working** — every other live session: starting (also before it has a project), running, stopping, or idle. In
-  start order, on the Working shelf.
+- **The list** — every live session that is not in a turn, without a header: its first row follows Overview at the
+  rows' own spacing. The rows that need the user come first:
+  *needs input* (waits for sign-in, a permission or an input form), *failed* (startup or the connection failed) and
+  *done* (a turn finished and its end has not been on screen yet,
+  [ADR-0026's amendment](../adr/0026-app-wide-session-manager.md)); then the idle ones. Each group in start order.
+- **Working** — live sessions that are starting (also before they have a project), running or stopping, and an idle
+  (or done) session whose queue is about to start its next turn: not paused, not held by an edit of a queued message,
+  not behind a merge, so that its row does not bounce between the shelf and the list between queued turns. In start
+  order, on the Working shelf.
 - **Settled** — saved sessions that are not live and not archived, by last activity, newest first.
-- Empty sections are hidden. The scrolling list holds Needs You alone; without Needs You rows it reads `Nothing needs
-  you` in secondary text, centered. A session moves between sections as its status changes; ending a session moves it
-  to Settled, Continue moves it back up. `Prompt failed` and `Queue paused` do not put a row in Needs You.
-- A *done* row leaves Needs You once the end of the finished turn has been on screen in an active window (scrolled up
-  away from the end, it stays).
+- Empty sections are hidden. With no open session at all, in the list or on the Working shelf, the list reads `No open
+  sessions` in secondary text, centered; when every open session is on the shelf, the list area is empty. A session
+  moves between sections as its status changes; ending a session moves it to Settled, Continue moves it back up.
+  `Prompt failed` and `Queue paused` rows are idle: they sit among the idle rows of the list.
+- A row's move between the list and the Working shelf, or in and out of either, animates: the light spring of the
+  shelves (about 0.25 s). Under Reduce Motion, and while a search filters or is cleared, rows change at once.
+- A *done* row moves down among the idle rows once the end of the finished turn has been on screen in an active window
+  (scrolled up away from the end, it stays). A turn that ends while its session is shown at the end of its transcript
+  in an active window is seen at once: its row goes straight to the idle rows, without a frame as done.
 
-*Why start order:* Needs You and Working do not re-sort by activity, so rows do not jump while the user aims at them.
-Settled sorts by last activity because a list whose visible times are out of order reads as a bug.
+*Why start order:* the list and Working do not re-sort by activity, so rows do not jump while the user aims at them;
+a row only moves between the list's two groups or to and from the shelf. Settled sorts by last activity because a list
+whose visible times are out of order reads as a bug.
 
 ## Shelves
 
@@ -41,11 +50,11 @@ Working and Settled are footers pinned to the bottom edge, Working above Settled
   they move the selection into one of its rows. A search opens both shelves while a query is entered; the header cannot
   collapse a shelf then.
 - Expanding and collapsing a shelf animates: a light spring of about 0.25 s on the height of its list and the
-  chevron's rotation. Under Reduce Motion the shelf changes at once.
+  chevron's rotation. Under Reduce Motion, and when a search opens or closes it, the shelf changes at once.
 - History refreshes on its own; there is no Refresh button.
 
-*Why a Working shelf:* Working held idle sessions with nothing on the row to tell them apart from running ones; the
-shelf's rows say which, and for how long (after T3 Code's shelf).
+*Why a Working shelf of running sessions:* the list holds what the user can act on now, and the shelf the agents that
+are busy, and for how long; a session leaves the shelf for the list when its agent stops (after T3 Code's sidebar).
 
 ## Rows
 
@@ -70,8 +79,8 @@ Each row is one line of title over one line of detail, with the status and time 
   a starting session with no record yet shows no time.
 - **On the Working shelf**, the state and its time instead: `Working 1m 12s` while a turn runs (stopping included),
   counted from the turn's start, `Working 45s` below a minute and `Working 1h 2m` from an hour, updated every second
-  while the row is on screen; `Idle 20m` otherwise, since the last activity in the format above (`Idle now` within a
-  minute). A starting session shows no time: its spinner and `Starting` say it.
+  while the row is on screen. A starting session shows no time: its spinner and `Starting` say it. A row between queued
+  turns shows no time for the moment before the next turn starts.
 - The tooltip holds the full title and second line. The accessibility label is `title, project, reason, last active
   3m`; without a reason it names the status instead (`Working`, `Done`, …; nothing for idle or saved). On the Working
   shelf it ends with the shelf time instead, which names the state: `title, project, Working 1m 12s`.
@@ -121,12 +130,12 @@ its call only by id takes the title the agent reported for that call.
 
 All in the Session menu, acting on the focused window:
 
-- `Previous Session` ⌥⌘[ and `Next Session` ⌥⌘] step through the visible rows in order — Needs You, Working,
+- `Previous Session` ⌥⌘[ and `Next Session` ⌥⌘] step through the visible rows in order — the list, Working,
   Settled — and wrap; the Overview row is not a stop. Archived rows are skipped even when a search shows them. From the
   draft or the board, or when the selected row is not visible, Next selects the first row and Previous the last. Disabled when there is no row.
 - `Next Session Needing Input` ⇧⌥⌘] goes to the next live row whose status is *needs input* (sign-in, permission or
-  form), in the same order with wrap; failed and done rows in Needs You are skipped. Disabled when none waits.
-- `Switch to Session` lists nine items, ⌘1…⌘9, for the first nine rows of Needs You then Working, in the order on
+  form), in the same order with wrap; failed and done rows are skipped. Disabled when none waits.
+- `Switch to Session` lists nine items, ⌘1…⌘9, for the first nine rows of the list then Working, in the order on
   screen and after the search filter. Each item shows its row's title; a number without a row reads `No Session` and
   is disabled. Settled is not numbered, and rows do not show their numbers.
 
@@ -186,6 +195,12 @@ their next refresh, and a finished deletion triggers one in every window.
 
 ## Changes
 
+- 2026-11-19, #352: the list holds every open session that is not in a turn, the rows that need the user first, with
+  no header; it reads `No open sessions` when empty. The Working shelf holds only the sessions in a turn (and one about
+  to start a queued turn); `Idle 20m` is gone. A row's move between them animates. The first row follows Overview
+  without a gap; a turn that ends while shown at the end of its transcript in an active window goes straight to idle.
+  `No open sessions` shows only when no session is open, in the list or on the shelf; typing or clearing a search
+  never animates.
 - 2026-11-09, #227: the Overview row above Needs You (⌘0) shows the session board; a window whose session was deleted
   goes to the board instead of the draft.
 - 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.

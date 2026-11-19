@@ -212,6 +212,26 @@ import os
     func unseenResult(appearsActive: Bool) -> Int64? {
         appearsActive && !showingSetup && restored == nil ? owner?.unseenResult : nil
     }
+    /// The live session whose end this window shows the user: it appears active and follows the session's transcript
+    /// to its end. A turn that ends then is seen at once (`LiveSession.setWatched`).
+    func watchedOwner(appearsActive: Bool) -> LiveSession? {
+        guard appearsActive, !closed, !showingSetup, !isLoadingHistory, restored == nil, heldPrompt == nil,
+            endPosition == .following
+        else { return nil }
+        return owner
+    }
+    @ObservationIgnored private weak var watched: LiveSession?
+    /// Registers this window as watching `owner`'s end, releasing the session it watched before; a closed window
+    /// watches nothing.
+    func watch(_ owner: LiveSession?) {
+        let owner = closed ? nil : owner
+        guard owner !== watched else { return }
+        watched?.setWatched(false, by: self)
+        owner?.setWatched(true, by: self)
+        watched = owner
+    }
+    // A window freed without `close()` must not keep a session from ever showing Done.
+    isolated deinit { watched?.setWatched(false, by: self) }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
     /// A removed worktree has no files left to browse.
     var filesSession: SessionRecord? {
@@ -629,7 +649,7 @@ import os
         }
     }
 
-    /// Wraps in exactly the order shown by the sidebar: Needs You, the Working shelf, then Settled. A search can
+    /// Wraps in exactly the order shown by the sidebar: the list, the Working shelf, then Settled. A search can
     /// list archived sessions, which navigation skips (ADR-0044).
     func navigationTarget(backward: Bool = false, needsInput: Bool = false) -> NavigationTarget? {
         guard !closed else { return nil }
@@ -1099,6 +1119,7 @@ import os
         closed = true; selection = UUID(); files.close(); review = nil; showingReview = false; merge = nil
         pullRequestDraft = nil
         sessions.setShown(nil, in: self)
+        watch(nil)
         settleQueueEdit()
     }
 }

@@ -7,6 +7,8 @@ import SwiftUI
 /// than `topRoom`.
 struct SidebarShelves: View {
     @Bindable var model: SessionWindowModel
+    /// The column's `model.sidebar`, so that a row's move between the list and a shelf takes the column's animation.
+    let sidebar: SessionSidebar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The sidebar's height below the search field, measured by `heightProbe`.
     @State private var height: CGFloat = 0
@@ -42,43 +44,43 @@ struct SidebarShelves: View {
     }
 
     var body: some View {
-        let sidebar = model.sidebar
-        let working = sidebar.section(.working)
+        let working = sidebar.section(.working) ?? .init(kind: .working, rows: [])
         let settled = sidebar.section(.settled)
         let filtered = sidebar.isFiltered
-        let workingOpen = working != nil && Self.isOpen(stored: model.workingShelfExpanded, filtered: filtered)
+        let workingOpen = Self.isOpen(stored: model.workingShelfExpanded, filtered: filtered)
         let settledOpen = settled != nil && Self.isOpen(stored: model.settledShelfExpanded, filtered: filtered)
         let heights = Self.listHeights(
             height: height,
-            working: workingOpen ? working?.rows.count : nil,
+            working: workingOpen && !working.rows.isEmpty ? working.rows.count : nil,
             settled: settledOpen ? settled?.rows.count : nil
         )
-        if working != nil || settled != nil {
-            VStack(spacing: 0) {
-                if let working {
-                    SidebarShelf(
-                        model: model,
-                        section: working,
-                        expanded: workingOpen,
-                        listHeight: heights.working,
-                        stored: $model.workingShelfExpanded
-                    )
-                }
-                if let settled {
-                    SidebarShelf(
-                        model: model,
-                        section: settled,
-                        expanded: settledOpen,
-                        listHeight: heights.settled,
-                        stored: $model.settledShelfExpanded
-                    )
-                }
+        VStack(spacing: 0) {
+            // Mounted also without rows, at no height: a row that moves here is inserted into a table that exists,
+            // which animates, where a new table would show its rows only a few frames later.
+            SidebarShelf(
+                model: model,
+                section: working,
+                expanded: workingOpen,
+                listHeight: heights.working,
+                stored: $model.workingShelfExpanded
+            )
+            if let settled {
+                SidebarShelf(
+                    model: model,
+                    section: settled,
+                    expanded: settledOpen,
+                    listHeight: heights.settled,
+                    stored: $model.settledShelfExpanded
+                )
             }
-            .clipped()
-            .animation(Self.animation(reduceMotion: reduceMotion), value: [workingOpen, settledOpen])
-            .background(.bar)
-            .background(heightProbe)
         }
+        .clipped()
+        // A search opens and closes the shelves at once, as it filters the rows.
+        .animation(nil, value: model.sidebarQuery)
+        .animation(Self.animation(reduceMotion: reduceMotion), value: [workingOpen, settledOpen])
+        .background(.bar)
+        // Measured also before any shelf has rows, so the first one opens at its height.
+        .background(heightProbe)
     }
 
     private var heightProbe: some View {
@@ -89,6 +91,7 @@ struct SidebarShelves: View {
 }
 
 /// One shelf: a divider, the header button (chevron, section name, count) and, when expanded, the section's list.
+/// Without rows it has no header, and its list no height.
 private struct SidebarShelf: View {
     let model: SessionWindowModel
     let section: SessionSidebar.Section
@@ -99,31 +102,36 @@ private struct SidebarShelf: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
-            Button {
-                stored = !expanded
-            } label: {
-                HStack {
-                    Image(systemName: "chevron.right").rotationEffect(expanded ? .degrees(90) : .zero)
-                    Text(section.kind.rawValue)
-                    Spacer()
-                    Text(section.rows.count, format: .number).monospacedDigit()
-                }
-                .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                SidebarShelves.accessibilityLabel(section.kind, count: section.rows.count, expanded: expanded)
-            )
+            if !section.rows.isEmpty { header }
             if expanded {
                 List(selection: Bindable(model).sidebarSelection) {
                     SessionSidebarRows(model: model, section: section)
                 }
                 .frame(height: listHeight)
+                .accessibilityHidden(section.rows.isEmpty)
                 .transition(.opacity)
             }
         }
+    }
+
+    @ViewBuilder private var header: some View {
+        Divider()
+        Button {
+            stored = !expanded
+        } label: {
+            HStack {
+                Image(systemName: "chevron.right").rotationEffect(expanded ? .degrees(90) : .zero)
+                Text(section.kind.rawValue)
+                Spacer()
+                Text(section.rows.count, format: .number).monospacedDigit()
+            }
+            .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            SidebarShelves.accessibilityLabel(section.kind, count: section.rows.count, expanded: expanded)
+        )
     }
 }

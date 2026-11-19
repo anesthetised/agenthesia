@@ -83,11 +83,11 @@ import Testing
             SessionRow.accessibilityLabel(
                 title: "Fix",
                 project: "p",
-                reason: "Queue paused",
-                status: .idle,
+                reason: "Plan the change",
+                status: .working,
                 lastActivity: nil,
-                shelfTime: "Idle 20m"
-            ) == "Fix, p, Queue paused, Idle 20m"
+                shelfTime: "Working 5s"
+            ) == "Fix, p, Plan the change, Working 5s"
         )
     }
 

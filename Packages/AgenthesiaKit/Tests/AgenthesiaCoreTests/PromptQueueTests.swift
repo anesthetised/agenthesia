@@ -243,6 +243,34 @@ private actor QueueGate {
         await session.close()
     }
 
+    @Test func onlyAQueueAboutToStartItsNextTurnIsDue() async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        #expect(!SessionSidebar.queueDue(session))
+        try await session.submit([.init(text: "start")])
+        await connection.waitForPrompts(1)
+        try await session.submit([.init(text: "queued")])
+        // A running turn keeps the row on the shelf by itself.
+        #expect(!SessionSidebar.queueDue(session))
+        session.holdQueue()
+        await connection.finish(.endTurn)
+        while session.status != .idle { await Task.yield() }
+        // An open edit holds the queue: the session waits for the user, not for its next turn.
+        #expect(session.queuedPrompts.count == 1 && !session.queuePaused)
+        #expect(!SessionSidebar.queueDue(session))
+        session.releaseQueue()
+        // Released, the queue is due: its drain runs at the next suspension, and the row stays on the shelf until then.
+        #expect(SessionSidebar.queueDue(session))
+        await connection.waitForPrompts(2)
+        try await session.submit([.init(text: "later")])
+        try await session.stop()
+        while session.status != .idle { await Task.yield() }
+        // A paused queue waits for Resume.
+        #expect(session.queuePaused && session.queuedPrompts.count == 1)
+        #expect(!SessionSidebar.queueDue(session))
+        await session.close()
+    }
+
     @Test func anExplicitSendIgnoresTheHold() async throws {
         let (session, connection, _, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }

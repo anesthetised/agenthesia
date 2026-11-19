@@ -8,8 +8,9 @@ system; the app has no setting for it.
 ## The item
 
 - The icon is a template symbol (`sparkles`), so the system tints it for the menu bar.
-- A count follows the icon only while the Needs You section is not empty. It is the number of Needs You sessions (waiting
-  for sign-in, a permission or a form, failed, or finished and unseen), the number the menu lists under Needs You.
+- A count follows the icon only while some session needs the user. It is the number of sessions that wait for
+  sign-in, a permission or a form, failed, or finished unseen: the rows at the top of the sidebar's list, and the
+  number the menu lists under Needs You.
 - The accessibility label is `Agenthesia`, or `Agenthesia, 2 need you` with a count.
 
 ## The menu
@@ -18,9 +19,9 @@ system; the app has no setting for it.
   `Question`, `Failed`, `Finished`, …). A session with a pending permission request has a submenu instead of a plain
   item: **Open** first, then the agent's options in the agent's order, for the oldest pending request. A plain item
   opens the session.
-- **Working** — one item per session, `title · step`, where the step is the plan entry in progress, or else
-  `title · Working 1m 12s`, the sidebar's shelf time, so the menu agrees with the sidebar. A starting session with
-  neither shows its title only. An item opens the session. A section with no sessions is left out.
+- **Working** — one item per session on the sidebar's Working shelf (in a turn), `title · step`, where the step is
+  the plan entry in progress, or else `title · Working 1m 12s`, the sidebar's shelf time, so the menu agrees with the
+  sidebar. A starting session with neither shows its title only. Idle sessions are not listed. An item opens the session. A section with no sessions is left out.
 - **New Session** opens a window with the draft.
 - **Open Agenthesia** opens a window with the draft and brings the app forward; it is shown only while no window is
   open, because the app keeps running after its last window closes.
@@ -38,5 +39,6 @@ system; the app has no setting for it.
 
 ## Changes
 
+- 2026-11-19, #352: Working lists the sessions on the sidebar's Working shelf, so idle sessions are no longer listed.
 - 2026-11-10, #374: an option answers the request the submenu listed, not whichever is oldest when it is clicked.
 - 2026-11-09, #228: the menu bar item, its menu and the count.

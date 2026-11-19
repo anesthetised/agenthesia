@@ -119,8 +119,9 @@ struct DemoSessionTests {
         #expect(type(of: controller.table).isCompatibleWithResponsiveScrolling)
     }
 
-    /// A mouse wheel without the phases of a trackpad's gestures still stops the transcript from following its end:
-    /// AppKit animates its scroll as a live scroll. The animation runs on the display link, so the window is on a screen.
+    /// A mouse wheel without the phases of a trackpad's gestures still stops the transcript from following its end.
+    /// AppKit scrolls for it at once, posting only `didLiveScroll`, or animates the scroll as a live scroll on the
+    /// display link, so the window is on a screen.
     @Test func aLegacyWheelStopsFollowingTheStreamingEnd() async throws {
         let session = DemoSession()
         let token = try #require(session.begin("Hello"))
@@ -129,9 +130,14 @@ struct DemoSessionTests {
         let window = host(controller, drivesDisplayLink: true)
         defer { window.close() }
         controller.update(session)
-        _ = controller.table.view(atColumn: 0, row: 3, makeIfNecessary: true)
-        controller.table.noteHeightOfRows(withIndexesChanged: [3])
-        controller.table.layoutSubtreeIfNeeded()
+        // The rows' measured heights replace their estimates over a few turns of the run loop. A document that shrinks
+        // during the wheel's animation ends it before it moves, so the scroll starts once the height holds.
+        var height: CGFloat = -1
+        let settled = ContinuousClock.now + .seconds(5)
+        while controller.table.frame.height != height, ContinuousClock.now < settled {
+            height = controller.table.frame.height
+            try await Task.sleep(for: .milliseconds(100))
+        }
         controller.scrollToEnd()
         #expect(controller.followsEnd)
 
@@ -145,11 +151,21 @@ struct DemoSessionTests {
             wheel3: 0
         )
         let event = try #require(cgEvent.flatMap(NSEvent.init(cgEvent:)))
-        let end = LiveScrollEnd(of: controller.scroll)
         controller.scroll.scrollWheel(with: event)
+        func scrolledAway() -> Bool {
+            !TranscriptTableController.followsBottom(
+                documentHeight: controller.table.frame.height,
+                visibleRect: controller.scroll.contentView.bounds
+            )
+        }
+        // Until the animation, if any, has stopped.
+        var last = NSPoint(x: -1, y: -1)
         let deadline = ContinuousClock.now + .seconds(10)
-        while !end.ended, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
-        try #require(end.ended)
+        while !(scrolledAway() && controller.scroll.contentView.bounds.origin == last), ContinuousClock.now < deadline {
+            last = controller.scroll.contentView.bounds.origin
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(scrolledAway(), "the wheel scrolled the transcript away from its end")
         #expect(!controller.followsEnd)
 
         let origin = controller.scroll.contentView.bounds.origin
@@ -158,22 +174,6 @@ struct DemoSessionTests {
         await nextMainTurn()
         #expect(abs(controller.scroll.contentView.bounds.origin.y - origin.y) < 1)
         session.stop()
-    }
-
-    /// Whether a scroll view posted the end of a live scroll since it was made.
-    @MainActor private final class LiveScrollEnd {
-        private(set) var ended = false
-        private var observer: (any NSObjectProtocol)?
-
-        init(of scroll: NSScrollView) {
-            observer = NotificationCenter.default.addObserver(
-                forName: NSScrollView.didEndLiveScrollNotification,
-                object: scroll,
-                queue: .main
-            ) { [weak self] _ in MainActor.assumeIsolated { self?.ended = true } }
-        }
-
-        isolated deinit { observer.map(NotificationCenter.default.removeObserver) }
     }
 
     @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() async throws {

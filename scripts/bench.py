@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import signal
 import subprocess
 import tempfile
 import time
@@ -50,6 +51,35 @@ def read_results(lines):
     if not results:
         raise ValueError("Benchmark produced no structured results; see the saved log")
     return results
+
+
+def processes(executable):
+    """The identifiers of the running processes of `executable`."""
+    found = subprocess.run(["pgrep", "-f", str(executable)], capture_output=True, text=True).stdout
+    return {int(pid) for pid in found.split()}
+
+
+def stop(pids, grace=5):
+    """Terminate `pids`, then kill those still running after `grace` seconds; return when all have exited."""
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+        deadline = time.monotonic() + grace
+        while any(alive(pid) for pid in pids) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        pids = {pid for pid in pids if alive(pid)}
+        if not pids:
+            return
 
 
 def run_once(command, environment, log, timeout):
@@ -137,7 +167,15 @@ def run(args):
                         command = ["open", "-n", "-W", "--stdout", str(log), "--stderr", str(log),
                                    "--env", f"AGENTHESIA_LAB_RUNS={scenario}", "--env", f"CFFIXED_USER_HOME={home}",
                                    str(binary.parents[2])]
-                    results = run_once(command, environment, log, args.timeout)
+                    # `open -W` waits for the app, but a timeout or an interrupt stops only `open`: stop the lab too
+                    # before its temporary home is removed.
+                    running = processes(binary) if args.mode == "lab" else set()
+                    try:
+                        results = run_once(command, environment, log, args.timeout)
+                    except BaseException:
+                        if args.mode == "lab":
+                            stop(processes(binary) - running)
+                        raise
                 metadata["results"].append({
                     "repetition": repetition, "scenario": scenario, "log": log.name,
                     "wallSeconds": time.monotonic() - start, "samples": results,

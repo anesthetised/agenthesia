@@ -59,10 +59,10 @@ run per side is enough to locate the work, not to size it.
 | `Cell` intervals, all of the run | 72 | 80 |
 | `-[NSTableView prepareContentInRect:]` samples | 50 | 53 |
 
-The main thread does about 5 % more work per frame. The new part is the tool group's row: the answer streams below
+The main thread does about 5 % more work per frame. The one new piece of work the profile shows is the tool group's row: the answer streams below
 it, so it leaves the viewport early on. Before step 1 the table then dropped it. With responsive scrolling it stays
 prepared above the visible rect, so `update` asks for its message on every batch, rebuilding the five calls' summary,
-and compares it. Rows are not made or prepared more often: `Cell` and `prepareContentInRect` are level. Both sides spend
+and compares it. That row contributes to the regression; how much of it, the profile does not isolate. Rows are not made or prepared more often: `Cell` and `prepareContentInRect` are level. Both sides spend
 most of a frame on the streamed answer, the same in both: `renderMarkdown` of the whole answer (0.66 ms per callback)
 and the layout `update` forces (about 1 ms). Comparing the 10,002 rows with the last shown ones (`Array ==` under
 `update`) took 73 samples after and 4 before; that is not explained yet. Frames already took about three quarters of the
@@ -86,5 +86,6 @@ overlap.
 
 - The wheel gains nothing measurable; the gesture gains about 15 %, in all three rounds. Both stay far from the
   target, the wheel about 80 times over it: the hitches are rows built as they scroll in, which steps 2–4 address.
-- S9 costs about 9 % in excess time from one row kept prepared off screen. The step lands with it; the larger cost of
-  S9, the streamed answer's full render and the forced layout on every batch, is the same on both sides.
+- S9 costs about 9 % in excess time, to which the tool group's row, kept prepared off screen, contributes. The owner
+  accepted the regression for step 1; #367, which refreshes only the rows that changed, is to win it back. The larger
+  cost of S9, the streamed answer's full render and the forced layout on every batch, is the same on both sides.

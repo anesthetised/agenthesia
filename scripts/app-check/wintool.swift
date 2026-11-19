@@ -19,6 +19,29 @@ func number(_ index: Int) -> Double {
 
 func post(_ event: CGEvent?) { event?.post(tap: .cghidEventTap) }
 
+/// With `WINTOOL_TARGET` set to a process identifier, `scroll` and `gesture` exit with status 2 as soon as the frontmost
+/// window under the pointer is not that process's, checking every 100 ms, so a burst never reaches another app.
+let target = ProcessInfo.processInfo.environment["WINTOOL_TARGET"].flatMap { Int32($0) }
+
+func checkTarget(at point: CGPoint, lastCheck: inout UInt64) {
+    guard let target else { return }
+    let now = DispatchTime.now().uptimeNanoseconds
+    guard now - lastCheck >= 100_000_000 else { return }
+    lastCheck = now
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+    let front = list.first { window in
+        guard window[kCGWindowLayer as String] as? Int == 0,
+            let bounds = window[kCGWindowBounds as String] as? [String: Any],
+            let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary)
+        else { return false }
+        return frame.contains(point)
+    }
+    guard front?[kCGWindowOwnerPID as String] as? Int32 == target else {
+        FileHandle.standardError.write(Data("ABORT: process \(target)'s window is no longer under the pointer\n".utf8))
+        exit(2)
+    }
+}
+
 func moveMouse(to point: CGPoint, button: CGMouseButton = .left) {
     post(
         CGEvent(
@@ -82,9 +105,12 @@ case "scroll":
     let lines = Int32(number(4))
     let events = args.count > 5 ? Int(number(5)) : 10
     let interval = useconds_t(args.count > 6 ? number(6) * 1000 : 20_000)
-    moveMouse(to: CGPoint(x: number(2), y: number(3)))
+    let point = CGPoint(x: number(2), y: number(3))
+    moveMouse(to: point)
     usleep(50_000)
+    var lastCheck: UInt64 = 0
     for _ in 0..<events {
+        checkTarget(at: point, lastCheck: &lastCheck)
         post(
             CGEvent(
                 scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0,
@@ -97,9 +123,13 @@ case "gesture":
     let points = Int32(number(4))
     let events = Int(number(5))
     let interval = useconds_t(args.count > 6 ? number(6) * 1000 : 8_000)
-    moveMouse(to: CGPoint(x: number(2), y: number(3)))
+    let point = CGPoint(x: number(2), y: number(3))
+    moveMouse(to: point)
     usleep(50_000)
+    var lastCheck: UInt64 = 0
     for index in 0...events {
+        // Not before the last event, which ends the gesture.
+        if index < events { checkTarget(at: point, lastCheck: &lastCheck) }
         let event = CGEvent(
             scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: index < events ? points : 0,
             wheel2: 0, wheel3: 0)

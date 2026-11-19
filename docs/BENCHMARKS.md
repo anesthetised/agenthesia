@@ -276,7 +276,8 @@ main thread is busy. Like profiling, it needs the owner's approval and a quiet m
 
 Results of step 1, which made the transcript compatible with responsive scrolling:
 [2026-11-19](benchmarks/2026-11-19/responsive-scrolling/README.md). The wheel gained nothing, the gesture about 15 %, and
-S9 lost about 9 % because the tool group's row stays prepared above the viewport and is refreshed on every update.
+S9 lost about 9 %, to which the tool group's row contributes: it stays prepared above the viewport and is refreshed on
+every update. The owner accepted it; #367 is to win it back.
 
 ### Lab isolation
 

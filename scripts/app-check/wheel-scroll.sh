@@ -14,9 +14,10 @@
 # (CFFIXED_USER_HOME), so it reads nothing of the installed app's.
 #
 # It needs `just lab-build` and `just app-check-tools`. It drives the app through scripts/app-check/lib.sh: leave the
-# machine alone while it runs (about a minute); it aborts when another app comes to the front. While it records,
-# Instruments keeps a kernel trace of up to about 20 GB in the user's temporary directory, which the script deletes when
-# it exits.
+# machine alone while it runs (about a minute). It aborts when another app comes to the front, and wintool stops a burst
+# of events as soon as the lab's window is no longer under the pointer. While it records, Instruments keeps a kernel trace
+# of up to about 20 GB in the user's temporary directory; when the script exits it deletes the traces that appeared
+# during the run and that no process has open, and names any it leaves.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -43,8 +44,17 @@ cleanup() {
     [ -n "$recorder" ] && kill -INT "$recorder" 2>/dev/null && wait "$recorder" 2>/dev/null || true
     [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     # The recorder leaves its kernel trace, gigabytes for each run, in the user's temporary directory, whatever TMPDIR.
-    [ -e "$tmp/recording" ] && find "$(getconf DARWIN_USER_TEMP_DIR)" -maxdepth 1 -name 'instruments*.ktrace' \
-        -newer "$tmp/recording" -delete
+    # Only a trace that appeared during this run and that no process still has open is ours to delete.
+    if [ -e "$tmp/ktraces" ]; then
+        for trace in "$(getconf DARWIN_USER_TEMP_DIR)"instruments*.ktrace; do
+            [ -e "$trace" ] && ! grep -qxF "$trace" "$tmp/ktraces" || continue
+            if lsof -t -- "$trace" >/dev/null 2>&1; then
+                echo "Left $trace: a process has it open" >&2
+            else
+                rm -f -- "$trace"
+            fi
+        done
+    fi
     rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -52,16 +62,20 @@ now() { python3 -c 'import time; print(time.time())'; }
 
 . scripts/app-check/lib.sh
 # S12 holds its window longer than this script needs and then quits, so the lab never outlives a failed run for long.
-# Started by a shell, the app presents no window; through LaunchServices it presents the lab.
+# Started by a shell, the app presents no window; through LaunchServices it presents the lab. A lab already running from
+# the same build is not this run's.
+running=$(pgrep -f "$app/Contents/MacOS/Agenthesia" || true)
 open -n --stdout "$tmp/lab.log" --stderr "$tmp/lab.log" --env "AGENTHESIA_LAB_RUNS=S12:${PROTOTYPE:-App}:$((2 * seconds + 90))" \
     --env "CFFIXED_USER_HOME=$tmp" "$app" --args -NSRequiresAquaSystemAppearance YES
 for _ in $(seq 50); do
-    pid=$(pgrep -n -f "$app/Contents/MacOS/Agenthesia" || true)
+    pid=$(pgrep -f "$app/Contents/MacOS/Agenthesia" | grep -vxF -e "${running:-none}" | tail -1 || true)
     [ -n "$pid" ] && break
     sleep 0.2
 done
 [ -n "$pid" ] || { echo "ABORT: the lab did not start" >&2; exit 1; }
 export APP_CHECK_PID=$pid
+# wintool stops a burst of events when the lab's window is no longer under the pointer.
+export WINTOOL_TARGET=$pid
 
 # The window appears once the grammars are loaded and the transcript is laid out at its end.
 for _ in $(seq 60); do
@@ -76,7 +90,7 @@ y=$((top + height / 2))
 
 # Job control gives the recorder its own process group, where SIGINT, which ends the recording, is not ignored as it is
 # for background jobs of a script. The time limit is a backstop only.
-touch "$tmp/recording"
+ls -d "$(getconf DARWIN_USER_TEMP_DIR)"instruments*.ktrace >"$tmp/ktraces" 2>/dev/null || true
 set -m
 xcrun xctrace record --template 'Animation Hitches' --instrument 'Points of Interest' --attach "$pid" \
     --time-limit "$((2 * seconds + 60))s" --output "$out" --no-prompt >"$tmp/xctrace.log" 2>&1 &
@@ -95,7 +109,8 @@ start=$(now)
 for direction in 1 -1; do
     end=$((SECONDS + seconds))
     while [ "$SECONDS" -lt "$end" ]; do
-        guard
+        # Abort rather than bring the lab back: the owner switched apps.
+        [ "$(ac_tool wintool front)" = "$pid" ] || { echo "ABORT: the lab is no longer frontmost" >&2; exit 1; }
         if [ "$input" = wheel ]; then
             ac_tool wintool scroll "$x" "$y" "$((lines * direction))" 60 16
         else

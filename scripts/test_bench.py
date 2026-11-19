@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -24,6 +25,24 @@ class BenchmarkRunnerTests(unittest.TestCase):
         for invalid in ["S1:A′", "S3:A", "S7:A", "S7:A2", "S8:A", "S9:A", "S4:colours", "S4:cold+cold", "S1:A2,"]:
             with self.assertRaises(argparse.ArgumentTypeError):
                 bench.scenarios(invalid)
+
+    def test_stop_ends_the_lab_processes_started_since_a_run_began(self):
+        with tempfile.TemporaryDirectory() as directory:
+            # A stand-in for the lab that ignores SIGTERM, so `stop` has to kill it.
+            executable = Path(directory) / "lab"
+            executable.write_text("#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 0.1; done\n")
+            executable.chmod(0o755)
+            self.assertEqual(bench.processes(executable), set())
+            lab = subprocess.Popen([str(executable)])
+            try:
+                time.sleep(0.3)
+                self.assertEqual(bench.processes(executable), {lab.pid})
+                bench.stop({lab.pid}, grace=0.5)
+                self.assertIsNotNone(lab.wait(timeout=5))
+                self.assertEqual(bench.processes(executable), set())
+            finally:
+                lab.kill()
+                lab.wait()
 
     def test_structured_results_are_not_parsed_from_locale_dependent_tables(self):
         result = {"scenario": "stream", "measurements": {"p95MS": 1.25}}

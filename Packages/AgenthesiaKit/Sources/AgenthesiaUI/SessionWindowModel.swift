@@ -629,7 +629,7 @@ import os
         }
     }
 
-    /// Wraps in exactly the order shown by the sidebar: Needs You, the Working shelf, then Settled. A search can
+    /// Wraps in exactly the order shown by the sidebar: the list, the Working shelf, then Settled. A search can
     /// list archived sessions, which navigation skips (ADR-0044).
     func navigationTarget(backward: Bool = false, needsInput: Bool = false) -> NavigationTarget? {
         guard !closed else { return nil }

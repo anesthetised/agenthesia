@@ -160,14 +160,15 @@ import Testing
             owners: [starting, finished, failed, idle]
         )
 
-        #expect(sidebar.sections.map(\.kind) == [.needsYou, .working, .settled])
-        #expect(sidebar.sections[0].rows.map(\.id) == [AnyHashable(live[1]), AnyHashable(live[2])])
-        #expect(sidebar.sections[1].rows.map(\.id) == [AnyHashable(live[0]), AnyHashable(live[3])])
+        // None is in a turn, so all are in the list: done and failed first, then the idle ones, each in start order.
+        #expect(sidebar.sections.map(\.kind) == [.active, .settled])
+        #expect(sidebar.sections[0].rows.map(\.id) == [1, 2, 0, 3].map { AnyHashable(live[$0]) })
+        #expect(sidebar.needsYou.map(\.id) == [AnyHashable(live[1]), AnyHashable(live[2])])
         // Saved sessions that are live are not repeated; the rest are newest first.
-        #expect(sidebar.sections[2].rows.map(\.id) == [newest, middle, oldest, unknown].map { AnyHashable($0.id) })
+        #expect(sidebar.sections[1].rows.map(\.id) == [newest, middle, oldest, unknown].map { AnyHashable($0.id) })
         #expect(sidebar.rows.count == 8)
         #expect(sidebar.sections[0].rows.allSatisfy { $0.project == project })
-        #expect(sidebar.sections[2].rows.map(\.project?.name) == [project.name, "Other", project.name, nil])
+        #expect(sidebar.sections[1].rows.map(\.project?.name) == [project.name, "Other", project.name, nil])
         guard case .live(let owner) = sidebar.sections[0].rows[0].source,
             case .saved(let record) = sidebar.rows[4].source
         else {
@@ -245,25 +246,34 @@ import Testing
 
     private func numbered(_ sidebar: SessionSidebar) -> [AnyHashable] { sidebar.numberedRows.map(\.id) }
 
-    @Test func numberedRowsAreNeedsYouThenWorkingAndLeaveOutSettled() async throws {
+    @Test func numberedRowsAreTheListThenWorkingAndLeaveOutSettled() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let missing = AgentInstallRecord(name: "Missing", executable: "/nope")
-        let working = manager.start(directory: directory, agent: agent)
+        let running = manager.start(directory: directory, agent: agent)
+        let idle = manager.start(directory: directory, agent: agent)
         let failed = manager.start(directory: directory, agent: missing)
-        for owner in [working, failed] { await owner.startup?.value }
+        for owner in [running, idle, failed] { await owner.startup?.value }
+        let controller = try #require(running.controller)
+        let turn = Task { await running.send("slow") }
+        while controller.status == .idle { await Task.yield() }
         let saved = SessionRecord(projectID: UUID(), agentInstallID: UUID(), workingDirectory: "/x")
-        let owners = [working, failed]
+        let owners = [running, idle, failed]
 
-        // Needs You comes first although it started later; the saved session is shown but has no number.
+        // The list comes first although its sessions started later, the failed one at its top; the saved session is
+        // shown but has no number.
         let sidebar = SessionSidebar(projects: [], history: [saved], owners: owners)
-        #expect(sidebar.sections.map(\.kind) == [.needsYou, .working, .settled])
-        let ids = [AnyHashable(failed.id), AnyHashable(try #require(working.sessionID))]
+        #expect(sidebar.sections.map(\.kind) == [.active, .working, .settled])
+        let ids = try [
+            AnyHashable(failed.id), AnyHashable(#require(idle.sessionID)), AnyHashable(#require(running.sessionID)),
+        ]
         #expect(numbered(sidebar) == ids)
         // Fewer than nine rows leave the other numbers without one.
-        #expect(sidebar.numberedRows.count == 2 && sidebar.rows.count == 3)
+        #expect(sidebar.numberedRows.count == 3 && sidebar.rows.count == 4)
         #expect(numbered(SessionSidebar(projects: [], history: [saved], owners: [])).isEmpty)
         #expect(numbered(SessionSidebar(projects: [], history: [], owners: [])).isEmpty)
+        await running.stop()
+        await turn.value
         await manager.closeAll()
     }
 
@@ -454,44 +464,63 @@ import Testing
         #expect(time(.working, turn: nil, last: 1200) == nil)
     }
 
-    @Test func runningAndIdleSessionsShareTheWorkingSection() async throws {
+    @Test func theShelfHoldsTurnsAndTheListTheRestWithTheSessionsThatNeedYouFirst() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let running = manager.start(directory: directory, agent: agent)
-        let idle = manager.start(directory: directory, agent: agent)
-        for owner in [running, idle] { await owner.startup?.value }
-        let controller = try #require(running.controller)
+        let owners = (0..<6).map { _ in manager.start(directory: directory, agent: agent) }
+        for owner in owners { await owner.startup?.value }
+        let (running, asking, finished, failed) = (owners[1], owners[2], owners[3], owners[4])
+        let (runningController, askingController) = try (#require(running.controller), #require(asking.controller))
         let turn = Task { await running.send("slow") }
-        while controller.status == .idle { await Task.yield() }
+        let permission = Task { await asking.send("write note.txt hi") }
+        await finished.send("hello")
+        await failed.send("exit")
+        while runningController.status == .idle || askingController.pendingPermissions.isEmpty
+            || failed.controller?.status != .closed, !Task.isCancelled
+        {
+            await Task.yield()
+        }
+        #expect(
+            owners.map(\.activity) == [.idle, .working, .needsInput, .done, .failed, .idle]
+        )
 
-        let sidebar = SessionSidebar(projects: [], history: [], owners: [running, idle])
-        #expect(sidebar.section(.needsYou) == nil && sidebar.section(.settled) == nil)
-        let rows = try #require(sidebar.section(.working)?.rows)
-        let ids = try [running, idle].map { AnyHashable(try #require($0.sessionID)) }
-        #expect(rows.map(\.id) == ids)
-        let started = try #require(controller.turnStartedAt)
+        let sidebar = SessionSidebar(projects: [], history: [], owners: owners)
+        let ids = try owners.map { AnyHashable(try #require($0.sessionID)) }
+        #expect(sidebar.sections.map(\.kind) == [.active, .working])
+        #expect(sidebar.section(.active)?.rows.map(\.id) == [ids[2], ids[3], ids[4], ids[0], ids[5]])
+        #expect(sidebar.section(.working)?.rows.map(\.id) == [ids[1]])
+        #expect(sidebar.needsYou.map(\.id) == [ids[2], ids[3], ids[4]])
+        #expect(sidebar.rows.map(\.id) == [ids[2], ids[3], ids[4], ids[0], ids[5], ids[1]])
+
+        // A shelf row counts its turn from the start.
+        let started = try #require(runningController.turnStartedAt)
         #expect(
             SessionSidebar.shelfTime(
                 activity: running.activity,
                 turnStartedAt: started,
-                lastActivity: rows[0].lastActivity,
+                lastActivity: sidebar.section(.working)?.rows.first?.lastActivity,
                 now: started.addingTimeInterval(72)
             ) == "Working 1m 12s"
         )
-        let idleSince = try #require(rows[1].lastActivity)
-        #expect(
-            SessionSidebar.shelfTime(
-                activity: idle.activity,
-                turnStartedAt: idle.controller?.turnStartedAt,
-                lastActivity: idleSince,
-                now: idleSince.addingTimeInterval(1200)
-            ) == "Idle 20m"
-        )
 
-        // Stopped, the turn has no start any more and the row reads idle.
+        // Stopped, the turn has no start any more and the row moves to the list.
         await running.stop()
         await turn.value
-        #expect(running.activity == .idle && controller.turnStartedAt == nil)
+        #expect(running.activity == .idle && runningController.turnStartedAt == nil)
+        #expect(SessionSidebar(projects: [], history: [], owners: owners).section(.working) == nil)
+        await asking.stop()
+        await permission.value
         await manager.closeAll()
+    }
+
+    @Test func onlyATurnOrAQueueAboutToStartOneKeepsARowOnTheShelf() {
+        for activity: Activity in [.needsInput, .failed, .working, .done, .idle] {
+            #expect(SessionSidebar.isWorking(activity, queueDue: false) == (activity == .working))
+        }
+        // Between queued turns a session is idle, or done until seen; it stays on the shelf rather than bounce.
+        #expect(SessionSidebar.isWorking(.idle, queueDue: true) && SessionSidebar.isWorking(.done, queueDue: true))
+        #expect(
+            !SessionSidebar.isWorking(.needsInput, queueDue: true) && !SessionSidebar.isWorking(.failed, queueDue: true)
+        )
     }
 }

@@ -1,7 +1,7 @@
 import AgenthesiaCore
 import SwiftUI
 
-/// The session board (ADR-0046): one card per live session, Needs You then Working in sidebar order, in a grid that
+/// The session board (ADR-0046): one card per live session, the list then Working in sidebar order, in a grid that
 /// wraps to the detail column's width. ⌘0 and the sidebar's Overview row show it.
 struct SessionBoard: View {
     let model: SessionWindowModel

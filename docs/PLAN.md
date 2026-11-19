@@ -193,6 +193,15 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #352 (the list and the Working shelf) is in review: `SessionSidebar.Kind.active` replaced `needsYou`; the list holds
+  the live sessions that are not working, the rows that need the user first, and `SessionSidebar.needsYou` keeps those
+  rows for the menu bar. Working holds turns and a queue about to start one (`queueDue`: idle, not paused, not held by
+  an edit, not merging). The menu bar's Working follows the shelf, so idle sessions left it. A row's move animates
+  with the shelves' spring, none under Reduce Motion or while a search filters. Tested with Swift Testing: sectioning
+  for every activity and the order inside the list (Core, with MockAgent), the queue rule (Core, the queue's fake
+  connection, including the moment a released queue is due), the numbered rows, the board's order, the menu bar, and a
+  hosted sidebar with one idle and one running session in `OffscreenWindow`. Not checked yet: the running app with
+  `MockAgent` in light and dark, which also shows whether the move animation reads well.
 - #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
   and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
   3 were aligned with it.
@@ -297,7 +306,7 @@ the first-run, text-size and VoiceOver items.
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
 | 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; [ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)) (landed; live agent check open) | `agent:strong` | — |
-| 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) | `agent:strong` | — |
+| 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) (in review; running-app check open) | `agent:strong` | — |
 | 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
 | 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |
 | 2 | #376 One attention level for every surface | `agent:strong` | #368 |

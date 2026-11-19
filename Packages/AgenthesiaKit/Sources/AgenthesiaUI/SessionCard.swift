@@ -40,8 +40,8 @@ struct SessionCard: View {
         /// itself opens the session.
         var choices: [PermissionChoice] { request.map { PermissionChoice.choices(for: $0) } ?? [] }
 
-        /// The running turn's `Working 1m 12s`, or an idle session's `Idle 20m`, as on the Working shelf
-        /// (`SessionSidebar.shelfTime`); else the time of the last activity, as on a Needs You row.
+        /// The running turn's `Working 1m 12s`, as on the Working shelf, or an idle session's `Idle 20m`
+        /// (`SessionSidebar.shelfTime`); else the time of the last activity, as on a row in the list.
         func time(now: Date = .now) -> String? {
             SessionSidebar.shelfTime(
                 activity: activity,

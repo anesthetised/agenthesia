@@ -2,8 +2,8 @@ import ACP
 import AgenthesiaCore
 import Foundation
 
-/// What the menu bar item lists (ADR-0046): the sessions that need the user, then the ones working. Derived on every
-/// read from the live sessions, like the sidebar it agrees with; nothing is stored.
+/// What the menu bar item lists (ADR-0046): the sessions that need the user, then the ones on the Working shelf.
+/// Derived on every read from the live sessions, like the sidebar it agrees with; nothing is stored.
 struct SessionMenu {
     struct Entry: Identifiable {
         let id: AnyHashable
@@ -25,11 +25,11 @@ struct SessionMenu {
     /// entry in progress, or else `title · Working 1m 12s`, the sidebar's shelf time.
     @MainActor init(owners: [LiveSession], now: Date = .now) {
         let sidebar = SessionSidebar(projects: [], history: [], owners: owners)
-        func entries(_ kind: SessionSidebar.Kind) -> [Entry] {
-            (sidebar.section(kind)?.rows ?? []).compactMap { row in
+        func entries(_ rows: [SessionSidebar.Row], needsYou: Bool) -> [Entry] {
+            rows.compactMap { row in
                 guard case .live(let owner) = row.source else { return nil }
                 let detail =
-                    kind == .needsYou
+                    needsYou
                     ? owner.reason
                     : PlanProgress(owner.controller?.transcript.plan)?.current
                         ?? SessionSidebar.shelfTime(
@@ -38,7 +38,7 @@ struct SessionMenu {
                             lastActivity: row.lastActivity,
                             now: now
                         )
-                let request = kind == .needsYou ? owner.controller?.pendingPermissions.first : nil
+                let request = needsYou ? owner.controller?.pendingPermissions.first : nil
                 return Entry(
                     id: row.id,
                     sessionID: owner.sessionID,
@@ -52,7 +52,7 @@ struct SessionMenu {
                 )
             }
         }
-        needsYou = entries(.needsYou)
-        working = entries(.working)
+        needsYou = entries(sidebar.needsYou, needsYou: true)
+        working = entries(sidebar.section(.working)?.rows ?? [], needsYou: false)
     }
 }

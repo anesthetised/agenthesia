@@ -109,6 +109,20 @@ import Testing
         await fixture.close()
     }
 
+    @Test func cardsFollowTheSidebarTheListBeforeWorking() async throws {
+        let fixture = try Fixture()
+        let (running, controller) = try await fixture.start()
+        let (idle, _) = try await fixture.start()
+        let turn = Task { await running.send("slow") }
+        await eventually { controller.status == .running }
+        // The idle session started later, yet it is in the list, above the Working shelf.
+        let ids = [idle, running].map { SessionWindowModel.NavigationTarget.live($0).id }
+        #expect(SessionBoard.cards(fixture.model).map(\.id) == ids)
+        await running.stop()
+        await turn.value
+        await fixture.close()
+    }
+
     @Test func aCardSaysWhatTheRowSaysAndTheAgentsLastLine() async throws {
         let fixture = try Fixture()
         let (owner, controller) = try await fixture.start()

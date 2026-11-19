@@ -179,7 +179,7 @@ import Testing
         await owner.startup?.value
         await model.refresh()
         #expect(model.projects.count == 1)
-        #expect(model.sidebar.sections.map(\.kind) == [.working])
+        #expect(model.sidebar.sections.map(\.kind) == [.active])
         #expect(model.sidebar.rows.first?.project?.id == model.projects.first?.id)
         await sessions.end(owner)
         await model.refresh()
@@ -388,7 +388,7 @@ import Testing
         await sessions.closeAll()
     }
 
-    @Test func navigationVisitsNeedsYouBeforeWorkingWhateverTheStartOrder() async throws {
+    @Test func navigationVisitsTheSessionsThatNeedYouFirstWhateverTheStartOrder() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-sections-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -404,12 +404,13 @@ import Testing
         )
         await failed.startup?.value
         await model.refresh()
-        #expect(model.sidebar.sections.map(\.kind) == [.needsYou, .working])
+        // Both are in the list, the failed one at its top although it started later.
+        #expect(model.sidebar.sections.map(\.kind) == [.active])
         #expect(model.navigationTarget()?.id == AnyHashable(failed.id))
         #expect(model.navigationTarget(backward: true)?.id == AnyHashable(workingID))
         model.show(failed)
         #expect(model.navigationTarget()?.id == AnyHashable(workingID))
-        // Failed sessions are in Needs You, but only a session that waits for input is skipped to.
+        // Failed sessions need the user, but only a session that waits for input is skipped to.
         #expect(model.navigationTarget(needsInput: true) == nil)
         await sessions.closeAll()
     }

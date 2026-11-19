@@ -147,7 +147,7 @@ import Testing
     }
 
     @Test func nextSessionExpandsACollapsedWorkingShelfAndLeavesSettledAlone() async throws {
-        let fixture = try await Fixture(sessions: 2, live: 1)
+        let fixture = try await Fixture(sessions: 2, running: 1)
         defer { fixture.close() }
         await fixture.settle()
         fixture.model.showingSetup = true
@@ -178,24 +178,57 @@ import Testing
         #expect(fixture.sidebarTables().count == 1)
     }
 
-    @Test func anIdleSessionSitsOnTheWorkingShelfExpandedByDefault() async throws {
-        let fixture = try await Fixture(sessions: 0, live: 1)
+    @Test func anIdleSessionIsInTheListAndARunningOneOnTheWorkingShelf() async throws {
+        let fixture = try await Fixture(sessions: 0, live: 1, running: 1)
         defer { fixture.close() }
         // The draft selects no row, so the shelf is open by default rather than forced open by the selection.
         fixture.model.showingSetup = true
         await fixture.settle()
         let tables = fixture.sidebarTables()
         try #require(tables.count == 2)
-        // The top list holds the Overview row and Needs You, which is empty; the shelf lists the session under it.
-        #expect(tables[0].numberOfRows == 1)
+        // The top list holds the Overview row, the headerless section's spacer and the idle session; the shelf lists
+        // the running one under it.
+        #expect(tables[0].numberOfRows == 3)
         #expect(tables[1].numberOfRows == 1)
+        let sidebar = fixture.model.sidebar
+        #expect(sidebar.section(.active)?.rows.count == 1 && sidebar.section(.working)?.rows.count == 1)
+        #expect(SessionSidebarColumn.placeholder(sidebar) == nil)
         let list = try #require(tables[1].enclosingScrollView)
         #expect(abs(list.frame.height - (SidebarShelves.rowHeight + SidebarShelves.listPadding)) < 2)
         await fixture.manager.closeAll()
     }
 
+    @Test func aLoneRowsMoveFromTheListToTheShelfChangesWhatTheAnimationWatches() async throws {
+        let fixture = try await Fixture(sessions: 0, live: 1)
+        defer { fixture.close() }
+        let owner = try #require(fixture.manager.owners.first)
+        let id = AnyHashable(try #require(owner.sessionID))
+        #expect(SessionSidebarColumn.liveRows(fixture.model.sidebar) == [[id], []])
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+        #expect(SessionSidebarColumn.liveRows(fixture.model.sidebar) == [[], [id]])
+        await owner.stop()
+        await turn.value
+        await fixture.manager.closeAll()
+    }
+
+    @Test func anEmptyListSaysThereAreNoOpenSessions() async throws {
+        let fixture = try await Fixture(sessions: 1, running: 1)
+        defer { fixture.close() }
+        await fixture.settle()
+        #expect(fixture.sidebarTables().first?.numberOfRows == 1)
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == .noOpenSessions)
+        fixture.model.sidebarQuery = "nothing"
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == .noResults)
+        // A search that finds only shelf rows leaves the list empty.
+        fixture.model.sidebarQuery = "session"
+        #expect(SessionSidebarColumn.placeholder(fixture.model.sidebar) == .noOpenSessions)
+        await fixture.manager.closeAll()
+    }
+
     @Test func theWorkingShelfSitsAboveSettled() async throws {
-        let fixture = try await Fixture(sessions: 40, live: 1)
+        let fixture = try await Fixture(sessions: 40, running: 1)
         defer { fixture.close() }
         await fixture.settle()
         fixture.model.settledShelfExpanded = true
@@ -221,8 +254,9 @@ import Testing
     let window: NSWindow
     let records: [SessionRecord]
 
-    /// `live` sessions of the bundled `MockAgent` are started and left idle; the caller closes them.
-    init(sessions count: Int, live: Int = 0) async throws {
+    /// `live` sessions of the bundled `MockAgent` are started and left idle, then `running` more are left in a turn;
+    /// the caller closes them.
+    init(sessions count: Int, live: Int = 0, running: Int = 0) async throws {
         _ = NSApplication.shared
         directory = FileManager.default.temporaryDirectory.appending(path: "settled-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -248,17 +282,20 @@ import Testing
         self.records = records
         model = SessionWindowModel(sessions: manager)
         await model.refresh()
-        if live > 0 {
+        if live + running > 0 {
             let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
             let binary = try #require(
                 [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
                     .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
             )
-            for _ in 0..<live {
+            for index in 0..<(live + running) {
                 let owner = try #require(
                     model.start(directory: directory, agent: .init(name: "Mock", executable: binary.path))
                 )
                 await owner.startup?.value
+                guard index >= live, let controller = owner.controller else { continue }
+                Task { await owner.send("slow") }
+                while controller.status == .idle { await Task.yield() }
             }
         }
         host = NSHostingView(rootView: RootView(model: model))

@@ -11,9 +11,9 @@
 The app advertises the ACP client capabilities `fs.readTextFile` and `fs.writeTextFile`, so an agent may send its file
 reads and writes to the app. `SessionFileSystem` served both only inside the session's roots: the working directory and
 `additionalDirectories`, which the draft never supplies. Everything else was refused with `Path is outside the
-session's filesystem roots`: an agent's skills, memory and plans in `~/.agents`, `~/.claude` and the like, the files M13
-will hand an agent in the app's data folder (#314, #315, #316), and an attachment outside the roots (ADR-0018). The owner
-hit it on 2026-11-10 when an agent's read of a skill reference failed and the agent went on without it.
+session's filesystem roots`: an agent's skills, memory and plans in `~/.agents`, `~/.claude` and the like, the files
+M13 will hand an agent in the app's data folder (#314, #315, #316), and an attachment outside the roots (ADR-0018). The
+owner hit it on 2026-11-10 when an agent's read of a skill reference failed and the agent went on without it.
 
 For an agent with an unrestricted shell the rule protected nothing for reads: it reads the file with `cat`. For an agent
 without a shell, or with one that cannot read outside its workspace, the app's file system is a channel of its own, and
@@ -25,7 +25,12 @@ widening it widens what that agent can read.
 
 - `fs/read_text_file` reads a regular UTF-8 text file at any absolute path. A symlink resolves wherever it leads (skill
   folders are often links, `~/.claude/skills/x` to `~/.agents/skills/x`). The other checks stay: no NUL byte, the
-  canonical path opened with `O_NOFOLLOW_ANY` and `O_NONBLOCK`, a regular file.
+  canonical path opened with `O_NOFOLLOW_ANY` and `O_NONBLOCK`, a regular file, and a device or a FIFO is refused
+  before it is opened.
+- A read is capped at 16 MiB and a larger file fails with `File is larger than 16 MiB` before it is loaded, so a
+  multi-gigabyte log or disk image anywhere on the disk cannot exhaust the app's memory. The cap is larger than the
+  file preview's 2 MiB because reads inside the checkout had no cap before, and a lock file or a generated source
+  there can exceed 2 MiB.
 - `fs/write_text_file` stays inside the roots, so what an agent changes through the app stays in the checkout the user
   reviews. A refused write says what is allowed: `Writes are limited to the session's folders: <roots>`, the roots as
   the agent was given them.
@@ -64,12 +69,16 @@ asks before `.env` and keys. The read the owner saw refused was most likely Kimi
 - An agent reads skill references, the app's data files and attachments outside the checkout through the app.
 - Known and accepted: an agent that writes its memory or plan files through the app is still refused outside the
   roots. From source, that is Kimi's plan file in plan mode; the refusal names the folders it may write to.
-- ADR-0018's note that `fs/read_text_file` refuses a checkout path outside the roots is outdated: such an attachment is
-  now read through the app as well. It may still differ from the worktree's copy.
+- ADR-0018 is outdated where it says the app refuses reads outside the roots: in its Context (`fs/read_text_file`
+  refuses a checkout path), and in its Consequences (an agent without file tools of its own reads a link only when it
+  points into a root; a file dropped from the checkout reaches the agent outside the roots). Such a link is now read
+  through the app wherever it points. A checkout path may still name a different file than the worktree's copy.
 - `acp-cli`'s `CLIFileSystem`, a tool for trying the protocol by hand, keeps its working-directory scope for both.
 
 ### To check live
 
 With the owner's consent, one session each with Claude, Codex and Kimi: whether a read outside the working directory
-asks in the default mode, and which of them sends `fs/*` requests for its memory or plan files (the event log shows
-them).
+asks in the default mode (the permission card in the app shows it), and which of them sends `fs/*` requests for its
+memory or plan files. The event log does not record `fs/*` requests; `just cli chat --trace -- <agent command>` prints
+the raw ACP traffic, them included, to stderr, and in the app a refused write shows `Writes are limited to the
+session's folders` in the tool call's card.

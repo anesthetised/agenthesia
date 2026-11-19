@@ -309,10 +309,12 @@ The issues of this milestone touch views, not the session core, so they run besi
 Progress:
 
 - #395 (reads outside the session's folders) landed: `SessionFileSystem` reads through a `ScopedFileAccess` whose only
-  root is `/`, so every check but the scope stays, and writes keep the session's roots with the error `Writes are
-  limited to the session's folders: <roots>` ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)). Tested
-  with Swift Testing: a read outside the roots and through a symlink that leaves them, a FIFO and a directory refused,
-  a write outside the roots and through a symlink refused with the new message. How Claude, Codex and Kimi use the
+  root is `/`, so every check but the scope stays, caps a read at 16 MiB, and writes keep the session's roots with the
+  error `Writes are limited to the session's folders: <roots>`
+  ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)). `ScopedFileAccess` refuses a device or a FIFO
+  before opening it. Tested with Swift Testing: a read outside the roots and through a symlink that leaves them, a
+  FIFO and a directory refused, a read over the cap refused, a write outside the roots, through a symlink and through
+  `..` refused with the new message. How Claude, Codex and Kimi use the
   app's `fs` comes from their installed source, not a live session: only Kimi routes its file tools through it, and its
   plan-mode plan file is refused. A live check with each agent (does a read outside the working directory ask; which
   writes memory or plans through the app) needs the owner's consent.

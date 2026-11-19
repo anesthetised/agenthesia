@@ -675,32 +675,32 @@ earlier; the ACP file request must already have been accepted to finish. The con
 recording agent updates until the prompt response arrives, then permits file requests again when idle.
 
 Reads go anywhere, writes stay inside the roots ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)):
-`fs/read_text_file` reads a regular UTF-8 text file at any absolute path, symlinks resolving wherever they lead, so
-the app reads any file the user can read and the agent's own permission flow is what guards it. A write outside the
-roots fails with `Writes are limited to the session's folders: <roots>`. Roots are the actual session working
-directory (the worktree directory for Git projects), plus explicit `additionalDirectories`. The launch API accepts additional directories and passes the same list to
-`session/new`; an agent that does not advertise support fails startup rather than silently receiving
-different roots. The draft supplies only the working directory. Additional roots are
-launch parameters, not restored permissions; reopening history enables no provider. A continued session
-does not store or restore additional roots, so its only root is its working directory.
+`fs/read_text_file` reads a regular UTF-8 text file of at most 16 MiB at any absolute path, symlinks resolving wherever
+they lead, so the app reads any file the user can read and the agent's own permission flow is what guards it. A larger
+file fails with `File is larger than 16 MiB` before it is loaded. A write outside the roots fails with `Writes are
+limited to the session's folders: <roots>`. Roots are the actual session working directory (the worktree directory for
+Git projects), plus explicit `additionalDirectories`. The launch API accepts additional directories and passes the same
+list to `session/new`; an agent that does not advertise support fails startup rather than silently receiving different
+roots. The draft supplies only the working directory. Additional roots are launch parameters, not restored
+permissions; reopening history enables no provider. A continued session does not store or restore additional roots, so
+its only root is its working directory.
 
-`ScopedFileAccess` canonicalizes roots and requested paths, including macOS aliases such as `/var`,
-then enforces directory-component boundaries. Internal symlinks may resolve inside any allowed root;
-outside targets are refused. The session's reads use the single root `/`, which keeps every other check. Reads open the canonical path with `O_NOFOLLOW_ANY`, then require a
-regular file; `O_NONBLOCK` avoids hanging on a substituted FIFO. Writes open the root and walk parent
-directories without following symlinks, create missing directories, and atomically rename a temporary
-file relative to the retained parent descriptor. Existing ordinary permission bits are preserved.
-Replacing a final symlink after validation cannot redirect the write, and replacing a hard link does
-not overwrite its other names. Temporary files are removed on handled failures, but a process crash
-can leave a `.agenthesia-<UUID>` file in the worktree. NUL paths are rejected and line range arithmetic
-cannot overflow. Reads currently load the whole file even for a line range; incremental reads and
-resource limits remain follow-up work for large files.
+`ScopedFileAccess` canonicalizes roots and requested paths, including macOS aliases such as `/var`, then enforces
+directory-component boundaries. Internal symlinks may resolve inside any allowed root; outside targets are refused. The
+session's reads use the single root `/`, which keeps every other check. Reads refuse a path that is not a regular file
+before opening it, so a device or a FIFO is never opened, then open the canonical path with `O_NOFOLLOW_ANY` and require
+a regular file again; `O_NONBLOCK` avoids hanging on a FIFO substituted in between. Writes open the root and walk parent
+directories without following symlinks, create missing directories, and atomically rename a temporary file relative to
+the retained parent descriptor. Existing ordinary permission bits are preserved. Replacing a final symlink after
+validation cannot redirect the write, and replacing a hard link does not overwrite its other names. Temporary files are
+removed on handled failures, but a process crash can leave a `.agenthesia-<UUID>` file in the worktree. NUL paths are
+rejected and line range arithmetic cannot overflow. A read loads the whole file, up to its cap, even for a line range;
+incremental reads remain follow-up work.
 
-These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox:
-an agent's own tools remain outside this provider, reads can see existing hard-linked files, and an
-open directory descriptor keeps referring to that directory if another process renames it. File
-changes remain in the worktree; tool call diffs are rendered in cards and the session file list observes
-current disk changes. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
+These checks prevent symlink substitution from redirecting an operation. They are not an OS sandbox: an agent's own
+tools remain outside this provider, and an open directory descriptor keeps referring to that directory if another
+process renames it. File changes remain in the worktree; tool call diffs are rendered in cards and the session file
+list observes current disk changes. The CLI also benefits from the hardened `ScopedFileAccess` implementation.
 
 ## Session file browsing
 

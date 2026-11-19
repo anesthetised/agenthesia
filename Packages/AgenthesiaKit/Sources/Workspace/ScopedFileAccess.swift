@@ -54,11 +54,14 @@ public struct ScopedFileAccess: Sendable {
     ) throws(Failure) -> String {
         let url = try resolve(path)
         beforeAccess?()
+        // Opening a device or a FIFO can have side effects, so refuse one before opening it.
+        var info = stat()
+        guard lstat(url.path, &info) == 0 else { throw failure(path) }
+        guard info.st_mode & S_IFMT == S_IFREG else { throw .notRegularFile(path) }
         // O_NONBLOCK prevents a substituted FIFO from blocking before fstat can reject it.
         let descriptor = open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW_ANY | O_NONBLOCK)
         guard descriptor >= 0 else { throw failure(path) }
         defer { Darwin.close(descriptor) }
-        var info = stat()
         guard fstat(descriptor, &info) == 0 else { throw failure(path) }
         guard info.st_mode & S_IFMT == S_IFREG else { throw .notRegularFile(path) }
         if let maximumBytes {

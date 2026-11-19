@@ -8,6 +8,10 @@ A session in the project folder ([ADR-0043](../adr/0043-sessions-in-the-project-
 Merge in the inspector, the review pane's footer and the Session menu is disabled with the help text `This session works
 in the project folder`, and the review's header reads `Changes since the session started`.
 
+Merge is disabled with the help text `No changes to merge` when the session's changed-file list is current, loaded
+without an error and empty, in the inspector, the review pane and the Session menu. While the list loads or failed, the
+sheet itself decides.
+
 ## The sheet
 
 - The title is `Merge into <base>`. While Git is asked it reads `Checking the merge…`; a blocker replaces the form with
@@ -65,6 +69,7 @@ pane's footer and in the Session menu.
 
 ## Changes
 
+- 2026-11-19, #388: Merge disabled with `No changes to merge` moved here from ARCHITECTURE.md.
 - 2026-11-09, #229: Merge is disabled for a session in the project folder, and Open Pull Request… absent.
 - 2026-11-09, #233: Open Pull Request…, the pull request link and Push.
 - 2026-11-09, #232: the `Push <base> to <remote>` checkbox; the rest summarised from ADR-0032 and the code at 3e6d0c3.

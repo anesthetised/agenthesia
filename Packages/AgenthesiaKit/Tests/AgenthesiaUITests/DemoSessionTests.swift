@@ -111,6 +111,71 @@ struct DemoSessionTests {
         session.stop()
     }
 
+    /// An `NSScrollView` subclass that overrides `scrollWheel(with:)` loses responsive scrolling (#396).
+    @Test func theTranscriptScrollsResponsively() {
+        let controller = TranscriptTableController()
+        #expect(type(of: controller.scroll).isCompatibleWithResponsiveScrolling)
+        #expect(type(of: controller.scroll.contentView).isCompatibleWithResponsiveScrolling)
+        #expect(type(of: controller.table).isCompatibleWithResponsiveScrolling)
+    }
+
+    /// A mouse wheel without the phases of a trackpad's gestures still stops the transcript from following its end.
+    /// AppKit scrolls for it at once, posting only `didLiveScroll`, or animates the scroll as a live scroll on the
+    /// display link, so the window is on a screen.
+    @Test func aLegacyWheelStopsFollowingTheStreamingEnd() async throws {
+        let session = DemoSession()
+        let token = try #require(session.begin("Hello"))
+        session.receive(String(repeating: "A paragraph to read.\n\n", count: 30), for: token)
+        let controller = TranscriptTableController()
+        let window = host(controller, drivesDisplayLink: true)
+        defer { window.close() }
+        controller.update(session)
+        // The rows' measured heights replace their estimates over a few turns of the run loop. A document that shrinks
+        // during the wheel's animation ends it before it moves, so the scroll starts once the height holds.
+        var height: CGFloat = -1
+        let settled = ContinuousClock.now + .seconds(5)
+        while controller.table.frame.height != height, ContinuousClock.now < settled {
+            height = controller.table.frame.height
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        controller.scrollToEnd()
+        #expect(controller.followsEnd)
+
+        // Ten lines up, more than `followsBottom`'s tolerance.
+        let cgEvent = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .line,
+            wheelCount: 1,
+            wheel1: 10,
+            wheel2: 0,
+            wheel3: 0
+        )
+        let event = try #require(cgEvent.flatMap(NSEvent.init(cgEvent:)))
+        controller.scroll.scrollWheel(with: event)
+        func scrolledAway() -> Bool {
+            !TranscriptTableController.followsBottom(
+                documentHeight: controller.table.frame.height,
+                visibleRect: controller.scroll.contentView.bounds
+            )
+        }
+        // Until the animation, if any, has stopped.
+        var last = NSPoint(x: -1, y: -1)
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !(scrolledAway() && controller.scroll.contentView.bounds.origin == last), ContinuousClock.now < deadline {
+            last = controller.scroll.contentView.bounds.origin
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(scrolledAway(), "the wheel scrolled the transcript away from its end")
+        #expect(!controller.followsEnd)
+
+        let origin = controller.scroll.contentView.bounds.origin
+        session.receive("Another paragraph.\n\n", for: token)
+        controller.update(session)
+        await nextMainTurn()
+        #expect(abs(controller.scroll.contentView.bounds.origin.y - origin.y) < 1)
+        session.stop()
+    }
+
     @Test func initiallyFittingTranscriptKeepsFollowingDeferredRowGrowth() async throws {
         let session = DemoSession()
         let controller = TranscriptTableController()
@@ -330,8 +395,8 @@ struct DemoSessionTests {
         }
     }
 
-    private func host(_ controller: TranscriptTableController) -> NSWindow {
-        let window = OffscreenWindow(size: .init(width: 600, height: 300))
+    private func host(_ controller: TranscriptTableController, drivesDisplayLink: Bool = false) -> NSWindow {
+        let window = OffscreenWindow(size: .init(width: 600, height: 300), drivesDisplayLink: drivesDisplayLink)
         controller.scroll.frame = window.contentLayoutRect
         controller.table.frame.size.width = 600
         window.contentView = controller.scroll

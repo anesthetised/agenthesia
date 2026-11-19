@@ -2,6 +2,7 @@ import AgenthesiaCore
 import AppKit
 import Rendering
 import SwiftUI
+import os
 
 struct DemoTranscript: NSViewRepresentable {
     let session: DemoSession
@@ -27,6 +28,10 @@ enum EndPosition: Equatable {
     /// Away from the end, which has changed since the reader left it: `New response below`.
     case newBelow
 }
+
+/// Intervals of the transcript's row work in Instruments' Points of Interest (#396): making a row view and a cell, the
+/// cell's message and `show`, text measurement, table layout (where AppKit measures automatic row heights) and drawing.
+let transcriptSignposter = OSSignposter(subsystem: "io.github.anesthetised.Agenthesia", category: .pointsOfInterest)
 
 /// Shared native A′ table. The Rendering Lab keeps its measurement implementation unchanged.
 final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
@@ -98,8 +103,6 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
         }
         table.willNavigate = { [weak self] in self?.followingBottom = false }
         table.didNavigate = { [weak self] in self?.userDidScroll(nil) }
-        scroll.willNavigate = { [weak self] in self?.followingBottom = false }
-        scroll.didNavigate = { [weak self] in self?.userDidScroll(nil) }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(userWillScroll),
@@ -370,17 +373,24 @@ final class TranscriptTableController: NSObject, NSTableViewDataSource, NSTableV
 
     func numberOfRows(in tableView: NSTableView) -> Int { session?.messageCount ?? 0 }
 
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { TranscriptRowView() }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        transcriptSignposter.withIntervalSignpost("RowView") { TranscriptRowView() }
+    }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let session else { return nil }
+        let signpost = transcriptSignposter.beginInterval("Cell", "\(row)")
+        defer { transcriptSignposter.endInterval("Cell", signpost) }
         let rowView = TranscriptMessageRow(markdown: "")
-        rowView.show(
-            session.message(at: row),
-            streaming: session.isStreaming(at: row),
-            width: TranscriptColumn.width(inRowOfWidth: tableView.tableColumns[0].width),
-            controller: self
-        )
+        let message = transcriptSignposter.withIntervalSignpost("Message") { session.message(at: row) }
+        transcriptSignposter.withIntervalSignpost("Show") {
+            rowView.show(
+                message,
+                streaming: session.isStreaming(at: row),
+                width: TranscriptColumn.width(inRowOfWidth: tableView.tableColumns[0].width),
+                controller: self
+            )
+        }
         rowView.highlight(findQuery)
         return rowView
     }
@@ -417,7 +427,7 @@ final class TranscriptTableView: NSTableView {
     var didNavigate: (() -> Void)?
 
     override func layout() {
-        super.layout()
+        transcriptSignposter.withIntervalSignpost("TableLayout") { super.layout() }
         didLayout?()
     }
 
@@ -440,16 +450,9 @@ final class TranscriptTableView: NSTableView {
     }
 }
 
-final class TranscriptScrollView: NSScrollView {
-    var willNavigate: (() -> Void)?
-    var didNavigate: (() -> Void)?
-
-    override func scrollWheel(with event: NSEvent) {
-        willNavigate?()
-        super.scrollWheel(with: event)
-        didNavigate?()
-    }
-}
+/// The transcript's scroll view. It overrides no event method, so it stays compatible with responsive scrolling (#396):
+/// the controller follows the reader through the live-scroll notifications, which wheel, trackpad and scroller all post.
+final class TranscriptScrollView: NSScrollView {}
 
 /// How firmly a row's content keeps its own height: above the height AppKit gives a row (priority 500), so a row last
 /// measured at another width shrinks to its content instead of stretching it.
@@ -977,6 +980,15 @@ private final class TranscriptMessageRow: NSTableCellView {
 /// A selectable text field that lets the transcript handle its links before AppKit opens them.
 final class LinkTextField: NSTextField {
     var followLink: ((URL) -> Bool)?
+
+    /// The text's size at `preferredMaxLayoutWidth`: what an automatic row height measures.
+    override var intrinsicContentSize: NSSize {
+        transcriptSignposter.withIntervalSignpost("TextLayout") { super.intrinsicContentSize }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        transcriptSignposter.withIntervalSignpost("Draw") { super.draw(dirtyRect) }
+    }
 
     /// The delegate method of the field editor, which AppKit calls on its owner when a link is clicked.
     @objc(textView:clickedOnLink:atIndex:) func textView(

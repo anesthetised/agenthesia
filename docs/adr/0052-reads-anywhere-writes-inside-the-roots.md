@@ -42,7 +42,8 @@ flow, which the app shows; the app adds no policy of its own (ADR-0042 is deferr
 ## The three agents
 
 From each agent's installed source (`claude-agent-acp` 0.101.0 with the Claude Agent SDK it bundles, `codex-acp` 2.5.0,
-`kimi-code` 2.5.2) and documentation, **not checked live**:
+`kimi-code` 2.5.2) and documentation, **not checked live**. The amendment of 2026-11-19 below checked Claude and Codex
+live and corrects this table where it disagrees; Kimi stays as it is here, from sources only (#420):
 
 | Agent | Uses the app's `fs` | Asks before reading outside its working directory | Writes memory or plans through the app |
 |---|---|---|---|
@@ -77,8 +78,32 @@ asks before `.env` and keys. The read the owner saw refused was most likely Kimi
 
 ### To check live
 
-With the owner's consent, one session each with Claude, Codex and Kimi: whether a read outside the working directory
-asks in the default mode (the permission card in the app shows it), and which of them sends `fs/*` requests for its
-memory or plan files. The event log does not record `fs/*` requests; `just cli chat --trace -- <agent command>` prints
-the raw ACP traffic, them included, to stderr, and in the app a refused write shows `Writes are limited to the
-session's folders` in the tool call's card.
+Done on 2026-11-19 for Claude and Codex; see the amendment below. Kimi is still open (#420).
+
+## Amendment (2026-11-19): checked live with Claude and Codex
+
+Claude (`claude-agent-acp` 0.101.0, Claude Code 2.1.311) and Codex (`codex-acp` 2.5.0, codex-cli 0.169.0) were run on
+2026-11-19 through a throwaway Python ACP client that sends the same client capabilities as `LiveSession`, serves
+`fs/*` by this ADR's rules and logs every ACP message, in a throwaway repository with the "outside" files in a scratch
+folder, never the owner's real folders. Kimi Code CLI 2.5.2 could not be checked: its subscription has no access to
+Kimi Code, so everything above about Kimi is from its sources only (#420).
+
+What the live runs show, and where it corrects the table above:
+
+- **Default modes.** Claude starts in `auto` ("Claude handles permission decisions"). Codex starts in `agent` ("Auto
+  review", the adapter's `DEFAULT_AGENT_MODE`; its approvals reviewer is `auto_review`, not the user), not the
+  `workspace-write` this ADR assumed. Kimi's is `default`, from sources.
+- **Reads outside the working directory.** Claude in `auto` does not ask and reads with its own Read tool; in `default`
+  ("Manual") it asks (`session/request_permission`) before reading, so "No, unless the user sets
+  `permissions.blockReadsOutsideWorkingDirectories`" is true only of `auto`. Codex in `agent` does not ask and reads
+  itself (`cat` through `exec_command`).
+- **Writes outside the working directory.** Claude writes with its own Write tool and asks only in `default`; Codex
+  writes itself with `apply_patch`. Neither sent a single `fs/read_text_file` or `fs/write_text_file` in any run, so
+  neither uses the app's `fs`, which confirms the table's "No" for both. Caveat: the outside folder was under
+  `/private/tmp`, which Codex's workspace sandbox keeps writable, so whether Codex asks for a write elsewhere outside
+  the workspace is not shown. Memory and plan files the agents write on their own initiative were not triggered, to
+  keep them out of the owner's real folders; both agents use the same write tools for them.
+
+So for Claude and Codex, the app's `fs` is no channel at all: they read and write with their own tools, and what stands
+between them and a file is their own permission mode, which the app shows as a permission card when it asks. The
+conclusion that Kimi is the agent the rule matters for rests on its sources and stays open until #420.

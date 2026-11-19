@@ -8,17 +8,28 @@ on:
 permissions:
   contents: read
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   package:
-    name: Lint and test with coverage
-    runs-on: macos-26
+    name: Lint and test with coverage (Xcode ${{ matrix.xcode }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - xcode: "26.6"
+            runner: macos-26
+            experimental: false
+          # Informational until its first green runs (#73); 26.6 stays the required toolchain.
+          - xcode: "27.2"
+            runner: xcode-27
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -70,7 +81,7 @@ jobs:
         if: ${{ failure() && steps.coverage.outcome == 'failure' }}
         uses: actions/upload-artifact@v7
         with:
-          name: test-crashes-${{ github.run_attempt }}
+          name: test-crashes-${{ matrix.xcode }}-${{ github.run_attempt }}
           path: |
             ~/Library/Logs/DiagnosticReports/swiftpm-testing*.ips
             ~/Library/Logs/DiagnosticReports/AgenthesiaKitPackageTests*.ips
@@ -82,7 +93,7 @@ jobs:
           retention-days: 14
 
       - name: Upload coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.xcode == '26.6'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-badge
@@ -91,8 +102,22 @@ jobs:
           retention-days: 1
 
   app:
-    name: Build app
-    runs-on: macos-26
+    name: Build app (Xcode ${{ matrix.xcode }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - xcode: "26.6"
+            runner: macos-26
+            experimental: false
+          # Informational until its first green runs (#73); 26.6 stays the required toolchain.
+          - xcode: "27.2"
+            runner: xcode-27
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -134,6 +159,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # A failed informational Xcode 27 entry (continue-on-error) reports success here; 26.6 entries still gate.
       - name: Require both checks to pass
         env:
           PACKAGE_RESULT: ${{ needs.package.result }}

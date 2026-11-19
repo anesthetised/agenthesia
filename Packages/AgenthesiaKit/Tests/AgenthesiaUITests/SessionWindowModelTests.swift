@@ -1,5 +1,6 @@
 import Foundation
 import Persistence
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -192,6 +193,61 @@ import Testing
         model.close()
         await owner.send("hello")
         #expect(owner.activity == .done)
+        await sessions.closeAll()
+    }
+
+    @Test func onlyAWindowShowingTheLiveEndWatches() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-watch-only-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        // The first message is held in the detail column until the transcript shows it.
+        let owner = try #require(
+            model.start(directory: directory, agent: agent, initialPrompt: PromptDraft(text: "hi"))
+        )
+        #expect(model.heldPrompt != nil && model.watchedOwner(appearsActive: true) == nil)
+        try await waitUntil { model.heldPrompt == nil && owner.controller?.status == .idle }
+        #expect(model.watchedOwner(appearsActive: true) === owner)
+        // While a Settled session loads, the detail column shows `Loading history…`, not this session.
+        model.isLoadingHistory = true
+        #expect(model.watchedOwner(appearsActive: true) == nil)
+        model.isLoadingHistory = false
+        model.restored = owner.controller
+        #expect(model.watchedOwner(appearsActive: true) == nil)
+        model.restored = nil
+
+        // A closed window watches nothing, even when asked.
+        model.close()
+        #expect(model.watchedOwner(appearsActive: true) == nil)
+        model.watch(owner)
+        owner.markSeen()
+        await owner.send("hello")
+        #expect(owner.activity == .done)
+        await sessions.closeAll()
+    }
+
+    @Test func switchingSessionsReleasesTheFirstAndSeesTheSecond() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-watch-switch-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        let first = try #require(model.start(directory: directory, agent: agent))
+        let second = try #require(model.start(directory: directory, agent: agent))
+        for owner in [first, second] { await owner.startup?.value }
+        model.show(first)
+        model.watch(model.watchedOwner(appearsActive: true))
+        await second.send("hello")
+        await first.send("hello")
+        #expect(first.activity == .idle && second.activity == .done)
+        // Showing the second session at its end sees its turn; the first keeps the turn it watched as seen.
+        model.show(second)
+        model.watch(model.watchedOwner(appearsActive: true))
+        #expect(first.activity == .idle && second.activity == .idle)
+        await first.send("hello")
+        #expect(first.activity == .done)
+        model.close()
         await sessions.closeAll()
     }
 

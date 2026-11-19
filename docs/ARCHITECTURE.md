@@ -452,7 +452,10 @@ those in a turn and those whose queue is about to start one (`SessionSidebar.isW
 bounce between queued turns. `SessionSidebar.needsYou` is the pure list of the rows that need the user, which the menu
 bar reads; `SessionSidebarColumn.liveRows` is the value its animation watches. The column reads `model.sidebar` once
 and passes it to `SessionSidebarList` and `SidebarShelves`: a view that read it itself would be updated by its own
-observation, outside the column's animated transaction, and the move would not animate.
+observation, outside the column's animated transaction, and the move would not animate. The Working shelf keeps its
+`List` mounted at no height while it has no rows, so a row that moves there is inserted into a table that exists, which
+animates; a table made for the row would show it a few frames late. A query change never animates: an
+`.animation(nil, value: sidebarQuery)` sits inside the column's spring and inside the shelves' own.
 Each row carries its project (`nil` while unknown). `ProjectBadge.initials` draws a row's badge; its tint is a 64-bit
 FNV-1a hash of the name, since `hashValue` changes per launch. `SidebarReason` (Core, pure) derives a row's reason from
 `LiveSession.Activity`, so it never contradicts the status symbol; a permission request that names its call only by id
@@ -525,8 +528,9 @@ a clip-view resize (the docked card and the panes resize it); the clip view is o
 without one nothing is scheduled. Once the end was shown, the table reports the item once and stops watching;
 `markSeen(reaching:)` marks every turn seen only when the item is still the latest result. A reader following the end
 never sees the mark: `SessionWindowModel.watchedOwner(appearsActive:)` is the live session a window shows while it
-appears active and its `endPosition` is `.following`, `RootView` hands it to `watch(_:)`, and `LiveSession.setWatched`
-keeps a set of such windows. While the set is not empty `hasUnseenResult` is false, so a turn that ends is seen in the
+appears active and its `endPosition` is `.following` (not closed, not on the draft or the board, not loading or showing
+a saved session, no held first message), `RootView` hands it to `watch(_:)`, and `LiveSession.setWatched` keeps a set
+of such windows; a closed window watches nothing, and the model's `isolated deinit` releases the session too. While the set is not empty `hasUnseenResult` is false, so a turn that ends is seen in the
 same update and its row never sorts among those that need the user; the last window to leave marks every turn seen.
 
 `New response below` and Jump to Latest (ADR-0026's amendment, [behavior](behavior/transcript.md#following-the-end)): the table keeps `followingBottom`'s intent and, when it

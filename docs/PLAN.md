@@ -208,7 +208,15 @@ Progress:
   sidebar down, and an on-screen hosted test sees the list's bottom inset pass through in-between values, which it
   does not without the fix); and a frame or two of `Finished` at the top of the list when the shown session's turn
   ended (the transcript cleared the mark a frame later; a window that follows the end now marks the turn seen in the
-  same update, `LiveSession.setWatched`). The second running-app check is to do.
+  same update, `LiveSession.setWatched`). The second running-app check found the turn-start move unreliable: the
+  Working shelf's `List` was made when its first row arrived and showed it a few frames late (and without any shelf
+  the height probe was not mounted, so the first shelf opened at no height); the shelf now keeps its list mounted at
+  no height and its height probe always measures, which also ends the turn-end pause (the shelf used to fade out with
+  the row still in it). The independent review's findings are fixed here: `watchedOwner` leaves out a closed window and
+  a loading Settled session, a freed window releases its session, a query change never animates, and `No open
+  sessions` shows only without any open session (the owner's decision). The animation itself is not asserted in CI,
+  whose runner does not tick it reliably: tests cover the animation's choice and that the row lands in the shelf's
+  existing table, and the frame-level check stays with the running app. The third running-app check is to do.
 - #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
   and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
   3 were aligned with it.

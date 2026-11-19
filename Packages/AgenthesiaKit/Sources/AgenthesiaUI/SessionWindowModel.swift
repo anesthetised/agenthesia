@@ -215,16 +215,23 @@ import os
     /// The live session whose end this window shows the user: it appears active and follows the session's transcript
     /// to its end. A turn that ends then is seen at once (`LiveSession.setWatched`).
     func watchedOwner(appearsActive: Bool) -> LiveSession? {
-        appearsActive && !showingSetup && restored == nil && heldPrompt == nil && endPosition == .following
-            ? owner : nil
+        guard appearsActive, !closed, !showingSetup, !isLoadingHistory, restored == nil, heldPrompt == nil,
+            endPosition == .following
+        else { return nil }
+        return owner
     }
     @ObservationIgnored private weak var watched: LiveSession?
+    /// Registers this window as watching `owner`'s end, releasing the session it watched before; a closed window
+    /// watches nothing.
     func watch(_ owner: LiveSession?) {
+        let owner = closed ? nil : owner
         guard owner !== watched else { return }
         watched?.setWatched(false, by: self)
         owner?.setWatched(true, by: self)
         watched = owner
     }
+    // A window freed without `close()` must not keep a session from ever showing Done.
+    isolated deinit { watched?.setWatched(false, by: self) }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
     /// A removed worktree has no files left to browse.
     var filesSession: SessionRecord? {

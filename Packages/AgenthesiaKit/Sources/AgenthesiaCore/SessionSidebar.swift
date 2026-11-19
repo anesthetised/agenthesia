@@ -61,6 +61,11 @@ public import Persistence
         public let kind: Kind
         public let rows: [Row]
         public var id: Kind { kind }
+
+        public init(kind: Kind, rows: [Row]) {
+            self.kind = kind
+            self.rows = rows
+        }
     }
 
     /// The list, Working and Settled in that order; empty sections are omitted.

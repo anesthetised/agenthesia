@@ -20,11 +20,12 @@ has no selected row. The search text and the selection belong to the window.
   not behind a merge, so that its row does not bounce between the shelf and the list between queued turns. In start
   order, on the Working shelf.
 - **Settled** — saved sessions that are not live and not archived, by last activity, newest first.
-- Empty sections are hidden. Without rows the list reads `No open sessions` in secondary text, centered. A session
+- Empty sections are hidden. With no open session at all, in the list or on the Working shelf, the list reads `No open
+  sessions` in secondary text, centered; when every open session is on the shelf, the list area is empty. A session
   moves between sections as its status changes; ending a session moves it to Settled, Continue moves it back up.
   `Prompt failed` and `Queue paused` rows are idle: they sit among the idle rows of the list.
 - A row's move between the list and the Working shelf, or in and out of either, animates: the light spring of the
-  shelves (about 0.25 s). Under Reduce Motion, and while a search filters, rows change at once.
+  shelves (about 0.25 s). Under Reduce Motion, and while a search filters or is cleared, rows change at once.
 - A *done* row moves down among the idle rows once the end of the finished turn has been on screen in an active window
   (scrolled up away from the end, it stays). A turn that ends while its session is shown at the end of its transcript
   in an active window is seen at once: its row goes straight to the idle rows, without a frame as done.
@@ -49,7 +50,7 @@ Working and Settled are footers pinned to the bottom edge, Working above Settled
   they move the selection into one of its rows. A search opens both shelves while a query is entered; the header cannot
   collapse a shelf then.
 - Expanding and collapsing a shelf animates: a light spring of about 0.25 s on the height of its list and the
-  chevron's rotation. Under Reduce Motion the shelf changes at once.
+  chevron's rotation. Under Reduce Motion, and when a search opens or closes it, the shelf changes at once.
 - History refreshes on its own; there is no Refresh button.
 
 *Why a Working shelf of running sessions:* the list holds what the user can act on now, and the shelf the agents that
@@ -198,6 +199,8 @@ their next refresh, and a finished deletion triggers one in every window.
   no header; it reads `No open sessions` when empty. The Working shelf holds only the sessions in a turn (and one about
   to start a queued turn); `Idle 20m` is gone. A row's move between them animates. The first row follows Overview
   without a gap; a turn that ends while shown at the end of its transcript in an active window goes straight to idle.
+  `No open sessions` shows only when no session is open, in the list or on the shelf; typing or clearing a search
+  never animates.
 - 2026-11-09, #227: the Overview row above Needs You (⌘0) shows the session board; a window whose session was deleted
   goes to the board instead of the draft.
 - 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.

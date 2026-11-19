@@ -17,7 +17,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-acp-client-not-harness.md) | ACP client, not an agent harness | Accepted |
-| [0002](0002-tech-stack-and-layout.md) | Tech stack and project layout | Accepted |
+| [0002](0002-tech-stack-and-layout.md) | Tech stack and project layout | Accepted; the minimum system superseded by [0053](0053-require-macos-27.md) |
 | [0003](0003-own-acp-implementation.md) | Own ACP implementation | Accepted |
 | [0004](0004-agent-runtime.md) | Agent runtime | Accepted; managed Node and installation decisions superseded by [0034](0034-agent-installs-with-user-runtimes.md) |
 | [0005](0005-event-log.md) | Event log as the source of truth | Accepted |
@@ -68,5 +68,6 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0050](0050-settled-is-the-users-decision.md) | Settled is the user's decision | Accepted; not implemented yet (#353) |
 | [0051](0051-turns-between-sessions.md) | Turns between sessions | Accepted; not implemented yet (#355–#366, #317, #318) |
 | [0052](0052-reads-anywhere-writes-inside-the-roots.md) | Reads anywhere, writes inside the roots | Accepted |
+| [0053](0053-require-macos-27.md) | Require macOS 27 | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

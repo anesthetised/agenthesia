@@ -57,6 +57,9 @@ from the review.
 Known CI problems: #133 (main-actor saturation in the package test run) and #126 (an intermittent AppKit crash while
 rendering Markdown attributes). The records of their investigations are in the archive.
 
+CI builds with Xcode 27.2 on the `xcode-27` image only, and the app requires macOS 27 ([ADR-0053](adr/0053-require-macos-27.md),
+#413, 2026-11-19); the macOS 26 environment of #126 is no longer tested.
+
 ## Next steps
 
 Decided by the owner on 2026-11-10: fixes and measurement first; three lanes in parallel, one agent each in its own
@@ -71,7 +74,7 @@ order". Tiers are on the issues.
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
 | Interface (M20) | #234, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
 | Test stability (M10) | #133, before #355 |
-| Any time | #388 (documents and the tracker), #73 (CI with Xcode 27) |
+| Any time | #388 (documents and the tracker) |
 
 The first step is the head of each lane: #355 (after #133); #396, then #97 and #372; #234, #395, #390 and #397; #133.
 Landed from the lane heads on 2026-11-10: #373, #354, #71, #134, #374, #351, #375.

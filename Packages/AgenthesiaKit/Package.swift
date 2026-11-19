@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.4
 
 import PackageDescription
 
@@ -11,7 +11,7 @@ let swiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "AgenthesiaKit",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v27)],
     products: [
         .library(name: "AgenthesiaUI", targets: ["AgenthesiaUI"]),
         .executable(name: "acp-cli", targets: ["acp-cli"]),

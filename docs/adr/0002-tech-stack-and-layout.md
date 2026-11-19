@@ -1,6 +1,6 @@
 # 0002. Tech stack and project layout
 
-- Status: Accepted
+- Status: Accepted; the minimum system superseded by [0053](0053-require-macos-27.md)
 - Date: 2026-10-05
 
 ## Context

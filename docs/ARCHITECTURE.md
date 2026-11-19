@@ -789,8 +789,8 @@ merge, a remote that moved (rejected, nothing undone), no or a local upstream, a
 meanwhile), commits the uncommitted changes (`commitUncommittedChanges`, `--no-verify`), pushes with `pushBranch`
 (`git push -u`, sharing the base push's output file, `GIT_TERMINAL_PROMPT=0` and 2-minute stop) and runs `gh pr create`
 (`GH_PROMPT_DISABLED`), reading the number from the URL it prints. The result is appended as its own event kind,
-`session.pullRequestOpened` with `PullRequest(url, number)`, through the live controller (`SessionController.record`)
-or the library; builds that do not know the kind skip it, which a new `SessionEvent` case would not allow.
+`session.pullRequestOpened` with `PullRequest(url, number)`, through the session's log (`SessionManager.append`), which
+shows it in a live controller at once; builds that do not know the kind skip it, which a new `SessionEvent` case would not allow.
 `TranscriptState.pullRequest` replays it with a notice. `PullRequestFlow` (UI) hosts the sheet and rechecks the target
 or, with a pull request, `hasUnpushedWork` for Push, keyed on the session, the file index, the status and the pull
 request. The discard summary names the branch's remote upstream. Tests use a local bare remote and a fake `gh`.
@@ -881,6 +881,8 @@ An append commits a whole batch or none of it. Sequences start at one per sessio
 inside the transaction. Concurrent batches receive distinct sequences, but the session controller
 must await appends in ACP arrival order; task scheduling does not establish that order. Replay orders
 by sequence, not wall-clock timestamps. Cancellation follows GRDB's transaction rollback behavior.
+`append(_ batches:)` appends to the logs of several sessions in one transaction, all or nothing, for a child's end
+of turn and the outcome in its parent's log (ADR-0051, #317).
 
 Append rejects raw NUL bytes and invalid UTF-8 before SQLite validates JSON syntax; SQLite alone
 accepts both malformed byte sequences. Payloads are retained byte-for-byte in a BLOB. Unknown event kinds,
@@ -1188,14 +1190,21 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
    before consumption, so a failed durable commit can close the connection without completing it twice. A consumer may
    close the connection but must not await another wire response on it.
 2. *The write tail.* `@MainActor` alone cannot preserve the order across an async SQLite write: actor reentrancy lets
-   another call run while one awaits. `SessionController` therefore chains every event append and reduction on one task
-   (`tail`), capturing the previous tail and replacing it *before* awaiting. A notification handler awaits its commit
+   another call run while one awaits. Every append to a session's log therefore runs as a step of its `SessionLog`
+   (#355), one at a time in call order, the order reserved *before* anything is awaited. `SessionManager` keeps one log
+   per session id and hands it to the session's controller and to its own appends (`SessionManager.append`: a
+   worktree's outcome, a pull request), so nothing appends behind a loaded controller. The controller chains its own
+   append and reduction steps (`tail`) through the log; a step that another writer reserved stores its events and
+   hands them to the log's controller (`didAppend`), which shows them unless it failed or closed. History loads as a
+   step of the log, and the reopen baseline is built inside its step, so it sees what another writer appended while
+   the agent reopened the session. A controller whose next stored event does not follow the last one it applied reads
+   the missing events from the store instead of failing with `outOfOrder`. A notification handler awaits its commit
    and reduction before the connection dispatches the next message. A permission resolution is enqueued synchronously,
    so close, which awaits the tail, drains it with the other writes. Appends reach `Persistence` in ACP arrival order
    because the controller awaits them in that order; the store only guarantees distinct sequences.
 3. *The queue coordinator.* Prompt-queue operations (`submit`, resume, send-now, edits, drain) run through
-   `SessionController.coordinateQueue`, which chains them one at a time on a second task (`queueTask`). Before building a queue snapshot it waits for the write tail to
-   settle, so lifecycle writes that arrive outside the coordinator cannot make it publish a stale snapshot. A config
+   `SessionController.coordinateQueue`, which chains them one at a time on a second task (`queueTask`). Before building a queue snapshot it waits for the session's log to
+   settle (`SessionLog.settled`), so lifecycle writes and other writers that arrive outside the coordinator cannot make it publish a stale snapshot. A config
    change that enters while idle, or a mode change during a turn, is awaited before a scheduled drain. Changes of other
    options during a turn wait in `pendingConfig` (memory only, [ADR-0019's
    amendment](adr/0019-session-config-controls.md)); the end of a turn, also by Stop, schedules a coordinated

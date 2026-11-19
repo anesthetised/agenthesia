@@ -193,6 +193,16 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #355 (one log writer per session) is in review: `SessionLog` chains every append to a session's log; `SessionManager`
+  keeps one per session id for the controller and its own appends (worktree outcomes, pull requests), and
+  `SessionLibrary.record` is gone. A controller hands another writer's events to its transcript at once, reads events
+  it missed from the store instead of failing with `outOfOrder`, loads history as a step of the log and builds the
+  reopen baseline inside its step. `PersistenceStore.append(_ batches:)` writes to several sessions' logs in one
+  transaction, for #317, which still has to add a step that joins two sessions' logs. Tested with Swift Testing (an
+  append during Continue, with and without the log; a write in flight while another caller appends; a failed
+  controller; the two-session transaction), each test seen failing with the fix taken out. No event format or stored
+  data changed.
+
 - #352 (the list and the Working shelf) is in review: `SessionSidebar.Kind.active` replaced `needsYou`; the list holds
   the live sessions that are not working, the rows that need the user first, and `SessionSidebar.needsYou` keeps those
   rows for the menu bar. Working holds turns and a queue about to start one (`queueDue`: idle, not paused, not held by

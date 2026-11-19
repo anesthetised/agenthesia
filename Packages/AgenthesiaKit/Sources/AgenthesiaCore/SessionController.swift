@@ -116,6 +116,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     private var failure: (any Error)?
     @ObservationIgnored private let store: PersistenceStore
+    /// The session's append chain, shared with the other writers of its log (#355).
+    @ObservationIgnored let log: SessionLog
     @ObservationIgnored private var connection: (any ACP.AgentConnection)?
     @ObservationIgnored private var reduced = TranscriptState()
     @ObservationIgnored private var tail: Task<Void, any Error>?
@@ -144,19 +146,38 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     @ObservationIgnored var appendEvents: @Sendable ([NewEvent], UUID) async throws -> [StoredEvent]
 
     /// The project and agent install must already exist. The draft session is inserted after session/new succeeds
-    /// and the `configHints` were applied: the draft's model and effort and a mode picked in it (ADR-0040).
-    public init(
+    /// and the `configHints` were applied: the draft's model and effort and a mode picked in it (ADR-0040). `log` is
+    /// the session's log from `SessionManager`; without one the controller is its only writer.
+    public convenience init(
         session: SessionRecord,
         store: PersistenceStore,
         additionalDirectories: [String] = [],
         configHints: [ACP.ConfigOption] = []
     ) {
+        self.init(
+            session: session,
+            store: store,
+            log: nil,
+            additionalDirectories: additionalDirectories,
+            configHints: configHints
+        )
+    }
+
+    init(
+        session: SessionRecord,
+        store: PersistenceStore,
+        log: SessionLog?,
+        additionalDirectories: [String] = [],
+        configHints: [ACP.ConfigOption] = []
+    ) {
         self.session = session
         self.store = store
+        self.log = log ?? SessionLog(sessionID: session.id, store: store)
         self.additionalDirectories = additionalDirectories
         self.configHints = configHints
         createSession = { try await store.createSession($0) }
         appendEvents = { try await store.append($0, to: $1) }
+        self.log.controller = self
     }
 
     public func start(connection: any ACP.AgentConnection, client: ACP.Implementation) async throws {
@@ -232,7 +253,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             throw error
         }
         guard status == .starting else { throw SessionError.invalidState }
-        try await begin([try SessionEvent.started(configOptions: options).storedEvent()])
+        let started = try SessionEvent.started(configOptions: options).storedEvent()
+        try await begin { [started] }
     }
 
     /// Sets each hint whose value differs from the agent's, one at a time in the agent's order; each response is the
@@ -289,36 +311,40 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case .loaded(let loaded): (state, method) = (loaded, .load)
         case .unavailable: throw SessionError.cannotReopen
         }
-        // Close what an earlier run left open, so the new baseline starts with no turn or request pending.
-        var events: [NewEvent] = []
-        if let turn = reduced.activeTurn {
-            events.append(
-                try SessionEvent.failed(id: turn, message: "Interrupted: Agenthesia stopped during this turn.")
-                    .storedEvent()
-            )
+        // Close what an earlier run left open, so the new baseline starts with no turn or request pending. It is
+        // built in its write, after whatever another writer appended while the agent reopened the session.
+        try await begin { [self] in
+            var events: [NewEvent] = []
+            if let turn = reduced.activeTurn {
+                events.append(
+                    try SessionEvent.failed(id: turn, message: "Interrupted: Agenthesia stopped during this turn.")
+                        .storedEvent()
+                )
+            }
+            for id in reduced.unansweredPermissions {
+                events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
+            }
+            queuePaused = !reduced.queuedPrompts.isEmpty
+            events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
+            for id in reduced.unansweredInputs {
+                events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
+            }
+            events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
+            return events
         }
-        for id in reduced.unansweredPermissions {
-            events.append(try SessionEvent.permissionResolved(id: id, outcome: .cancelled).storedEvent())
-        }
-        queuePaused = !reduced.queuedPrompts.isEmpty
-        events.append(try SessionEvent.queuePaused(queuePaused).storedEvent())
-        for id in reduced.unansweredInputs {
-            events.append(try SessionEvent.inputResolved(id: id, response: .init(action: .cancel)).storedEvent())
-        }
-        events.append(try SessionEvent.reopened(configOptions: state.configOptions, method: method).storedEvent())
-        try await begin(events)
     }
 
     /// Enqueues the baseline and all early updates without yielding, before accepting live writes.
-    private func begin(_ baseline: [NewEvent]) async throws {
-        var events = baseline
+    private func begin(_ baseline: @escaping @MainActor () throws -> [NewEvent]) async throws {
+        var updates: [NewEvent] = []
         for (id, update, raw) in startupUpdates where id == session.agentSessionID {
-            events += try updateEvents(update, raw: raw)
+            updates += try updateEvents(update, raw: raw)
         }
         startupUpdates.removeAll()
         startupBytes = 0
         recording = true
-        try await record(events)
+        let task = enqueue { try baseline() + updates }
+        do { try await task.value } catch { throw await fail(error) }
         guard status == .starting else { throw SessionError.invalidState }
         status = .idle
         publishTranscript()
@@ -338,14 +364,25 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         store: PersistenceStore,
         additionalDirectories: [String] = []
     ) async throws -> SessionController {
+        try await history(id: id, store: store, log: nil, additionalDirectories: additionalDirectories)
+    }
+
+    /// Reads history like `history(id:store:additionalDirectories:)`, for a controller that writes through `log`.
+    static func history(
+        id: UUID,
+        store: PersistenceStore,
+        log: SessionLog?,
+        additionalDirectories: [String] = []
+    ) async throws -> SessionController {
         guard let session = try await store.session(id: id) else { throw SessionError.sessionNotFound }
-        let controller = SessionController(session: session, store: store, additionalDirectories: additionalDirectories)
-        while true {
-            let page = try await store.events(in: id, after: controller.reduced.sequence)
-            guard !page.isEmpty else { break }
-            for event in page { try controller.reduced.apply(event) }
-            if let last = page.last { controller.noteActivity(at: last.event.timestamp) }
-        }
+        let controller = SessionController(
+            session: session,
+            store: store,
+            log: log,
+            additionalDirectories: additionalDirectories
+        )
+        // A step of the log, so no other writer appends while the history loads.
+        try await controller.log.run { try await controller.load() }.value
         controller.queuePaused = !controller.reduced.queuedPrompts.isEmpty || controller.reduced.queuePaused
         controller.publishTranscript()
         return controller
@@ -571,11 +608,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let previous = queueTask
         let task = Task {
             _ = await previous?.result
-            // Lifecycle writes can arrive outside the queue coordinator; do not build a stale queue snapshot.
-            while let pending = self.tail {
-                try await pending.value
-                if self.tail == pending { break }
-            }
+            // Lifecycle writes, and other writers of the log, can arrive outside the queue coordinator; do not build a
+            // stale queue snapshot.
+            await self.log.settled()
+            try await self.tail?.value
             try await operation()
         }
         queueTask = task
@@ -643,12 +679,6 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         guard canBeginMerge else { return false }
         isMerging = true
         return true
-    }
-
-    /// Appends the pull request opened from the session's branch (ADR-0045) and shows it at once.
-    func record(_ pullRequest: PullRequest) async throws {
-        try await record([pullRequest.storedEvent()])
-        publishTranscript()
     }
 
     var canBeginMerge: Bool {
@@ -1151,14 +1181,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         return events
     }
 
-    private func enqueue(_ events: [NewEvent]) -> Task<Void, any Error> {
+    private func enqueue(_ events: [NewEvent]) -> Task<Void, any Error> { enqueue { events } }
+
+    /// Writes as a step of the session's log; `build` runs in the step, after every earlier write was applied.
+    private func enqueue(_ build: @escaping @MainActor () throws -> [NewEvent]) -> Task<Void, any Error> {
         // MainActor reentrancy does not serialize async writes. Capture and replace the tail BEFORE awaiting.
         let previous = tail
         let append = appendEvents
         let id = session.id
-        let task = Task {
+        let task = log.run {
             try await previous?.value
             guard self.status != .failed else { throw SessionError.invalidState }
+            let events = try build()
             let stored: [StoredEvent]
             do {
                 stored = try await append(events, id)
@@ -1167,23 +1201,54 @@ public final class SessionController: ACP.AgentConnectionDelegate {
                 if self.failure == nil { self.failure = error }
                 throw error
             }
-            let options = self.reduced.sequence == 0 ? nil : self.reduced.configOptions
-            for event in stored { try self.reduced.apply(event) }
-            if self.reduced.configOptions != options {
-                self.onConfigOptions?(self.reduced.configOptions)
-                // The agent may itself move an option to its pending value.
-                for option in self.reduced.configOptions {
-                    if let value = self.pendingConfig[option.id], option.isCurrent(value) {
-                        self.pendingConfig[option.id] = nil
-                    }
-                }
-            }
-            if let last = stored.last { self.noteActivity(at: last.event.timestamp) }
-            await self.adoptTitle()
+            try await self.receive(stored)
             if self.status == .failed || self.status == .closed { self.publishTranscript() }
         }
         tail = task
         return task
+    }
+
+    /// Applies events stored in the session's log. Events that another writer appended before them and this controller
+    /// has not applied are read first, instead of failing the session (#355); events it applied already are skipped.
+    private func receive(_ stored: [StoredEvent]) async throws {
+        let options = reduced.sequence == 0 ? nil : reduced.configOptions
+        if let first = stored.first, first.sequence > reduced.sequence + 1 {
+            try await load(through: first.sequence - 1)
+        }
+        for event in stored where event.sequence > reduced.sequence { try reduced.apply(event) }
+        if reduced.configOptions != options {
+            onConfigOptions?(reduced.configOptions)
+            // The agent may itself move an option to its pending value.
+            for option in reduced.configOptions {
+                if let value = pendingConfig[option.id], option.isCurrent(value) {
+                    pendingConfig[option.id] = nil
+                }
+            }
+        }
+        if let last = stored.last { noteActivity(at: last.event.timestamp) }
+        await adoptTitle()
+    }
+
+    /// Shows what another writer appended to the session's log, such as a pull request. A failed or closed controller
+    /// keeps what it has; continuing the session reads the log again.
+    func didAppend(_ stored: [StoredEvent]) async {
+        guard status != .failed, status != .closed else { return }
+        do { try await receive(stored) } catch {
+            // Not awaited: closing the connection must not hold the log's step.
+            Task { await self.fail(error) }
+            return
+        }
+        publishTranscript()
+    }
+
+    /// Reads the log in bounded pages after the last applied event, up to `last`.
+    private func load(through last: Int64 = .max) async throws {
+        while reduced.sequence < last {
+            let page = try await store.events(in: session.id, after: reduced.sequence).prefix { $0.sequence <= last }
+            guard let end = page.last else { return }
+            for event in page { try reduced.apply(event) }
+            noteActivity(at: end.event.timestamp)
+        }
     }
 
     func noteActivity(at date: Date) {

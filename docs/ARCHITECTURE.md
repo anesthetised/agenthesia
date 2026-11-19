@@ -674,8 +674,11 @@ Stop also prevents admission while the turn is stopping, even if its tool permis
 earlier; the ACP file request must already have been accepted to finish. The controller continues
 recording agent updates until the prompt response arrives, then permits file requests again when idle.
 
-Roots are the actual session working directory (the worktree directory for Git projects), plus explicit
-`additionalDirectories`. The launch API accepts additional directories and passes the same list to
+Reads go anywhere, writes stay inside the roots ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)):
+`fs/read_text_file` reads a regular UTF-8 text file at any absolute path, symlinks resolving wherever they lead, so
+the app reads any file the user can read and the agent's own permission flow is what guards it. A write outside the
+roots fails with `Writes are limited to the session's folders: <roots>`. Roots are the actual session working
+directory (the worktree directory for Git projects), plus explicit `additionalDirectories`. The launch API accepts additional directories and passes the same list to
 `session/new`; an agent that does not advertise support fails startup rather than silently receiving
 different roots. The draft supplies only the working directory. Additional roots are
 launch parameters, not restored permissions; reopening history enables no provider. A continued session
@@ -683,7 +686,7 @@ does not store or restore additional roots, so its only root is its working dire
 
 `ScopedFileAccess` canonicalizes roots and requested paths, including macOS aliases such as `/var`,
 then enforces directory-component boundaries. Internal symlinks may resolve inside any allowed root;
-outside targets are refused. Reads open the canonical path with `O_NOFOLLOW_ANY`, then require a
+outside targets are refused. The session's reads use the single root `/`, which keeps every other check. Reads open the canonical path with `O_NOFOLLOW_ANY`, then require a
 regular file; `O_NONBLOCK` avoids hanging on a substituted FIFO. Writes open the root and walk parent
 directories without following symlinks, create missing directories, and atomically rename a temporary
 file relative to the retained parent descriptor. Existing ordinary permission bits are preserved.

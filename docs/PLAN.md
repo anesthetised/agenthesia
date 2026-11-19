@@ -279,7 +279,7 @@ the first-run, text-size and VoiceOver items.
 | 1 | #374 fix: the menu bar answers the request it lists | `agent:light` | — |
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
-| 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; a short ADR) | `agent:strong` | — |
+| 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; [ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)) (landed; live agent check open) | `agent:strong` | — |
 | 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) | `agent:strong` | — |
 | 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
 | 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |
@@ -308,6 +308,14 @@ The issues of this milestone touch views, not the session core, so they run besi
 
 Progress:
 
+- #395 (reads outside the session's folders) landed: `SessionFileSystem` reads through a `ScopedFileAccess` whose only
+  root is `/`, so every check but the scope stays, and writes keep the session's roots with the error `Writes are
+  limited to the session's folders: <roots>` ([ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)). Tested
+  with Swift Testing: a read outside the roots and through a symlink that leaves them, a FIFO and a directory refused,
+  a write outside the roots and through a symlink refused with the new message. How Claude, Codex and Kimi use the
+  app's `fs` comes from their installed source, not a live session: only Kimi routes its file tools through it, and its
+  plan-mode plan file is refused. A live check with each agent (does a read outside the working directory ask; which
+  writes memory or plans through the app) needs the owner's consent.
 - Running-app check of #374, #351, #375 and #71 (2026-11-10): one Debug build with the four branches merged, a fresh
   bundle identifier, `CFFIXED_USER_HOME` in a temporary folder, MockAgent, light and dark, scripted with
   `scripts/app-check`. Seen: the menu bar submenu lists the request and Reject answers it; the `Run interrupted`

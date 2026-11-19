@@ -108,6 +108,66 @@ import Testing
         await fixture.controller.close()
     }
 
+    @Test func readsOutsideTheRootsAndThroughSymlinksThatLeaveThem() async throws {
+        let fixture = try await FileSessionFixture()
+        let files = try await fixture.start()
+        let outside = fixture.directory.appending(path: "skills/reference.md")
+        try FileManager.default.createDirectory(
+            at: outside.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "one\ntwo".write(to: outside, atomically: true, encoding: .utf8)
+        let link = fixture.root.appending(path: "skills")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside.deletingLastPathComponent())
+        let response = try await fixture.server.request(
+            ACP.V1.Method.ReadTextFile.self,
+            .init(sessionId: "s", path: outside.path, line: 2, limit: 1)
+        )
+        #expect(response.content == "two")
+        let linked = link.appending(path: "reference.md").path
+        #expect(try await files.readTextFile(at: linked, line: nil, limit: nil, in: "s") == "one\ntwo")
+        await fixture.controller.close()
+    }
+
+    @Test func refusesFIFOsAndDirectoriesOutsideTheRoots() async throws {
+        let fixture = try await FileSessionFixture()
+        let files = try await fixture.start()
+        let fifo = fixture.directory.appending(path: "fifo").path
+        #expect(mkfifo(fifo, 0o600) == 0)
+        for path in [fifo, fixture.directory.path] {
+            do {
+                _ = try await files.readTextFile(at: path, line: nil, limit: nil, in: "s")
+                Issue.record("Read \(path)")
+            } catch let error as RPCError {
+                #expect(error.message == "Not a regular file: \(path)")
+            }
+        }
+        await fixture.controller.close()
+    }
+
+    @Test func refusesWritesOutsideTheRootsAndThroughSymlinksThatLeaveThem() async throws {
+        let fixture = try await FileSessionFixture(additionalRoots: true)
+        let files = try await fixture.start()
+        let outside = fixture.directory.appending(path: "outside")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: fixture.root.appending(path: "link"),
+            withDestinationURL: outside
+        )
+        let message = "Writes are limited to the session's folders: \(fixture.root.path), \(fixture.additional.path)"
+        for path in [outside.appending(path: "file.txt").path, fixture.root.appending(path: "link/file.txt").path] {
+            do {
+                try await files.writeTextFile(at: path, content: "bad", in: "s")
+                Issue.record("Wrote \(path)")
+            } catch let error as RPCError {
+                #expect(error.message == message)
+            }
+        }
+        #expect(!FileManager.default.fileExists(atPath: outside.appending(path: "file.txt").path))
+        #expect(fixture.controller.fileRevision == 0)
+        await fixture.controller.close()
+    }
+
     @Test func rejectsRequestsBeforeStartAfterFailureAndAfterClose() async throws {
         let fixture = try await FileSessionFixture()
         let unstarted = try await SessionFileSystem(controller: fixture.controller)

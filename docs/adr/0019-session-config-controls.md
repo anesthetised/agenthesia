@@ -71,24 +71,33 @@ message came too late, because the queue sent that message as soon as the turn e
 The UI behaviour is in [composer.md](../behavior/composer.md#session-settings) and
 [queue.md](../behavior/queue.md#pausing).
 
-### The agents (from sources, not checked live)
+### The agents (checked live for Claude and Codex, from sources for Kimi)
 
-Read from the installed adapters on 2026-11-19; no agent was run. A live check remains.
+Claude and Codex were checked live on 2026-11-19 with a throwaway ACP client that sends `LiveSession`'s client
+capabilities and logs every ACP message, in a throwaway repository: Claude through `claude-agent-acp` 0.101.0 (Claude
+Code 2.1.311), Codex through `codex-acp` 2.5.0 (codex-cli 0.169.0). Kimi (`kimi-code` 2.5.2) could not be checked: its
+subscription has no access to Kimi Code, so what follows for it is read from its installed adapter only (#420).
 
-- **Claude** (`@agentclientprotocol/claude-agent-acp` 0.101.0): `session/set_config_option` for the mode is not
-  refused during a prompt; config changes of a session are only serialised with each other. The mode goes to the
-  Claude Agent SDK's `query.setPermissionMode`, which the running query consults at its next permission check. A
-  waiting permission request is a pending `session/request_permission` that only its answer or the turn's cancellation
-  (its abort signal) settles; the mode change does not touch it.
-- **Codex** (`@agentclientprotocol/codex-acp` 2.5.0): the mode change is accepted at any time, but it only sets the
-  session's `agentMode`, which the adapter reads when it starts a turn (`turn/start` with that mode's approval policy
-  and sandbox). The running turn keeps its old approval policy and sandbox; the pill nevertheless shows the new mode,
-  because the agent confirms it. A waiting approval is not touched.
-- **Kimi** (`kimi-code` 2.5.2): `setMode` has no check for a running turn (unlike `prompt`, which refuses a second
-  turn). It sets the agent's permission mode service, which the permission policies read at each tool call, so it
-  applies within the running turn; it also enters or leaves plan mode. Waiting approvals are not resolved by it.
+- **Claude** (checked live): `session/set_config_option` for the mode is accepted during a turn (about 10 ms), with a
+  `current_mode_update`, and applies within the turn in both directions: from `default` to `acceptEdits` while a Write
+  request waited, the next write needed no request; from `acceptEdits` back to `default`, the next write asked. The
+  adapter does not refuse it during a prompt (config changes of a session are only serialised with each other) and
+  hands the mode to the Claude Agent SDK's `query.setPermissionMode`.
+- **Codex** (checked live): the change is accepted and confirmed in the response, but there is no
+  `current_mode_update`, and it applies only from the next turn, in both directions. From read-only to
+  workspace-write, the next write in the same turn still asked and the next turn's did not; from workspace-write to
+  read-only, the running turn kept writing without asking. So **Codex cannot be restricted during a turn**, which works
+  against this amendment's motivation. The adapter only sets the session's `agentMode`, which it reads at `turn/start`.
+- **Kimi** (from sources only, not checked live; #420): `setMode` has no check for a running turn (unlike `prompt`,
+  which refuses a second turn). It sets the agent's permission mode service, which the permission policies read at each
+  tool call, so it should apply within the running turn; it also enters or leaves plan mode.
 
-None of the three refuses a mode change during a turn, so the refusal path is covered by tests only.
+A permission request that already waited was kept by both Claude and Codex until it was answered: neither withdrew or
+answered it because of the mode change, and neither sent a cancel. For Kimi this is from sources: its waiting approvals
+are not resolved by `setMode`.
+
+Neither Claude nor Codex refused a mode change during a turn (Kimi's sources show no refusal either), so the refusal
+path is covered by tests only.
 
 ### Alternatives not taken
 
@@ -101,6 +110,12 @@ None of the three refuses a mode change during a turn, so the refusal path is co
 
 ### Consequences
 
-Codex shows a confirmed mode that its running turn does not use yet; the pill cannot tell, because the agent's answer
-is the only signal, so the composer's note says only that the agent decides when the mode applies. A pending change lives only as long as the controller, so a crash or relaunch before the turn ends
-loses it without a trace in the history.
+Codex confirms a mode that its running turn does not use yet, and cannot be restricted during a turn. The pill cannot
+tell, because the agent's answer is the only signal (Claude sends a `current_mode_update`, Codex does not), so the
+composer's generic grey line is the owner's answer: it says only that the agent decides when the mode applies. The
+specific option, a pending pill (`Agent → Read only, next turn`, "This turn keeps the previous mode.") when a mode is
+confirmed without a `current_mode_update`, is parked in #421: it is accurate for Codex today but rests on a heuristic
+that a new adapter version may break, and it reworks the pill.
+
+A pending change lives only as long as the controller, so a crash or relaunch before the turn ends loses it without a
+trace in the history.

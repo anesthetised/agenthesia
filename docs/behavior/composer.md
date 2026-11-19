@@ -101,8 +101,9 @@ instead. The draft before a session exists is described in [session-start.md](se
   running turn depends on the agent.
 - A mode the agent confirms during a turn brings a grey line above the card, until the turn ends: `The agent decides
   when the new mode applies; some apply it from the next turn.` It names no agent. *Why:* the agents differ, and the
-  app cannot tell; read from its adapter's sources, Codex confirms the mode at once but uses it only from the next
-  turn, while Claude and Kimi use it within the running turn (ADR-0019's amendment).
+  app cannot tell; checked live on 2026-11-19, Codex confirms the mode at once but uses it only from the next turn
+  (and sends no `current_mode_update`), while Claude uses it within the running turn; Kimi, from its sources only, does
+  too (ADR-0019's amendment). A specific pending pill for Codex is parked in #421.
 - A mode the agent refuses during a turn becomes its pending change for the next turn, and a grey line above the card
   reads `The agent did not change the mode during the turn; it changes from the next turn.` until the turn ends. It is
   not an error, and the agent's message is not shown. Both grey lines can show at once, the confirmed one first.
@@ -238,6 +239,8 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
 
 ## Changes
 
+- 2026-11-19, #397 (live checks): the note on a mode confirmed during a turn rests on live checks of Claude and Codex
+  (Kimi from sources, #420); a specific pending pill for Codex is parked in #421.
 - 2026-11-19, #397 (review): a grey line after a mode confirmed during a turn; a refusal names every refused change,
   keeps a Send Now draft and clears when the queue resumes; a pending change the agent makes itself is dropped.
 - 2026-11-19, #397: settings can change during a turn: the mode at once, every other option from the next turn as a

@@ -237,7 +237,8 @@ import os
         get { displayed.flatMap { composerDrafts[$0.session.id] } ?? ComposerDraft() }
         set {
             guard let id = displayed?.session.id else { return }
-            composerDrafts[id] = newValue == ComposerDraft() ? nil : newValue
+            // An emptied draft is not kept, with or without the line that an edit became it.
+            composerDrafts[id] = newValue.message == PromptDraft() && newValue.editingQueueID == nil ? nil : newValue
         }
     }
     /// The answers to each session's docked form, by session ID; one is replaced when another form docks. Never
@@ -303,11 +304,31 @@ import os
             find.reveal = .init(item: item)
         }
     }
-    /// The queued message being edited may have been sent while another session was shown.
-    func dropStaleQueueEdit() {
-        guard let id = composer.editingQueueID, displayed?.queuedPrompts.contains(where: { $0.id == id }) != true
-        else { return }
-        composer.finishEditing()
+    /// The session whose queue this window holds while its composer edits one of the queued messages (#390).
+    @ObservationIgnored private weak var queueHold: SessionController?
+    /// What `settleQueueEdit()` depends on; `RootView` calls it whenever this changes.
+    struct QueueEdit: Equatable {
+        let session: ObjectIdentifier
+        let entry: UUID
+        let queued: Bool
+    }
+    var queueEdit: QueueEdit? {
+        guard !closed, let displayed, let id = composer.editingQueueID else { return nil }
+        return .init(
+            session: ObjectIdentifier(displayed),
+            entry: id,
+            queued: displayed.queuedPrompts.contains { $0.id == id }
+        )
+    }
+    /// Holds the displayed session's queue while a queued message is edited here, and releases it once the edit is
+    /// saved, cancelled or no longer shown. An edit whose message was sent anyway becomes an ordinary draft.
+    func settleQueueEdit() {
+        if queueEdit?.queued == false { composer.keepEditAsDraft() }
+        let wanted = queueEdit == nil ? nil : displayed
+        guard wanted !== queueHold else { return }
+        queueHold?.releaseQueue()
+        wanted?.holdQueue()
+        queueHold = wanted
     }
     /// The displayed session's identity, or the launch form while none is shown or still starting.
     var target: WindowTarget {
@@ -1053,6 +1074,7 @@ import os
         closed = true; selection = UUID(); files.close(); review = nil; showingReview = false; merge = nil
         pullRequestDraft = nil
         sessions.setShown(nil, in: self)
+        settleQueueEdit()
     }
 }
 

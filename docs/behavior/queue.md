@@ -67,7 +67,20 @@ sends the queue ([ADR-0028](../adr/0028-empty-draft-sends-queue.md)):
 - Only the text can change: the attachments stay with the message and cannot be removed or added while editing.
 - Return (`Save`) writes the new text; Cancel Edit discards it. Either way the composer gets back the draft it had
   before editing started. ⌘Return and ⇧⌘Return do nothing while editing.
-- If the message is sent while another session is shown, the edit is dropped when the window returns to this session.
+- **An open edit holds the queue.** While a queued message is edited, the end of a turn does not send the queue; the
+  header reads `Queue waits for your edit` (`Queue paused` still wins while the queue is paused). Save or Cancel Edit
+  releases the hold and the queue drains as the turn's end would have, together and with the message in its place.
+  The hold counts the open edits, so with the session in two windows the queue waits for both. Showing another session
+  in the window, closing the window and the end of the session release it; returning to a session whose message is
+  still queued holds it again. The hold is not stored.
+  *Why:* correcting a message queued while the agent works is the main use of the edit, and the turn can end at any
+  moment.
+- The hold does not stop explicit sends: Send Queue Now and Send Whole Queue Now from another window still send. If the
+  edited message is sent anyway (from another window, or by a turn that started before the edit and that Stop did not
+  return), the edit becomes an ordinary draft: the typed text stays, followed by the draft the edit replaced, the sent
+  message's attachments are not kept, and the line `The message was already sent; your edit is now a draft` replaces
+  the editing line until the draft is sent, emptied or another edit begins. The same happens when the message was
+  deleted in another window. No error is shown and nothing is lost.
 
 ## Pausing
 
@@ -106,6 +119,8 @@ captioned `not sent`.
 
 ## Changes
 
+- 2026-11-19, #390: an open edit holds the queue, the header reads `Queue waits for your edit`, and an edit whose
+  message was sent anyway becomes a draft instead of being dropped.
 - 2026-11-09, #340: steering shows the new prompt with a `↪ Steer` label and ends the interrupted turn with a plain
   hairline, instead of the `Interrupted` notice shown when the stop was requested.
 - 2026-11-09, #326: Return never queues while an input form waits; the round button reads `Next` or `Answer` instead,

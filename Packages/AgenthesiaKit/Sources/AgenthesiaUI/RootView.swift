@@ -147,9 +147,11 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            model.dropStaleQueueEdit(); model.closeFind(); showingQuickOpen = false; fileQuery = ""
+            model.closeFind(); showingQuickOpen = false; fileQuery = ""
             model.review = nil; model.showingReview = false
         }
+        // An open queue edit holds its session's queue; a sent one becomes a draft (#390).
+        .onChange(of: model.queueEdit, initial: true) { model.settleQueueEdit() }
         .onChange(of: model.files.sessionID) {
             if model.review?.id != model.files.sessionID { model.review = nil }
         }
@@ -413,6 +415,9 @@ public struct RootView: View {
                     Spacer()
                     Button("Cancel Edit") { model.composer.finishEditing() }
                 }
+            } else if model.composer.editWasSent, form == nil {
+                Text("The message was already sent; your edit is now a draft").font(.caption)
+                    .foregroundStyle(.secondary)
             }
             // While a form waits, the text is its answer and the draft waits in `model.composer` (#326).
             ComposerInput(
@@ -554,6 +559,13 @@ public struct RootView: View {
                 do {
                     try await session.updateQueuedPrompt(editingID, text: draft.message.text)
                     model.composerDrafts[id]?.finishEditing()
+                } catch SessionController.SessionError.invalidState
+                    where !session.queuedPrompts.contains(where: { $0.id == editingID })
+                {
+                    // Sent while saving: the edit becomes a draft, not an error (#390).
+                    if model.composerDrafts[id]?.editingQueueID == editingID {
+                        model.composerDrafts[id]?.keepEditAsDraft()
+                    }
                 } catch { model.errorMessage = error.localizedDescription }
             } else if await owner.submit(draft.message.text, attachments: draft.message.attachments, intent: intent) {
                 // Acceptance is durable; a failed append leaves the composed draft intact. The window may show another

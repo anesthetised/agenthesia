@@ -56,6 +56,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
 
     public var queuedPrompts: [QueuedPrompt] { transcript.queuedPrompts }
     public private(set) var queuePaused = false
+    /// Queued messages open for editing in windows (#390). While any is open, no turn's end drains the queue; closing
+    /// the last one drains it as that would have. Not stored: an edit lives only as long as its window.
+    public private(set) var queueEdits = 0
     /// The minute of the last event written to the log (ADR-0039), for the sidebar's time. It changes at most
     /// once a minute, because `enqueue` runs for every streamed batch and the row has no use for finer resolution.
     public private(set) var lastActivity: Date?
@@ -443,6 +446,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         }
     }
 
+    /// A window started editing a queued message; the queue waits until `releaseQueue()`.
+    public func holdQueue() { queueEdits += 1 }
+
+    /// A window saved, cancelled or left its edit; the last release drains the queue if it is due.
+    public func releaseQueue() {
+        guard queueEdits > 0 else { return }
+        queueEdits -= 1
+        if queueEdits == 0, status == .idle, !queuePaused, !steering {
+            Task { try? await self.coordinateQueue { try await self.drainQueue() } }
+        }
+    }
+
     public func removeQueuedPrompt(_ id: UUID) async throws {
         try await changeQueue { $0.removeAll { $0.id == id } }
     }
@@ -574,7 +589,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         // A config change can enter while idle before a scheduled drain acquires the queue coordinator.
         // Wait for its confirmation rather than rejecting the drain and stranding an unpaused queue.
         _ = await configTask?.result
-        guard status == .idle, !isMerging, !queuePaused, !steering, !reduced.queuedPrompts.isEmpty else { return }
+        guard status == .idle, !isMerging, !queuePaused, !steering, queueEdits == 0, !reduced.queuedPrompts.isEmpty
+        else { return }
         try await dispatch(reduced.queuedPrompts, removingQueued: true)
     }
 

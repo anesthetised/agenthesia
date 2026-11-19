@@ -277,32 +277,187 @@ import Testing
         await fixture.remove()
     }
 
-    @Test func aQueueEditSurvivesSwitchingUnlessItsMessageWasSent() async throws {
+    /// Starts a turn in `owner` that waits for a permission answer, and queues `texts` behind it.
+    private func queue(_ texts: [String], in owner: LiveSession) async throws -> [QueuedPrompt] {
+        let controller = try #require(owner.controller)
+        #expect(await owner.submit("/write note.txt hello", attachments: [], intent: .whenReady))
+        try await waitUntil { controller.status == .running && controller.pendingPermissions.isEmpty == false }
+        for text in texts { #expect(await owner.submit(text, attachments: [], intent: .whenReady)) }
+        return controller.queuedPrompts
+    }
+
+    /// Ends the turn `queue(_:in:)` started.
+    private func endTurn(_ controller: SessionController) async throws {
+        controller.answerPermission(try #require(controller.pendingPermissions.first).id, with: "reject")
+        try await waitUntil { controller.status == .idle }
+        for _ in 0..<20 { await Task.yield() }
+    }
+
+    @Test func aQueueEditSurvivesSwitchingAndBecomesADraftOnceItsMessageIsGone() async throws {
         let fixture = try Fixture()
         let model = fixture.model
         let (first, second) = try await twoSessions(fixture)
         model.show(first)
         let controller = try #require(first.controller)
-        // The turn waits for the permission answer, so the next message stays queued.
-        #expect(await first.submit("/write note.txt hello", attachments: [], intent: .whenReady))
-        try await waitUntil { controller.status == .running && controller.pendingPermissions.isEmpty == false }
-        #expect(await first.submit("queued", attachments: [], intent: .whenReady))
-        let entry = try #require(controller.queuedPrompts.first)
+        let entry = try #require(try await queue(["queued"], in: first).first)
 
         model.composer.message.text = "typed"
         model.composer.edit(entry)
+        model.settleQueueEdit()
         #expect(model.composer.message.text == "queued" && model.composer.editingQueueID == entry.id)
         model.show(second)
-        model.dropStaleQueueEdit()
+        model.settleQueueEdit()
         model.show(first)
-        model.dropStaleQueueEdit()
+        model.settleQueueEdit()
         #expect(model.composer.message.text == "queued" && model.composer.editingQueueID == entry.id)
 
+        // The typed text is kept with the draft it replaced; nothing is lost and no error shows.
         try await controller.removeQueuedPrompt(entry.id)
         model.show(second)
         model.show(first)
-        model.dropStaleQueueEdit()
-        #expect(model.composer.message.text == "typed" && model.composer.editingQueueID == nil)
+        model.settleQueueEdit()
+        #expect(model.composer.message.text == "queued\n\ntyped" && model.composer.editingQueueID == nil)
+        #expect(model.composer.editWasSent && model.errorMessage == nil && controller.queueEdits == 0)
+        // An emptied draft forgets the line; a new edit starts without it.
+        model.composer.message.text = ""
+        #expect(model.composerDrafts[controller.session.id] == nil)
+        await fixture.remove()
+    }
+
+    /// A turn that ends while a queued message is edited must not send its old text (#390).
+    @Test func aTurnThatEndsDuringAnEditLeavesTheMessageQueued() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        let entry = try #require(try await queue(["queued"], in: first).first)
+
+        model.composer.edit(entry)
+        model.settleQueueEdit()
+        try await endTurn(controller)
+        #expect(controller.queuedPrompts.map(\.id) == [entry.id])
+        #expect(controller.queueEdits == 1)
+
+        // Save writes the new text and releases the hold; the queue drains as the turn's end would have.
+        model.composer.message.text = "edited"
+        try await controller.updateQueuedPrompt(entry.id, text: model.composer.message.text)
+        model.composer.finishEditing()
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 0)
+        try await waitUntil { controller.queuedPrompts.isEmpty }
+        let sent = controller.transcript.items.compactMap(\.message).last { $0.localPromptID == entry.id }
+        #expect(sent?.text == "edited")
+        await fixture.remove()
+    }
+
+    @Test func cancelSwitchingAndClosingReleaseTheHold() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, second) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        let entry = try #require(try await queue(["queued"], in: first).first)
+        model.composer.edit(entry)
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 1)
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 1)
+
+        // Another session in the window releases it; coming back while the message is queued holds again.
+        model.show(second)
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 0)
+        model.show(first)
+        model.settleQueueEdit()
+        #expect(controller.queueEdits == 1)
+        model.close()
+        #expect(controller.queueEdits == 0)
+        await fixture.remove()
+
+        let cancelling = try Fixture()
+        let (owner, _) = try await twoSessions(cancelling)
+        cancelling.model.show(owner)
+        let session = try #require(owner.controller)
+        cancelling.model.composer.edit(try #require(try await queue(["queued"], in: owner).first))
+        cancelling.model.settleQueueEdit()
+        try await endTurn(session)
+        #expect(session.queuedPrompts.count == 1)
+        cancelling.model.composer.finishEditing()
+        cancelling.model.settleQueueEdit()
+        #expect(session.queueEdits == 0)
+        try await waitUntil { session.queuedPrompts.isEmpty }
+        await cancelling.remove()
+    }
+
+    @Test func twoWindowsEditingTwoMessagesHoldTheQueueUntilBothFinish() async throws {
+        let fixture = try Fixture()
+        let (first, _) = try await twoSessions(fixture)
+        let other = SessionWindowModel(sessions: fixture.sessions, catalog: nil)
+        defer { other.close() }
+        let controller = try #require(first.controller)
+        let entries = try await queue(["one", "two"], in: first)
+        for (model, entry) in zip([fixture.model, other], entries) {
+            model.show(first)
+            model.composer.edit(entry)
+            model.settleQueueEdit()
+        }
+        #expect(controller.queueEdits == 2)
+        try await endTurn(controller)
+        fixture.model.composer.finishEditing()
+        fixture.model.settleQueueEdit()
+        for _ in 0..<20 { await Task.yield() }
+        #expect(controller.queueEdits == 1 && controller.queuedPrompts.count == 2)
+        other.composer.finishEditing()
+        other.settleQueueEdit()
+        try await waitUntil { controller.queuedPrompts.isEmpty }
+        await fixture.remove()
+    }
+
+    @Test func aMessageSentFromAnotherWindowTurnsTheEditIntoADraft() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        let entry = try #require(try await queue(["queued"], in: first).first)
+        model.composer.edit(entry)
+        model.settleQueueEdit()
+        model.composer.message.text = "corrected"
+
+        // Send Queue Now in another window: the hold does not block an explicit send.
+        #expect(await first.submit("", attachments: [], intent: .now))
+        try await waitUntil { controller.queuedPrompts.isEmpty }
+        model.settleQueueEdit()
+        #expect(model.composer.message == PromptDraft(text: "corrected"))
+        #expect(model.composer.editingQueueID == nil && model.composer.editWasSent)
+        #expect(controller.queueEdits == 0 && model.errorMessage == nil)
+        model.composer.edit(entry)
+        #expect(!model.composer.editWasSent)
+        await fixture.remove()
+    }
+
+    @Test func theWindowHoldsTheQueueWhileItsComposerEdits() async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, second) = try await twoSessions(fixture)
+        model.show(first)
+        let controller = try #require(first.controller)
+        let entry = try #require(try await queue(["queued"], in: first).first)
+        _ = NSApplication.shared
+        let window = OffscreenWindow(size: .init(width: 1000, height: 700))
+        window.contentView = NSHostingView(rootView: RootView(model: model))
+        window.orderFront(nil)
+        defer { window.close() }
+
+        model.composer.edit(entry)
+        try await waitUntil { controller.queueEdits == 1 }
+        model.show(second)
+        try await waitUntil { controller.queueEdits == 0 }
+        model.show(first)
+        try await waitUntil { controller.queueEdits == 1 }
+        model.composer.finishEditing()
+        try await waitUntil { controller.queueEdits == 0 }
         await fixture.remove()
     }
 

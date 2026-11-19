@@ -424,7 +424,13 @@ unchanged. `Origin.wrapped` (pure) marks the content of any other origin as anot
 the agent, without naming that session; `Origin.label` names the source in the transcript (a labelled card row instead
 of the user's bubble) and in the sidebar's reason, resolved by `SessionManager.originLabel` from the sessions open in
 this launch. Up in an empty composer recalls the last entry for text editing without
-rebuilding its attachments. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
+rebuilding its attachments. An open edit holds the queue: `SessionWindowModel.settleQueueEdit()`, run by `RootView`
+whenever `queueEdit` (the displayed controller, the entry and whether it is still queued) changes and by `close()`,
+calls `SessionController.holdQueue()` for the displayed session while its composer edits a queued entry and
+`releaseQueue()` once it saves, cancels, shows another session or closes. `queueEdits` counts the holds in memory (one
+per window, never stored); `drainQueue` does nothing while it is nonzero, and the last release schedules the drain a
+finished turn would have. Explicit sends ignore it. An edit whose entry left the queue becomes a draft
+(`ComposerDraft.keepEditAsDraft`). Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
 Saved entries remain paused after Continue; an empty queue resumes normal sending
 ([ADR-0029](adr/0029-empty-queue-recovery.md)). Explicitly sending the last queued entry also clears
 the pause. An ended or failed established session also offers Continue, which creates a new connection; failed connections stay closed. Continue requires a persisted session

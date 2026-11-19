@@ -11,11 +11,15 @@ struct PromptQueue: View {
     let onEdit: (QueuedPrompt) -> Void
     let onError: (any Error) -> Void
 
+    /// A pause needs Resume, so it is named before an open edit's hold (#390).
+    private var header: String {
+        session.queuePaused ? "Queue paused" : session.queueEdits > 0 ? "Queue waits for your edit" : "Queued messages"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(caption ?? (session.queuePaused ? "Queue paused" : "Queued messages")).font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(caption ?? header).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if session.queuePaused, editable {
                     Button("Resume Queue", systemImage: "play.fill", action: resume)

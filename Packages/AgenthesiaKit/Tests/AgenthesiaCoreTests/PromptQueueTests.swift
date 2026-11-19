@@ -216,6 +216,47 @@ private actor QueueGate {
         await session.close()
     }
 
+    @Test func anOpenEditHoldsTheQueueUntilTheLastIsReleased() async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        session.releaseQueue()
+        #expect(session.queueEdits == 0)
+        try await session.submit([.init(text: "start")])
+        await connection.waitForPrompts(1)
+        try await session.submit([.init(text: "queued")])
+        session.holdQueue()
+        session.holdQueue()
+        await connection.finish(.endTurn)
+        while session.status != .idle { await Task.yield() }
+        // A resume while held does not drain either, and a fresh Return queues behind the held entry.
+        try await session.stop()
+        try await session.resumeQueue()
+        try await session.submit([.init(text: "later")])
+        session.releaseQueue()
+        for _ in 0..<20 { await Task.yield() }
+        #expect(session.queuedPrompts.count == 2 && session.status == .idle)
+        #expect(await connection.prompts.count == 1)
+        session.releaseQueue()
+        await connection.waitForPrompts(2)
+        #expect(await connection.prompts.last == [.init(text: "queued"), .init(text: "later")])
+        #expect(session.queuedPrompts.isEmpty && session.queueEdits == 0)
+        await session.close()
+    }
+
+    @Test func anExplicitSendIgnoresTheHold() async throws {
+        let (session, connection, _, directory) = try await live()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await session.submit([.init(text: "start")])
+        await connection.waitForPrompts(1)
+        try await session.submit([.init(text: "queued")])
+        session.holdQueue()
+        try await session.submit([], intent: .now)
+        await connection.waitForPrompts(2)
+        #expect(await connection.prompts.last == [.init(text: "queued")])
+        #expect(session.queuedPrompts.isEmpty)
+        await session.close()
+    }
+
     @Test func manualStopAndRefusalRequireExplicitResume() async throws {
         let (session, connection, _, directory) = try await live()
         defer { try? FileManager.default.removeItem(at: directory) }

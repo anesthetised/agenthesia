@@ -7,7 +7,8 @@ import Persistence
 @MainActor final class SessionLog {
     let sessionID: UUID
     private let store: PersistenceStore
-    private var tail: Task<Void, any Error>?
+    /// The last step reserved.
+    private(set) var tail: Task<Void, any Error>?
     /// The controller that keeps this session's transcript; it is handed what other writers append.
     weak var controller: SessionController?
 

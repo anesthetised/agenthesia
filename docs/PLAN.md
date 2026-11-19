@@ -197,10 +197,16 @@ Progress:
   keeps one per session id for the controller and its own appends (worktree outcomes, pull requests), and
   `SessionLibrary.record` is gone. A controller hands another writer's events to its transcript at once, reads events
   it missed from the store instead of failing with `outOfOrder`, loads history as a step of the log and builds the
-  reopen baseline inside its step. `PersistenceStore.append(_ batches:)` writes to several sessions' logs in one
+  reopen baseline inside its step, after reading what was written to the store past the log; a foreign event it cannot
+  apply fails it at once. The manager drops a session's log when the session is deleted. Queue snapshots are still
+  built before their write step, so #357 moves them into the step before deliveries change the queue.
+  `PersistenceStore.append(_ batches:)` writes to several sessions' logs in one
   transaction, for #317, which still has to add a step that joins two sessions' logs. Tested with Swift Testing (an
   append during Continue, with and without the log; a write in flight while another caller appends; a failed
-  controller; the two-session transaction), each test seen failing with the fix taken out. No event format or stored
+  controller; the controller and the manager sharing one order; history waiting for an earlier step; a baseline after
+  a pending step and after a write past the log; a foreign event that cannot be applied; the two-session transaction),
+  each test seen failing with the fix taken out. The independent review (Opus) found nothing to fix before merging; its
+  suggestions are addressed or noted on #357. No event format or stored
   data changed.
 
 - #352 (the list and the Working shelf) is in review: `SessionSidebar.Kind.active` replaced `needsYou`; the list holds

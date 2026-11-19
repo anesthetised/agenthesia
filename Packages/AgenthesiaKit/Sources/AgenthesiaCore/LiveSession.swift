@@ -55,10 +55,9 @@ public final class LiveSession {
     }
     /// Labels a turn the user did not send (ADR-0049); `SessionManager` names the source session.
     @ObservationIgnored public var originLabel: (QueuedPrompt.Origin) -> String? = { $0.label(title: nil, agent: nil) }
-    /// The log of a session, which `SessionManager` shares with its own appends (#355).
-    @ObservationIgnored var sessionLog: (UUID, PersistenceStore) -> SessionLog = {
-        SessionLog(sessionID: $0, store: $1)
-    }
+    /// The log of a session, which `SessionManager` shares with its own appends (#355); without one the controller
+    /// is its session's only writer.
+    @ObservationIgnored var sessionLog: (UUID) async throws -> SessionLog? = { _ in nil }
     /// Turns finished when the user last saw a result on screen (ADR-0026's amendment). In memory only.
     private var seenTurns = 0
     /// The windows that show this session's end to the user (`setWatched`). In memory only.
@@ -281,11 +280,8 @@ public final class LiveSession {
                     store: store
                 )
             case .saved(let session):
-                controller = try await SessionController.history(
-                    id: session.id,
-                    store: store,
-                    log: sessionLog(session.id, store)
-                )
+                let log = try await sessionLog(session.id)
+                controller = try await SessionController.history(id: session.id, store: store, log: log)
                 if let outcome = controller.transcript.worktreeOutcome {
                     throw LaunchError(message: "\(outcome.notice) The session cannot continue.")
                 }
@@ -606,6 +602,7 @@ public final class LiveSession {
             name: directory == nil ? ProjectRecord.scratchName : nil
         )
         let install = try await library.install(agent)
+        let log = try await sessionLog(id)
         guard !isClosed else { throw CancellationError() }
         return SessionController(
             session: SessionRecord(
@@ -619,7 +616,7 @@ public final class LiveSession {
                 fallbackUpstream: workspace.fallbackUpstream
             ),
             store: store,
-            log: sessionLog(id, store),
+            log: log,
             additionalDirectories: additionalDirectories.map { $0.path(percentEncoded: false) },
             configHints: configHints
         )

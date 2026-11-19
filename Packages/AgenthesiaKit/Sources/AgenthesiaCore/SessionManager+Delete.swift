@@ -73,6 +73,7 @@ extension SessionManager {
         }
         for owner in owners where owner.sessionID == id { await end(owner) }
         try await library.store().deleteSession(id)
+        logs[id] = nil
         deletedIDs.insert(id)
     }
 

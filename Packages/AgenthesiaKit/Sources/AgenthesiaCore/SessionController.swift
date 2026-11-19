@@ -312,8 +312,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case .unavailable: throw SessionError.cannotReopen
         }
         // Close what an earlier run left open, so the new baseline starts with no turn or request pending. It is
-        // built in its write, after whatever another writer appended while the agent reopened the session.
+        // built in its write, after whatever another writer appended while the agent reopened the session, also one
+        // that wrote to the store past the log.
         try await begin { [self] in
+            try await load()
             var events: [NewEvent] = []
             if let turn = reduced.activeTurn {
                 events.append(
@@ -335,7 +337,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     /// Enqueues the baseline and all early updates without yielding, before accepting live writes.
-    private func begin(_ baseline: @escaping @MainActor () throws -> [NewEvent]) async throws {
+    private func begin(_ baseline: @escaping @MainActor () async throws -> [NewEvent]) async throws {
         var updates: [NewEvent] = []
         for (id, update, raw) in startupUpdates where id == session.agentSessionID {
             updates += try updateEvents(update, raw: raw)
@@ -343,7 +345,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         startupUpdates.removeAll()
         startupBytes = 0
         recording = true
-        let task = enqueue { try baseline() + updates }
+        let task = enqueue { try await baseline() + updates }
         do { try await task.value } catch { throw await fail(error) }
         guard status == .starting else { throw SessionError.invalidState }
         status = .idle
@@ -1184,7 +1186,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     private func enqueue(_ events: [NewEvent]) -> Task<Void, any Error> { enqueue { events } }
 
     /// Writes as a step of the session's log; `build` runs in the step, after every earlier write was applied.
-    private func enqueue(_ build: @escaping @MainActor () throws -> [NewEvent]) -> Task<Void, any Error> {
+    private func enqueue(_ build: @escaping @MainActor () async throws -> [NewEvent]) -> Task<Void, any Error> {
         // MainActor reentrancy does not serialize async writes. Capture and replace the tail BEFORE awaiting.
         let previous = tail
         let append = appendEvents
@@ -1192,7 +1194,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         let task = log.run {
             try await previous?.value
             guard self.status != .failed else { throw SessionError.invalidState }
-            let events = try build()
+            let events = try await build()
             let stored: [StoredEvent]
             do {
                 stored = try await append(events, id)
@@ -1234,8 +1236,10 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     func didAppend(_ stored: [StoredEvent]) async {
         guard status != .failed, status != .closed else { return }
         do { try await receive(stored) } catch {
-            // Not awaited: closing the connection must not hold the log's step.
-            Task { await self.fail(error) }
+            // Failed at once, so later steps refuse to write; closing is not awaited, since it must not hold the
+            // log's step.
+            markFailed(error)
+            Task { await self.closeAfterFailure() }
             return
         }
         publishTranscript()
@@ -1282,6 +1286,13 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     /// Keep the first cause when closing the connection produces follow-up errors.
     @discardableResult private func fail(_ error: any Error) async -> any Error {
         guard status != .failed, status != .closed else { return failure ?? error }
+        let cause = markFailed(error)
+        await closeAfterFailure()
+        return cause
+    }
+
+    /// The failed state without the closing, which the caller does next.
+    @discardableResult private func markFailed(_ error: any Error) -> any Error {
         let cause = failure ?? error
         failure = cause
         queuePaused = true
@@ -1292,9 +1303,12 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         startupUpdates.removeAll()
         startupBytes = 0
         publishTranscript()
+        return cause
+    }
+
+    private func closeAfterFailure() async {
         await connection?.close()
         await fileSystem?.close()
         connection = nil
-        return cause
     }
 }

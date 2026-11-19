@@ -1195,16 +1195,22 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
    per session id and hands it to the session's controller and to its own appends (`SessionManager.append`: a
    worktree's outcome, a pull request), so nothing appends behind a loaded controller. The controller chains its own
    append and reduction steps (`tail`) through the log; a step that another writer reserved stores its events and
-   hands them to the log's controller (`didAppend`), which shows them unless it failed or closed. History loads as a
-   step of the log, and the reopen baseline is built inside its step, so it sees what another writer appended while
-   the agent reopened the session. A controller whose next stored event does not follow the last one it applied reads
-   the missing events from the store instead of failing with `outOfOrder`. A notification handler awaits its commit
+   hands them to the log's controller (`didAppend`), which shows them unless it failed or closed; an event it cannot
+   apply fails it at once, so later steps refuse, and the connection closes outside the step. These events reach only
+   the transcript: the controller's own state (`status`, the running turn, `queuePaused`, pending requests) does not
+   react to them. History loads as a step of the log, and the reopen baseline is built inside its step after reading
+   anything written to the store past the log, so it sees what another writer appended while the agent reopened the
+   session. A controller whose next stored event does not follow the last one it applied reads the missing events from
+   the store instead of failing with `outOfOrder`. A notification handler awaits its commit
    and reduction before the connection dispatches the next message. A permission resolution is enqueued synchronously,
    so close, which awaits the tail, drains it with the other writes. Appends reach `Persistence` in ACP arrival order
    because the controller awaits them in that order; the store only guarantees distinct sequences.
 3. *The queue coordinator.* Prompt-queue operations (`submit`, resume, send-now, edits, drain) run through
    `SessionController.coordinateQueue`, which chains them one at a time on a second task (`queueTask`). Before building a queue snapshot it waits for the session's log to
-   settle (`SessionLog.settled`), so lifecycle writes and other writers that arrive outside the coordinator cannot make it publish a stale snapshot. A config
+   settle (`SessionLog.settled`), so writes reserved before it, lifecycle writes and other writers' included, are in
+   the snapshot. The snapshot is still built before its own write is reserved, and a queue operation may suspend in
+   between, so a queue change another writer reserves meanwhile could be overwritten; no other writer changes the queue
+   yet, and #357 builds queue snapshots inside the write step before deliveries do. A config
    change that enters while idle, or a mode change during a turn, is awaited before a scheduled drain. Changes of other
    options during a turn wait in `pendingConfig` (memory only, [ADR-0019's
    amendment](adr/0019-session-config-controls.md)); the end of a turn, also by Stop, schedules a coordinated

@@ -90,6 +90,7 @@ extension WorktreeDiscardTests {
         // A merge whose removal failed leaves its worktree; deleting removes it too.
         try await manager.delete(merged)
         #expect(try await isGone(merged, in: manager))
+        #expect(manager.logs[merged.id] == nil)
         #expect(!FileManager.default.fileExists(atPath: merged.workingDirectory))
     }
 

@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import Observation
 import Persistence
 import SwiftUI
 import TestSupport
@@ -134,6 +135,57 @@ import Testing
     }
 
     // MARK: - Support
+
+    /// A pending label long enough to push pills into `…`; once it is short again, applied or dropped, every pill is
+    /// back in the row, in the same hosting view and at the same width.
+    @Test(arguments: [true, false]) func pillsComeBackWhenAPendingLabelShrinks(applied: Bool) async throws {
+        let choices = ACP.ConfigSelectOptions.flat([
+            .init(value: "medium", name: "Medium"), .init(value: "high", name: "High"),
+        ])
+        func options(effort: String) -> [ACP.ConfigOption] {
+            [
+                .init(
+                    id: "effort",
+                    name: "Effort",
+                    category: .thoughtLevel,
+                    value: .select(currentValue: effort, options: choices)
+                ),
+                .init(id: "fast", name: "Fast mode", value: .boolean(currentValue: false)),
+            ]
+        }
+        let state = RowState(options: options(effort: "medium"))
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: StateRow(state: state).frame(width: 180, alignment: .leading))
+        let window = OffscreenWindow(size: .init(width: 700, height: 100))
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        func settle() async throws {
+            try await Task.sleep(for: .milliseconds(100))
+            for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        }
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" } == ["Medium"])
+        state.pending = ["effort": .select("high")]
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" }.last == "…")
+        if applied { state.options = options(effort: "high") }
+        state.pending = [:]
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" } == [applied ? "High" : "Medium"])
+    }
+
+    @MainActor @Observable final class RowState {
+        var options: [ACP.ConfigOption]
+        var pending: [ACP.ConfigOptionID: ACP.ConfigValue] = [:]
+        init(options: [ACP.ConfigOption]) { self.options = options }
+    }
+
+    /// Updates one row in place, as a session's controls do.
+    private struct StateRow: View {
+        let state: RowState
+        var body: some View { ConfigControlRow(options: state.options, pending: state.pending) { _, _ in } }
+    }
 
     /// The titles of the row's menus, and whether they all lie inside it.
     private func labels(of view: some View, width: CGFloat) async throws -> (labels: [String], fits: Bool) {

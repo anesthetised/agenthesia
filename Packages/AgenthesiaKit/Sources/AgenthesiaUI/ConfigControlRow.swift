@@ -30,6 +30,9 @@ struct ConfigControlRow: View {
                 row(Self.split(shown, overflowing: count))
             }
         }
+        // `ViewThatFits` re-measures the splits it does not show only when its size changes, so a label that shrank
+        // (a pending change applied or dropped) would leave pills in `…`; new labels make a new layout.
+        .id(shown.map(title))
         .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: shown.map(\.id))
     }
 
@@ -136,6 +139,13 @@ struct ConfigControlRow: View {
 
     private func toggleTitle(_ option: ACP.ConfigOption) -> String {
         ConfigSelectMenu.label(option.name, pending: pendingName(option))
+    }
+
+    /// What the option's pill reads.
+    private func title(_ option: ACP.ConfigOption) -> String {
+        guard case .select(_, let choices) = option.value else { return toggleTitle(option) }
+        let value = ConfigSelectMenu.valueName(of: selected(option), in: choices) ?? placeholder
+        return ConfigSelectMenu.label(value, pending: pendingName(option))
     }
 }
 

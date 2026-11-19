@@ -5,6 +5,10 @@ import SwiftUI
 struct AgenthesiaApp: App {
     @NSApplicationDelegateAdaptor(SessionApplicationDelegate.self) private var lifecycle
 
+    #if DEBUG
+        init() { RenderingLabView.failUnlessAutorunStarts() }
+    #endif
+
     var body: some Scene {
         WindowGroup(for: WindowTarget.self) { $target in
             RootView(sessions: lifecycle.sessions, catalog: .shared, target: $target)
@@ -17,6 +21,9 @@ struct AgenthesiaApp: App {
         }
         #if DEBUG
             .commands { RenderingLabCommands() }
+            // An unattended lab run (`AGENTHESIA_LAB_RUNS`) shows only the Rendering Lab and restores no window.
+            .defaultLaunchBehavior(RenderingLabView.isAutorun ? .suppressed : .automatic)
+            .restorationBehavior(RenderingLabView.isAutorun ? .disabled : .automatic)
         #endif
 
         MenuBarExtra {
@@ -34,6 +41,7 @@ struct AgenthesiaApp: App {
                 RenderingLabView()
             }
             .defaultLaunchBehavior(RenderingLabView.isAutorun ? .presented : .automatic)
+            .restorationBehavior(RenderingLabView.isAutorun ? .disabled : .automatic)
         #endif
     }
 }

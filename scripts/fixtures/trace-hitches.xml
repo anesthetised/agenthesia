@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- A hand-made `xctrace export` of a hitches table, recorded twice: refs reach ids in other rows and in the other table. -->
+<trace-query-result>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[7]'><schema name="hitches"><col><mnemonic>start</mnemonic><name>Start</name><engineering-type>start-time</engineering-type></col><col><mnemonic>duration</mnemonic><name>Duration</name><engineering-type>duration</engineering-type></col><col><mnemonic>process</mnemonic><name>Process</name><engineering-type>process</engineering-type></col><col><mnemonic>narrative-description</mnemonic><name>Description</name><engineering-type>narrative</engineering-type></col></schema>
+<row><start-time id="1" fmt="00:01.000.000">1000000000</start-time><duration id="2" fmt="25.00 ms">25000000</duration><process id="3" fmt="Agenthesia (4242)"><pid id="4" fmt="4242">4242</pid></process><narrative id="5" fmt="Expensive commit">Expensive commit</narrative></row>
+<row><start-time id="6" fmt="00:02.000.000">2000000000</start-time><duration id="7" fmt="8.33 ms">8333333</duration><process ref="3"/><sentinel/></row>
+<row><start-time id="8" fmt="00:03.000.000">3000000000</start-time><duration id="9" fmt="50.00 ms">50000000</duration><process id="10" fmt="WindowServer (100)"><pid id="11" fmt="100">100</pid></process><narrative ref="5"/></row>
+</node>
+<node xpath='//trace-toc[1]/run[1]/data[1]/table[8]'><schema name="hitches"><col><mnemonic>start</mnemonic><name>Start</name><engineering-type>start-time</engineering-type></col><col><mnemonic>duration</mnemonic><name>Duration</name><engineering-type>duration</engineering-type></col><col><mnemonic>process</mnemonic><name>Process</name><engineering-type>process</engineering-type></col><col><mnemonic>narrative-description</mnemonic><name>Description</name><engineering-type>narrative</engineering-type></col></schema>
+<row><start-time ref="1"/><duration ref="2"/><process ref="3"/><narrative ref="5"/></row>
+<row><start-time id="12" fmt="00:04.000.000">4000000000</start-time><duration id="13" fmt="16.67 ms">16666667</duration><process ref="3"/><sentinel/></row>
+</node></trace-query-result>

@@ -11,6 +11,19 @@
         /// Whether the app was launched to run scenarios unattended (see ``RenderingLab/autorun()``).
         public static var isAutorun: Bool { RenderingLab.autorunScenarios != nil }
 
+        /// Ends an unattended run whose lab did not start within `limit`, so that a runner fails at once with a
+        /// message instead of waiting for its timeout behind a window that is not the lab.
+        public static func failUnlessAutorunStarts(within limit: Duration = .seconds(30)) {
+            guard isAutorun else { return }
+            Task {
+                try? await Task.sleep(for: limit)
+                guard !RenderingLab.didStartAutorun else { return }
+                let message = "AGENTHESIA_LAB_RUNS: the Rendering Lab did not start within \(limit); nothing ran\n"
+                FileHandle.standardError.write(Data(message.utf8))
+                exit(3)
+            }
+        }
+
         @State private var lab = RenderingLab()
 
         public init() {}
@@ -144,17 +157,18 @@
         /// TextKit relayout the old text.
         private(set) var content = NSView()
         private let monitor = FrameMonitor()
-        private var didAutorun = false
+        /// Whether a lab window started the unattended run; one run per process.
+        static var didStartAutorun = false
 
         /// Runs from `AGENTHESIA_LAB_RUNS`, such as `S1:A,S2:B,S4:lines+colors`: a scenario and its prototype, or
-        /// for S4 the SourceView flags.
+        /// for S4 the SourceView flags; S12 also takes its time in seconds, `S12:App:60`.
         static let autorunScenarios = ProcessInfo.processInfo.environment["AGENTHESIA_LAB_RUNS"]?
             .split(separator: ",").map(String.init)
 
         /// Runs the scenarios from the environment, prints the results as Markdown and quits.
         func autorun() async {
-            guard let scenarios = Self.autorunScenarios, !didAutorun else { return }
-            didAutorun = true
+            guard let scenarios = Self.autorunScenarios, !Self.didStartAutorun else { return }
+            Self.didStartAutorun = true
             // Launched from a terminal, the app stays behind it, and a window in the back gets a throttled display
             // link: the first scenario measured that until the app was brought forward and given time to settle.
             NSApp.activate()
@@ -173,6 +187,7 @@
                 case "S11": await runStream(toolUpdates: true, history: 10_000, thoughts: true, turns: true)
                 case "S2": await runScroll()
                 case "S5": await runAppearance()
+                case "S12": await showForWheel(seconds: parts.count > 2 ? Double(parts[2]) ?? 60 : 60)
                 default:
                     let flags = argument.split(separator: "+")
                     lineNumbers = flags.contains("lines")
@@ -346,6 +361,31 @@
             ]) { _, new in new }
         }
 
+        /// S12: S2's 10 000 items from the end, in a window of a session's transcript column, for `seconds` while
+        /// `scripts/app-check/wheel-scroll.sh` scrolls it with wheel or trackpad events under Instruments (#396).
+        /// The scroll goes through AppKit's event handling, which S2 bypasses. Nothing is measured in the app.
+        func showForWheel(seconds: Double) async {
+            var generator = TranscriptGenerator(seed: 2)
+            let view = prototype.make()
+            Self.loadGrammars()
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1240, height: 760),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.title = "S12 Wheel"
+            window.contentView = view.view
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            view.show(LabTranscript(items: generator.items(10_000)))
+            view.view.layoutSubtreeIfNeeded()
+            if let scrollView = view.scrollView { scrollToEnd(scrollView) }
+            try? await Task.sleep(for: .seconds(seconds))
+            window.close()
+        }
+
         /// S3: show a 200-item transcript to select and copy text by hand.
         func showForSelection() async {
             var generator = TranscriptGenerator(seed: 1)
@@ -460,11 +500,15 @@
 
         private func present(_ prototype: any TranscriptPrototype) async -> any TranscriptPrototype {
             isRunning = true
-            // Grammars load once per app, ~230 ms the first time each: not part of opening a transcript.
-            for language in CodeLanguage.allCases { _ = Highlighter().highlight("x", language: language) }
+            Self.loadGrammars()
             content = prototype.view
             while prototype.view.window == nil { try? await Task.sleep(for: .milliseconds(10)) }
             return prototype
+        }
+
+        /// Grammars load once per app, ~230 ms the first time each: not part of opening a transcript.
+        private static func loadGrammars() {
+            for language in CodeLanguage.allCases { _ = Highlighter().highlight("x", language: language) }
         }
 
         /// Calls `onFrame` on every frame until it returns `false` and adds the frame times to the results.

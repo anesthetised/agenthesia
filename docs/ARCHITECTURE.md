@@ -108,8 +108,7 @@ environment (`LiveSession` passes the agent command's, resolved once per launch;
 limit, then creates the worktree from the tracking ref instead of `HEAD`
 ([ADR-0047](adr/0047-worktrees-from-the-fetched-upstream.md)). Without an upstream it starts from `HEAD`; when the fetch
 fails or is stopped, it starts from `HEAD` and stores the upstream's name in the session's nullable `fallbackUpstream`
-column (migration `v7-session-fallback-upstream`), which the inspector shows. The draft's Checkout label names the
-upstream (`SessionWorkspace.worktreeBase`). The new worktree's actual initial HEAD is retained as the session's
+column (migration `v7-session-fallback-upstream`), which the inspector shows ([behavior](behavior/session-start.md#checkout)). The new worktree's actual initial HEAD is retained as the session's
 `baseRevision` before launching the agent. The branch checked out in the selected checkout at that moment is retained
 as `baseBranch` (ADR-0032), even when the worktree started from its upstream; a detached `HEAD` records none, and such
 a session cannot be merged, only discarded. Non-Git directories are used directly; bare, broken (including a dangling `.git` link), or
@@ -129,10 +128,10 @@ fetch; an unborn `HEAD` fails. No column marks it: `SessionManager.worksInProjec
 revision whose working directory lies outside the worktrees root, a location `SessionWorkspace.Worktree` never matches,
 so merge, discard, push, Open Pull Request… and Delete Session's file removal all refuse or skip it; deleting one
 deletes only its history. Non-Git and scratch sessions have no base revision, so the test never reads them as such.
-`SessionWindowModel.displaysProjectFolderSession` gives Merge and Discard Worktree… the help text `This session works
-in the project folder` (inspector, review footer, Session menu), titles Changes `Changes since the session started`, and
-opens `SessionReview` with `inProjectFolder`, which drops the base branch so the review compares with `baseRevision`:
-the merge base with the checked-out branch would be the checkout itself.
+`SessionWindowModel.displaysProjectFolderSession` marks such a session for the views (what they then show is in
+[inspector.md](behavior/inspector.md) and [merge.md](behavior/merge.md)) and opens `SessionReview` with
+`inProjectFolder`, which drops the base branch so the review compares with `baseRevision`: the merge base with the
+checked-out branch would be the checkout itself.
 
 Sessions without a project ([ADR-0048](adr/0048-sessions-without-a-project.md)) start with a nil directory:
 `SessionManager.start(directory: nil, …)` passes its `scratchRoot` (default `SessionWorkspace.defaultScratchRoot`,
@@ -146,40 +145,35 @@ only filesystem root of `SessionFileSystem`; the project root is never added. `S
 creates the project row once, named `ProjectRecord.scratchName` (`No project`). No column marks it: the project is
 recognised by its well-known root, `ProjectRecord.isScratch(scratchPath:)` against `SessionManager.scratchPath`
 (`SessionWorkspace.scratchProjectPath`), so no migration was needed. `ProjectRecord.recent` skips it, so the draft's
-project menu and default never offer it; `SessionWindowModel.isScratch` drives `ProjectBadge.mark` (`.dashed`, drawn as
-`square.dashed`), hides Discard Worktree… and Review, and the inspector's Changes text. Merge and Discard are refused
+project menu and default never offer it; `SessionWindowModel.isScratch` drives `ProjectBadge.mark` (`.dashed`) and what the views hide
+([behavior](behavior/session-start.md#without-a-project)). Merge and Discard are refused
 anyway, since such a session has no base revision and no `Worktree`. The draft's switch is
 `SessionWindowModel.draftWithoutProject`; Send clears it, and a failed start brings it back with the picks.
 `LiveSession.removeUnstartedWorktree` also removes the folder of a start that failed before its record existed, through
 `SessionWorkspace.removeEmptyScratch`, and only while the folder is empty.
 
-New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md)), which replaced the
-launch form. A window without a session (and New Session, ⇧⌘N) shows `SessionDraftView`: the heading "What should
-we build in <project>?" (`DraftHeading`, the project a menu; a second line through `ViewThatFits` when narrow) over
-the centered composer card, whose chips pick the agent and name the checkout, with the agent's cached mode, model and
-effort as pills beside Attach. Send runs inside `withAnimation`, and `RootView` removes the draft with
-`DraftSendTransition`, which sets the `draftLeaving` environment value so the card moves to the bottom edge as it
-fades. The draft's state lives in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The
-project menu lists `ProjectRecord.recent` (by each project's newest session), marked by `isDraftProject`, and Choose
-Folder…; with nothing picked, the project of the newest session is used, named by `draftProjectName`. While
-`draftNeedsAgent` (no agent choice and no custom command), the card shows `Add Agent…` (`ManageAgentsButton`) in place
-of the text field. The Agent chip lists `AgentCatalog.choices` (the newest installed version of each
-agent, then local agents), Custom Command… (`CustomCommandSheet`, parsed by `RootView.launchCommand`) and Manage
-Agents…; with nothing picked it uses `AgentCatalog.defaultChoice`, the agent remembered by `remember` under the
-`lastAgent` defaults key while it is still offered, else the first choice. The Checkout label is `DraftCheckout`:
-`SessionWorkspace.worktreeBase` names the checked-out branch, or the short commit of a detached `HEAD`; outside
-Git it is "Project folder". Send with a nonempty `PromptDraft` calls `SessionManager.start(…, initialPrompt:)`,
-clears the draft; the agent is remembered once the initial prompt is submitted. `LiveSession.initialPrompt` holds it in memory (not in the queue,
-which belongs to a session record) until the session is idle for the first time: `connected`, after `session/new`
-or after sign-in, submits it with intent `whenReady` like a typed prompt, and a failed submission fails startup.
+New sessions start from the draft ([ADR-0040](adr/0040-composer-first-session-start.md),
+[behavior](behavior/session-start.md)), which replaced the launch form. A window without a session (and New Session,
+⇧⌘N) shows `SessionDraftView`, with `DraftHeading` and the composer card. Send runs inside `withAnimation`, and
+`RootView` removes the draft with `DraftSendTransition`, which sets the `draftLeaving` environment value. The draft's
+state lives in `SessionWindowModel` (`draft`, `draftDirectory`, `draftAgent`, `draftError`). The project menu lists
+`ProjectRecord.recent` (by each project's newest session), marked by `isDraftProject`; with nothing picked, the project
+of the newest session is used, named by `draftProjectName`. `draftNeedsAgent` (no agent choice and no custom command)
+swaps the text field for `ManageAgentsButton`. The Agent chip lists `AgentCatalog.choices` (the newest installed
+version of each agent, then local agents), Custom Command… (`CustomCommandSheet`, parsed by `RootView.launchCommand`)
+and Manage Agents…; with nothing picked it uses `AgentCatalog.defaultChoice`, the agent remembered by `remember` under
+the `lastAgent` defaults key while it is still offered, else the first choice. `DraftCheckout` is the Checkout chip,
+and `SessionWorkspace.worktreeBase` names what it shows. Send with a nonempty `PromptDraft` calls
+`SessionManager.start(…, initialPrompt:)` and clears the draft; the agent is remembered once the initial prompt is
+submitted. `LiveSession.initialPrompt` holds it in memory (not in the queue, which belongs to a session record) until
+the session is idle for the first time: `connected`, after `session/new` or after sign-in, submits it with intent
+`whenReady` like a typed prompt, and a failed submission fails startup.
 If startup fails or is cancelled (Cancel Startup, End Session at sign-in), the owner is no longer live and still
 holds its prompt; `SessionWindowModel.abandonedStart` reports it, and `RootView` calls `returnToDraft`, which puts
 the prompt back into the draft with the owner's error and ends the owner, so the sidebar does not list it.
-A session row's context menu offers New Session in Project (`SessionWindowModel.newSession(in:)`), which opens the
-draft with the row's project selected and keeps the typed message and agent; a starting session has no project yet
-and offers nothing. A live row also offers Settle Session (`SessionWindowModel.settle(_:)`, #275): End Session for
-that row's own owner, available while `SessionRow.canSettle(owner.activity)` holds (idle, done, failed); on hover the
-row shows the same action as a button.
+A session row's New Session in Project is `SessionWindowModel.newSession(in:)`, and Settle Session
+`SessionWindowModel.settle(_:)` (#275): End Session for that row's own owner, available while
+`SessionRow.canSettle(owner.activity)` holds (idle, done, failed).
 
 Mode, model and effort hints (ADR-0040's amendment) are applied at start. `AgentCatalog.configHints` keeps, per
 `AgentCatalog.Choice`, the select options with category `mode`, `model` or `thought_level` (effort) from the agent's
@@ -190,22 +184,16 @@ undecodable entry is ignored. `SessionController.onConfigOptions` reports each c
 command to its local agent, else to a custom command; `SessionManager.catalog` is set by the app delegate.
 `SessionWindowModel.draftHints` is what Send passes as `configHints`: the cached model and effort options, with any
 value picked in `draftConfig`, and a mode only when one was picked there; changing the agent and Send clear
-`draftConfig`.
-`SessionController.createRemote` applies them after `session/new` and before the record exists: an equal value sends
+`draftConfig`. `SessionWindowModel.draftPills` is the selected agent's `configHints` entry and `draftValue(of:)` the
+value of each (the pick in `draftConfig` if the agent offered it, else the cached model or effort; a mode nobody picked
+has none), so a pill always shows what Send applies. `SessionDraftView` draws them with `ConfigControlRow`, the control
+row `SessionConfigControls` also uses.
+`SessionController.createRemote` applies the hints after `session/new` and before the record exists: an equal value sends
 nothing, others go through `setConfigOption` one at a time in the agent's order, each response replaces the list the
 next hint is checked against, and config notifications buffered before a response are dropped, because the response
 supersedes them; the `started` event holds the final list. A hint whose option or value the agent no longer offers, or
-an error response, throws `HintRejected` (`The agent does not offer “Large” any more.`), after reporting the agent's
-list to the catalog; the start fails as any other, so the worktree is removed, nothing is recorded and the draft
-returns with the error.
-
-The draft shows the cached options as pills (#212). `SessionWindowModel.draftPills` is the selected agent's
-`configHints` entry and `draftValue(of:)` the value of each: the one picked in `draftConfig`, if the agent offered it
-(else the pick is ignored), or the cached model or effort; a mode nobody picked has none and its pill reads `Default mode`.
-`draftHints` is built from `draftValue(of:)`, so a pill always shows what Send applies. `SessionDraftView` draws them
-in the composer's bottom row after Attach with `ConfigControlRow`, the control row `SessionConfigControls` also uses,
-as secondary, with the tooltip and accessibility note `Last used with this agent; confirmed when the session starts`;
-a pick sets `draftConfig`, and a change of agent clears it. An agent without a cache entry shows no pills.
+an error response, throws `HintRejected`, after reporting the agent's list to the catalog; the start fails as any
+other, so the worktree is removed, nothing is recorded and the draft returns with the error.
 
 While the session starts, the detail column shows the held prompt instead of an empty view
 ([ADR-0040's amendment of 2026-11-07](adr/0040-composer-first-session-start.md)). `SessionWindowModel.heldPrompt` is
@@ -216,11 +204,6 @@ is a one-item `TranscriptSource` that renders the prompt with `LiveTranscriptSou
 `LiveTranscript` for it after. `LiveSession.startLine` is the line above the card: `fetching` is set from
 `SessionWorkspace.prepare(onFetch:)` while ADR-0047's fetch runs, and `startPlace` (`newWorktree`, `projectFolder` or
 `newFolder`, ADR-0048) once the checkout is known, before the install check.
-
-The Checkout chip is `DraftCheckout`: for a Git project a menu of `New worktree from <upstream>` (the default) and
-`Project folder` ([ADR-0043](adr/0043-sessions-in-the-project-folder.md)), outside Git the label `Project folder`;
-`SessionWorkspace.worktreeBase` names both the worktree's base and what is checked out, for the folder's help text.
-
 
 A start that fails or is closed before its record exists (Cancel Startup or End Session at sign-in, an agent that
 exits during `initialize`) removes the worktree and branch its `LiveSession` made (#176). The record is written
@@ -283,51 +266,38 @@ rows, caches attributed text, and handles updates to earlier rows as well as app
 use the same table in read-only mode. The demo remains available as a test fixture; the original
 Rendering Lab prototypes retain their implementations, with an additional production-table variant.
 While a turn runs, `SessionController.turnStartedAt` (in memory; set on entering `running`, kept while
-`stopping`, cleared otherwise) drives a "Working for 1m 12s" line (`WorkingTimeLine`,
-`WorkingDuration.format`) directly above the composer card, ticking once a second. With a plan it adds
-`PlanProgress.summary` (`· 3 of 7 · Writing tests`, `· 3 of 7 done`).
+`stopping`, cleared otherwise) drives the working line above the composer (`WorkingTimeLine`,
+`WorkingDuration.format`, `PlanProgress.summary`; [behavior](behavior/composer.md#status-line)), ticking once a second.
 
-Transcript rows lay out in the `TranscriptColumn` that the composer card shares: centered, at most 720 pt wide,
-with at least 24 pt on each side (`TranscriptColumn.width(inRowOfWidth:)` also gives the text wrap width). A row's
-Copy button is shown only while the pointer is over the row (`NSTrackingArea`, `.activeInKeyWindow`,
-`.inVisibleRect`); the row also offers Copy as an accessibility custom action.
-
-`TranscriptMessage.kind` says how a row shows its role: a user message is a `BubbleCell` at the column's trailing edge
-(`NSColor.quaternarySystemFill`, radius 14, padding 10 × 14) that hugs its text and stops at 80 % of the column
-(`TranscriptColumn.bubbleWidth(forTextWidth:inColumnOfWidth:)`); its `caption` (`not sent`, `sent together`) is a
-right-aligned label under the bubble. Agent messages have no role label. Tool, permission and input rows keep their
-headers. `role` stays in the model, and Copy returns a row's
-Markdown without it.
+Transcript rows lay out in the `TranscriptColumn` that the composer card shares
+([behavior](behavior/transcript.md#rows)): `TranscriptColumn.width(inRowOfWidth:)` also gives the text wrap width and
+`bubbleWidth(forTextWidth:inColumnOfWidth:)` the user bubble's. A row's Copy button follows an `NSTrackingArea`
+(`.activeInKeyWindow`, `.inVisibleRect`); the row also offers Copy as an accessibility custom action.
+`TranscriptMessage.kind` says how a row shows its role (a user message is a `BubbleCell` with its `caption`). `role`
+stays in the model, and Copy returns a row's Markdown without it.
 
 The table's rows are not the transcript's items: `TranscriptSource.rows` lists `TranscriptRow`s, and
-`TranscriptRow.fold` folds two or more consecutive tool calls into one `.group` row. Any other item, including a
-permission request or an input form, ends a group, and one call stays a plain card. `ToolGroupSummary` words the row
-from the ACP tool kinds (`Ran 3 commands, made 2 edits`, `· 1 failed` in the failure color); while the session runs
-and the group's last call is pending or in progress, it shows that call's title instead (`just test…`). A group
-is a header without a body, collapsed by default and expanded by its disclosure into the existing cards, which follow
-it as rows; `LiveTranscriptSource` keys that by the group's first item, separately from each card's own expansion.
-`TranscriptTableController` diffs the rows by identity (`CollectionDifference`) and inserts and removes only those that
-changed, so the others keep their views, selected text and table selection. A row that folds away loses its selection.
-A group has no Markdown of its own: its `copyText` builds its cards' Markdown only when asked, which also keeps
-streaming from rendering cards nobody sees. A table selection skips an expanded group's summary, so that its cards are
-copied once.
+`TranscriptRow.fold` folds consecutive tool calls into a `.group` row, every run of one or more consecutive thoughts
+into a `.thoughts(first:)` row and a finished turn's work into a `.turn(first:)` row (what each shows is in
+[transcript.md](behavior/transcript.md)). Any item other than a tool call, including a permission request or an input
+form, ends a group. `ToolGroupSummary` words a group from the ACP tool kinds and `ThoughtSummary` a run of thoughts. A
+group and a thought run are headers without a body; `LiveTranscriptSource` keys the expansion of each by its first item,
+separately from each card's own expansion, and a thought run's expanded text is part of the same row, so expanding
+inserts no rows and goes through the row's own height (`rowContentHugging`). `TranscriptTableController` diffs the rows
+by identity (`CollectionDifference`) and inserts and removes only those that changed, so the others keep their views,
+selected text and table selection. A row that folds away loses its selection. A fold has no Markdown of its own: its
+`copyText` builds its cards' Markdown only when asked, which also keeps streaming from rendering cards nobody sees. A
+table selection skips an expanded group's summary, so that its cards are copied once. When only the text of a
+one-line, truncating header changes, as a collapsed thought's does with each chunk, `TranscriptTableController` sets
+the label in place and does not measure the row again (S10 found the rebuild costly).
 
-Thoughts are collapsed ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)): `TranscriptRow.fold` folds every
-run of one or more consecutive thoughts into a `.thoughts(first:)` row. Collapsed, the row is a header without a body,
-as a group is; expanded (`LiveTranscriptSource` keys it by the run's first item, in the same set as a card's own
-expansion), it adds the thoughts' Markdown below the header, dimmed, in the same row, so expanding inserts no rows and
-goes through the row's own height (`rowContentHugging`). `ThoughtSummary` words the header: `Thinking… <last line>`
-while the run ends the running turn's transcript (`Thinking…` alone when expanded, so streamed text does not rebuild the
-header), `Thought for 12s` after. When only the text of a one-line, truncating header changes, as a collapsed
-thought's does with each chunk, `TranscriptTableController` sets the label in place and does not measure the row
-again (S10 found the rebuild costly). The times come from `TranscriptState`: the reducer sets a thought's `thoughtStart` at
-its first chunk and moves `thoughtEnd` to each event's timestamp while the thought is the last item of a running turn,
-so the next item or the turn's end closes it, in live and saved transcripts alike; a run's time is the sum of its
-thoughts' `thoughtDuration`. Copy returns the run's Markdown through `copyText`, built when asked; Find matches each
-thought item and `reveal(item:)` expands the run that holds it. The Rendering Lab's S10 streams two folding thoughts
-before the S1 answer.
+Thought times come from `TranscriptState`: the reducer sets a thought's `thoughtStart` at its first chunk and moves
+`thoughtEnd` to each event's timestamp while the thought is the last item of a running turn, so the next item or the
+turn's end closes it, in live and saved transcripts alike; a run's time is the sum of its thoughts'
+`thoughtDuration`. Find matches each thought item and `reveal(item:)` expands the run that holds it. The Rendering Lab's
+S10 streams two folding thoughts before the S1 answer.
 
-A finished turn's work folds under one row (#341, as T3 Code does). The reducer records
+A finished turn's work folds under one row (#341). The reducer records
 `TranscriptState.finishedTurns`, each turn that ended on its own with its time from the event that started it to its
 `finished` event; a stopped, steered or failed turn has none, so it never folds. `TranscriptRow.turnFolds` reads the
 items as `TurnPart`s (prompt, answer, question, work, other) and returns a `TurnFold` for each finished turn with
@@ -340,79 +310,54 @@ the last turn's items on each state change, so a streamed chunk costs the runnin
 full fold on every chunk costly). A change of group or turn expansion starts it over; another session's transcript
 too. It finds a fold by its row or by an item it holds with a binary search over the folds, which are sorted by first
 item, since the table asks for every row it shows on each update. The source keys turn expansion by turn, and
-`reveal(item:)` expands a turn that hides the item. The row
-(`TranscriptMessage.Kind.turn`) is a borderless button with the label and a trailing chevron over a separator, built by
+`reveal(item:)` expands a turn that hides the item. The row (`TranscriptMessage.Kind.turn`) is built by
 `TranscriptMessageRow.showTurn`; it has no Markdown and no Copy. A running turn never folds, so streamed chunks leave
 its rows as they were. The Rendering Lab's S11 streams S10's thoughts with S9's tool updates in a new turn
 below a 10,000-item history of finished, folded turns, and folds the new turn at its end.
 
-Session notices (continued, ended, merged, discarded) render as a centered caption between two hairlines, without
-role label or Copy. A turn that ends `cancelled` after `stopRequested` (Stop or steering) gets an item of its own
+A turn that ends `cancelled` after `stopRequested` (Stop or steering) gets an item of its own
 (`TranscriptState.Item.interruption`, reduced from the stored events, which do not change; `interrupted` adds no
-item any more) whose cause is read from the same events: steering records `interrupted` with its stop request, so that turn is
-`.steered` and ends with a plain hairline, and any other is `.stopped` and gets T3 Code's red `Run interrupted ·
-Stopped by user` divider. The prompts of the turn that follows a steered stop are `Message.isSteer` (dropped when a
-`queuePaused(true)` with no turn running shows the user stopped instead) and show `↪ Steer` above the bubble
-(`TranscriptMessage.label`, drawn by `BubbleCell`), or `· Steer` after an origin label. A failed prompt
-(`TranscriptState.Item.isFailure`) is a red `Error` row with the `message` of its stored `RPCError(...)` description
-(`PromptFailure.summary`, applied when displayed, so saved history benefits and stored events do not change) below,
-and a Details disclosure with the full stored text. An answered, declined or cancelled form is a question row
-(`InputAnswer`: the composer's `InputStep.steps` paired with the stored response, a pure function), collapsed to one
-header line and expanded into an attributed list built without Markdown. These three rows have their own
-`TranscriptMessage.Kind` (`question`, `interruption`, `failure`), which a turn's fold (#341) recognises: it leaves
-answered questions out and never folds an interrupted or failed turn. The divider and the error read as one
-accessibility element each, with the row's Copy and the Details disclosure as custom actions.
+item any more) whose cause is read from the same events: steering records `interrupted` with its stop request, so that
+turn is `.steered`, and any other is `.stopped`. The prompts of the turn that follows a steered stop are
+`Message.isSteer` (dropped when a `queuePaused(true)` with no turn running shows the user stopped instead). A failed
+prompt (`TranscriptState.Item.isFailure`) shows the `message` of its stored `RPCError(...)` description
+(`PromptFailure.summary`, applied when displayed, so saved history benefits and stored events do not change). An
+answered, declined or cancelled form is a question row (`InputAnswer`: the composer's `InputStep.steps` paired with
+the stored response, a pure function). These three rows have their own `TranscriptMessage.Kind` (`question`,
+`interruption`, `failure`), which a turn's fold (#341) recognises: it leaves answered questions out and never folds an
+interrupted or failed turn. How they look is in [transcript.md](behavior/transcript.md#interruptions-and-errors).
 
-The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md)) in the transcript column
-(`TranscriptColumn`: at most 720 pt, 16 pt side and 12 pt bottom margins, `.bar` material with a hairline border).
-Inside it come the queue, the editing hint, attachments, the text and a bottom row: attach, the control row, the Send
-options menu and a round button whose role `ComposerPrimaryAction` picks (Send,
-Queue, Save, or Stop for an empty draft while a turn runs or stops; Queue and Save show their name beside the arrow, and while a turn runs the Send options menu names Send Now as interrupting it and lists Stop Turn next to ⌘. in the Session menu). The control row
-(`ConfigControlRow`), shared by a session's `SessionConfigControls` and the draft's hints, draws select options as
-borderless `ConfigSelectMenu` pills that show the value only (the option name is in the tooltip and the accessibility
-label; the mode opens `ModeChoices` in a popover) and booleans as toggle pills; a `ViewThatFits` over every split of
-`ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu (other options leave
-first, then mode, model and effort). `ContextRing` follows the control row in a fixed slot before the Send options
-menu, so its width comes out of the pills' room and it never overflows: `ContextUsage` (Core, pure) turns the last
-`usage_update` into the ring's state (hidden below 70 %, attention from 90 %, the percentage rounded down) and the
-inspector's *Context* and *Cost* rows (`84k of 200k · 42 %`, the cost formatted by the system in the agent's
-currency). While a turn runs, `WorkingTimeLine` directly above the
-composer card reads `Working for …`, or `Waiting for you` while a permission or form waits; the docked permission card shows
-its ⌥⌘ shortcuts, and the queue header says that the queue is paused. A session that cannot take a prompt (saved, ended, failed, starting, merging or with a merge/discard outcome)
-shows `ContinueCard` instead of the card: a symbol and the state (`ContinueCard.State`, a pure mapping of status,
-merge flag and outcome) and, when `SessionWindowModel.canContinue` and there is no outcome, a prominent Continue
-button.
+The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md), [behavior](behavior/composer.md)) in
+the transcript column. `ComposerPrimaryAction` picks the round button's role (Send, Queue, Save or Stop).
+`ConfigControlRow`, shared by a session's `SessionConfigControls` and the draft's hints, draws select options as
+`ConfigSelectMenu` pills (the mode opens `ModeChoices` in a popover) and booleans as toggle pills; a `ViewThatFits` over
+every split of `ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu.
+`ContextRing` follows the control row in a fixed slot before the Send options menu, so its width comes out of the
+pills' room and it never overflows: `ContextUsage` (Core, pure) turns the last `usage_update` into the ring's state and
+the inspector's *Context* and *Cost* rows. A session that cannot take a prompt (saved, ended, failed, starting, merging
+or with a merge/discard outcome) shows `ContinueCard` instead of the card: `ContinueCard.State` is a pure mapping of
+status, merge flag and outcome, and the Continue button needs `SessionWindowModel.canContinue` and no outcome.
+Composer errors show as a `FailureBanner` above the card.
 
 The oldest pending permission request is docked above the composer card (`PermissionDock`,
-[ADR-0039's amendment](adr/0039-t3-style-window-layout.md)), above the errors and `Waiting for you` in the status line,
-so it stays on screen whatever the scroll position. `DockedPermission` builds it from
-`SessionController.pendingPermissions`, which carry the tool call as known when the agent asked: the kind and the
-paths (locations, then the diffs' files), the title as secondary text, the first diff with `+n more files` that
-expands in place, and `1 of 3` while several are pending. The card is at most 40 % of the column's height and its diff
-scrolls inside it. A shell call's command (`PermissionCommand`, Core, pure: `rawInput.command`, an argument array
-shell-quoted without its shell wrapper, the first text content, the title) follows the title in monospaced selectable
-text that scrolls beyond about six lines; `SessionController` merges later `rawInput` and content of the call into the
-pending request when it publishes the transcript. The buttons follow the agent's order and names, show ⌥⌘1…⌥⌘9 for the first nine options and wrap
-(`WrappingLayout`) instead of truncating; none is the default, and Return and Escape stay with the composer. The card
-never takes focus. Each request gets a new card identity, so `PermissionArming` ignores clicks and shortcuts for
-400 ms after a request appears, including the next one after an answer, and the buttons look disabled meanwhile.
-VoiceOver announces each new request. The card shrinks the table's clip view; the table relayouts and follows the end,
-which a hosted test covers. [ADR-0042](adr/0042-allow-edits-in-this-worktree.md) (deferred) would add a pill while
-edits are allowed.
+[ADR-0039's amendment](adr/0039-t3-style-window-layout.md), [behavior](behavior/composer.md#docked-permission-request)).
+`DockedPermission` builds it from `SessionController.pendingPermissions`, which carry the tool call as known when the
+agent asked; `SessionController` merges later `rawInput` and content of the call into the pending request when it
+publishes the transcript. `PermissionCommand` (Core, pure) derives a shell call's command. The buttons wrap
+(`WrappingLayout`). Each request gets a new card identity, so `PermissionArming` ignores clicks and shortcuts for 400 ms
+after a request appears, including the next one after an answer, and the buttons look disabled meanwhile. The card
+shrinks the table's clip view; the table relayouts and follows the end, which a hosted test covers.
+[ADR-0042](adr/0042-allow-edits-in-this-worktree.md) (deferred) would add a pill while edits are allowed.
 
-Composer errors show as a `FailureBanner` above the card, with its actions and a Details disclosure.
-
-The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView` that grows from two to six
-lines; Return submits when ready, ⇧Return and ⌥Return insert a line break, and drafts stay editable during a
-turn. Each session keeps its own unsent text, attachments and queue edit (`ComposerDraft`, in
-`SessionWindowModel.composerDrafts`) for as long as the window lives, so looking at another session loses nothing; they
-do not survive a relaunch, and two windows on one session have separate drafts. Dropped, pasted and chosen files (⇧⌘A) are shown as removable chips and sent after the text as
+The composer ([ADR-0018](adr/0018-composer-attachments.md)) is an `NSTextView`. Each session keeps its own unsent
+text, attachments and queue edit (`ComposerDraft`, in `SessionWindowModel.composerDrafts`) for as long as the window
+lives; they do not survive a relaunch. Dropped, pasted and chosen files are sent after the text as
 `resource_link` blocks built by `ResourceLink.file` in Core. For a session in a linked worktree,
 `SessionWorkspace.linkedCheckout` supplies the main checkout, and links to checkout paths that exist in
 the worktree point there. A draft that is a bare `/word` lists the matching commands from
-`available_commands_update`; choosing one inserts `/name ` as text. The transcript names link
-attachments. `SessionController.submit(_:intent:)` owns the per-session prompt queue
-([ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md)).
+`available_commands_update`; choosing one inserts `/name ` as text. `SessionController.submit(_:intent:)` owns the
+per-session prompt queue ([ADR-0010](adr/0010-prompt-queue-and-steering.md), [ADR-0021](adr/0021-prompt-queue-lifecycle.md);
+[behavior](behavior/queue.md)).
 Return sends when idle with an empty queue, clearing a retained empty pause; otherwise it queues the
 draft. A completed turn drains the queue as one prompt. Queue snapshots record text, attachments, editing, removal and
 order in the existing event log. Dequeue and one `promptMessage` event per message commit atomically;
@@ -421,18 +366,18 @@ sequence per transcript row. Each `QueuedPrompt` carries its `Origin` ([ADR-0049
 `user`, or `session(id, turnID)`, `delegation(taskID)`, `delivery(taskID)` and `task(taskID)` for turns that the app's
 tools start; `user` is left out of the stored JSON and is the default when the field is absent, so older logs decode
 unchanged. `Origin.wrapped` (pure) marks the content of any other origin as another agent session's before it goes to
-the agent, without naming that session; `Origin.label` names the source in the transcript (a labelled card row instead
-of the user's bubble) and in the sidebar's reason, resolved by `SessionManager.originLabel` from the sessions open in
-this launch. Up in an empty composer recalls the last entry for text editing without
-rebuilding its attachments. An open edit holds the queue: `SessionWindowModel.settleQueueEdit()`, run by `RootView`
-whenever `queueEdit` (the displayed controller, the entry and whether it is still queued) changes and by `close()`,
-calls `SessionController.holdQueue()` for the displayed session while its composer edits a queued entry and
-`releaseQueue()` once it saves, cancels, shows another session or closes. `queueEdits` counts the holds in memory (one
-per window, never stored); `drainQueue` does nothing while it is nonzero, and the last release schedules the drain a
-finished turn would have. Explicit sends ignore it. An edit whose entry left the queue becomes a draft
-(`ComposerDraft.keepEditAsDraft`), marked sent when the transcript holds the entry and removed otherwise;
-`SessionWindowModel.saveQueueEdit` does the same when Save finds the entry gone. Stop, refusal and errors pause the queue; ⇧⌘R explicitly resumes it.
-Saved entries remain paused after Continue; an empty queue resumes normal sending
+the agent, without naming that session; `Origin.label` names the source in the transcript and in the sidebar's reason,
+resolved by `SessionManager.originLabel` from the sessions open in this launch. Up in an empty composer recalls the
+last entry for text editing without rebuilding its attachments. An open edit holds the queue:
+`SessionWindowModel.settleQueueEdit()`, run by `RootView` whenever `queueEdit` (the displayed controller, the entry and
+whether it is still queued) changes and by `close()`, calls `SessionController.holdQueue()` for the displayed session
+while its composer edits a queued entry and `releaseQueue()` once it saves, cancels, shows another session or closes.
+`queueEdits` counts the holds in memory (one per window, never stored); `drainQueue` does nothing while it is nonzero,
+and the last release schedules the drain a finished turn would have. Explicit sends ignore it. An edit whose entry left
+the queue becomes a draft (`ComposerDraft.keepEditAsDraft`), marked sent when the transcript holds the entry and
+removed otherwise; `SessionWindowModel.saveQueueEdit` does the same when Save finds the entry gone. Stop, refusal and
+errors pause the queue; resuming it is explicit. Saved entries remain paused after Continue; an empty queue resumes
+normal sending
 ([ADR-0029](adr/0029-empty-queue-recovery.md)). Explicitly sending the last queued entry also clears
 the pause. An ended or failed established session also offers Continue, which creates a new connection; failed connections stay closed. Continue requires a persisted session
 with an agent session ID. Startup failures cannot continue, and ended sessions remain selectable in
@@ -443,15 +388,12 @@ built only after preceding lifecycle writes settle, so this compensation cannot 
 An error response to `session/prompt` ends only that turn ([ADR-0027](adr/0027-recoverable-prompt-errors.md)).
 Core records the failed turn and queue pause before returning to idle, retaining the same process,
 connection and agent session. Pending permissions and forms are cancelled durably. The error stays
-in the transcript without requiring Continue or automatically retrying the prompt. Return queues while
-retained entries are paused; an explicit send or queue resume is needed for that work. An empty queue
-accepts a fresh Return immediately. Transport loss, process exit, malformed responses
-and event-log failures still end the session. Saved history always opens read-only, including after
-a recoverable error.
+in the transcript without requiring Continue or automatically retrying the prompt. Transport loss, process exit,
+malformed responses and event-log failures still end the session. Saved history always opens read-only, including
+after a recoverable error.
 
-⌘Return sends a nonempty draft now and leaves the queue in place; with an empty or whitespace-only
-draft, it sends the whole queue ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Attachments count as
-a nonempty draft. ⇧⌘Return sends the queue with the nonempty draft last. Steering uses
+Sending a nonempty draft now leaves the queue in place; with an empty or whitespace-only
+draft, it sends the whole queue ([ADR-0028](adr/0028-empty-draft-sends-queue.md)). Steering uses
 `AgentProfile.steering`: v1 interrupts, waits for the owned turn and cancel tasks to settle, and then starts the next turn; injection-capable connections implement
 `AgentConnection.inject(_:in:)` without ending the active turn. The default injection implementation
 fails explicitly and no current v1 adapter advertises it. Injection first records complete composed
@@ -462,43 +404,33 @@ insertion and acknowledgement conservatively retains the content for explicit re
 no exactly-once guarantee. Manual Stop supersedes a pending interrupt
 and never causes an automatic drain. Composer drafts clear only after durable acceptance.
 
-Tool rows are cards: a native header (kind symbol, kind, status, disclosure) and a
-Markdown body with the title, reported locations and text content, so selection and copying work as
-for messages. Missing fields are shown as not reported; unsupported content appears
-as a placeholder. A diff shows its path and unified hunks with three lines of context in a ```` ```diff ```` block;
-`MarkdownRenderer` tints added and removed lines and the words that changed between adjacent runs (runs over
-200 lines skip word comparison). Edits with over 1,000 unmatched lines show as a whole replacement, and a
-diff is computed once per edit, not on every row update. Side-by-side diffs remain open. A command's output replaces the terminal placeholder: `TerminalText` derives
-escape-free text at render time, shown in a code block with the exit status; collapsed, it keeps the last lines. Bodies beyond 12 lines or 2,000 characters are collapsed; expansion
-is keyed by row identity and survives streamed updates. Header-only updates preserve the body and its
-text selection. Truncated code blocks retain their fence delimiter when closed before the truncation note.
-Each permission request is its own record row, even when several refer to one tool call, and the row has no
-buttons: they live on the docked card, where ⌥⌘1…⌥⌘9 choose an option of the oldest pending request. Return and
-Escape choose nothing. The record is one line, like a folded group (`kind == .group`, a header without a body):
-the recorded outcome, then what was asked (`Allowed once · Edit · Write note.txt`; `Waiting for you · …` while
-pending), with a Details disclosure that unfolds the tool call as known when the agent asked and the outcome in
-words. The header is `LiveTranscriptSource.permissionCard`'s `ToolCardHeader` with `record` set: the status leads, the
-summary (the kind and the first line of the title) truncates at the tail. Details are keyed by row identity like any
-card's expansion, Copy returns them whether or not the row is folded, and Find reads them. A tool row whose call has
-a pending request leaves its diff out (`toolCard(hidingDiffs:)`, from `LiveTranscriptSource.pending`) and shows it
-again once the request is answered; the row's height changes then, and follow-bottom or the reader's scroll origin
-handles it as for any row change. Agent-provided “always” options are returned verbatim and labeled as remembered by
-the agent; the app keeps no policy of its own. Answered records state only the recorded response (the option's name
-and kind, or cancellation), never an inferred approval or decline. Requests without a recorded response after a
-restart show that none was recorded. Non-text content is identified with attachment placeholders rather than silently
-dropped.
+Tool rows ([behavior](behavior/transcript.md#tool-calls)) are a native header over a Markdown body, so selection and
+copying work as for messages. `MarkdownRenderer` tints a diff's added and removed lines and the words that changed
+between adjacent runs (`UnifiedDiff`); a diff is computed once per edit, not on every row update. `TerminalText`
+derives the escape-free text of a command's output at render time. Expansion is keyed by row identity and survives
+streamed updates, and header-only updates preserve the body and its text selection. Truncated code blocks retain their
+fence delimiter when closed before the truncation note.
+Each permission request is its own record row, even when several refer to one tool call. The record is a folded group
+(`kind == .group`, a header without a body): `LiveTranscriptSource.permissionCard`'s `ToolCardHeader` with `record`
+set shows the status first and truncates the summary at the tail, and its Details unfold the tool call as known when
+the agent asked. Details are keyed by row identity like any card's expansion, Copy returns them whether or not the row
+is folded, and Find reads them. A tool row whose call has a pending request leaves its diff out
+(`toolCard(hidingDiffs:)`, from `LiveTranscriptSource.pending`) and shows it again once the request is answered; the
+row's height changes then, and follow-bottom or the reader's scroll origin handles it as for any row change.
+Agent-provided “always” options are returned verbatim; the app keeps no policy of its own. Answered records state only
+the recorded response, never an inferred approval or decline. Non-text content is identified with attachment
+placeholders rather than silently dropped.
 
 > **Accepted, not yet implemented:** "the app keeps no policy of its own" would no longer hold for an explicitly
 > enabled session ([ADR-0042](adr/0042-allow-edits-in-this-worktree.md), deferred).
 
 The session's bounded stderr log and environment diagnostics are visible in the window.
 
-Find in the transcript (`TranscriptFindBar`, `TranscriptFindState`, `TranscriptSearch`) reads each item's full text, so it
-also finds what a folded group or collapsed card does not show. Matches are items, not occurrences. Typing only counts
-and marks the text in visible rows, 150 ms after the last key; Return and ⌘G step to a match, and only a step expands
-the group and card that hide it, scrolls to the row and selects it. Streaming rows are not marked until they finish, and
-a streamed answer is counted again at the next edit or step, not on every chunk. Copy returns a tool card's whole
-output whether or not it is collapsed, and an expanded summary selected alone copies its cards.
+Find in the transcript (`TranscriptFindBar`, `TranscriptFindState`, `TranscriptSearch`, [behavior](behavior/transcript.md#find-in-the-transcript))
+reads each item's full text, so it also finds what a folded group or collapsed card does not show. Streaming rows are
+not marked until they finish, and a streamed answer is counted again at the next edit or step, not on every chunk. Copy
+returns a tool card's whole output whether or not it is collapsed, and an expanded summary selected alone copies its
+cards.
 
 Saved history opens read-only. Its Continue action selects a new owner that reattaches the saved
 session ([ADR-0017](adr/0017-continue-saved-sessions.md)): `LiveSession.resume` looks up the session's
@@ -513,16 +445,36 @@ turn without an outcome, `permissionResolved(.cancelled)` for requests without a
 “Continued” divider. Any failure leaves the log unchanged and the history readable.
 
 The AppKit application delegate owns the `SessionManager` and passes it to every window. Owners start
-in the background. The sidebar (`SessionSidebar` in Core, `SessionSidebarList` and `SidebarShelves` in the UI,
-[ADR-0039](adr/0039-t3-style-window-layout.md)) is grouped by status, in this order: *Needs You* (live
-sessions whose activity is needs input, failed or done, in start order), *Working* (the other live sessions,
-including owners that have no project yet, in start order) and *Settled* (saved sessions that are not live,
-by last activity, newest first); empty sections are omitted. Each row carries its project (`nil` while unknown).
-A row (`SessionRow`) shows a project badge (`ProjectBadge.initials`; the tint is a 64-bit FNV-1a hash of the name, since `hashValue` changes per launch), the title, the project and a reason, the status symbol and `RelativeTime.short` of the session's last activity. The second line is `project · reason` ([ADR-0039's amendment](adr/0039-t3-style-window-layout.md)). `SidebarReason` (Core, pure) derives the reason from `LiveSession.Activity`, so it never contradicts the symbol: `Sign in`, `Allow? <tool title>` (the oldest pending request, `+n` for more) or `Permission` without a title, `Question`, `Failed`, `Starting`, `Stopping`, the label of a running turn the user did not send (`TranscriptState.turnOrigin`, see below), else the plan entry in progress (`PlanProgress.current`), `Merging`, `Finished`, `Refused`, `Hit a limit`, `Prompt failed` (the last prompt was rejected: `TranscriptState.lastTurnFailed`) and `Queue paused` (a paused, nonempty queue); a running turn the user sent or a plain idle session has none, a saved one only `Archived` (found by a search, see below) or its `Merged` or `Discarded` outcome. A permission request that names its call only by id takes the title the agent reported earlier (`PendingPermission.callTitle`). The title is reduced to its first line and 120 characters. The line never wraps: `SubtitleLayout` shrinks the project first, to 40 % of the line, then cuts the reason at its tail. The tooltip and the accessibility label (`title, project, reason, last active 3m`; the status when there is no reason) hold the whole row. The time is the last activity: `SessionController.lastActivity` for a live session (the minute of the last stored event, set at most once a minute and seeded when history loads), `PersistenceStore.lastEvents()` for a saved one (`SessionLibrary.lastEvents()` returns it with the worktree outcomes, in one query), else `createdAt`. Settled sorts by it; Needs You and Working keep start order.
-Needs You scrolls in the sidebar list (`SessionSidebarList`), which shows `Nothing needs you` as an overlay when it has no rows. Working and Settled are shelves pinned to the bottom edge, Working above (`SidebarShelves`, one `safeAreaInset`), each hidden while its section has no rows. A shelf's header (a chevron, the section name and the count, a disclosure button labelled “Working, N sessions, expanded/collapsed”) is always visible. Working is expanded by default and Settled collapsed; each keeps its state in `SessionWindowModel.workingShelfExpanded` / `settledShelfExpanded` (`RootView` remembers them in `@SceneStorage`, like the inspector). The chevron collapses a shelf even while one of its rows is selected; only a search opens it regardless (`SidebarShelves.isOpen`), and Previous/Next Session expand the shelf they move into (`SessionWindowModel.revealShelf`). Expanding and collapsing animate with a 0.25 s spring, none under Reduce Motion (`SidebarShelves.animation`). Expanded, a shelf grows upward with its own `List`, sized by a row-height estimate because a `List` does not report its content height: `SidebarShelves.listHeights` caps Working at 35 % of the sidebar's height and Settled at 45 %, less when the list above would keep under `topRoom`. A Working shelf row ends with `SessionSidebar.shelfTime` in place of the last-activity time: `Working 1m 12s` from `SessionController.turnStartedAt` (`WorkingDuration`, a one-second `TimelineView` only on running shelf rows; a `List` builds only the rows on screen), or `Idle 20m` from the last activity. History refreshes on its own, so the toolbar has no Refresh button.
-The sidebar has a native search field (`SessionSidebarColumn`, `.searchable` with the sidebar placement; the text is `SessionWindowModel.sidebarQuery`, not persisted). `SessionSidebar(query:)` is the pure filter: rows whose title or project name `localizedStandardContains` the trimmed query (a starting or untitled session matches as “New Session”), empty sections omitted, `isFiltered` set. The list, the shelves (open while a query is entered, their counts are the numbers of matches), Previous/Next Session and Next Session Needing Input all read the filtered sidebar, so navigation only visits visible rows. With no match the list shows `ContentUnavailableView.search`. ⌥⌘F (Session → Search Sessions) focuses the field through `searchFocused`.
+in the background. The sidebar ([behavior](behavior/sidebar.md), [ADR-0039](adr/0039-t3-style-window-layout.md)) is
+`SessionSidebar` in Core, which groups the sessions by status, and `SessionSidebarList` and `SidebarShelves` in the UI.
+Each row carries its project (`nil` while unknown). `ProjectBadge.initials` draws a row's badge; its tint is a 64-bit
+FNV-1a hash of the name, since `hashValue` changes per launch. `SidebarReason` (Core, pure) derives a row's reason from
+`LiveSession.Activity`, so it never contradicts the status symbol; a permission request that names its call only by id
+takes the title the agent reported earlier (`PendingPermission.callTitle`), and the running turn's origin label comes
+from `TranscriptState.turnOrigin`. `SubtitleLayout` lays out the second line. The time is the last activity:
+`SessionController.lastActivity` for a live session (the minute of the last stored event, set at most once a minute and
+seeded when history loads), `PersistenceStore.lastEvents()` for a saved one (`SessionLibrary.lastEvents()` returns it
+with the worktree outcomes, in one query), else `createdAt`.
+The shelves keep their state in `SessionWindowModel.workingShelfExpanded` / `settledShelfExpanded` (`RootView` remembers
+them in `@SceneStorage`, like the inspector); `SidebarShelves.isOpen` opens them for a search,
+`SessionWindowModel.revealShelf` for Previous/Next Session, and `SidebarShelves.animation` is the spring that Reduce
+Motion removes. A shelf grows with its own `List`, sized by a row-height estimate because a `List` does not report its
+content height: `SidebarShelves.listHeights` applies the caps. A Working shelf row's `SessionSidebar.shelfTime` is
+`Working 1m 12s` from `SessionController.turnStartedAt` (`WorkingDuration`, a one-second `TimelineView` only on running
+shelf rows; a `List` builds only the rows on screen) or `Idle 20m` from the last activity.
+The search field is `SessionSidebarColumn`'s `.searchable` with the sidebar placement; its text is
+`SessionWindowModel.sidebarQuery`, not persisted, and `searchFocused` focuses it. `SessionSidebar(query:)` is the pure
+filter (`localizedStandardContains` on the title and project name; a starting or untitled session matches as “New
+Session”; `isFiltered` set). The list, the shelves, Previous/Next Session and Next Session Needing Input all read the
+filtered sidebar, so navigation only visits visible rows.
 
-**Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable `session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when; `PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of Settled (so out of its header count, and out of the section altogether when nothing else is saved) unless a query is entered: a search lists them in Settled order, the header then counts the matches, and the row's reason is `Archived` (`SidebarReason.saved`, which wins over `Merged` and `Discarded`). Previous and Next Session skip archived rows even while a search shows them. *Archive Session* / *Unarchive Session* (the title follows `archivedAt`) is in the row's context menu of a saved row and in the Session menu; neither asks for confirmation. The Session menu item is disabled unless the displayed session is saved, with the help text `End the session first` for a live one (`SessionWindowModel.canArchive`, `archiveHelp`); live rows have no context-menu item. **Continue** clears `archivedAt` (`SessionWindowModel.continueRestored`): a session the user talks to again is not archived. Every write refreshes the window's history; other windows pick it up at their next refresh.
+**Archive Session** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) hides a saved session from Settled without touching its log. The nullable
+`session.archivedAt` column (migration `v6-session-archived-at`, `SessionRecord.archivedAt`) holds when;
+`PersistenceStore.setArchived(_:of:)` sets it, or clears it with `nil`. `SessionSidebar` leaves archived sessions out of
+Settled unless a query is entered, and `SidebarReason.saved` (`Archived`) wins over `Merged` and `Discarded`.
+`SessionWindowModel.canArchive` and `archiveHelp` gate the Session menu item. **Continue** clears `archivedAt`
+(`SessionWindowModel.continueRestored`). Every write refreshes the window's history; other windows pick it up at their
+next refresh.
 
 **Delete Session…** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) removes a saved session for good. Events are
 append-only in the schema itself (`event_no_delete`); migration `v8-session-deletion` lets the guard pass only the
@@ -538,17 +490,17 @@ component. `deleteSummary` words the confirmation's state (`DeleteSummary`: merg
 `DiscardSummary`, the folder's name and file count, failed to start when the session stored no event, or history
 only). `SessionManager.deletingIDs` is part of `RootView`'s history key, so every window refreshes when a deletion
 ends, and `SessionWindowModel.refresh` sends a window whose displayed saved session vanished to the session board,
-dropping its review and viewed marks. The item is on saved rows' context menus and in the Session menu
-(`canDelete`, with Archive's help text); `SessionAlerts` holds the confirmations of Discard and Delete.
+dropping its review and viewed marks. `canDelete` gates the Session menu item (with Archive's help text);
+`SessionAlerts` holds the confirmations of Discard and Delete.
 
 The session board ([ADR-0046](adr/0046-session-board-and-menu-bar.md), [behavior](behavior/board.md)) is a state of
 the window, not a scene: `SessionWindowModel.showingBoard` sits beside `showingSetup` (set together, since neither shows
-a session; any assignment to `showingSetup` leaves the board), `showBoard()` (⌘0, the sidebar's Overview row tagged
+a session; any assignment to `showingSetup` leaves the board), `showBoard()` (the sidebar's Overview row tagged
 `SessionWindowModel.overviewID`, a deleted session) drops the displayed owner, and `WindowTarget.board` restores it.
 `SessionBoard` builds `SessionCard.Content` for each live row of an unfiltered `SessionSidebar`: the row's title,
 project and reason (`SessionWindowModel.reason(of:)`, shared with the row), `SessionSidebar.shelfTime`, the agent's last
 line (`TranscriptState.agentLastLine`, Core, pure) and the oldest pending permission with `PermissionChoice.choices`
-under the plain rule. A card shows the command in up to four lines. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
+under the plain rule. A card's options reuse `DockedPermission`'s operation line, `PermissionArming` and
 `WrappingLayout`, and answer through `SessionController.answerPermission`; its context menu is `SessionRowMenu`, the
 rows' own.
 
@@ -567,32 +519,30 @@ without one nothing is scheduled. Once the end was shown, the table reports the 
 `markSeen(reaching:)` marks every turn seen only when the item is still the latest result. A reader following the end
 clears the mark as the turn ends.
 
-`New response below` and Jump to Latest (ADR-0026's amendment): the table keeps `followingBottom`'s intent and, when it
+`New response below` and Jump to Latest (ADR-0026's amendment, [behavior](behavior/transcript.md#following-the-end)): the table keeps `followingBottom`'s intent and, when it
 turns false, remembers `TranscriptState.End` (the last item's identity and how much text it holds: its content blocks,
 the last block's length, a command's output bytes). An update checks `session.end` against it only while the reader is
 not following, so the streaming path pays nothing while the reader follows the end; coming back to the end forgets it.
 `TranscriptTableController.position` is `following`, `scrolledUp` (the end is as the reader left it) or `newBelow`;
 it is reported to `LiveTranscript.onPositionChange` on a later main-queue turn and only when it changed
-(`SessionWindowModel.endPosition`). `RootView` overlays `NewResponseButton`, a capsule centered at the transcript's
-bottom edge above the status line, while the position is `newBelow`; scrolling up alone does not show it. Its click
-and Session → Jump to Latest (⌥⌘↓, disabled while following, `canJumpToLatest`) call `jumpToLatest()`, which counts a
+(`SessionWindowModel.endPosition`). `RootView` overlays `NewResponseButton` while the position is `newBelow`.
+Its click and Session → Jump to Latest (`canJumpToLatest`) call `jumpToLatest()`, which counts a
 request (`jumpRequests`, as ⌘L counts `composerFocusRequests`); `LiveTranscript` answers it with
 `TranscriptTableController.scrollToEnd()`, without animation, which resumes following and, through the viewport
-check, clears a waiting Done. ⌘↓ stays with the composer's text view. A live session is failed
+check, clears a waiting Done. A live session is failed
 only when it is no longer connected and has an error, so one rejected prompt does not mark it. End Session (or Cancel Startup)
 closes an owner and removes it, after which its session is listed as saved history; an owner whose
 startup, process or controller failed stays listed with its error until it is ended or continued, except a
 new session whose startup failed before its first prompt was submitted, which returns to the draft (ADR-0040).
-The Session menu routes actions through the focused window's `SessionWindowModel`. New Session is
-⇧⌘N, End Session (or Cancel Startup) is ⇧⌘E, Stop keeps ⌘., Continue is ⇧⌘C, and Resume Queue keeps
-⇧⌘R. Previous/Next Session use ⌥⌘[ / ⌥⌘], wrapping in the visible sidebar order (Needs You, Working, Settled); from the draft they select the last/first row. Next Session Needing Input
-uses ⇧⌥⌘] (⌥⌘I toggles the inspector), skipping saved history and other statuses. Search Sessions is ⌥⌘F. Focus Composer is ⌘L from any pane (`composerFocusRequests` moves first responder to the text view, as ⌥⌘F does for the sidebar field). Find in Transcript is ⌘F, with Find Next ⌘G, Find Previous ⇧⌘G and Next Failed Tool Call ⌥⌘G, and Jump to Latest ⌥⌘↓. The review pane's commands are Review Changes ⌃⌘R, Mark Viewed and Go to Next ⌥⌘V and
-Ask Agent ⌥⌘A. Permission answers keep ⌥⌘1…⌥⌘9. ⌘1…⌘9 (Session → Switch to Session, ADR-0046) select the first nine rows of Needs You and Working in the filtered sidebar, in the order on screen; Settled is not numbered. `SessionSidebar.numberedRows` is the pure mapping, `SessionWindowModel.numberedSessions` pads it to nine items (a number without a row is disabled, titled “No Session”) and the menu lists each row's title. Commands are
-disabled without an eligible selection in the focused window. Resume Queue also enables an empty
-paused queue, though a fresh Return now clears that pause automatically. The sidebar uses native single selection,
-sharing the same row identity with keyboard navigation; the new-session form has no selected row.
+The Session menu routes actions through the focused window's `SessionWindowModel`; its items and shortcuts are in the
+behavior documents ([sidebar](behavior/sidebar.md#navigation), [composer](behavior/composer.md),
+[queue](behavior/queue.md), [transcript](behavior/transcript.md), [merge](behavior/merge.md)). Commands are disabled
+without an eligible selection in the focused window. `SessionSidebar.numberedRows` is the pure mapping behind
+⌘1…⌘9 (ADR-0046) and `SessionWindowModel.numberedSessions` pads it to nine items; `composerFocusRequests` moves the
+first responder to the composer's text view, as `searchFocused` does for the sidebar field. The sidebar uses native
+single selection, sharing the same row identity with keyboard navigation; the new-session form has no selected row.
 History refresh follows completed startup, after the session record is persisted; an early session ID
-alone must not leave Continue disabled after a later process exit. Opening/restoring windows remains #40.
+alone must not leave Continue disabled after a later process exit.
 
 Notifications and the Dock badge follow [ADR-0030](adr/0030-notification-activation-and-identity.md).
 `SessionAttention` (Core) derives `AttentionNotice`s from the manager's owners and
@@ -847,43 +797,26 @@ the transcript's session is still displayed. `SessionFiles.selectedLine` carries
 `SourceView.showLine` selects it and scrolls by the laid-out fragment (TextKit 2 estimates heights), and
 follows the layout correction when highlighting finishes. Markdown opened with a line shows Source.
 
-The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md)) is the rightmost
-pane of the detail column, after the transcript and the file pane, toggled by a toolbar button and ⌥⌘I.
-`SessionWindowModel.showingInspector` is the working state and a `@SceneStorage` value remembers it per window
-(default shown); the inspector exists only beside a displayed session, so the draft has none. Neither the
-native `.inspector` nor `HSplitView` is used: the first crashed AppKit beside the split view, and the split view
-kept stale divider positions when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures
-the column with a `GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes`.
-Visibility: the transcript (at least 240 pt) always stays, the file pane the user opened (at least 240 pt; the
-review pane shares its slot) needs 480 pt, and the inspector (220–360 pt) needs 220 pt on top of what is shown, so it
-is the first to give way and at the 740 pt minimum it is hidden while a file is open. A hidden pane keeps its state
-and returns when the window widens. Widths: the file pane (default 420 pt) and the inspector (default 260 pt) keep the width the user last
-dragged them to (`PaneDivider` on each pane's leading edge, also adjustable with VoiceOver; stored in
-`SessionWindowModel`); when the column is too narrow the transcript gives way first, then the file pane shrinks
-to its minimum, then the inspector, and the three widths always add up to the column. It reads the window's
-`SessionWindowModel` and leads with the work ([ADR-0039](adr/0039-t3-style-window-layout.md), amendment). *Plan*
-(`PlanSection`, while the displayed transcript has a plan) comes first: one `PlanRow` per entry, the header
-`Plan · completed of total`, open while `turnStartedAt` is set and collapsed after the turn (`Section(isExpanded:)`; a
-toggle by hand holds until the turn starts or ends). `PlanProgress` (Core, pure) counts the completed entries and picks
-the first in progress, reduced to one line like a sidebar reason; the working line and the Working row's reason read
-it. `TranscriptState` clears `plan` when a turn starts, so the plan is always the current or the last turn's. Then three
-sections: *Changes* (`+added −removed · N files` from `SessionFiles.changeStats`, then Review and Merge into
-`<base>`…, then the changed-file list with per-file counts that opens the file pane; Review is the prominent button
-while there are changes, and the two share a row only when the pane is wide enough); *Workspace* (one block: the
-session branch (the stored name, or `agenthesia/<session id>` for older sessions) with `from <base>`, only for
-sessions in an Agenthesia worktree, and the working directory, as
-selectable text that wraps; Show in Finder and Open in Editor, through `EditorHandoff` with an empty path, are icon
-buttons with tooltips in its header; Discard Worktree… is a plain borderless button at its end); and *Agent* (agent
-name, Context and Cost from `ContextUsage` once the agent reported usage, and the Agent Log toggle, live sessions
-only). Merge is disabled with the help text `No changes to merge` when
-`SessionFiles.hasNoChanges` (the list is current, without an error, and empty), also in the Session menu and the
-review pane; while the list loads or failed, the merge sheet decides, as before. Refresh Files shows only with
-`SessionFiles.watchError` (`WatchErrorNotice`, beside its message in the inspector and in the review pane's footer).
-The path bar under the composer and the sidebar's changed files are gone.
+The session inspector (`SessionInspector`, [ADR-0039](adr/0039-t3-style-window-layout.md),
+[behavior](behavior/inspector.md)) is the rightmost pane of the detail column, after the transcript and the file pane.
+`SessionWindowModel.showingInspector` is the working state and a `@SceneStorage` value remembers it per window; the
+inspector exists only beside a displayed session, so the draft has none. Neither the native `.inspector` nor
+`HSplitView` is used: the first crashed AppKit beside the split view, and the split view kept stale divider positions
+when a pane appeared or the window shrank (ADR-0039, amendments). `RootView` measures the column with a
+`GeometryReader` and lays the panes out in an `HStack` with explicit widths from `DetailPanes` (the rules and defaults
+are in [file-pane.md](behavior/file-pane.md#width)); `PaneDivider` sits on each pane's leading edge, also adjustable
+with VoiceOver, and the widths are stored in `SessionWindowModel`. It reads the window's `SessionWindowModel` and leads
+with the work ([ADR-0039](adr/0039-t3-style-window-layout.md), amendment). `PlanSection` shows the plan;
+`PlanProgress` (Core, pure) counts the completed entries and picks the first in progress, reduced to one line like a
+sidebar reason; the working line and the Working row's reason read it. `TranscriptState` clears `plan` when a turn
+starts, so the plan is always the current or the last turn's. The Changes section reads `SessionFiles.changeStats`;
+Merge is disabled when `SessionFiles.hasNoChanges` (the list is current, without an error, and empty), also in the
+Session menu and the review pane; while the list loads or failed, the merge sheet decides. `WatchErrorNotice` shows
+with `SessionFiles.watchError`. The Workspace block's Show in Finder and Open in Editor go through `EditorHandoff`
+with an empty path, and the Agent section's Context and Cost come from `ContextUsage`.
 
-The file pane's Open in Editor (⌥⌘O) uses the editor chosen in the Settings scene (`SettingsView`, stored
-as `editorBundleIdentifier` in `UserDefaults`): the line URL when the editor has one, otherwise the file
-in that app; with no choice, or an editor that is not installed, the system's default app.
+The file pane's Open in Editor (⌥⌘O, [behavior](behavior/file-pane.md#open-in-editor)) reads the editor chosen in the
+Settings scene (`SettingsView`, stored as `editorBundleIdentifier` in `UserDefaults`).
 
 Inline code in agent messages and thoughts links when it names a file in the displayed session's index.
 `Rendering` marks inline code with the generic `.inlineCode` attribute. `SessionFiles` publishes
@@ -909,7 +842,7 @@ The initial `v1` migration creates four tables:
 |---|---|
 | `project` | Local UUID, name, unique root path and creation time. |
 | `agent_install` | Local UUID, name, executable, argument array and creation time. Migration `v4-agent-install-installation` adds the optional AgentRuntime installation ID: one row per installed version, `NULL` for a manual command ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)). Versioned installation metadata lives in AgentRuntime. |
-| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision, `v3-session-base-branch` the optional branch the session started from, `v5-session-branch` the optional session branch as created, and `v6-session-archived-at` the optional time the user archived the session (it is the one session column that changes after creation besides the title; the log stays append-only). |
+| `session` | Local UUID, project and agent references, optional agent session ID, protocol version, title, working directory and creation time. Migration `v2-session-base-revision` adds the optional initial Git revision, `v3-session-base-branch` the optional branch the session started from, `v5-session-branch` the optional session branch as created, and `v6-session-archived-at` the optional time the user archived the session (it and the title are the session columns that change after creation; the log stays append-only), and `v7-session-fallback-upstream` the optional name of the upstream a worktree could not start from. Migration `v8-session-deletion` adds no column: it lets a deletion remove a session's events (below). |
 | `event` | Session-local sequence, kind, payload format version, timestamp and the original JSON bytes. |
 
 The event log uses an ordinary rowid table with a unique composite primary-key index. This keeps
@@ -917,8 +850,9 @@ larger JSON payloads in table leaf pages instead of hitting the early overflow-p
 `WITHOUT ROWID` index records. The composite index still serves session/sequence lookup and ordering.
 
 Foreign keys reject missing parents and prevent deleting referenced metadata. Local session identity
-is separate from the agent's session ID. The store currently creates and reads metadata; editing,
-deletion and live observation are deferred until their callers need them. UUID columns use uppercase
+is separate from the agent's session ID. Besides creating and reading metadata, the store changes a session's title and archive time (`updateTitle`, `setArchived`)
+and deletes a whole session (`deleteSession`, see *Delete Session…* above); live observation is deferred until a caller
+needs it. UUID columns use uppercase
 `uuidString` TEXT, not GRDB's default UUID BLOB binding. Dates use REAL seconds since Foundation's
 reference date (2001-01-01); avoiding epoch conversion preserves their exact `Double` precision.
 Project root uniqueness compares exact strings. The caller must canonicalize directory identity,
@@ -938,7 +872,8 @@ belong to `AgenthesiaCore`.
 
 SQLite triggers reject event updates, deletes and replacement inserts. Every store connection enables
 recursive triggers so an `INSERT OR REPLACE` collision on the hidden rowid also fires the delete guard.
-Log compaction or history deletion will require an explicit migration and policy. Migrations never
+Only `deleteSession` may delete events, and only through the `session_deletion` marker that migration `v8-session-deletion`
+adds (*Delete Session…* above); log compaction would need its own migration and policy. Migrations never
 erase data on schema changes; opening a database with unknown migration identifiers fails rather than
 writing through a newer schema. The app uses this store; the CLI remains independent.
 
@@ -958,9 +893,7 @@ cancelling a task waiting on `send` does not cancel that owned turn. `stop` reco
 `session/cancel`, retaining updates until the prompt response. A new prompt is not allowed until a pending cancel has been sent.
 A stop while the initial prompt write
 is pending prevents sending that prompt. Low-level `send` rejects busy calls; the app uses `submit`
-to queue or steer them. The queue coordinator settles lifecycle writes before building snapshots and
-checks the Stop generation captured at public operation entry, so an earlier send-now or resume
-waiting behind an edit cannot supersede a later Stop.
+to queue or steer them (the ordering rules of queue operations and Stop are in *Concurrency*).
 Turn errors are recorded and close the session; deliberate close records cancellation instead.
 Closing during startup also throws `CancellationError`; an earlier failure or a failed persistence write takes precedence.
 The first failure is retained so a subsequent connection-closed error cannot hide its cause.
@@ -978,19 +911,12 @@ close are discarded. Native composer menus preserve choice groups; checkboxes sh
 Unknown option types are hidden, and saved settings remain visible read-only. Legacy modes enter the
 same controls through adapter normalization.
 
-Config responses use a JSON-RPC ordered result consumer: decoding, adapter normalization and the Core
-commit finish before the reader dispatches the next incoming message. This preserves both orderings:
-a response supersedes earlier config notifications, and later notifications supersede that response.
-The original config API still returns the normalized snapshot for its response. Cancellation before
+Config responses use a JSON-RPC ordered result consumer (*Concurrency*). The original config API still returns the normalized snapshot for its response. Cancellation before
 response admission withdraws the request; once its consumer starts, it completes even if its waiter is
-cancelled or the connection closes. The pending continuation is removed before consumption, so a
-failed durable commit can close the connection without completing it twice. Consumers may close the
-connection but must not await another wire response on it.
+cancelled or the connection closes.
 
-All writes and reductions share an explicit task chain. `@MainActor` alone cannot preserve this order
-across an async SQLite write. Incoming notification handlers await their commit and reduction before
-JSON-RPC dispatches the next message. This also makes tool updates available before a permission request.
-`SessionController` owns pending permission requests and their responses; views only submit a request
+Writes and reductions follow the ordering rules of *Concurrency*, which also make tool updates available before a
+permission request. `SessionController` owns pending permission requests and their responses; views only submit a request
 identifier and an offered option identifier through `answerPermission`, which rejects stale, repeated
 and unknown answers. A request is committed before it is shown, and its response is committed before
 it is returned to the agent. Stop, `$/cancel_request`, the end of the turn, close and failure settle
@@ -1084,8 +1010,7 @@ executor with stdin closed, stdout capped at 64 KiB and stderr drained without r
 sensitive output. Each probe has a 5-second deadline and process-group cleanup; cancellation is checked
 before and after the bounded probe. Missing/broken tools, timeouts, invalid metadata/ranges, incompatible
 versions and changed saved paths/versions have typed, actionable diagnostics. Runtime checks do not
-install, upgrade or remove anything. The API is ready for #35/#36; the current manual-session flow and
-running sessions are unchanged.
+install, upgrade or remove anything. 
 
 `AgentProcess` retains Foundation's `Process` and verifies process-group isolation before using group
 signals. Shutdown is shared by concurrent callers: SIGTERM targets the group, followed by SIGKILL
@@ -1143,7 +1068,7 @@ without a valid cache they throw. Cancellation throws rather than returning stal
 failure leaves fetched metadata usable with a warning, but cannot guarantee offline availability.
 The client uses an ephemeral URLSession without shared caches, cookies or credentials, and follows
 redirects only within the registry's HTTPS origin. It does not download icons, install or start agents,
-and is not wired into the app yet (#36).
+and `AgentCatalog` owns the app's client.
 
 The app displays the bounded stderr tail in its Agent Log panel ([#15](https://github.com/anesthetised/agenthesia/issues/15)).
 `AgentInstaller` owns `Application Support/Agenthesia/Agents/<agent-id>/<version>` under
@@ -1151,7 +1076,8 @@ The app displays the bounded stderr tail in its Agent Log panel ([#15](https://g
 marker, a lease file and `installation.json` with format version 1, a unique installation ID, registry
 identity, command, declared environment, source, timestamp and (for npm) the checked toolchain and engine
 requirements. It never persists the captured login-shell environment. This store is separate from
-Persistence's manual command records; windows and history adopt installations in #36.
+Persistence's manual command records; a session of an installed agent links to its version by the `agent_install` row's
+installation ID ([ADR-0036](adr/0036-agent-settings-and-installed-sessions.md)).
 `AppSupport.directory` (AgentRuntime) is the app's folder in `Application Support`: `Agenthesia` for the original
 bundle identifier and when there is none (tests, the CLI), `Agenthesia-<suffix>` for `….Agenthesia.<suffix>`. `just app`
 builds the `.dev` identifier, so a development build keeps its history, installs and registry cache apart from the
@@ -1182,8 +1108,8 @@ requests disabled. Configuration and cache are isolated from the user's npm file
 engines, the JavaScript entrypoint and the generated lockfile are validated; the manifest and lockfile
 remain beside `node_modules`. Launch uses the pinned Node executable and installed script directly,
 without npx or network resolution, after revalidating the saved runtime. Missing entrypoints explain
-the disabled-script policy. Some script-dependent packages fail only when launched: #36's bounded ACP
-readiness probe must report that failure without enabling scripts. Cancellation of npm/probes terminates
+the disabled-script policy. Some script-dependent packages fail only when launched; `AgentProbe`, the bounded initialize probe, checks local agents
+only and does not run after an install. Cancellation of npm/probes terminates
 the captured process group before cleanup.
 
 `AgentCatalog` (AgenthesiaCore) backs Settings → Agents and the draft's Agent chip: the registry snapshot,
@@ -1196,8 +1122,7 @@ processes have exited and the session has ended or failed. The catalog also keep
 found or custom commands; the list is a Codable array in `UserDefaults`, and a session with a local agent
 records a manual `agent_install` row as before. `AgentProbe` launches a command in an empty temporary
 directory, sends ACP `initialize` under a timeout, then closes the connection and terminates the process
-group; it creates no session and does not prove sign-in. Pre-session sign-in remains in #36. Runtime
-validation and explicit shell refresh are implemented. The shell/probe
+group; it creates no session and does not prove sign-in. Sign-in before a session is `AgentSignIn` (above). The shell/probe
 `posix_spawn` implementation addresses a terminal interaction found while reviewing
 [#14](https://github.com/anesthetised/agenthesia/issues/14). A possible transition of `AgentProcess`
 remains a separate investigation in [#91](https://github.com/anesthetised/agenthesia/issues/91).
@@ -1222,17 +1147,49 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
 - The event log is the source of truth for what is displayed; raw ACP updates are stored so old
   sessions can be re-rendered when the renderer improves ([ADR-0005](adr/0005-event-log.md)).
 - Streaming chunks are coalesced once per frame before they reach the UI.
-- **Ordering invariant:** `Connection` processes incoming messages strictly in arrival order. A
-  notification handler finishes before the next message is looked at, so anything a request refers to
-  (for example the `tool_call` a `session/request_permission` is about) has been handled when the request
-  handler starts. Request handlers then run concurrently.
+- Ordering rules: see *Concurrency*.
 
 ## Concurrency
 
 - Swift 6 language mode with complete strict concurrency checking.
 - I/O lives in actors (`JSONRPC.Connection`, process and PTY wrappers).
-- Everything the UI observes is `@MainActor @Observable`. Actors publish to it through `AsyncStream`s.
+- Everything the UI observes is `@MainActor @Observable` (`SessionController` among it). Actors publish to it through
+  `AsyncStream`s.
 - No `@unchecked Sendable` without a comment explaining why it is safe.
+
+**Ordering rules.** They keep what is stored, what is reduced and what the agent is told in one order.
+
+1. *Arrival order.* `Connection` processes incoming messages strictly in arrival order. A notification handler finishes
+   before the next message is looked at, so anything a request refers to (for example the `tool_call` a
+   `session/request_permission` is about) has been handled when the request handler starts. Request handlers then run
+   concurrently. A response's *ordered result consumer* (used for config responses) decodes, normalizes and commits in
+   the Core before the reader dispatches the next message, so a response supersedes earlier config notifications and
+   later notifications supersede the response. Cancelling before admission withdraws the request; once the consumer
+   starts, it completes even if its waiter is cancelled or the connection closes. The pending continuation is removed
+   before consumption, so a failed durable commit can close the connection without completing it twice. A consumer may
+   close the connection but must not await another wire response on it.
+2. *The write tail.* `@MainActor` alone cannot preserve the order across an async SQLite write: actor reentrancy lets
+   another call run while one awaits. `SessionController` therefore chains every event append and reduction on one task
+   (`tail`), capturing the previous tail and replacing it *before* awaiting. A notification handler awaits its commit
+   and reduction before the connection dispatches the next message. A permission resolution is enqueued synchronously,
+   so close, which awaits the tail, drains it with the other writes. Appends reach `Persistence` in ACP arrival order
+   because the controller awaits them in that order; the store only guarantees distinct sequences.
+3. *The queue coordinator.* Prompt-queue operations (`submit`, resume, send-now, edits, drain) run through
+   `SessionController.coordinateQueue`, which chains them one at a time on a second task (`queueTask`). Before building a queue snapshot it waits for the write tail to
+   settle, so lifecycle writes that arrive outside the coordinator cannot make it publish a stale snapshot. A config
+   change that enters while idle waits for the coordinator before a scheduled drain.
+4. *Stop generations.* `stop()` increments `stopGeneration` and reserves `stopping` synchronously, so turn completion
+   cannot slip an automatic drain past it. A public queue operation captures the generation at entry and checks it
+   again inside the coordinator: an earlier send-now or resume that waited behind an edit cannot supersede a later Stop.
+   A pending interrupt is superseded by a manual Stop, which never causes an automatic drain.
+
+**Dispatch queues instead of actors.** Work that blocks a thread, or that must keep the order of its own calls, runs on
+a Dispatch queue outside the cooperative pool: the Git CLI and the scans and diffs on top of it (`Workspace`, with
+`FileIndex`'s scan), `SessionFileSystem`'s serialized file operations and `SessionFileDocument` reads (Core), the
+registry cache file (`AgentRuntime`), `CommandOutput`'s bounded probes, the `TerminalProcess` queues (the master side's
+reader, the process source that reaps the command, and the typing queue), `FileHandleTransport`'s write queue (so a
+write cannot block an actor) and the `MCPSocket`'s accept source. The results come back to an actor or the main actor
+by `await`. `DirectoryWatcher` delivers FSEvents on the main queue and only signals invalidation.
 
 ## Protocol version strategy
 

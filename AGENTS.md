@@ -205,6 +205,21 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
 - New behavior comes with tests (Swift Testing).
 - Match the surrounding code: naming, comment density, idioms.
 
+## Done when
+
+An issue says what is done in its own words and links here for the rest, instead of repeating this paragraph. A change
+is done when:
+
+- `just lint` and `just test` pass, with Swift Testing tests for the new behavior and coverage above the `justfile`
+  thresholds;
+- the change is kept minimal (`ponytail`), and changed views are reviewed with `swiftui-pro`;
+- the result is checked in the running app with `MockAgent`, in light and dark, when it changes what the app shows
+  (see *Testing the running app*; add a relaunch when it changes stored state or window restoration);
+- ARCHITECTURE.md and PLAN.md are updated, and so are the behavior documents of the areas it touches, each with a
+  `Changes` line.
+
+A documentation-only issue is done when the documents agree with the code and with each other, and `just lint` passes.
+
 ## Dependencies
 
 - Third-party code must be under a GPLv3-compatible license (MIT, BSD, Apache-2.0, ISC, zlib, LGPL,

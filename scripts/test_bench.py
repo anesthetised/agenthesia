@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -24,6 +25,24 @@ class BenchmarkRunnerTests(unittest.TestCase):
         for invalid in ["S1:A′", "S3:A", "S7:A", "S7:A2", "S8:A", "S9:A", "S4:colours", "S4:cold+cold", "S1:A2,"]:
             with self.assertRaises(argparse.ArgumentTypeError):
                 bench.scenarios(invalid)
+
+    def test_stop_ends_the_lab_processes_started_since_a_run_began(self):
+        with tempfile.TemporaryDirectory() as directory:
+            # A stand-in for the lab that ignores SIGTERM, so `stop` has to kill it.
+            executable = Path(directory) / "lab"
+            executable.write_text("#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 0.1; done\n")
+            executable.chmod(0o755)
+            self.assertEqual(bench.processes(executable), set())
+            lab = subprocess.Popen([str(executable)])
+            try:
+                time.sleep(0.3)
+                self.assertEqual(bench.processes(executable), {lab.pid})
+                bench.stop({lab.pid}, grace=0.5)
+                self.assertIsNotNone(lab.wait(timeout=5))
+                self.assertEqual(bench.processes(executable), set())
+            finally:
+                lab.kill()
+                lab.wait()
 
     def test_structured_results_are_not_parsed_from_locale_dependent_tables(self):
         result = {"scenario": "stream", "measurements": {"p95MS": 1.25}}
@@ -81,6 +100,30 @@ class BenchmarkRunnerTests(unittest.TestCase):
             report = json.loads((output / "report.json").read_text())
             self.assertEqual([row["repetition"] for row in report["results"]], [1, 1, 2, 2])
             self.assertEqual(len({row["log"] for row in report["results"]}), 4)
+
+    def test_each_lab_process_gets_a_fresh_home_that_is_removed_afterwards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(mode="lab", runs=1, timeout=7, output=Path(directory) / "results",
+                                      scenarios=["S1:A2", "S2:App"])
+            homes = []
+            def run_once(command, environment, log, timeout):
+                home = Path(environment["CFFIXED_USER_HOME"])
+                self.assertTrue(home.is_dir())
+                self.assertEqual(list(home.iterdir()), [])
+                (home / "Library").mkdir()  # What the app leaves behind goes with the home.
+                homes.append(home)
+                return [{"scenario": "test"}]
+            def capture(*command):
+                return "1024" if "hw.memsize" in command else "test"
+            with patch.dict(bench.os.environ, {"AGENTHESIA_LAB_SNAPSHOTS": "/tmp/shots"}), \
+                 patch.object(bench, "capture", side_effect=capture), \
+                 patch.object(bench.subprocess, "run"), \
+                 patch.object(bench, "run_once", side_effect=run_once) as run:
+                bench.run(args)
+            self.assertEqual(len(set(homes)), 2)
+            self.assertFalse(any(home.exists() for home in homes))
+            self.assertNotEqual(homes[0].parent, Path.home())
+            self.assertTrue(all("AGENTHESIA_LAB_SNAPSHOTS" not in call.args[1] for call in run.call_args_list))
 
     def test_persistence_matrix_uses_release_binary_and_separate_processes(self):
         with tempfile.TemporaryDirectory() as directory:

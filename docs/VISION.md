@@ -56,16 +56,17 @@ behavior outside UI/UX, T3 Code is a comparison, not a template, as in
   in mind.
 - Platforms other than macOS.
 
-## After the MVP
+## Before 1.0
 
-- Cross-agent memory, after the core session and review workflow is reliable
-  ([ADR-0012](adr/0012-defer-cross-agent-memory.md)).
 - Built-in tools for agents through the `agenthesia` MCP server: show, review, screenshots, rendered pages,
   delegation, messages between sessions, secrets, worktree handoff and background commands
-  ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)).
+  ([ADR-0049](adr/0049-built-in-agenthesia-mcp-server.md)). They are milestone M13, which comes before the
+  release (M10).
 
 ## After 1.0
 
+- Cross-agent memory, after the core session and review workflow is reliable
+  ([ADR-0012](adr/0012-defer-cross-agent-memory.md)); it is not scheduled.
 - Basic editing in the viewer.
 - Shared MCP servers configured once for every agent.
 - User-launched background tasks next to agent sessions.

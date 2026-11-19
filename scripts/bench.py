@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 import platform
 import re
+import signal
 import subprocess
+import tempfile
 import time
 
 
@@ -49,6 +51,35 @@ def read_results(lines):
     if not results:
         raise ValueError("Benchmark produced no structured results; see the saved log")
     return results
+
+
+def processes(executable):
+    """The identifiers of the running processes of `executable`."""
+    found = subprocess.run(["pgrep", "-f", str(executable)], capture_output=True, text=True).stdout
+    return {int(pid) for pid in found.split()}
+
+
+def stop(pids, grace=5):
+    """Terminate `pids`, then kill those still running after `grace` seconds; return when all have exited."""
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+        deadline = time.monotonic() + grace
+        while any(alive(pid) for pid in pids) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        pids = {pid for pid in pids if alive(pid)}
+        if not pids:
+            return
 
 
 def run_once(command, environment, log, timeout):
@@ -117,18 +148,34 @@ def run(args):
             binary = ROOT / ".build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia"
         for repetition in range(1, args.runs + 1):
             for index, scenario in enumerate(metadata["scenarios"], start=1):
-                environment = dict(os.environ)
-                environment.pop("AGENTHESIA_LAB_RUNS", None)
-                environment.pop("AGENTHESIA_LAB_SNAPSHOTS", None)
-                if args.mode == "lab":
-                    environment["AGENTHESIA_LAB_RUNS"] = scenario  # One scenario per process, including cold runs.
                 log = directory / f"run-{repetition}-{index}.log"
                 print(f"Run {repetition}/{args.runs}: {scenario}", flush=True)
                 start = time.monotonic()
                 command = [str(binary)]
                 if args.mode == "persistence":
                     command += scenario.split(":")
-                results = run_once(command, environment, log, args.timeout)
+                environment = {key: value for key, value in os.environ.items()
+                               if key not in ("AGENTHESIA_LAB_RUNS", "AGENTHESIA_LAB_SNAPSHOTS")}
+                # A fresh home per lab process keeps the installed app's history, settings and saved windows out,
+                # beside the lab build's own bundle identifier; it is removed afterwards.
+                with tempfile.TemporaryDirectory(prefix="agh-lab-") as home:
+                    if args.mode == "lab":
+                        # One scenario per process, including cold runs.
+                        environment |= {"AGENTHESIA_LAB_RUNS": scenario, "CFFIXED_USER_HOME": home}
+                        # Started by a shell, the app presents no window; through LaunchServices it presents the
+                        # Rendering Lab (#396). Its output goes to the log, which `open -W` waits for.
+                        command = ["open", "-n", "-W", "--stdout", str(log), "--stderr", str(log),
+                                   "--env", f"AGENTHESIA_LAB_RUNS={scenario}", "--env", f"CFFIXED_USER_HOME={home}",
+                                   str(binary.parents[2])]
+                    # `open -W` waits for the app, but a timeout or an interrupt stops only `open`: stop the lab too
+                    # before its temporary home is removed.
+                    running = processes(binary) if args.mode == "lab" else set()
+                    try:
+                        results = run_once(command, environment, log, args.timeout)
+                    except BaseException:
+                        if args.mode == "lab":
+                            stop(processes(binary) - running)
+                        raise
                 metadata["results"].append({
                     "repetition": repetition, "scenario": scenario, "log": log.name,
                     "wallSeconds": time.monotonic() - start, "samples": results,

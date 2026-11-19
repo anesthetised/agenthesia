@@ -2,8 +2,8 @@
 
 The conversation of a session fills the center of its window: one row per message, tool call or notice, in a column
 at most 720 pt wide that the composer card below it shares ([ADR-0039](../adr/0039-t3-style-window-layout.md)). This
-document covers how rows are selected and copied and how the keyboard moves through them, how the agent's thoughts
-show and how a finished turn's work folds; what the other kinds of row show is not summarised here yet.
+document covers how rows are laid out, selected and copied, how the keyboard moves through them, how tool calls, the
+agent's thoughts and a finished turn's work show and fold, and how Find and following the end work.
 
 ## First message of a starting session
 
@@ -127,6 +127,61 @@ When a turn ends on its own, its work folds into one row, as in T3 Code: everyth
   expanded turn select and copy as before.
 - VoiceOver reads the row as a disclosure triangle labelled `Worked for 1m 3s`, collapsed or expanded.
 
+## Rows
+
+- Rows lie in the same column as the composer card: centered, at most 720 pt wide, with at least 24 pt on each side.
+- A user message is a bubble at the column's trailing edge, in the quiet `.quaternary` fill with rounded corners, that
+  hugs its text and stops at 80 % of the column; a caption under it (`not sent`, `sent together`) is right-aligned.
+  Agent messages have no role label, and tool, permission and question rows keep their headers.
+- A row's Copy button shows only while the pointer is over the row; VoiceOver gets the same action as a custom
+  action.
+- Session notices (continued, ended, merged, discarded, pull request opened) are a centered caption between two
+  hairlines, with no label and no Copy. After a Continue the transcript shows a `Continued · <date and time>` divider.
+
+## Tool calls
+
+- A tool call is a card: a header (the kind's symbol, the kind, the status, a disclosure) and a body with the title,
+  the reported locations and the text content. Selecting and copying the body works as for messages. A status the agent
+  did not report reads `Status not reported`; content the app cannot show is a placeholder, never dropped silently.
+- Two or more consecutive tool calls fold into one row, `Ran 3 commands, made 2 edits`, worded from the ACP tool
+  kinds, with `· 1 failed` in the failure color. While the session runs and the group's last call is pending or in
+  progress, the row shows that call's title instead (`just test…`). It is collapsed by default; its disclosure expands
+  the cards below it as rows. Any other item, a permission request or a form included, ends a group; a single call
+  stays a plain card.
+- A diff shows its path and unified hunks with three lines of context in a code block, with added and removed lines
+  tinted and the words that changed between adjacent lines marked (not for runs over 200 lines). An edit with more than
+  1,000 unmatched lines shows as a whole replacement. There are no side-by-side diffs.
+- A command's output replaces the terminal placeholder: text without escape sequences, in a code block with the exit
+  status; collapsed, it keeps the last lines. A body of more than 12 lines or 2,000 characters is collapsed, and its
+  expansion survives streamed updates. A header-only update leaves the body and its text selection alone.
+- A tool row whose call has a pending permission request leaves its diff out and shows it again once the request is
+  answered.
+- Paths in a tool call's locations and diffs, and inline code in agent messages and thoughts that names a file of the
+  session, are links that open the file ([file-pane.md](file-pane.md)); Copy still returns the plain Markdown.
+  Streaming rows and the user's prompts are not linked.
+- A permission request's record names what the agent offered and what was answered. The agent's own "always" options
+  are listed as the agent returned them, labeled as remembered by the agent, and Agenthesia keeps no permission policy
+  of its own. An answered record states only the recorded response (the option's name and kind, or cancellation), never
+  an inferred approval or decline; a request without a recorded response after a restart says so.
+
+## Find in the transcript
+
+- ⌘F opens the find bar; ⌘G steps to the next match, ⇧⌘G to the previous one, ⌥⌘G to the next failed tool call.
+- Find reads the full text of every row, so it finds what a folded group, a collapsed card or a folded turn does not
+  show. Matches are rows, not occurrences.
+- Typing counts the matches and marks them in the visible rows, 150 ms after the last key. Only Return or a step
+  expands the group, card or turn that hides the match, scrolls to its row and selects it. A row that is still
+  streaming is marked once it finishes.
+
+## Following the end
+
+- While a turn streams, the transcript follows its end. Scrolling up, or the keys of
+  [keyboard navigation](#keyboard-navigation), stops it; reaching the end again resumes it.
+- When the reader scrolled up and the end then grew, a `New response below` capsule appears at the bottom edge of the
+  transcript, above the status line. Scrolling up alone does not show it.
+- Clicking the capsule, or Session → Jump to Latest (⌥⌘↓, disabled while following), scrolls to the end without
+  animation and resumes following. ⌘↓ stays with the composer's text.
+
 ## Row selection
 
 - Clicking a row selects it; ⇧-click and ⌘-click extend the selection to a range and toggle single rows, as in any
@@ -169,6 +224,7 @@ the text; a selection here marks which message ⌘C or a keystroke acts on, not 
 
 ## Changes
 
+- 2026-11-19, #388: tool calls and groups, notices, Find and following the end moved here from ARCHITECTURE.md.
 - 2026-11-10, #375: an expanded permission record shows a shell call's whole command.
 - 2026-11-10, #341: a finished turn's work (calls, thoughts, permission records, earlier agent messages) folds into
   one `Worked for 1m 3s` row with a chevron above its answer; previously every row of a turn stayed open.

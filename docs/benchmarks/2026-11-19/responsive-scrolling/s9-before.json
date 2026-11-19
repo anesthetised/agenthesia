@@ -1,0 +1,182 @@
+[
+  {
+    "schemaVersion": 1,
+    "startedAt": "20261119T001335.761550Z",
+    "mode": "lab",
+    "runs": 1,
+    "timeoutSeconds": 180,
+    "commit": "1394723308094d0eed5c6c0e9922f2bb1633fb94",
+    "workingTree": "M scripts/app-check/wheel-scroll.sh\n M scripts/bench.py",
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "MacBookPro18,2",
+    "architecture": "arm64",
+    "memoryBytes": 34359738368,
+    "cpuCount": 10,
+    "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+    "build": "Debug with -O",
+    "scenarios": [
+      "S9:App"
+    ],
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "S9:App",
+        "log": "run-1-1.log",
+        "wallSeconds": 14.993186582999996,
+        "samples": [
+          {
+            "id": "A5D9D6EC-DCD2-466B-99DC-7EBFB1D968B4",
+            "measurements": {
+              "backingScale": 2,
+              "applyLatencyMaxMS": 99.99479199999995,
+              "elapsedMS": 12783.218042,
+              "chunkIntervalMS": 10,
+              "characters": 16387,
+              "toolUpdates": 127,
+              "chunks": 1278,
+              "viewportWidth": 868,
+              "viewportHeight": 340,
+              "applyLatencyP95MS": 16.332042000000158,
+              "peakBacklogChunks": 10,
+              "screenMaximumFPS": 120
+            },
+            "scenario": "S9 Tool updates, 10k items, App: production transcript, warm",
+            "report": {
+              "memory": 92.8760757446289,
+              "excessMilliseconds": 1535.18279036507,
+              "hitches": 103,
+              "freeMemory": 65,
+              "load": 4.39794921875,
+              "p50": 8.333333302289248,
+              "estimatedMissed": 185,
+              "p99": 22.835083305835724,
+              "frames": 1345,
+              "p95": 19.458374939858913,
+              "max": 97.44533337652683
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "startedAt": "20261119T001524.434047Z",
+    "mode": "lab",
+    "runs": 1,
+    "timeoutSeconds": 180,
+    "commit": "1394723308094d0eed5c6c0e9922f2bb1633fb94",
+    "workingTree": "M scripts/app-check/wheel-scroll.sh\n M scripts/bench.py",
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "MacBookPro18,2",
+    "architecture": "arm64",
+    "memoryBytes": 34359738368,
+    "cpuCount": 10,
+    "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+    "build": "Debug with -O",
+    "scenarios": [
+      "S9:App"
+    ],
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "S9:App",
+        "log": "run-1-1.log",
+        "wallSeconds": 15.179392416999995,
+        "samples": [
+          {
+            "report": {
+              "memory": 92.2198486328125,
+              "p50": 8.333333302289248,
+              "excessMilliseconds": 1604.052621871233,
+              "freeMemory": 64,
+              "hitches": 106,
+              "p95": 19.034875091165304,
+              "frames": 1337,
+              "estimatedMissed": 193,
+              "p99": 23.216458037495613,
+              "load": 6.296875,
+              "max": 122.67541652545333
+            },
+            "measurements": {
+              "applyLatencyMaxMS": 111.673417,
+              "elapsedMS": 12781.943458,
+              "viewportWidth": 868,
+              "peakBacklogChunks": 12,
+              "backingScale": 2,
+              "viewportHeight": 340,
+              "toolUpdates": 127,
+              "characters": 16387,
+              "screenMaximumFPS": 120,
+              "applyLatencyP95MS": 17.91375000000017,
+              "chunks": 1278,
+              "chunkIntervalMS": 10
+            },
+            "id": "BC6787B7-8237-4EDD-8E93-1EC6D9F31A10",
+            "scenario": "S9 Tool updates, 10k items, App: production transcript, warm"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "startedAt": "20261119T001635.659721Z",
+    "mode": "lab",
+    "runs": 1,
+    "timeoutSeconds": 180,
+    "commit": "1394723308094d0eed5c6c0e9922f2bb1633fb94",
+    "workingTree": "M scripts/app-check/wheel-scroll.sh\n M scripts/bench.py",
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "MacBookPro18,2",
+    "architecture": "arm64",
+    "memoryBytes": 34359738368,
+    "cpuCount": 10,
+    "toolchain": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)\nTarget: arm64-apple-macosx27.0.0",
+    "build": "Debug with -O",
+    "scenarios": [
+      "S9:App"
+    ],
+    "results": [
+      {
+        "repetition": 1,
+        "scenario": "S9:App",
+        "log": "run-1-1.log",
+        "wallSeconds": 15.212602,
+        "samples": [
+          {
+            "scenario": "S9 Tool updates, 10k items, App: production transcript, warm",
+            "id": "554074CB-A774-4F8B-8FF1-CC7C883D103E",
+            "measurements": {
+              "elapsedMS": 12780.261,
+              "backingScale": 2,
+              "viewportHeight": 340,
+              "applyLatencyP95MS": 16.53837499999966,
+              "peakBacklogChunks": 13,
+              "chunks": 1278,
+              "screenMaximumFPS": 120,
+              "chunkIntervalMS": 10,
+              "characters": 16387,
+              "applyLatencyMaxMS": 129.90562500000013,
+              "toolUpdates": 127,
+              "viewportWidth": 868
+            },
+            "report": {
+              "p99": 22.442624904215336,
+              "load": 5.69091796875,
+              "p50": 8.333333302289248,
+              "p95": 19.254083279520273,
+              "max": 132.3318751528859,
+              "estimatedMissed": 200,
+              "hitches": 124,
+              "excessMilliseconds": 1688.4340387769043,
+              "freeMemory": 65,
+              "memory": 94.6417236328125,
+              "frames": 1327
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

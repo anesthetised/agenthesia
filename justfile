@@ -79,11 +79,12 @@ bench-persistence-build:
 bench-path:
     @swift build -c release --package-path {{package}} --show-bin-path
 
-# Build an optimized Debug build, which has the Rendering Lab, for measurements
+# Build an optimized Debug build, which has the Rendering Lab, for measurements. Its own bundle identifier keeps the
+# installed app's settings, saved windows and data folder (Agenthesia-lab) apart; lab runs also get a temporary home.
 lab-build:
     xcodebuild -project Agenthesia.xcodeproj -scheme Agenthesia -configuration Debug \
         -destination 'platform=macOS' -derivedDataPath .build/xcode-lab -skipPackagePluginValidation build -quiet \
-        SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s
+        SWIFT_OPTIMIZATION_LEVEL=-O GCC_OPTIMIZATION_LEVEL=s PRODUCT_BUNDLE_IDENTIFIER=io.github.anesthetised.Agenthesia.lab
 
 # Launch the optimized lab build
 lab: lab-build
@@ -102,10 +103,18 @@ lab-profile scenario="S6:A2" output=".build/rendering.trace" options="": lab-bui
     set -eo pipefail
     recording_options=()
     if [[ -n "$3" ]]; then recording_options=(--recording-options "$3"); fi
+    home=$(mktemp -d /tmp/agh-lab.XXXXXX)
+    trap 'rm -rf "$home"' EXIT
     xcrun xctrace record --template 'Time Profiler' --instrument 'Points of Interest' --time-limit 30s \
         "${recording_options[@]}" \
-        --output "$2" --env "AGENTHESIA_LAB_RUNS=$1" --target-stdout - \
+        --output "$2" --env "AGENTHESIA_LAB_RUNS=$1" --env "CFFIXED_USER_HOME=$home" --target-stdout - \
         --no-prompt --launch -- .build/xcode-lab/Build/Products/Debug/Agenthesia.app/Contents/MacOS/Agenthesia
+
+# It drives the lab's window: leave the Mac alone for about a minute.
+# Scroll lab scenario S12 with wheel or trackpad events under Animation Hitches and summarize the trace (#396)
+[positional-arguments]
+lab-wheel input="wheel" output=".build/wheel.trace": lab-build app-check-tools
+    scripts/app-check/wheel-scroll.sh "$1" "$2"
 
 # Export CPU samples for inspection; the trace also opens directly in Instruments
 [positional-arguments]

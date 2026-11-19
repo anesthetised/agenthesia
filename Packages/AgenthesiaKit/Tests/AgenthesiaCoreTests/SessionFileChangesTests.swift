@@ -1,4 +1,5 @@
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -13,7 +14,7 @@ import Testing
         var invalidations = 0
         let changes = try await SessionFileChanges(directory: directory) { invalidations += 1 }
         try "external".write(to: directory.appending(path: "file"), atomically: true, encoding: .utf8)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while invalidations == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(invalidations > 0)
         changes.close()
@@ -44,7 +45,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(500))
         #expect(invalidations == 0)
         try "ref".write(to: git.appending(path: "refs/heads/probe"), atomically: false, encoding: .utf8)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while invalidations == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(invalidations > 0)
     }

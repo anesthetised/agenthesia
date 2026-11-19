@@ -89,6 +89,20 @@ sample. Tests: `scripts/test_coverage.py`, including a check that a pipe reader 
 Open: look at a CI log, where each `started`, `passed` and `failed` line should carry its own time, and the list after a
 timeout should name the stuck tests.
 
+**#133 (main-actor saturation), first part.** The waits now outlast the test that runs them: `TestSupport` (a target
+under `Tests/`) gives `eventually`, `waitUntil` and `waitLimit`, which wait up to the running test's own time limit (a
+minute where a test has none) and stop when the time limit cancels the test. Twelve copies of the polling loop became
+those helpers; the remaining deadlines of 1–20 s in the Core, UI, Workspace, AgentRuntime and acp-cli tests use
+`waitLimit`; `ScenarioAgent` waits 90 s for each client message instead of 50. The trigger was
+`SessionDraftTests`' 10-second wait expiring on `main` (run 42819157315). Measured with `sample` in one native
+test process (2026-11-10, local, 10 cores, load 9–17, about a third of the RAM free): the main thread was busy for
+65% of the 85-second run, four fifths of it on hosted views, half of that AppKit laying out windows in display-cycle
+observers rather than test code; in the core group alone it was 17% busy. The hosted group's wall time is
+`SessionPaneLayoutTests`, a serialized suite whose tests run one after another for the whole group (76 s locally,
+127–155 s on CI). Not changed and left for the structural decision: fixed settle sleeps and yield counts in hosted
+views, "sleep then reset a counter" FSEvents fixtures, "sleep, then cancel the turn" orderings in the ACP tests, and
+elapsed-time upper bounds. Open: the structural option (owner's decision) and several consecutive green CI runs.
+
 Dependencies across lanes: #371 needs #355 and #97; #376 needs #368; #363 needs #60 and #352; #366
 needs #357 and #60.
 

@@ -1,4 +1,5 @@
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -250,7 +251,7 @@ import Testing
     }
 
     private func waitForOutput(_ expected: String, from terminal: TerminalProcess) async throws {
-        let deadline = ContinuousClock.now + .seconds(3)
+        let deadline = ContinuousClock.now + waitLimit
         while !text(terminal.output).contains(expected) && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }

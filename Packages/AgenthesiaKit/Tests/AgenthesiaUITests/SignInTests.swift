@@ -4,6 +4,7 @@ import AppKit
 import Foundation
 import SwiftTerm
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -74,17 +75,6 @@ import Testing
             [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]
                 .map { package.appending(path: $0) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
         ).path
-    }
-
-    private func eventually(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("Timed out waiting for the condition", sourceLocation: sourceLocation)
-                return
-            }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
     }
 
     @Test func clearingTheSheetCancelsARunningSignInOrHidesAFailedOne() async throws {

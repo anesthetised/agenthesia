@@ -1,4 +1,5 @@
 import Foundation
+import TestSupport
 import Testing
 
 @testable import Workspace
@@ -183,7 +184,7 @@ import Testing
         defer { watcher.close() }
         // Only a ref in the main checkout changes; the selected worktree directory is untouched.
         try fixture.write(base + "\n", path: ".git/refs/heads/watcher-fixture")
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while invalidations == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(invalidations > 0)
         #expect(try await SessionWorkspace.changedPaths(in: session.workingDirectory, baseRevision: nil).isEmpty)

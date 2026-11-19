@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -180,7 +181,7 @@ import Testing
         let pidText = try String(contentsOf: childFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         let pid = try #require(Int32(pidText))
         defer { kill(pid, SIGKILL) }
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + waitLimit
         while kill(pid, 0) == 0 && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -216,7 +217,7 @@ import Testing
         let pidText = try String(contentsOf: childFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         let pid = try #require(Int32(pidText))
         defer { kill(pid, SIGKILL) }
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + waitLimit
         while kill(pid, 0) == 0 && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }

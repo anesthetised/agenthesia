@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -78,7 +79,7 @@ import Testing
         window.contentView = host
         host.layoutSubtreeIfNeeded()
         window.close()
-        try await eventually { fixture.catalog.signIn == nil }
+        try await waitUntil { fixture.catalog.signIn == nil }
         #expect(flow.state == .closed)
     }
 
@@ -88,7 +89,7 @@ import Testing
         let flow = try fixture.flow()
         await flow.prepare()
         let signingIn = Task { await flow.signIn(with: "mock-terminal") }
-        try await eventually { flow.terminal != nil }
+        try await waitUntil { flow.terminal != nil }
         let terminal = try #require(flow.terminal)
         // A bare window: the test is about `NSWindow`'s own default, not hosted layout.
         let window = NSWindow()
@@ -109,14 +110,8 @@ import Testing
         }
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
         #expect(delegate.applicationShouldTerminate(NSApplication.shared) == .terminateLater)
-        try await eventually { replies == 1 }
+        try await waitUntil { replies == 1 }
         await signingIn.value
         #expect(try await delegate.sessions.library.history().isEmpty)
-    }
-
-    private func eventually(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try #require(condition())
     }
 }

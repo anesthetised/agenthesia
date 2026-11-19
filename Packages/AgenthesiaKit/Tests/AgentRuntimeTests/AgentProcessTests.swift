@@ -2,6 +2,7 @@ import ACP
 import ACPTesting
 import Foundation
 import JSONRPC
+import TestSupport
 import Testing
 
 @testable import AgentRuntime
@@ -282,7 +283,7 @@ import Testing
         let process = try AgentProcess(
             launching: AgentCommand(executable: "/bin/sh", arguments: ["-c", "echo ready >&2; exec /bin/sleep 30"])
         )
-        let deadline = ContinuousClock.now + .seconds(3)
+        let deadline = ContinuousClock.now + waitLimit
         while !(await process.stderrLog).contains("ready") && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -430,7 +431,7 @@ struct MockAgentScenarioTests {
 /// Pass nil when a parent task races readiness against bounded process completion.
 func waitForChildPID(
     at file: URL,
-    deadline: ContinuousClock.Instant? = ContinuousClock.now + .seconds(3)
+    deadline: ContinuousClock.Instant? = ContinuousClock.now + waitLimit
 ) async throws -> Int32 {
     while true {
         try Task.checkCancellation()
@@ -446,7 +447,7 @@ func waitForChildPID(
 }
 
 func waitUntilInactive(_ pid: Int32) async throws -> Bool {
-    let deadline = ContinuousClock.now + .seconds(3)
+    let deadline = ContinuousClock.now + waitLimit
     while ContinuousClock.now < deadline {
         if kill(pid, 0) != 0 { return true }
         let process = Process()

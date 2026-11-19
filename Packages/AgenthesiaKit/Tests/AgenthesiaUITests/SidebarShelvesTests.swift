@@ -1,6 +1,7 @@
 import AppKit
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -122,9 +123,9 @@ import Testing
         #expect(fixture.sidebarTables().count == 2)
         fixture.model.settledShelfExpanded = false
         // The list leaves with the shelf's animation.
-        for _ in 0..<40 where fixture.sidebarTables().count != 1 {
-            try await Task.sleep(for: .milliseconds(50))
-            await fixture.settle()
+        await eventually {
+            fixture.host.layoutSubtreeIfNeeded()
+            return fixture.sidebarTables().count == 1
         }
         #expect(fixture.sidebarTables().count == 1)
         // The selection and the session in the detail column stay.

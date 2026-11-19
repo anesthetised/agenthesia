@@ -2,6 +2,7 @@ import AgenthesiaCore
 import AppKit
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaUI
@@ -232,10 +233,9 @@ import Testing
     }
 
     private func settle(_ host: NSView, until predicate: () -> Bool) async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while !predicate() && ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
+        await eventually {
             host.layoutSubtreeIfNeeded()
+            return predicate()
         }
     }
 }

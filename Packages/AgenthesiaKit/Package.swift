@@ -120,10 +120,12 @@ let package = Package(
         .executableTarget(name: "MockAgent", dependencies: ["ACPTesting", "JSONRPC"], swiftSettings: swiftSettings),
         // The stdio end of the agenthesia MCP server (ADR-0049); system frameworks only, copied into Contents/Helpers.
         .executableTarget(name: "agenthesia-mcp", swiftSettings: swiftSettings),
+        // Waits for test conditions, shared by the test targets; it imports Testing, so no product may depend on it.
+        .target(name: "TestSupport", path: "Tests/TestSupport", swiftSettings: swiftSettings),
 
         .testTarget(
             name: "acp-cliTests",
-            dependencies: ["acp-cli", "ACP", "ACPTesting", "JSONRPC", "MockAgent", "agenthesia-mcp"],
+            dependencies: ["acp-cli", "ACP", "ACPTesting", "JSONRPC", "MockAgent", "agenthesia-mcp", "TestSupport"],
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "JSONRPCTests", dependencies: ["JSONRPC"], swiftSettings: swiftSettings),
@@ -135,12 +137,13 @@ let package = Package(
             swiftSettings: swiftSettings
         ),
         .testTarget(name: "ACPTestingTests", dependencies: ["ACPTesting"], swiftSettings: swiftSettings),
+        .testTarget(name: "TestSupportTests", dependencies: ["TestSupport"], swiftSettings: swiftSettings),
         .testTarget(
             name: "AgentRuntimeTests",
-            dependencies: ["AgentRuntime", "ACP", "ACPTesting", "JSONRPC", "MockAgent"],
+            dependencies: ["AgentRuntime", "ACP", "ACPTesting", "JSONRPC", "MockAgent", "TestSupport"],
             swiftSettings: swiftSettings
         ),
-        .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], swiftSettings: swiftSettings),
+        .testTarget(name: "WorkspaceTests", dependencies: ["Workspace", "TestSupport"], swiftSettings: swiftSettings),
         .testTarget(
             name: "PersistenceTests",
             dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")],
@@ -155,12 +158,13 @@ let package = Package(
             name: "AgenthesiaCoreTests",
             dependencies: [
                 "AgenthesiaCore", "AgentRuntime", "ACPTesting", "JSONRPC", "MCP", "MockAgent", "agenthesia-mcp",
+                "TestSupport",
             ],
             swiftSettings: swiftSettings
         ),
         .testTarget(
             name: "AgenthesiaUITests",
-            dependencies: ["AgenthesiaUI", "AgenthesiaCore", "AgentRuntime", "MockAgent"],
+            dependencies: ["AgenthesiaUI", "AgenthesiaCore", "AgentRuntime", "MockAgent", "TestSupport"],
             swiftSettings: swiftSettings
         ),
     ]

@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -114,11 +115,9 @@ import Testing
         sourceLocation: SourceLocation = #_sourceLocation,
         _ condition: () -> Bool
     ) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out", sourceLocation: sourceLocation)
-            try await Task.sleep(for: .milliseconds(10))
+        try await TestSupport.waitUntil(sourceLocation: sourceLocation) {
             host?.layoutSubtreeIfNeeded()
+            return condition()
         }
     }
 }

@@ -3,6 +3,7 @@ import AgentRuntime
 import Darwin
 import Foundation
 import JSONRPC
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -365,7 +366,7 @@ import Testing
         sourceLocation: SourceLocation = #_sourceLocation,
         _ value: () -> T?
     ) async throws -> T {
-        let deadline = ContinuousClock.now + .seconds(10)
+        let deadline = ContinuousClock.now + waitLimit
         while ContinuousClock.now < deadline {
             if let value = value() { return value }
             try await Task.sleep(for: .milliseconds(10))

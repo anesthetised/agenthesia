@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import JSONRPC
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -424,17 +425,6 @@ import Testing
             model.close()
             await sessions.closeAll()
             try? FileManager.default.removeItem(at: directory)
-        }
-    }
-
-    private func waitUntil(
-        _ condition: () -> Bool,
-        sourceLocation: SourceLocation = #_sourceLocation
-    ) async throws {
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !condition() {
-            try #require(ContinuousClock.now < deadline, "Timed out", sourceLocation: sourceLocation)
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 

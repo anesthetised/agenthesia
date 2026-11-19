@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -151,9 +152,9 @@ import Testing
             .frame(width: 140, alignment: .leading)
         )
         host.frame = CGRect(x: 0, y: 0, width: 140, height: 20)
-        for _ in 0..<20 where frames.reason == .zero {
+        await eventually {
             host.layoutSubtreeIfNeeded()
-            try await Task.sleep(for: .milliseconds(20))
+            return frames.reason != .zero
         }
         // The project is cut, and the reason starts where its text ends, not where its share would.
         #expect(frames.project.width > 0 && frames.project.width < 140 * 0.6)

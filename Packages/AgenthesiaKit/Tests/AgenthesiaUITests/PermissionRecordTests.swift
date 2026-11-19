@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -311,24 +312,18 @@ import Testing
 
     /// A restored diff makes its row taller once the table lays out again, which a loaded runner may delay.
     private func grows(_ controller: TranscriptTableController, from height: CGFloat) async throws -> Bool {
-        let deadline = ContinuousClock.now + .seconds(5)
-        while ContinuousClock.now < deadline {
+        await eventually {
             controller.table.layoutSubtreeIfNeeded()
-            if controller.table.frame.height > height { return true }
-            try await Task.sleep(for: .milliseconds(10))
+            return controller.table.frame.height > height
         }
-        return false
     }
 
     /// New rows measure themselves during layout, and the table follows them on the next main queue turn.
     private func reachesEnd(_ controller: TranscriptTableController) async throws -> Bool {
-        let deadline = ContinuousClock.now + .seconds(5)
-        while ContinuousClock.now < deadline {
+        await eventually {
             controller.table.layoutSubtreeIfNeeded()
-            if controller.table.frame.height - controller.scroll.contentView.bounds.maxY < 2 { return true }
-            try await Task.sleep(for: .milliseconds(10))
+            return controller.table.frame.height - controller.scroll.contentView.bounds.maxY < 2
         }
-        return false
     }
 
     private func host(_ controller: TranscriptTableController, width: CGFloat = 600) -> NSWindow {

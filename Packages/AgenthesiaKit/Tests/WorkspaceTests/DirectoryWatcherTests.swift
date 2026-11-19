@@ -1,4 +1,5 @@
 import Foundation
+import TestSupport
 import Testing
 
 @testable import Workspace
@@ -11,7 +12,7 @@ import Testing
         var changes = 0
         let watcher = try DirectoryWatcher(directories: [directory]) { changes += 1 }
         try "external edit".write(to: directory.appending(path: "file"), atomically: true, encoding: .utf8)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while changes == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(changes > 0)
         watcher.close()
@@ -41,7 +42,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(500))
         #expect(changes == 0)
         try "ref".write(to: directory.appending(path: "file"), atomically: true, encoding: .utf8)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        let deadline = ContinuousClock.now.advanced(by: waitLimit)
         while changes == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
         #expect(changes > 0)
     }

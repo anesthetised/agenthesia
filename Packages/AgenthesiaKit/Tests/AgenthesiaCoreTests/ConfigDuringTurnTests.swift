@@ -342,6 +342,8 @@ private actor TurnConnection: ACP.AgentConnection {
         defer { try? FileManager.default.removeItem(at: directory) }
         try await session.setConfigOption("model", to: .select("large"))
         try await session.submit([.init(text: "steer")], intent: .now)
+        // `submit` returns once the prompt is recorded; the turn's own task sends it to the agent after that.
+        await connection.waitForCalls(3)
         #expect(await connection.calls == ["prompt work", "model=large", "prompt steer"])
         #expect(session.pendingConfig.isEmpty)
         await session.close()

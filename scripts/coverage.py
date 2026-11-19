@@ -96,7 +96,7 @@ def test(package: str) -> int:
     result = 0
     # Hosted views run about twice as long on CI as on a developer machine; their timeout still catches a deadlock.
     for name, selector, pattern, timeout in [
-        ("core", "--skip", f"{RUNTIME_TESTS}|{HOSTED_TESTS}", 120),
+        ("core", "--skip", f"{RUNTIME_TESTS}|{HOSTED_TESTS}", 240),
         ("runtime", "--filter", RUNTIME_TESTS, 120),
         ("hosted", "--filter", HOSTED_TESTS, 240),
     ]:

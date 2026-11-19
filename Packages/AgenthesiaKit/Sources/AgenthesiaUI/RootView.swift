@@ -129,6 +129,8 @@ public struct RootView: View {
         .handlesExternalEvents(preferring: [], allowing: ["*"])
         // A session in front of the user needs no notification (ADR-0026).
         .onChange(of: shownSessionID, initial: true) { model.sessions.setShown(shownSessionID, in: model) }
+        // Nor does it pass through done when its turn ends.
+        .onChange(of: watchedOwner.map(ObjectIdentifier.init), initial: true) { model.watch(watchedOwner) }
         .onAppear {
             model.showingInspector = storedInspector
             model.workingShelfExpanded = storedWorkingShelf
@@ -195,6 +197,8 @@ public struct RootView: View {
             target = model.target
         }
     }
+
+    private var watchedOwner: LiveSession? { model.watchedOwner(appearsActive: appearsActive) }
 
     private var shownSessionID: UUID? {
         appearsActive && !model.showingSetup ? model.displayed?.session.id : nil

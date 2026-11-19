@@ -200,8 +200,15 @@ Progress:
   with the shelves' spring, none under Reduce Motion or while a search filters. Tested with Swift Testing: sectioning
   for every activity and the order inside the list (Core, with MockAgent), the queue rule (Core, the queue's fake
   connection, including the moment a released queue is due), the numbered rows, the board's order, the menu bar, and a
-  hosted sidebar with one idle and one running session in `OffscreenWindow`. Not checked yet: the running app with
-  `MockAgent` in light and dark, which also shows whether the move animation reads well.
+  hosted sidebar with one idle and one running session in `OffscreenWindow`. The first running-app check with `MockAgent`
+  in light and dark (by the integrator) passed the order, the shelf, the board times, the menu bar and `No open
+  sessions`, and found three defects, fixed here: a 13 pt gap below Overview (the headerless section's spacer row; the
+  rows now follow Overview directly); no animation of the move (the list and the shelves read `model.sidebar`
+  themselves, so their observation updated them outside the column's animated transaction; the column now passes its
+  sidebar down, and an on-screen hosted test sees the list's bottom inset pass through in-between values, which it
+  does not without the fix); and a frame or two of `Finished` at the top of the list when the shown session's turn
+  ended (the transcript cleared the mark a frame later; a window that follows the end now marks the turn seen in the
+  same update, `LiveSession.setWatched`). The second running-app check is to do.
 - #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
   and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
   3 were aligned with it.

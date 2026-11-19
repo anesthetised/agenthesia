@@ -10,7 +10,8 @@ has no selected row. The search text and the selection belong to the window.
 - **Overview** — always the first row, `Overview` with `square.grid.2x2`, above the list and not filtered by the
   search. Selecting it, or Session → `Overview` (⌘0), shows the session board in the window, and it is selected while
   the board shows ([board.md](board.md)).
-- **The list** — every live session that is not in a turn, without a header. The rows that need the user come first:
+- **The list** — every live session that is not in a turn, without a header: its first row follows Overview at the
+  rows' own spacing. The rows that need the user come first:
   *needs input* (waits for sign-in, a permission or an input form), *failed* (startup or the connection failed) and
   *done* (a turn finished and its end has not been on screen yet,
   [ADR-0026's amendment](../adr/0026-app-wide-session-manager.md)); then the idle ones. Each group in start order.
@@ -25,7 +26,8 @@ has no selected row. The search text and the selection belong to the window.
 - A row's move between the list and the Working shelf, or in and out of either, animates: the light spring of the
   shelves (about 0.25 s). Under Reduce Motion, and while a search filters, rows change at once.
 - A *done* row moves down among the idle rows once the end of the finished turn has been on screen in an active window
-  (scrolled up away from the end, it stays).
+  (scrolled up away from the end, it stays). A turn that ends while its session is shown at the end of its transcript
+  in an active window is seen at once: its row goes straight to the idle rows, without a frame as done.
 
 *Why start order:* the list and Working do not re-sort by activity, so rows do not jump while the user aims at them;
 a row only moves between the list's two groups or to and from the shelf. Settled sorts by last activity because a list
@@ -194,7 +196,8 @@ their next refresh, and a finished deletion triggers one in every window.
 
 - 2026-11-19, #352: the list holds every open session that is not in a turn, the rows that need the user first, with
   no header; it reads `No open sessions` when empty. The Working shelf holds only the sessions in a turn (and one about
-  to start a queued turn); `Idle 20m` is gone. A row's move between them animates.
+  to start a queued turn); `Idle 20m` is gone. A row's move between them animates. The first row follows Overview
+  without a gap; a turn that ends while shown at the end of its transcript in an active window goes straight to idle.
 - 2026-11-09, #227: the Overview row above Needs You (⌘0) shows the session board; a window whose session was deleted
   goes to the board instead of the draft.
 - 2026-11-09, #229: `Discard Worktree…` is disabled for a session in the project folder.

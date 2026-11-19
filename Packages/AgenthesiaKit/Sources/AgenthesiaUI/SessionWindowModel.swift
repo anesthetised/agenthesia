@@ -212,6 +212,19 @@ import os
     func unseenResult(appearsActive: Bool) -> Int64? {
         appearsActive && !showingSetup && restored == nil ? owner?.unseenResult : nil
     }
+    /// The live session whose end this window shows the user: it appears active and follows the session's transcript
+    /// to its end. A turn that ends then is seen at once (`LiveSession.setWatched`).
+    func watchedOwner(appearsActive: Bool) -> LiveSession? {
+        appearsActive && !showingSetup && restored == nil && heldPrompt == nil && endPosition == .following
+            ? owner : nil
+    }
+    @ObservationIgnored private weak var watched: LiveSession?
+    func watch(_ owner: LiveSession?) {
+        guard owner !== watched else { return }
+        watched?.setWatched(false, by: self)
+        owner?.setWatched(true, by: self)
+        watched = owner
+    }
     /// Continue keeps the same files, so browsing outlasts the startup gap without a controller (ADR-0023).
     /// A removed worktree has no files left to browse.
     var filesSession: SessionRecord? {
@@ -1099,6 +1112,7 @@ import os
         closed = true; selection = UUID(); files.close(); review = nil; showingReview = false; merge = nil
         pullRequestDraft = nil
         sessions.setShown(nil, in: self)
+        watch(nil)
         settleQueueEdit()
     }
 }

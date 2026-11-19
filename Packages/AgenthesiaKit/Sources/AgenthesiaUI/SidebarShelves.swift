@@ -7,6 +7,8 @@ import SwiftUI
 /// than `topRoom`.
 struct SidebarShelves: View {
     @Bindable var model: SessionWindowModel
+    /// The column's `model.sidebar`, so that a row's move between the list and a shelf takes the column's animation.
+    let sidebar: SessionSidebar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The sidebar's height below the search field, measured by `heightProbe`.
     @State private var height: CGFloat = 0
@@ -42,7 +44,6 @@ struct SidebarShelves: View {
     }
 
     var body: some View {
-        let sidebar = model.sidebar
         let working = sidebar.section(.working)
         let settled = sidebar.section(.settled)
         let filtered = sidebar.isFiltered

@@ -25,7 +25,7 @@ struct SessionSidebarColumn: View {
     var body: some View {
         let sidebar = model.sidebar
         List(selection: Bindable(model).sidebarSelection) {
-            SessionSidebarList(model: model)
+            SessionSidebarList(model: model, section: sidebar.section(.active))
         }
         .overlay {
             switch Self.placeholder(sidebar) {
@@ -34,7 +34,7 @@ struct SessionSidebarColumn: View {
             case nil: EmptyView()
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { SidebarShelves(model: model) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { SidebarShelves(model: model, sidebar: sidebar) }
         // A search filters at once.
         .animation(
             sidebar.isFiltered ? nil : SidebarShelves.animation(reduceMotion: reduceMotion),

@@ -105,6 +105,41 @@ import Testing
         await manager.closeAll()
     }
 
+    @Test func aTurnThatEndsWhileAWindowShowsItsEndIsSeenAtOnce() async throws {
+        let (directory, manager, agent) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        final class Window {}
+        let (first, second) = (Window(), Window())
+        let owner = manager.start(directory: directory, agent: agent)
+        await owner.startup?.value
+        // Shown at its end, the session never passes through done, so its row never sorts among those that need you.
+        owner.setWatched(true, by: first)
+        await owner.send("hello")
+        #expect(owner.activity == .idle && owner.unseenResult == nil)
+        owner.setWatched(false, by: first)
+        #expect(owner.activity == .idle)
+
+        // Unwatched, the turn is done; showing its end sees it, also after the window looks away.
+        await owner.send("hello")
+        #expect(owner.activity == .done)
+        owner.setWatched(true, by: first)
+        #expect(owner.activity == .idle)
+        owner.setWatched(false, by: first)
+        #expect(owner.activity == .idle)
+
+        // One of two windows looking away leaves the other watching.
+        owner.setWatched(true, by: first)
+        owner.setWatched(true, by: second)
+        owner.setWatched(false, by: first)
+        await owner.send("hello")
+        #expect(owner.activity == .idle)
+        owner.setWatched(false, by: second)
+        owner.setWatched(false, by: second)
+        await owner.send("hello")
+        #expect(owner.activity == .done)
+        await manager.closeAll()
+    }
+
     @Test func failedConnectionsAndStartupsShowAsFailed() async throws {
         let (directory, manager, agent) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

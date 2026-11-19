@@ -186,9 +186,9 @@ import Testing
         await fixture.settle()
         let tables = fixture.sidebarTables()
         try #require(tables.count == 2)
-        // The top list holds the Overview row, the headerless section's spacer and the idle session; the shelf lists
-        // the running one under it.
-        #expect(tables[0].numberOfRows == 3)
+        // The top list holds the Overview row and, right after it with no section between, the idle session; the
+        // shelf lists the running one under it.
+        #expect(tables[0].numberOfRows == 2)
         #expect(tables[1].numberOfRows == 1)
         let sidebar = fixture.model.sidebar
         #expect(sidebar.section(.active)?.rows.count == 1 && sidebar.section(.working)?.rows.count == 1)
@@ -208,6 +208,32 @@ import Testing
         let turn = Task { await owner.send("slow") }
         while controller.status == .idle { await Task.yield() }
         #expect(SessionSidebarColumn.liveRows(fixture.model.sidebar) == [[], [id]])
+        await owner.stop()
+        await turn.value
+        await fixture.manager.closeAll()
+    }
+
+    @Test func aRowsMoveToTheShelfAnimates() async throws {
+        // On a screen, so that the animation runs.
+        let fixture = try await Fixture(sessions: 0, live: 1, onScreen: true)
+        defer { fixture.close() }
+        fixture.model.showingSetup = true
+        await fixture.settle()
+        let list = try #require(fixture.sidebarTables().first?.enclosingScrollView)
+        #expect(list.contentInsets.bottom == 0)
+        let owner = try #require(fixture.manager.owners.first)
+        let controller = try #require(owner.controller)
+        let turn = Task { await owner.send("slow") }
+        while controller.status == .idle { await Task.yield() }
+        // The shelf that takes the row grows under the list: animated, the list's bottom inset passes through
+        // values between none and the shelf's height; without the animation it jumps there in one frame.
+        var insets: Set<CGFloat> = []
+        let start = ContinuousClock.now
+        while ContinuousClock.now - start < .seconds(2), insets.count < 3 {
+            insets.insert(list.contentInsets.bottom)
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(insets.count >= 3, "\(insets.sorted())")
         await owner.stop()
         await turn.value
         await fixture.manager.closeAll()
@@ -256,7 +282,7 @@ import Testing
 
     /// `live` sessions of the bundled `MockAgent` are started and left idle, then `running` more are left in a turn;
     /// the caller closes them.
-    init(sessions count: Int, live: Int = 0, running: Int = 0) async throws {
+    init(sessions count: Int, live: Int = 0, running: Int = 0, onScreen: Bool = false) async throws {
         _ = NSApplication.shared
         directory = FileManager.default.temporaryDirectory.appending(path: "settled-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -299,7 +325,7 @@ import Testing
             }
         }
         host = NSHostingView(rootView: RootView(model: model))
-        window = OffscreenWindow(size: .init(width: 900, height: 600))
+        window = OffscreenWindow(size: .init(width: 900, height: 600), drivesDisplayLink: onScreen)
         window.contentView = host
         window.orderFront(nil)
     }

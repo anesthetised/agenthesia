@@ -166,6 +166,35 @@ import Testing
         await sessions.closeAll()
     }
 
+    @Test func aWindowWatchesTheSessionItShowsAtItsEndWhileActive() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "window-watch-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = manager(directory)
+        let model = SessionWindowModel(sessions: sessions)
+        let agent = try mock()
+        model.start(directory: directory, executable: agent.executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        #expect(model.watchedOwner(appearsActive: true) === owner)
+        // Not key, scrolled away from the end, or showing the draft: nothing is watched.
+        #expect(model.watchedOwner(appearsActive: false) == nil)
+        model.endPosition = .scrolledUp
+        #expect(model.watchedOwner(appearsActive: true) == nil)
+        model.endPosition = .following
+        model.showingSetup = true
+        #expect(model.watchedOwner(appearsActive: true) == nil)
+        model.showingSetup = false
+
+        // Watched, the turn that ends is seen at once; closing the window stops watching.
+        model.watch(model.watchedOwner(appearsActive: true))
+        await owner.send("hello")
+        #expect(owner.activity == .idle)
+        model.close()
+        await owner.send("hello")
+        #expect(owner.activity == .done)
+        await sessions.closeAll()
+    }
+
     @Test func sidebarFollowsTheManagerAndRefreshLoadsProjects() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "window-sidebar-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

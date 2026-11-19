@@ -21,7 +21,8 @@ The composer itself is described in [composer.md](composer.md).
 - Send and Queue are disabled for an empty draft. A draft is empty when it has no attachments and its text is only
   whitespace. Send, Queue and the Send options items are also disabled while a config option change is being confirmed.
 - When a turn ends normally, all queued messages go to the agent together as one prompt. The transcript shows them as
-  separate messages captioned `sent together`.
+  separate messages captioned `sent together`. Settings picked during the turn are applied first; they belong to the
+  session, not to a queued message.
   *Why:* the agent sees every follow-up at once instead of answering them one turn at a time.
 
 ## Send options and steering
@@ -93,6 +94,8 @@ The queue pauses, and no queued message is sent automatically, when:
   queued; none of them does anything while Stop is unavailable, such as on an idle session;
 - the turn ends with a refusal;
 - the agent answers the prompt with an error ([ADR-0027](../adr/0027-recoverable-prompt-errors.md));
+- the agent refuses a settings change picked during the turn when it is applied at the turn's end
+  ([composer.md](composer.md#session-settings)), so no queued message goes out with the old settings;
 - the connection or the agent process fails.
 
 A turn that ends by hitting a limit (`max_tokens`, `max_turn_requests`) does not pause the queue.
@@ -122,6 +125,7 @@ captioned `not sent`.
 
 ## Changes
 
+- 2026-11-19, #397: settings picked during a turn are applied before the queue drains; a refused one pauses the queue.
 - 2026-11-19, #416: the list takes its rows' height up to 180 pt instead of a share of the column's height, which left a
   blank area under a short queue and scrolled a longer one early.
 - 2026-11-19, #390: an open edit holds the queue, the header reads `Queue waits for your edit`, and an edit whose

@@ -67,6 +67,8 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
     public let fallbackUpstream: String?
     /// When the user archived the session (ADR-0044); nil for a session that is not archived.
     public var archivedAt: Date?
+    /// When the session was settled, by the user or by a rule (ADR-0050); nil while it belongs in the list.
+    public var settledAt: Date?
     public let createdAt: Date
 
     public init(
@@ -82,6 +84,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         branch: String? = nil,
         fallbackUpstream: String? = nil,
         archivedAt: Date? = nil,
+        settledAt: Date? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -96,6 +99,7 @@ public struct SessionRecord: Identifiable, Equatable, Sendable {
         self.branch = branch
         self.fallbackUpstream = fallbackUpstream
         self.archivedAt = archivedAt
+        self.settledAt = settledAt
         self.createdAt = createdAt
     }
 }

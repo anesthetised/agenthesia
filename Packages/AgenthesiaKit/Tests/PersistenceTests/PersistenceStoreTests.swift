@@ -80,6 +80,7 @@ final class PersistenceStoreTests: Sendable {
             try await database.read { try Schema.migrator.appliedMigrations($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
                 "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream", "v8-session-deletion",
+                "v9-session-settled-at",
             ]
         )
     }
@@ -309,6 +310,73 @@ final class PersistenceStoreTests: Sendable {
         #expect(try await store.session(id: first.id) == first)
         // An unknown session is not an error and creates nothing.
         try await store.setArchived(date, of: UUID())
+        #expect(try await store.sessions(in: project.id).count == 2)
+    }
+
+    @Test func upgradingFromV8SettlesEverySessionAtItsLastActivity() async throws {
+        let legacy = try DatabaseQueue()
+        try Schema.migrator.migrate(legacy, upTo: "v8-session-deletion")
+        let (project, agent) = (UUID().uuidString, UUID().uuidString)
+        let (quiet, busy, archived) = (UUID(), UUID(), UUID())
+        try await legacy.write { db in
+            try db.execute(sql: "INSERT INTO project VALUES (?, 'P', '/tmp/p', 0)", arguments: [project])
+            try db.execute(
+                sql: "INSERT INTO agent_install VALUES (?, 'Agent', 'agent', CAST('[]' AS BLOB), 0, NULL)",
+                arguments: [agent]
+            )
+            for (session, createdAt, archivedAt) in [(quiet, 10.0, nil), (busy, 20.0, nil), (archived, 30.0, 40.0)] {
+                try db.execute(
+                    sql: """
+                        INSERT INTO session (id, projectID, agentInstallID, protocolVersion, workingDirectory, createdAt,
+                        archivedAt) VALUES (?, ?, ?, 1, '/tmp/tree', ?, ?)
+                        """,
+                    arguments: [session.uuidString, project, agent, createdAt, archivedAt]
+                )
+            }
+            // The last event by sequence counts, whatever its timestamp.
+            for (session, sequence, timestamp) in [(busy, 1, 50.0), (busy, 2, 45.0), (archived, 1, 35.0)] {
+                try db.execute(
+                    sql: "INSERT INTO event VALUES (?, ?, 'future', 1, CAST('{}' AS BLOB), ?)",
+                    arguments: [session.uuidString, sequence, timestamp]
+                )
+            }
+        }
+        let store = try PersistenceStore(database: legacy)
+        let settled = try await store.sessions(in: try #require(UUID(uuidString: project))).map(\.settledAt)
+        #expect(settled == [10, 45, 35].map(Date.init(timeIntervalSinceReferenceDate:)))
+        #expect(try await store.session(id: archived)?.archivedAt == Date(timeIntervalSinceReferenceDate: 40))
+        #expect(try await store.events(in: busy).map(\.sequence) == [1, 2])
+        // A session created after the migration is not settled.
+        let record = try #require(await store.session(id: quiet))
+        let new = SessionRecord(
+            projectID: record.projectID,
+            agentInstallID: record.agentInstallID,
+            workingDirectory: "/tmp/new",
+            createdAt: date
+        )
+        try await store.createSession(new)
+        #expect(try await store.session(id: new.id) == new)
+    }
+
+    @Test func settlesAndUnsettlesOneSessionWithoutTouchingItsLogOrTheOthers() async throws {
+        let (project, agent, first) = try await seed()
+        let second = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            workingDirectory: "/tmp/other",
+            settledAt: date
+        )
+        try await store.createSession(second)
+        #expect(try await store.session(id: second.id) == second)
+        let appended = try await store.append([event(1)], to: first.id)
+        try await store.setSettled(date, of: first.id)
+        #expect(try await store.sessions(in: project.id).map(\.settledAt) == [date, date])
+        try await store.setSettled(nil, of: first.id)
+        #expect(try await store.session(id: first.id) == first)
+        #expect(try await store.session(id: second.id) == second)
+        #expect(try await store.events(in: first.id) == appended)
+        // An unknown session is not an error and creates nothing.
+        try await store.setSettled(date, of: UUID())
         #expect(try await store.sessions(in: project.id).count == 2)
     }
 
@@ -581,7 +649,7 @@ final class PersistenceStoreTests: Sendable {
             try await database.read { try Schema.migrator.appliedIdentifiers($0) } == [
                 "v1", "v2-session-base-revision", "v3-session-base-branch", "v4-agent-install-installation",
                 "v5-session-branch", "v6-session-archived-at", "v7-session-fallback-upstream",
-                "v8-session-deletion", "future-version",
+                "v8-session-deletion", "v9-session-settled-at", "future-version",
             ]
         )
     }

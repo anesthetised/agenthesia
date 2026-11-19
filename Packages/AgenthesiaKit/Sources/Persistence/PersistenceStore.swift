@@ -90,15 +90,15 @@ public final class PersistenceStore: Sendable {
             try db.execute(
                 sql: """
                     INSERT INTO session
-                    (id, projectID, agentInstallID, agentSessionID, protocolVersion, title, workingDirectory, baseRevision, baseBranch, branch, fallbackUpstream, archivedAt, createdAt)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, projectID, agentInstallID, agentSessionID, protocolVersion, title, workingDirectory, baseRevision, baseBranch, branch, fallbackUpstream, archivedAt, settledAt, createdAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     session.id.uuidString, session.projectID.uuidString, session.agentInstallID.uuidString,
                     session.agentSessionID, session.protocolVersion, session.title, session.workingDirectory,
                     session.baseRevision, session.baseBranch, session.branch, session.fallbackUpstream,
                     session.archivedAt?.timeIntervalSinceReferenceDate,
-                    session.createdAt.timeIntervalSinceReferenceDate,
+                    session.settledAt?.timeIntervalSinceReferenceDate, session.createdAt.timeIntervalSinceReferenceDate,
                 ]
             )
         }
@@ -120,6 +120,17 @@ public final class PersistenceStore: Sendable {
             try db.execute(
                 sql: "UPDATE session SET archivedAt = ? WHERE id = ?",
                 arguments: [archivedAt?.timeIntervalSinceReferenceDate, sessionID.uuidString]
+            )
+        }
+    }
+
+    /// Settles a session at `settledAt`, or brings it back to the list with nil (ADR-0050). The session's log is
+    /// untouched; the caller records an Unsettle in it.
+    public func setSettled(_ settledAt: Date?, of sessionID: UUID) async throws {
+        try await database.write { db in
+            try db.execute(
+                sql: "UPDATE session SET settledAt = ? WHERE id = ?",
+                arguments: [settledAt?.timeIntervalSinceReferenceDate, sessionID.uuidString]
             )
         }
     }
@@ -262,6 +273,7 @@ public final class PersistenceStore: Sendable {
             archivedAt: (row.decode(forColumn: "archivedAt") as Double?).map(
                 Date.init(timeIntervalSinceReferenceDate:)
             ),
+            settledAt: (row.decode(forColumn: "settledAt") as Double?).map(Date.init(timeIntervalSinceReferenceDate:)),
             createdAt: Date(timeIntervalSinceReferenceDate: row.decode(forColumn: "createdAt"))
         )
     }

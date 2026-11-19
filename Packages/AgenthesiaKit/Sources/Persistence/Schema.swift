@@ -91,6 +91,19 @@ enum Schema {
                     """
             )
         }
+        // Every session that exists now counts as settled at its last activity, so the sidebar looks the same after the
+        // update (ADR-0050); the new meaning starts with the next session.
+        migrator.registerMigration("v9-session-settled-at") { db in
+            try db.execute(
+                sql: """
+                    ALTER TABLE session ADD COLUMN settledAt REAL;
+                    UPDATE session SET settledAt = coalesce(
+                        (SELECT timestamp FROM event WHERE sessionID = session.id ORDER BY sequence DESC LIMIT 1),
+                        createdAt
+                    );
+                    """
+            )
+        }
         return migrator
     }
 }

@@ -64,7 +64,9 @@ struct PromptQueue: View {
                         .background(.quaternary, in: .rect(cornerRadius: 6))
                     }
                 }
-            }.frame(maxHeight: 180)
+            }
+            // The rows' height up to the cap, not a share of the column's height (#416).
+            .frame(maxHeight: 180).fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .contain).accessibilityLabel("Prompt queue")
     }

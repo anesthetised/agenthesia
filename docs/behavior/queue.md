@@ -54,7 +54,8 @@ sends the queue ([ADR-0028](../adr/0028-empty-draft-sends-queue.md)):
 - The header reads `Queued messages`, or `Queue paused` while the queue is paused. A paused queue shows a `Resume Queue`
   button (help `Resume queued messages (⇧⌘R)`), disabled while the session is stopping.
 - Each row shows the message text on up to two lines (`Attachments` when it has no text) and, under it, each
-  attachment's name with a paperclip. The list scrolls past 180 pt.
+  attachment's name with a paperclip. The list is as tall as its rows up to 180 pt, then scrolls; a tall window gives
+  it no extra height.
 - Each row has icon buttons `Edit queued message`, `Move queued message up`, `Move queued message down` (disabled at the
   ends) and `Delete queued message`. Delete takes effect at once, without confirmation; it is disabled on the row whose
   message this window's composer is editing. The buttons are hidden while a send is being accepted.
@@ -121,6 +122,8 @@ captioned `not sent`.
 
 ## Changes
 
+- 2026-11-19, #416: the list takes its rows' height up to 180 pt instead of a share of the column's height, which left a
+  blank area under a short queue and scrolled a longer one early.
 - 2026-11-19, #390: an open edit holds the queue, the header reads `Queue waits for your edit`, and an edit whose
   message was sent anyway becomes a draft instead of being dropped.
 - 2026-11-19, #390 (review): a message deleted in another window gets its own line; Delete is disabled on the row being

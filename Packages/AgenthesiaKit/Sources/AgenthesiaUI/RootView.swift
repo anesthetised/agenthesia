@@ -11,7 +11,6 @@ public struct RootView: View {
     /// The window's persisted value: the system restores it after relaunch (ADR-0026).
     @Binding private var target: WindowTarget
     @State private var submitting = false
-    @State private var configError: String?
     @State private var showingLog = false
     /// The window's remembered inspector visibility; `SessionWindowModel.showingInspector` is the working copy.
     @SceneStorage("showingInspector") private var storedInspector = true
@@ -355,8 +354,15 @@ public struct RootView: View {
     private func composer(_ session: SessionController, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             PermissionDock(session: session, maxHeight: 0.4 * height)
-            if let error = model.errorMessage ?? configError {
+            if let error = model.errorMessage {
                 FailureBanner(error, offering: failureActions, perform: perform)
+            } else if let failure = session.configError {
+                FailureBanner(failure, offering: failureActions, perform: perform)
+            }
+            if session.isModeDeferred {
+                Text("The agent did not change the mode during the turn; it changes from the next turn.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if model.heldPrompt != nil, let line = model.owner?.startLine { StartingLine(text: line) }
             if let startedAt = session.turnStartedAt {
@@ -463,7 +469,7 @@ public struct RootView: View {
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .help("Attach files or folders (⇧⌘A)")
                 .disabled(model.composer.editingQueueID != nil || submitting || form != nil)
-            SessionConfigControls(session: session, onError: { configError = $0 }).id(session.session.id)
+            SessionConfigControls(session: session).id(session.session.id)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let usage = ContextUsage(session.transcript.usage) { ContextRing(usage: usage) }
             let turnActive =

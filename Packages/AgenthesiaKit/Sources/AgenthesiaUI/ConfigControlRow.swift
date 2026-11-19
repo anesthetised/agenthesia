@@ -1,4 +1,5 @@
 import ACP
+import AgenthesiaCore
 import SwiftUI
 
 /// The composer's settings pills, one row for a session's options and the draft's hints (ADR-0019, ADR-0040): a select
@@ -7,12 +8,16 @@ import SwiftUI
 struct ConfigControlRow: View {
     /// The options in the agent's order; options of unknown types are not shown.
     let options: [ACP.ConfigOption]
+    /// Values a session applies from the next turn, shown after the confirmed ones (`High → Max, next turn`).
+    var pending: [ACP.ConfigOptionID: ACP.ConfigValue] = [:]
     /// The select value a pill marks, nil when none is (a draft's mode before one is picked).
     var selected: (ACP.ConfigOption) -> ACP.ConfigValueID? = Self.currentValue
     /// What a select pill reads while its value is nil.
     var placeholder = ""
     /// The select pills' tooltip and accessibility note (`ConfigSelectMenu.note`).
     var note: String?
+    /// A sentence added to the mode pill's tooltip and accessibility label.
+    var modeNote: String?
     /// A change is pending: a spinner follows the pills.
     var isChanging = false
     let onChange: (ACP.ConfigOptionID, ACP.ConfigValue) -> Void
@@ -72,11 +77,13 @@ struct ConfigControlRow: View {
                 option: option,
                 choices: choices,
                 selected: selected(option),
+                pending: pendingName(option),
                 placeholder: placeholder,
-                note: note
+                note: note,
+                addendum: option.category == .mode ? modeNote : nil
             ) { onChange(option.id, .select($0)) }
         case .boolean(let isOn):
-            Toggle(option.name, isOn: binding(option, isOn))
+            Toggle(toggleTitle(option), isOn: binding(option, isOn))
                 .toggleStyle(PillToggleStyle()).help(option.description ?? option.name)
         case .unknown:
             EmptyView()
@@ -90,13 +97,13 @@ struct ConfigControlRow: View {
                 switch option.value {
                 case .select(_, let choices):
                     let value = ConfigSelectMenu.valueName(of: selected(option), in: choices) ?? placeholder
-                    Menu("\(option.name): \(value)") {
+                    Menu("\(option.name): \(ConfigSelectMenu.label(value, pending: pendingName(option)))") {
                         ConfigChoiceItems(choices: choices, selected: selected(option)) {
                             onChange(option.id, .select($0))
                         }
                     }
                 case .boolean(let isOn):
-                    Toggle(option.name, isOn: binding(option, isOn))
+                    Toggle(toggleTitle(option), isOn: binding(option, isOn))
                 case .unknown:
                     EmptyView()
                 }
@@ -110,8 +117,18 @@ struct ConfigControlRow: View {
     }
 
     /// A transactional binding: it keeps the confirmed value until the agent's answer has been recorded (ADR-0019).
+    /// A click flips the pending value when there is one, so a second click drops it.
     private func binding(_ option: ACP.ConfigOption, _ isOn: Bool) -> Binding<Bool> {
-        Binding(get: { isOn }, set: { onChange(option.id, .boolean($0)) })
+        let shown = if case .boolean(let wanted) = pending[option.id] { wanted } else { isOn }
+        return Binding(get: { isOn }, set: { _ in onChange(option.id, .boolean(!shown)) })
+    }
+
+    private func pendingName(_ option: ACP.ConfigOption) -> String? {
+        pending[option.id].map(option.valueName)
+    }
+
+    private func toggleTitle(_ option: ACP.ConfigOption) -> String {
+        ConfigSelectMenu.label(option.name, pending: pendingName(option))
     }
 }
 

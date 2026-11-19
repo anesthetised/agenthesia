@@ -51,12 +51,51 @@ import Testing
         let controller = fixture.controller
         func fast() -> ACP.ConfigOption.Value? { controller.transcript.configOptions.first { $0.id == "fast" }?.value }
         #expect(fast() == .boolean(currentValue: false))
-        var errors: [String?] = []
-        SessionConfigControls(session: controller) { errors.append($0) }.change("fast", to: .boolean(true))
+        SessionConfigControls(session: controller).change("fast", to: .boolean(true))
         #expect(fast() == .boolean(currentValue: false))
         try await waitUntil { fast() == .boolean(currentValue: true) && !controller.isChangingConfig }
-        #expect(errors == [nil])
+        #expect(controller.configError == nil)
         await fixture.remove()
+    }
+
+    /// A pick during a turn shows after the confirmed value; the mode pill also says a waiting request stays.
+    @Test func aPendingValueFollowsTheConfirmedOne() async throws {
+        let choices = ACP.ConfigSelectOptions.flat([
+            .init(value: "high", name: "High"), .init(value: "max", name: "Max"),
+        ])
+        let options: [ACP.ConfigOption] = [
+            .init(
+                id: "effort",
+                name: "Effort",
+                category: .thoughtLevel,
+                value: .select(currentValue: "high", options: choices)
+            ),
+            .init(id: "fast", name: "Fast mode", value: .boolean(currentValue: false)),
+        ]
+        let row = ConfigControlRow(options: options, pending: ["effort": .select("max"), "fast": .boolean(true)]) {
+            _,
+            _ in
+        }
+        #expect(try await labels(of: row, width: 600).labels == ["High → Max, next turn"])
+        #expect(try await labels(of: ConfigControlRow(options: options) { _, _ in }, width: 600).labels == ["High"])
+        #expect(ConfigSelectMenu.label("Fast mode", pending: "On") == "Fast mode → On, next turn")
+        let mode = ACP.ConfigOption(
+            id: "mode",
+            name: "Mode",
+            category: .mode,
+            value: .select(currentValue: "high", options: choices)
+        )
+        let pill = ConfigSelectMenu(
+            option: mode,
+            choices: choices,
+            selected: "high",
+            pending: "Max",
+            addendum: "Changing the mode does not answer the waiting request."
+        ) { _ in }
+        #expect(
+            pill.accessibilityText
+                == "Mode: High → Max, next turn. Changing the mode does not answer the waiting request."
+        )
     }
 
     // MARK: - Support

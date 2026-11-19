@@ -11,7 +11,15 @@ struct FailureBanner: View {
     @State private var showsDetails = false
 
     init(_ stored: String, offering: Set<SessionFailure.Action>, perform: @escaping (SessionFailure.Action) -> Void) {
-        failure = SessionFailure(stored)
+        self.init(SessionFailure(stored), offering: offering, perform: perform)
+    }
+
+    init(
+        _ failure: SessionFailure,
+        offering: Set<SessionFailure.Action>,
+        perform: @escaping (SessionFailure.Action) -> Void
+    ) {
+        self.failure = failure
         self.offering = offering
         self.perform = perform
     }

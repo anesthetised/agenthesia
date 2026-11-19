@@ -2,27 +2,25 @@ import ACP
 import AgenthesiaCore
 import SwiftUI
 
-/// Displays only durable, agent-confirmed values, including adapter-normalized legacy modes.
+/// Displays only durable, agent-confirmed values, including adapter-normalized legacy modes, and beside them the changes
+/// picked during a turn for the next one (ADR-0019's amendment).
 struct SessionConfigControls: View {
     let session: SessionController
-    /// Called with the failure of a change, and with nil when the next change starts.
-    var onError: (String?) -> Void = { _ in }
 
     var body: some View {
         ConfigControlRow(
             options: session.transcript.configOptions,
+            pending: session.pendingConfig,
+            modeNote: session.pendingPermissions.isEmpty
+                ? nil : "Changing the mode does not answer the waiting request.",
             isChanging: session.isChangingConfig,
             onChange: change
         )
-        .disabled(session.status != .idle || session.isChangingConfig)
+        .disabled(![.idle, .running, .stopping].contains(session.status) || session.isChangingConfig)
     }
 
+    /// The controller keeps the failure as `configError`.
     func change(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) {
-        onError(nil)
-        Task {
-            do { try await session.setConfigOption(id, to: value) } catch {
-                if session.status != .closed { onError(String(describing: error)) }
-            }
-        }
+        Task { try? await session.setConfigOption(id, to: value) }
     }
 }

@@ -49,20 +49,24 @@ message came too late, because the queue sent that message as soon as the turn e
 - **The mode changes at once**, also while a turn runs, stops or waits for a permission answer. As before, the pill
   shows the new value only once the agent confirmed it and the response is recorded; a refusal keeps the confirmed
   value. A permission request that already waits is not answered by the change: it stays until the user answers it or
-  the agent withdraws it.
+  the agent withdraws it. A mode confirmed during a turn brings a generic note, until the turn ends, that the agent
+  decides when it applies and some apply it from the next turn; the app keeps no per-agent knowledge (owner's decision
+  of 2026-11-19, after the review of #419).
 - **Every other option changes from the next turn.** A pick during a turn is kept as the session's one pending change
   for that option (`SessionController.pendingConfig`); choosing the confirmed value again drops it. When the turn has
-  ended, also by Stop, the pending changes go to the agent one at a time in the agent's order, before the next prompt
-  is sent, whether it comes from the queue, from the composer or from steering.
+  ended, also by Stop (even when Stop overtook a steering prompt), the pending changes go to the agent one at a time in
+  the agent's order, before the next prompt is sent, whether it comes from the queue, from the composer or from
+  steering. A pending change that the agent itself makes current is dropped.
 - A mode the agent refuses during a turn becomes its pending change for the next turn.
 - If the agent refuses a pending change when the turn ends, the change is dropped, the queue pauses (a stored
-  `queuePaused` event, as after Stop) and the error says which change was refused, so the queue does not drain with
-  the old settings.
+  `queuePaused` event, as after Stop, unless it is paused already) and the error names every refused change, so the
+  queue does not drain with the old settings. A prompt sent now is not sent (`SessionError.configRefused`). The error
+  clears when the queue resumes.
 - The pending change belongs to the session, not to a queued message: the queue is still sent as one prompt. It is not
   stored in the event log; after a relaunch the confirmed values stand.
-- `isChangingConfig` keeps its rule on both paths: a drain, a steering prompt and the turn-end application wait for a
-  mode change in flight, and a prompt typed while the pending changes are applied waits behind them in the queue
-  coordinator.
+- `isChangingConfig` keeps its rule on both paths: every new turn waits in `dispatch` for a change in flight, also a
+  mode change made during the last turn, and a prompt typed while the pending changes are applied waits behind them in
+  the queue coordinator.
 
 The UI behaviour is in [composer.md](../behavior/composer.md#session-settings) and
 [queue.md](../behavior/queue.md#pausing).
@@ -98,5 +102,5 @@ None of the three refuses a mode change during a turn, so the refusal path is co
 ### Consequences
 
 Codex shows a confirmed mode that its running turn does not use yet; the pill cannot tell, because the agent's answer
-is the only signal. A pending change lives only as long as the controller, so a crash or relaunch before the turn ends
+is the only signal, so the composer's note says only that the agent decides when the mode applies. A pending change lives only as long as the controller, so a crash or relaunch before the turn ends
 loses it without a trace in the history.

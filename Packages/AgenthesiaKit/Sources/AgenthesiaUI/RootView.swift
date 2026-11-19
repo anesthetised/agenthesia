@@ -359,10 +359,11 @@ public struct RootView: View {
             } else if let failure = session.configError {
                 FailureBanner(failure, offering: failureActions, perform: perform)
             }
+            if session.modeChangedDuringTurn {
+                ComposerNote(text: "The agent decides when the new mode applies; some apply it from the next turn.")
+            }
             if session.isModeDeferred {
-                Text("The agent did not change the mode during the turn; it changes from the next turn.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ComposerNote(text: "The agent did not change the mode during the turn; it changes from the next turn.")
             }
             if model.heldPrompt != nil, let line = model.owner?.startLine { StartingLine(text: line) }
             if let startedAt = session.turnStartedAt {

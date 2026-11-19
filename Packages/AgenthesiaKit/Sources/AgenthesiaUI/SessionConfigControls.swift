@@ -11,12 +11,16 @@ struct SessionConfigControls: View {
         ConfigControlRow(
             options: session.transcript.configOptions,
             pending: session.pendingConfig,
-            modeNote: session.pendingPermissions.isEmpty
-                ? nil : "Changing the mode does not answer the waiting request.",
+            modeNote: modeNote,
             isChanging: session.isChangingConfig,
             onChange: change
         )
         .disabled(![.idle, .running, .stopping].contains(session.status) || session.isChangingConfig)
+    }
+
+    /// Added to the mode pill's help while a permission request waits: the change does not answer it.
+    var modeNote: String? {
+        session.pendingPermissions.isEmpty ? nil : "Changing the mode does not answer the waiting request."
     }
 
     /// The controller keeps the failure as `configError`.

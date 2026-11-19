@@ -98,6 +98,41 @@ import Testing
         )
     }
 
+    /// A click on a toggle flips what the pill shows: a second click drops a pending change.
+    @Test func aSecondClickOnAToggleDropsItsPendingChange() {
+        #expect(ConfigControlRow.toggled(false, pending: nil))
+        #expect(!ConfigControlRow.toggled(false, pending: .boolean(true)))
+        #expect(ConfigControlRow.toggled(true, pending: .boolean(false)))
+    }
+
+    /// The mode pill's help names the waiting request only while one waits.
+    @Test func theModeNoteFollowsAWaitingPermissionRequest() async throws {
+        let fixture = try await Fixture()
+        let controller = fixture.controller
+        let agentID = try #require(controller.session.agentSessionID)
+        #expect(SessionConfigControls(session: controller).modeNote == nil)
+        try await controller.submit([.init(text: "slow")])
+        try await waitUntil { controller.status == .running }
+        let answer = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t"),
+                options: [.init(optionId: "ok", name: "OK", kind: .allowOnce)],
+                in: agentID
+            )
+        }
+        try await waitUntil { !controller.pendingPermissions.isEmpty }
+        #expect(
+            SessionConfigControls(session: controller).modeNote
+                == "Changing the mode does not answer the waiting request."
+        )
+        let request = try #require(controller.pendingPermissions.first)
+        controller.answerPermission(request.id, with: "ok")
+        _ = await answer.value
+        #expect(SessionConfigControls(session: controller).modeNote == nil)
+        try await controller.stop()
+        await fixture.remove()
+    }
+
     // MARK: - Support
 
     /// The titles of the row's menus, and whether they all lie inside it.

@@ -94,8 +94,9 @@ The queue pauses, and no queued message is sent automatically, when:
   queued; none of them does anything while Stop is unavailable, such as on an idle session;
 - the turn ends with a refusal;
 - the agent answers the prompt with an error ([ADR-0027](../adr/0027-recoverable-prompt-errors.md));
-- the agent refuses a settings change picked during the turn when it is applied at the turn's end
-  ([composer.md](composer.md#session-settings)), so no queued message goes out with the old settings;
+- the agent refuses a settings change picked during the turn when it is applied, at the turn's end or before a message
+  sent now ([composer.md](composer.md#session-settings)), so no message goes out with the old settings; resuming the
+  queue clears the error;
 - the connection or the agent process fails.
 
 A turn that ends by hitting a limit (`max_tokens`, `max_turn_requests`) does not pause the queue.
@@ -125,6 +126,7 @@ captioned `not sent`.
 
 ## Changes
 
+- 2026-11-19, #397 (review): a refusal before Send Now also pauses the queue; resuming clears its error.
 - 2026-11-19, #397: settings picked during a turn are applied before the queue drains; a refused one pauses the queue.
 - 2026-11-19, #416: the list takes its rows' height up to 180 pt instead of a share of the column's height, which left a
   blank area under a short queue and scrolled a longer one early.

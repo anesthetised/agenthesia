@@ -1185,8 +1185,11 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
    change that enters while idle, or a mode change during a turn, is awaited before a scheduled drain. Changes of other
    options during a turn wait in `pendingConfig` (memory only, [ADR-0019's
    amendment](adr/0019-session-config-controls.md)); the end of a turn, also by Stop, schedules a coordinated
-   operation that applies them before it drains, and `dispatch` applies any left before it sends. A refused one pauses
-   the queue and sets `configError`.
+   operation that applies them before it drains (also after a steering prompt that Stop overtook), and `dispatch`
+   applies any left, then waits for any change in flight, before it sends. A refused one pauses the queue, sets
+   `configError` (cleared when the queue resumes) and fails a prompt sent now with `SessionError.configRefused`, which
+   `LiveSession.submit` does not show as a second error. `modeChangedDuringTurn` marks a mode confirmed while the turn
+   runs, for the composer's note.
 4. *Stop generations.* `stop()` increments `stopGeneration` and reserves `stopping` synchronously, so turn completion
    cannot slip an automatic drain past it. A public queue operation captures the generation at entry and checks it
    again inside the coordinator: an earlier send-now or resume that waited behind an edit cannot supersede a later Stop.

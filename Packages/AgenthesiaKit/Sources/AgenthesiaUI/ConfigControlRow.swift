@@ -119,8 +119,15 @@ struct ConfigControlRow: View {
     /// A transactional binding: it keeps the confirmed value until the agent's answer has been recorded (ADR-0019).
     /// A click flips the pending value when there is one, so a second click drops it.
     private func binding(_ option: ACP.ConfigOption, _ isOn: Bool) -> Binding<Bool> {
-        let shown = if case .boolean(let wanted) = pending[option.id] { wanted } else { isOn }
-        return Binding(get: { isOn }, set: { _ in onChange(option.id, .boolean(!shown)) })
+        Binding(
+            get: { isOn },
+            set: { _ in onChange(option.id, .boolean(Self.toggled(isOn, pending: pending[option.id]))) }
+        )
+    }
+
+    /// The value a click on a toggle asks for: the opposite of the pending value, or of the confirmed one.
+    static func toggled(_ isOn: Bool, pending: ACP.ConfigValue?) -> Bool {
+        if case .boolean(let wanted) = pending { !wanted } else { !isOn }
     }
 
     private func pendingName(_ option: ACP.ConfigOption) -> String? {

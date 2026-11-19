@@ -503,6 +503,52 @@ import Testing
         await fixture.remove()
     }
 
+    /// The queue takes the height of its rows, up to its cap, not a share of the column's height: no blank area between
+    /// its last row and the edit line, and no scrolling while the rows fit (#416).
+    @Test(arguments: [1, 3, 8]) func theQueueTakesTheHeightOfItsRows(count: Int) async throws {
+        let fixture = try Fixture()
+        let model = fixture.model
+        let (first, _) = try await twoSessions(fixture)
+        model.show(first)
+        let entry = try #require(try await queue((1...count).map { "queued \($0)" }, in: first).first)
+        _ = NSApplication.shared
+        let view = NSHostingView(rootView: RootView(model: model))
+        let window = OffscreenWindow(size: .init(width: 1000, height: 900))
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.close() }
+        model.composer.edit(entry)
+
+        func all(_ view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(all)
+        }
+        func composer(_ view: NSView) -> NSTextView? {
+            if let text = view as? FileTextView { return text }
+            return view.subviews.lazy.compactMap(composer).first
+        }
+        /// SwiftUI's `ScrollView` is an `NSScrollView`; the queue's is the nearest one above the composer's text.
+        func frames() -> (queue: CGRect, content: CGFloat, composer: CGRect)? {
+            guard let text = composer(view)?.enclosingScrollView else { return nil }
+            let below = text.convert(text.bounds, to: nil)
+            let queue = all(view).map { ($0, $0.convert($0.bounds, to: nil)) }
+                .filter { $0.1.minY > below.maxY && $0.1.minX < below.maxX && $0.1.maxX > below.minX }
+                .min { $0.1.minY < $1.1.minY }
+            guard let (scroll, frame) = queue, let content = scroll.documentView?.frame.height else { return nil }
+            return (frame, content, below)
+        }
+        try await waitUntil { frames() != nil }
+        for _ in 0..<20 { await Task.yield() }
+        let (queue, content, text) = try #require(frames())
+        if content <= 180 {
+            #expect(abs(queue.height - content) < 1)
+        } else {
+            #expect(queue.height <= 180)
+        }
+        // Window coordinates grow upwards; between the queue and the text sits only the edit line and its spacing.
+        #expect(queue.minY - text.maxY < 50)
+        await fixture.remove()
+    }
+
     @Test func theComposerShowsTheDisplayedSessionsDraftAndSendingClearsOnlyThat() async throws {
         let fixture = try Fixture()
         let model = fixture.model

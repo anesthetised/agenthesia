@@ -1,6 +1,6 @@
 # 0018. Composer attachments and slash commands
 
-- Status: Accepted
+- Status: Accepted; `fs/read_text_file` reads outside the roots since [0052](0052-reads-anywhere-writes-inside-the-roots.md)
 - Date: 2026-10-15
 - Decider: Project owner
 - Scope: composer (#18); builds on [0006](0006-worktree-isolation.md) and [0014](0014-window-bound-live-sessions.md)

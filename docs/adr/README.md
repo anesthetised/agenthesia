@@ -33,7 +33,7 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0015](0015-agent-terminals.md) | Agent terminals | Accepted; ACP semantics, lifecycle and history superseded by [0016](0016-agent-reported-command-output.md) |
 | [0016](0016-agent-reported-command-output.md) | Agent-reported command output | Accepted |
 | [0017](0017-continue-saved-sessions.md) | Continue saved sessions | Accepted |
-| [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted; UI behavior, current state in [docs/behavior/composer.md](../behavior/composer.md) |
+| [0018](0018-composer-attachments.md) | Composer attachments and slash commands | Accepted; reads outside the roots allowed by [0052](0052-reads-anywhere-writes-inside-the-roots.md); UI behavior, current state in [docs/behavior/composer.md](../behavior/composer.md) |
 | [0019](0019-session-config-controls.md) | Session config controls | Accepted; UI behavior, current state in [docs/behavior/composer.md](../behavior/composer.md) |
 | [0020](0020-native-elicitation-forms.md) | Native elicitation forms | Accepted |
 | [0021](0021-prompt-queue-lifecycle.md) | Prompt queue lifecycle | Accepted; prompt error responses clarified by [0027](0027-recoverable-prompt-errors.md); empty-draft Command-Return superseded by [0028](0028-empty-draft-sends-queue.md); empty-queue recovery superseded by [0029](0029-empty-queue-recovery.md); held messages and the queue's format amended by [0051](0051-turns-between-sessions.md); UI behavior, current state in [docs/behavior/queue.md](../behavior/queue.md) |
@@ -67,5 +67,6 @@ Several ADRs below were written before that rule and describe UI behavior. They 
 | [0049](0049-built-in-agenthesia-mcp-server.md) | The built-in agenthesia MCP server | Accepted; turns started by agents amended by [0051](0051-turns-between-sessions.md) |
 | [0050](0050-settled-is-the-users-decision.md) | Settled is the user's decision | Accepted; not implemented yet (#353) |
 | [0051](0051-turns-between-sessions.md) | Turns between sessions | Accepted; not implemented yet (#355–#366, #317, #318) |
+| [0052](0052-reads-anywhere-writes-inside-the-roots.md) | Reads anywhere, writes inside the roots | Accepted |
 
 Template: Status, Date, Context, Decision, Consequences.

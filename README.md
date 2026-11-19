@@ -46,16 +46,18 @@ Rendering workloads, metrics and repeatable measurements are described in [docs/
 
 ## Live sessions
 
-The app opens a native session screen. Choose a project directory and an installed ACP agent command;
-enter literal arguments one per line (blank lines are ignored; spaces are preserved). Project and
-executable paths accept `~` for your home directory. Agents must already be authenticated. Git projects receive a fresh
-`agenthesia/<uuid>` branch and worktree under `~/.agenthesia/worktrees`; only committed HEAD content is
-copied. Non-Git directories are used directly. Worktrees remain on disk after closing, including failed
-startup, so changes are not discarded.
+A new session starts from the draft: pick a project (or start without one), an agent and a checkout, write the
+first message and send it. Agents are installed from the ACP Registry or added as local or custom commands in
+Settings → Agents; an agent that asks for it signs in from Settings or from the session. Git projects receive a fresh
+`agenthesia/<words>-<8 hex digits>` branch and worktree under `~/.agenthesia/worktrees`, started from the fetched
+upstream when the branch has one; only committed content is copied, and the project folder can be used instead.
+Non-Git directories are used directly. Worktrees remain on disk after closing, including failed startup, until the
+session is merged or discarded, so changes are not lost.
 
-Enter or Command-Return sends a text prompt while idle; Shift-Return inserts a newline and Command-period
-stops the turn. You can draft the next message while the agent works; queueing and steering are still
-planned. The Agent Log toggle in the inspector shows bounded stderr output. End Session, window close, and app quit
+Return sends the message; Shift-Return inserts a newline and Command-period stops the turn. A message written while
+the agent works waits in the prompt queue, and Command-Return sends it at once, interrupting the running turn
+(steering). Files are attached with Shift-Command-A, by dropping or by pasting them, and reach the agent as links.
+How the queue and the composer behave is in [docs/behavior/](docs/behavior/). The Agent Log toggle in the inspector shows bounded stderr output. End Session, window close, and app quit
 close ACP, finish pending event writes, and terminate the agent process group.
 
 Sessions are stored in `~/Library/Application Support/Agenthesia/history.sqlite`. The sidebar opens
@@ -65,9 +67,8 @@ options; choose one with the mouse or ⌥⌘1…⌥⌘9. Nothing is allowed impl
 answers pending requests with `cancelled`. ACP filesystem reads and writes are served inside the
 session's working directory, with a path policy that refuses access outside its allowed roots.
 Writes in Git sessions affect the isolated worktree. Closing the session waits for accepted file
-operations to finish. Client terminal tools and attachments are not yet connected;
-only implemented client capabilities are advertised.
-Worktree review, merge, and discard controls remain separate work.
+operations to finish. Client terminal tools are not yet connected; only implemented client capabilities are
+advertised. Review, Merge and Discard Worktree are in the inspector ([docs/behavior/merge.md](docs/behavior/merge.md)).
 
 For a local smoke test, build with `just test`, then point the app at the package's built `MockAgent`
 executable (the build directory depends on the Swift toolchain). Try `hello`, `slow`, `think`, or `fail`.

@@ -274,6 +274,10 @@ layout, where AppKit measures the heights of new rows) and `Draw` (a text field 
 render server, so unlike S2's display-link intervals they also count frames a responsive scroll presents while the
 main thread is busy. Like profiling, it needs the owner's approval and a quiet machine.
 
+Results of step 1, which made the transcript compatible with responsive scrolling:
+[2026-11-19](benchmarks/2026-11-19/responsive-scrolling/README.md). The wheel gained nothing, the gesture about 15 %, and
+S9 lost about 9 % because the tool group's row stays prepared above the viewport and is refreshed on every update.
+
 ### Lab isolation
 
 `just lab-build` gives the lab build its own bundle identifier, `io.github.anesthetised.Agenthesia.lab`: its own

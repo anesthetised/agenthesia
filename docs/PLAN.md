@@ -258,8 +258,13 @@ Progress:
   a temporary home; with `AGENTHESIA_LAB_RUNS` the app opens only the Rendering Lab, restores no window and quits after
   30 seconds if the lab did not start (the runs of 2026-11-10 hung behind the main window with the installed app's
   history). The wheel scenario scrolls the new lab scenario S12, S2's content in a session-sized window, and
-  `scripts/trace_summary.py` prints the hitch time ratio and the signposts. Not yet run on screen; the before and after
-  numbers of step 1 come next.
+  `scripts/trace_summary.py` prints the hitch time ratio and the signposts.
+- #396 (2026-11-19): step 1, the transcript compatible with responsive scrolling
+  ([results](benchmarks/2026-11-19/responsive-scrolling/README.md)). S12's wheel did not change (385 → 390 ms of hitches
+  per second), the gesture improved by about 15 % (84 → 71); both stay far over the target of 5, so the rows built as
+  they scroll in (steps 2–4) are next. S9 regressed by about 9 %: the tool group's row, kept prepared above the
+  viewport, is refreshed on every update. Checked by scripted runs of the lab build (`wheel-scroll.sh` with `wintool`
+  events, `bench.py lab`), not with VoiceOver or by hand with a real mouse and trackpad.
 
 ## M20: Review findings (2026-11-10)
 

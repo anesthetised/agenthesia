@@ -100,13 +100,13 @@ private actor InteractionConnection: ACP.AgentConnection {
         defer { try? FileManager.default.removeItem(at: directory) }
         let changing = Task { try await session.setConfigOption("flag", to: .boolean(true)) }
         await connection.waitForConfig()
-        await #expect(throws: SessionController.SessionError.invalidState) {
-            try await session.submit([.init(text: "too early")])
-        }
+        // The prompt waits for the confirmation instead of overtaking it.
+        let submitting = Task { try await session.submit([.init(text: "after confirmation")]) }
+        for _ in 0..<20 { await Task.yield() }
         #expect(await connection.prompts.isEmpty)
         await connection.releaseConfig()
         try await changing.value
-        try await session.submit([.init(text: "after confirmation")])
+        try await submitting.value
         await connection.waitForPrompts(1)
         #expect(await connection.prompts == [[.init(text: "after confirmation")]])
         await session.close()

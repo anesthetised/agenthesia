@@ -90,14 +90,35 @@ instead. The draft before a session exists is described in [session-start.md](se
 - Pills that appear or disappear (another agent, the agent's new list) fade in and out in about 0.2 s; under Reduce
   Motion they change at once.
 - Options of unknown types are not shown.
-- Settings can be changed only while the session is idle; while a turn runs, all pills are disabled.
-- A pick shows nothing as accepted at first: the pill keeps the confirmed value, a small spinner (`Changing session
-  settings`) appears and all pills are disabled until the agent's answer has been recorded. The pills then show the
-  agent's full returned settings, which may differ from the pick. While the change is pending, Send and Send Now are
-  disabled too. *Why:* the agent may refuse or adjust a value, and a turn must not start before the setting applies;
+- **During a turn** ([ADR-0019's amendment](../adr/0019-session-config-controls.md)), while it runs, stops or waits for
+  a permission answer, the pills stay enabled. The mode is sent to the agent at once, as while idle. Any other pick
+  is kept as the session's pending change for the next turn: the pill shows the confirmed value and the pending one,
+  `High → Max, next turn` (a toggle pill `Fast mode → On, next turn`, its tint still on the confirmed value), in the
+  `…` menu as well; choosing the confirmed value again, or clicking the toggle again, drops it. When the turn has
+  ended, also by Stop, the pending changes go to the agent before the next prompt, from the queue or the composer; a
+  prompt sent meanwhile waits for them. A pending change that the agent itself makes current is dropped. Pending
+  changes are not stored: after a relaunch the pills show the confirmed values. *Why:* the mode can restrict or relax a running agent; where a model or effort change would apply inside a
+  running turn depends on the agent.
+- A mode the agent confirms during a turn brings a grey line above the card, until the turn ends: `The agent decides
+  when the new mode applies; some apply it from the next turn.` It names no agent. *Why:* the agents differ, and the
+  app cannot tell; checked live on 2026-11-19, Codex confirms the mode at once but uses it only from the next turn
+  (and sends no `current_mode_update`), while Claude uses it within the running turn; Kimi, from its sources only, does
+  too (ADR-0019's amendment). A specific pending pill for Codex is parked in #421.
+- A mode the agent refuses during a turn becomes its pending change for the next turn, and a grey line above the card
+  reads `The agent did not change the mode during the turn; it changes from the next turn.` until the turn ends. It is
+  not an error, and the agent's message is not shown. Both grey lines can show at once, the confirmed one first.
+- While a permission request waits, the mode pill's tooltip and accessibility label end with `Changing the mode does
+  not answer the waiting request.`: the request stays on the card until it is answered or the agent withdraws it.
+- A change sent to the agent shows nothing as accepted at first: the pill keeps the confirmed value, a small spinner
+  (`Changing session settings`) appears and all pills are disabled until the agent's answer has been recorded. The
+  pills then show the agent's full returned settings, which may differ from the pick. While a change is being
+  confirmed, Send and Send Now are disabled too, and Return does nothing. *Why:* the agent may refuse or adjust a value, and a turn must not start before the setting applies;
   showing the pick early would mean rolling it back.
 - A refused change keeps the confirmed values, leaves the session usable and shows the error above the card; it clears
-  when the next change starts.
+  when the next change starts or the queue resumes. Pending changes the agent refuses when the turn ends, or before
+  Send Now, are dropped; the queue pauses ([queue.md](queue.md#pausing)), a message sent now is not sent and stays in
+  the composer, and the error names every refused change, `The agent refused <option>: <value>, <option>: <value>; the
+  queue is paused.`, with the agent's messages under `Details`.
 
 ## Send, Queue, Save and Stop
 
@@ -110,7 +131,7 @@ instead. The draft before a session exists is described in [session-start.md](se
   answers to the agent (Return)`.
 - Next and Answer are disabled while the step, or on the last step the whole form, has errors.
 - Send, Queue and Save are disabled for an empty draft (whitespace only and no attachments), while a send is being
-  accepted, and while a settings change is pending. Stop is disabled once the turn is stopping and the queue is paused.
+  accepted, and while a settings change is being confirmed. Stop is disabled once the turn is stopping and the queue is paused.
 - The Send options menu (chevron, `Send options`) holds `Send Draft Now` (or `Send Queue Now` when the draft is empty)
   with ⌘Return, and `Send Whole Queue Now` with ⇧⌘Return; while a turn runs both names end in ` (Interrupts Turn)`.
   When the turn can be stopped, `Stop Turn` follows a divider. Their rules are in [queue.md](queue.md). Both send items
@@ -193,7 +214,8 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
 
 - An error of a send, a queue action or a settings change shows above the card in red: a short sentence with a warning
   symbol, the actions that fit it (`Agent Log`, `New Session`, `Manage Agents…`) and the full text under `Details`.
-  Sending again clears a send or queue error; a settings error stays until the next settings change.
+  Sending again clears a send or queue error; a settings error stays until the next settings change or until the queue
+  resumes. A settings error belongs to the session, so every window that shows it shows the error.
 
 ## Sessions that cannot take a prompt
 
@@ -217,6 +239,13 @@ such as Claude's AskUserQuestion, is answered from the composer, as in T3 Code (
 
 ## Changes
 
+- 2026-11-19, #397 (live checks): the note on a mode confirmed during a turn rests on live checks of Claude and Codex
+  (Kimi from sources, #420); a specific pending pill for Codex is parked in #421.
+- 2026-11-19, #397 (review): a grey line after a mode confirmed during a turn; a refusal names every refused change,
+  keeps a Send Now draft and clears when the queue resumes; a pending change the agent makes itself is dropped.
+- 2026-11-19, #397: settings can change during a turn: the mode at once, every other option from the next turn as a
+  pending change shown on its pill; a refused mode waits for the next turn with a grey line; a settings error belongs to
+  the session instead of the window.
 - 2026-11-10, #375: the docked card shows a shell call's command whole in monospaced selectable text (scrolling beyond
   about six lines) and follows `rawInput` that arrives later; VoiceOver's announcement includes its first line.
 - 2026-11-09, #326: an agent's questions dock in the composer and are answered one step at a time; Return reads Next

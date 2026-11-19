@@ -9,14 +9,24 @@ struct ConfigSelectMenu: View {
     let choices: ACP.ConfigSelectOptions
     /// The value to mark, or nil when none is, as a draft's mode before one is picked.
     let selected: ACP.ConfigValueID?
+    /// The name of the value a session applies from the next turn.
+    var pending: String?
     /// What the label reads while `selected` is nil.
     var placeholder = ""
     /// Replaces the option's description as the tooltip, and is added to the accessibility label.
     var note: String?
+    /// A sentence added to the tooltip and the accessibility label.
+    var addendum: String?
     let onSelect: (ACP.ConfigValueID) -> Void
     @State private var isPresented = false
 
     private var valueName: String { Self.valueName(of: selected, in: choices) ?? placeholder }
+    private var title: String { Self.label(valueName, pending: pending) }
+
+    /// `value`, followed by the pending value when there is one: `High → Max, next turn`.
+    static func label(_ value: String, pending: String?) -> String {
+        pending.map { "\(value) → \($0), next turn" } ?? value
+    }
 
     /// The name of `value` among `choices`, the value itself when the agent does not list it.
     static func valueName(of value: ACP.ConfigValueID?, in choices: ACP.ConfigSelectOptions) -> String? {
@@ -24,21 +34,24 @@ struct ConfigSelectMenu: View {
     }
 
     var accessibilityText: String {
-        ["\(option.name): \(valueName)", note].compactMap(\.self).joined(separator: ". ")
+        ["\(option.name): \(title)", note, addendum].compactMap(\.self).joined(separator: ". ")
     }
 
     var body: some View {
         if option.category == .mode { modeButton } else { menu }
     }
 
-    private var tooltip: String { note ?? option.description.map { "\(option.name): \($0)" } ?? option.name }
+    private var tooltip: String {
+        [note ?? option.description.map { "\(option.name): \($0)" } ?? option.name, addendum].compactMap(\.self)
+            .joined(separator: ". ")
+    }
 
     private var modeButton: some View {
         Button {
             isPresented = true
         } label: {
             HStack(spacing: 3) {
-                Text(valueName)
+                Text(title)
                 Image(systemName: "chevron.up.chevron.down").imageScale(.small).accessibilityHidden(true)
             }
         }
@@ -57,7 +70,7 @@ struct ConfigSelectMenu: View {
         Menu {
             ConfigChoiceItems(choices: choices, selected: selected, onSelect: onSelect)
         } label: {
-            Text(valueName)
+            Text(title)
         }
         .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize()
         .accessibilityLabel(accessibilityText)

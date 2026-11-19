@@ -6,6 +6,7 @@ import JSONRPC
 import Observation
 import Persistence
 import Synchronization
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -1692,7 +1693,7 @@ extension SessionControllerTests {
         await serverConnection.close()
     }
 
-    @Test func runningTurnRejectsConfigChanges() async throws {
+    @Test func runningTurnKeepsAModelChangeForTheNextTurn() async throws {
         let fixture = try Fixture()
         let controller = try await fixture.live()
         let gate = Gate()
@@ -1703,13 +1704,14 @@ extension SessionControllerTests {
         }
         let turn = Task { try await controller.send([.init(text: "hello")]) }
         await gate.waitUntilEntered()
-        await #expect(throws: SessionController.SessionError.invalidState) {
-            try await controller.setConfigOption("model", to: .select("large"))
-        }
+        try await controller.setConfigOption("model", to: .select("large"))
+        #expect(controller.pendingConfig == ["model": .select("large")])
         // Only the prompt write is gated; allow the remaining turn writes normally.
         controller.appendEvents = { try await store.append($0, to: $1) }
         await gate.open()
         try await turn.value
+        try await waitUntil { controller.pendingConfig.isEmpty && !controller.isChangingConfig }
+        #expect(controller.transcript.configOptions.first { $0.id == "model" }?.isCurrent(.select("large")) == true)
         await controller.close()
     }
 }

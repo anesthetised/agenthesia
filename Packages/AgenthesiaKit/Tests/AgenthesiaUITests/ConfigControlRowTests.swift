@@ -1,6 +1,7 @@
 import ACP
 import AppKit
 import Foundation
+import Observation
 import Persistence
 import SwiftUI
 import TestSupport
@@ -51,15 +52,140 @@ import Testing
         let controller = fixture.controller
         func fast() -> ACP.ConfigOption.Value? { controller.transcript.configOptions.first { $0.id == "fast" }?.value }
         #expect(fast() == .boolean(currentValue: false))
-        var errors: [String?] = []
-        SessionConfigControls(session: controller) { errors.append($0) }.change("fast", to: .boolean(true))
+        SessionConfigControls(session: controller).change("fast", to: .boolean(true))
         #expect(fast() == .boolean(currentValue: false))
         try await waitUntil { fast() == .boolean(currentValue: true) && !controller.isChangingConfig }
-        #expect(errors == [nil])
+        #expect(controller.configError == nil)
+        await fixture.remove()
+    }
+
+    /// A pick during a turn shows after the confirmed value; the mode pill also says a waiting request stays.
+    @Test func aPendingValueFollowsTheConfirmedOne() async throws {
+        let choices = ACP.ConfigSelectOptions.flat([
+            .init(value: "high", name: "High"), .init(value: "max", name: "Max"),
+        ])
+        let options: [ACP.ConfigOption] = [
+            .init(
+                id: "effort",
+                name: "Effort",
+                category: .thoughtLevel,
+                value: .select(currentValue: "high", options: choices)
+            ),
+            .init(id: "fast", name: "Fast mode", value: .boolean(currentValue: false)),
+        ]
+        let row = ConfigControlRow(options: options, pending: ["effort": .select("max"), "fast": .boolean(true)]) {
+            _,
+            _ in
+        }
+        #expect(try await labels(of: row, width: 600).labels == ["High → Max, next turn"])
+        #expect(try await labels(of: ConfigControlRow(options: options) { _, _ in }, width: 600).labels == ["High"])
+        #expect(ConfigSelectMenu.label("Fast mode", pending: "On") == "Fast mode → On, next turn")
+        let mode = ACP.ConfigOption(
+            id: "mode",
+            name: "Mode",
+            category: .mode,
+            value: .select(currentValue: "high", options: choices)
+        )
+        let pill = ConfigSelectMenu(
+            option: mode,
+            choices: choices,
+            selected: "high",
+            pending: "Max",
+            addendum: "Changing the mode does not answer the waiting request."
+        ) { _ in }
+        #expect(
+            pill.accessibilityText
+                == "Mode: High → Max, next turn. Changing the mode does not answer the waiting request."
+        )
+    }
+
+    /// A click on a toggle flips what the pill shows: a second click drops a pending change.
+    @Test func aSecondClickOnAToggleDropsItsPendingChange() {
+        #expect(ConfigControlRow.toggled(false, pending: nil))
+        #expect(!ConfigControlRow.toggled(false, pending: .boolean(true)))
+        #expect(ConfigControlRow.toggled(true, pending: .boolean(false)))
+    }
+
+    /// The mode pill's help names the waiting request only while one waits.
+    @Test func theModeNoteFollowsAWaitingPermissionRequest() async throws {
+        let fixture = try await Fixture()
+        let controller = fixture.controller
+        let agentID = try #require(controller.session.agentSessionID)
+        #expect(SessionConfigControls(session: controller).modeNote == nil)
+        try await controller.submit([.init(text: "slow")])
+        try await waitUntil { controller.status == .running }
+        let answer = Task {
+            await controller.requestPermission(
+                for: .init(toolCallId: "t"),
+                options: [.init(optionId: "ok", name: "OK", kind: .allowOnce)],
+                in: agentID
+            )
+        }
+        try await waitUntil { !controller.pendingPermissions.isEmpty }
+        #expect(
+            SessionConfigControls(session: controller).modeNote
+                == "Changing the mode does not answer the waiting request."
+        )
+        let request = try #require(controller.pendingPermissions.first)
+        controller.answerPermission(request.id, with: "ok")
+        _ = await answer.value
+        #expect(SessionConfigControls(session: controller).modeNote == nil)
+        try await controller.stop()
         await fixture.remove()
     }
 
     // MARK: - Support
+
+    /// A pending label long enough to push pills into `…`; once it is short again, applied or dropped, every pill is
+    /// back in the row, in the same hosting view and at the same width.
+    @Test(arguments: [true, false]) func pillsComeBackWhenAPendingLabelShrinks(applied: Bool) async throws {
+        let choices = ACP.ConfigSelectOptions.flat([
+            .init(value: "medium", name: "Medium"), .init(value: "high", name: "High"),
+        ])
+        func options(effort: String) -> [ACP.ConfigOption] {
+            [
+                .init(
+                    id: "effort",
+                    name: "Effort",
+                    category: .thoughtLevel,
+                    value: .select(currentValue: effort, options: choices)
+                ),
+                .init(id: "fast", name: "Fast mode", value: .boolean(currentValue: false)),
+            ]
+        }
+        let state = RowState(options: options(effort: "medium"))
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: StateRow(state: state).frame(width: 180, alignment: .leading))
+        let window = OffscreenWindow(size: .init(width: 700, height: 100))
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        func settle() async throws {
+            try await Task.sleep(for: .milliseconds(100))
+            for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
+        }
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" } == ["Medium"])
+        state.pending = ["effort": .select("high")]
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" }.last == "…")
+        if applied { state.options = options(effort: "high") }
+        state.pending = [:]
+        try await settle()
+        #expect(popups(in: host).map { $0.accessibilityLabel() ?? "" } == [applied ? "High" : "Medium"])
+    }
+
+    @MainActor @Observable final class RowState {
+        var options: [ACP.ConfigOption]
+        var pending: [ACP.ConfigOptionID: ACP.ConfigValue] = [:]
+        init(options: [ACP.ConfigOption]) { self.options = options }
+    }
+
+    /// Updates one row in place, as a session's controls do.
+    private struct StateRow: View {
+        let state: RowState
+        var body: some View { ConfigControlRow(options: state.options, pending: state.pending) { _, _ in } }
+    }
 
     /// The titles of the row's menus, and whether they all lie inside it.
     private func labels(of view: some View, width: CGFloat) async throws -> (labels: [String], fits: Bool) {

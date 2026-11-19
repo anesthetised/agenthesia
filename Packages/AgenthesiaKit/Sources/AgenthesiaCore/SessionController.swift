@@ -42,6 +42,8 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         case cannotReopen
         /// The agent answered the session request with `-32000`; sign in, then `retry` or start again (ADR-0033).
         case authenticationRequired
+        /// The agent refused a change picked during the turn, so the prompt was not sent; `configError` says why.
+        case configRefused
     }
 
     /// A mode or model hint the agent no longer offers or refused: the start fails and the draft returns (ADR-0040).
@@ -50,6 +52,18 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     public private(set) var isChangingConfig = false
+    /// Changes picked during a turn, one per option, applied in the agent's order when the turn has ended and before
+    /// the next prompt (ADR-0019's amendment). Not stored: after a relaunch the confirmed values stand.
+    public private(set) var pendingConfig: [ACP.ConfigOptionID: ACP.ConfigValue] = [:]
+    /// Why the last settings change failed; it stays until the next change starts.
+    public private(set) var configError: SessionFailure?
+    /// The agent confirmed a mode change while this turn runs; when it applies is the agent's choice. Not stored.
+    public private(set) var modeChangedDuringTurn = false
+    /// The agent refused a mode change during the turn, so it waits for the next turn like any other option.
+    public var isModeDeferred: Bool {
+        (status == .running || status == .stopping)
+            && transcript.configOptions.contains { $0.category == .mode && pendingConfig[$0.id] != nil }
+    }
     /// A merge is committing the worktree; no turn starts meanwhile (ADR-0032).
     public private(set) var isMerging = false
     public enum SubmissionIntent: Equatable, Sendable { case whenReady, now, allNow }
@@ -71,7 +85,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             switch status {
             case .running: if turnStartedAt == nil { turnStartedAt = .now }
             case .stopping: break
-            default: turnStartedAt = nil
+            default:
+                turnStartedAt = nil
+                modeChangedDuringTurn = false
             }
         }
     }
@@ -335,13 +351,39 @@ public final class SessionController: ACP.AgentConnectionDelegate {
         return controller
     }
 
-    /// Changes settings only between turns. The agent's full response becomes visible after durable recording.
-    /// Like a turn, accepted config work belongs to the controller rather than the waiting UI task.
+    /// Changes a setting while idle, and during a turn the mode at once and any other option from the next turn, as its
+    /// pending change; choosing the confirmed value drops it (ADR-0019's amendment). A mode the agent refuses during the
+    /// turn becomes pending too. The agent's full response becomes visible after durable recording. Like a turn,
+    /// accepted config work belongs to the controller rather than the waiting UI task.
     public func setConfigOption(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) async throws {
         try Task.checkCancellation()
-        guard status == .idle, !isChangingConfig, let connection, let agentID = session.agentSessionID else {
-            throw SessionError.invalidState
+        configError = nil
+        let option = reduced.configOptions.first { $0.id == id }
+        do {
+            guard status == .running || status == .stopping else { return try await changeConfig(id, to: value) }
+            guard let option else { throw SessionError.invalidState }
+            if option.isCurrent(value) {
+                pendingConfig[id] = nil
+            } else if option.category != .mode {
+                pendingConfig[id] = value
+            } else {
+                do { try await changeConfig(id, to: value) } catch is RPCError
+                    where status == .running || status == .stopping
+                {
+                    pendingConfig[id] = value
+                }
+            }
+        } catch {
+            if status != .closed { configError = SessionFailure(String(describing: error)) }
+            throw error
         }
+    }
+
+    private func changeConfig(_ id: ACP.ConfigOptionID, to value: ACP.ConfigValue) async throws {
+        guard [.idle, .running, .stopping].contains(status), !isChangingConfig, let connection,
+            let agentID = session.agentSessionID
+        else { throw SessionError.invalidState }
+        let isMode = reduced.configOptions.first { $0.id == id }?.category == .mode
         isChangingConfig = true
         let task = Task {
             defer {
@@ -350,13 +392,44 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             }
             try await connection.setConfigOption(id, to: value, in: agentID) { @MainActor options in
                 // The adapter keeps this commit in wire order, ahead of later config notifications.
-                guard self.status == .idle else { throw SessionError.invalidState }
+                guard [.idle, .running, .stopping].contains(self.status) else { throw SessionError.invalidState }
                 try await self.record([try SessionEvent.configOptions(options).storedEvent()])
+                self.pendingConfig[id] = nil
+                if isMode, self.status == .running || self.status == .stopping { self.modeChangedDuringTurn = true }
                 self.publishTranscript()
             }
         }
         configTask = task
         try await task.value
+    }
+
+    /// Applies the pending changes once the turn has ended; each stays shown until the agent's answer is recorded. A
+    /// refusal drops the change, pauses the queue and says why, so the next prompt does not go out with the old settings.
+    private func applyPendingConfig() async throws {
+        guard status == .idle, !pendingConfig.isEmpty else { return }
+        var refused: [(name: String, error: any Error)] = []
+        for option in reduced.configOptions {
+            // A pick while idle may slip in between two changes; let it finish first.
+            while let task = configTask { _ = await task.result }
+            guard let value = pendingConfig[option.id] else { continue }
+            do { try await changeConfig(option.id, to: value) } catch let error as RPCError where status == .idle {
+                pendingConfig[option.id] = nil
+                refused.append(("\(option.name): \(option.valueName(value))", error))
+            }
+        }
+        // Options the agent no longer lists.
+        pendingConfig = [:]
+        guard !refused.isEmpty else { return }
+        if !queuePaused {
+            queuePaused = true
+            try await record([try SessionEvent.queuePaused(true).storedEvent()])
+            publishTranscript()
+        }
+        configError = SessionFailure(
+            refused.map { String(describing: $0.error) }.joined(separator: "\n"),
+            summary: "The agent refused \(refused.map(\.name).joined(separator: ", ")); the queue is paused."
+        )
+        throw SessionError.configRefused
     }
 
     /// Accepts a composed message without making the caller own the wire turn.
@@ -478,6 +551,7 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             try await self.record([try SessionEvent.queuePaused(false).storedEvent()])
             guard self.stopGeneration == generation else { return }
             self.queuePaused = false
+            self.configError = nil
             self.publishTranscript()
             if self.status == .idle { try await self.drainQueue() }
         }
@@ -535,11 +609,16 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             events.append(try SessionEvent.queuePaused(false).storedEvent())
             // Like Stop's pause, publish before the write; a newer Stop must win while it is pending.
             queuePaused = false
+            // A refusal's banner says the queue is paused.
+            configError = nil
         }
         return events
     }
 
     private func dispatch(_ prompts: [QueuedPrompt], removingQueued: Bool) async throws {
+        try await applyPendingConfig()
+        // A new turn never overtakes a change in flight (ADR-0019), also a mode change made during the last turn.
+        while let task = configTask { _ = await task.result }
         guard status == .idle, !isMerging, !isChangingConfig, let connection, let agentID = session.agentSessionID
         else {
             throw SessionError.invalidState
@@ -586,9 +665,9 @@ public final class SessionController: ACP.AgentConnectionDelegate {
     }
 
     private func drainQueue() async throws {
-        // A config change can enter while idle before a scheduled drain acquires the queue coordinator.
-        // Wait for its confirmation rather than rejecting the drain and stranding an unpaused queue.
-        _ = await configTask?.result
+        // A config change can enter while idle, or a mode change during the turn, before a scheduled drain acquires the
+        // queue coordinator. Wait for its confirmation rather than rejecting the drain and stranding an unpaused queue.
+        while let task = configTask { _ = await task.result }
         guard status == .idle, !isMerging, !queuePaused, !steering, queueEdits == 0, !reduced.queuedPrompts.isEmpty
         else { return }
         try await dispatch(reduced.queuedPrompts, removingQueued: true)
@@ -667,8 +746,16 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             cancelPermissions()
             cancelInputs()
             publishTranscript()
-            if status == .idle, !queuePaused, !steering {
-                Task { try? await self.coordinateQueue { try await self.drainQueue() } }
+            // Pending changes apply also after Stop, and after a steering prompt that Stop overtook; a steering prompt that
+            // goes out applies them itself, so this finds the session running and leaves them alone.
+            let drains = !queuePaused && !steering
+            if status == .idle, drains || !pendingConfig.isEmpty {
+                Task {
+                    try? await self.coordinateQueue {
+                        try await self.applyPendingConfig()
+                        if drains { try await self.drainQueue() }
+                    }
+                }
             }
         }
         do {
@@ -1082,7 +1169,15 @@ public final class SessionController: ACP.AgentConnectionDelegate {
             }
             let options = self.reduced.sequence == 0 ? nil : self.reduced.configOptions
             for event in stored { try self.reduced.apply(event) }
-            if self.reduced.configOptions != options { self.onConfigOptions?(self.reduced.configOptions) }
+            if self.reduced.configOptions != options {
+                self.onConfigOptions?(self.reduced.configOptions)
+                // The agent may itself move an option to its pending value.
+                for option in self.reduced.configOptions {
+                    if let value = self.pendingConfig[option.id], option.isCurrent(value) {
+                        self.pendingConfig[option.id] = nil
+                    }
+                }
+            }
             if let last = stored.last { self.noteActivity(at: last.event.timestamp) }
             await self.adoptTitle()
             if self.status == .failed || self.status == .closed { self.publishTranscript() }

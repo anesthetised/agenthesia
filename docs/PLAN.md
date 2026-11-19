@@ -46,7 +46,7 @@ before implementation.
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
 | M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049 with [ADR-0051](adr/0051-turns-between-sessions.md) (#354); a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
-| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row. #390 is in review: an open edit of a queued message holds the session's queue (`SessionController.holdQueue`), tested in Core and the window model; the running-app check with `MockAgent` in light and dark is still to do |
+| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row. #390 is in review: an open edit of a queued message holds the session's queue (`SessionController.holdQueue`), tested in Core and the window model; the running-app check with `MockAgent` in light and dark is still to do. #397 is in review: the mode changes at once during a turn and every other option from the next one (`SessionController.pendingConfig`, applied before the queue drains; a refusal pauses it), tested in Core and with a hosted pill; Claude and Codex were checked live on 2026-11-19 (Claude applies a mode change within the turn, Codex only from the next, so it cannot be restricted during a turn; a specific pending pill is parked in #421), Kimi is read from its sources only (#420), and the running-app check is still to do. The independent review's findings are addressed (a mode confirmed during a turn shows a generic note, the owner's decision) |
 | M10 Release | After M13 |
 | M5 Terminals | #61 and #67 wait for an agent that calls `terminal/create` (#104); #131 is open |
 | M9, M11, M12, M14, M17 | Not scheduled |
@@ -334,7 +334,7 @@ the first-run, text-size and VoiceOver items.
 | 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
 | 2 | #387 Transcript: move between prompts | `agent:light` | — |
 | 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue; in review) | `agent:strong` | — |
-| 2 | #397 Session settings during a turn: the mode at once, model and reasoning level from the next turn (an amendment of ADR-0019) | `agent:strong` | — |
+| 2 | #397 Session settings during a turn: the mode at once, model and reasoning level from the next turn (an amendment of ADR-0019; in review, running-app and live agent checks open) | `agent:strong` | — |
 | 2 | #391 Queue: change attachments while editing a queued message | `agent:light` | — |
 | 2 | #393 Queue: reorder by dragging; two buttons on a row | `agent:light` | — |
 | 3 | #392 Queue: step through queued messages, move and delete them from the keyboard | `agent:light` | #390 |

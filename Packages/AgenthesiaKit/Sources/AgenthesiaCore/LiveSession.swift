@@ -638,6 +638,9 @@ public final class LiveSession {
             try await controller.submit(content, intent: intent)
             errorMessage = nil
             return true
+        } catch SessionController.SessionError.configRefused {
+            // The controller's `configError` says why; the draft stays.
+            return false
         } catch {
             if !isClosed { errorMessage = controller.errorMessage ?? error.localizedDescription }
             if controller.status == .failed { await cleanup() }

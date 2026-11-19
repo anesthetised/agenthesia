@@ -331,7 +331,9 @@ The composer is a floating card ([ADR-0039](adr/0039-t3-style-window-layout.md),
 the transcript column. `ComposerPrimaryAction` picks the round button's role (Send, Queue, Save or Stop).
 `ConfigControlRow`, shared by a session's `SessionConfigControls` and the draft's hints, draws select options as
 `ConfigSelectMenu` pills (the mode opens `ModeChoices` in a popover) and booleans as toggle pills; a `ViewThatFits` over
-every split of `ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu.
+every split of `ConfigControlRow.split(_:overflowing:)` shows the first that fits, the rest in a `…` menu. A
+session's pills also show its `pendingConfig` after the confirmed values; settings errors are the controller's
+`configError` (a `SessionFailure`), so every window of the session shows them.
 `ContextRing` follows the control row in a fixed slot before the Send options menu, so its width comes out of the
 pills' room and it never overflows: `ContextUsage` (Core, pure) turns the last `usage_update` into the ring's state and
 the inspector's *Context* and *Cost* rows. A session that cannot take a prompt (saved, ended, failed, starting, merging
@@ -1194,7 +1196,14 @@ agent process ──stdout──▶ JSONRPC.Connection ──▶ ACP v1 adapter 
 3. *The queue coordinator.* Prompt-queue operations (`submit`, resume, send-now, edits, drain) run through
    `SessionController.coordinateQueue`, which chains them one at a time on a second task (`queueTask`). Before building a queue snapshot it waits for the write tail to
    settle, so lifecycle writes that arrive outside the coordinator cannot make it publish a stale snapshot. A config
-   change that enters while idle waits for the coordinator before a scheduled drain.
+   change that enters while idle, or a mode change during a turn, is awaited before a scheduled drain. Changes of other
+   options during a turn wait in `pendingConfig` (memory only, [ADR-0019's
+   amendment](adr/0019-session-config-controls.md)); the end of a turn, also by Stop, schedules a coordinated
+   operation that applies them before it drains (also after a steering prompt that Stop overtook), and `dispatch`
+   applies any left, then waits for any change in flight, before it sends. A refused one pauses the queue, sets
+   `configError` (cleared when the queue resumes) and fails a prompt sent now with `SessionError.configRefused`, which
+   `LiveSession.submit` does not show as a second error. `modeChangedDuringTurn` marks a mode confirmed while the turn
+   runs, for the composer's note.
 4. *Stop generations.* `stop()` increments `stopGeneration` and reserves `stopping` synchronously, so turn completion
    cannot slip an automatic drain past it. A public queue operation captures the generation at entry and checks it
    again inside the coordinator: an earlier send-now or resume that waited behind an edit cannot supersede a later Stop.

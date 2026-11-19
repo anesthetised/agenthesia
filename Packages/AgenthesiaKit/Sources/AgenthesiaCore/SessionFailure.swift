@@ -41,4 +41,11 @@ public struct SessionFailure: Equatable, Sendable {
         self.actions = actions
         self.details = summary == stored ? nil : stored
     }
+
+    /// `stored` classified as above, with `summary` in place of its sentence and the whole text under Details.
+    init(_ stored: String, summary: String) {
+        actions = SessionFailure(stored).actions
+        self.summary = summary
+        details = stored
+    }
 }

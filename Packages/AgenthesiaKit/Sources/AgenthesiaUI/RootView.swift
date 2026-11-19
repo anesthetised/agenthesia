@@ -147,9 +147,11 @@ public struct RootView: View {
         .task(id: model.filesSession?.id) { await model.files.attach(model.filesSession) }
         .onChange(of: model.displayed?.fileRevision) { model.files.invalidate() }
         .onChange(of: model.displayed?.session.id) {
-            model.dropStaleQueueEdit(); model.closeFind(); showingQuickOpen = false; fileQuery = ""
+            model.closeFind(); showingQuickOpen = false; fileQuery = ""
             model.review = nil; model.showingReview = false
         }
+        // An open queue edit holds its session's queue; a sent one becomes a draft (#390).
+        .onChange(of: model.queueEdit, initial: true) { model.settleQueueEdit() }
         .onChange(of: model.files.sessionID) {
             if model.review?.id != model.files.sessionID { model.review = nil }
         }
@@ -403,6 +405,7 @@ public struct RootView: View {
                 PromptQueue(
                     session: session,
                     editable: !submitting,
+                    editingID: model.composer.editingQueueID,
                     onEdit: editQueuedPrompt,
                     onError: { model.errorMessage = $0.localizedDescription }
                 )
@@ -411,8 +414,11 @@ public struct RootView: View {
                 HStack {
                     Text("Editing queued message · Return saves").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Cancel Edit") { model.composer.finishEditing() }
+                    // A Save in flight would write the cancelled text afterwards.
+                    Button("Cancel Edit") { model.composer.finishEditing() }.disabled(submitting)
                 }
+            } else if let left = model.composer.editLeftQueue, form == nil {
+                Text(left.line).font(.caption).foregroundStyle(.secondary)
             }
             // While a form waits, the text is its answer and the draft waits in `model.composer` (#326).
             ComposerInput(
@@ -550,11 +556,8 @@ public struct RootView: View {
         submitting = true
         Task {
             defer { submitting = false }
-            if let editingID = draft.editingQueueID {
-                do {
-                    try await session.updateQueuedPrompt(editingID, text: draft.message.text)
-                    model.composerDrafts[id]?.finishEditing()
-                } catch { model.errorMessage = error.localizedDescription }
+            if draft.editingQueueID != nil {
+                await model.saveQueueEdit(draft, in: session)
             } else if await owner.submit(draft.message.text, attachments: draft.message.attachments, intent: intent) {
                 // Acceptance is durable; a failed append leaves the composed draft intact. The window may show another
                 // session by now, so this clears the draft that was sent.

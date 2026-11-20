@@ -97,3 +97,18 @@ Refinements made while implementing the merge (#43, 2026-10-25); they add detail
 - The final commit runs in the login shell's environment, as agents do, so hooks and signing find their
   tools when the app was opened from the Dock. The default message is the agent's session title, or the
   first line of the first prompt.
+
+## Amendment (2026-11-20): Unsettle after the outcome
+
+- Status: Accepted by the owner on 2026-11-20 (#353)
+- Related: [0050](0050-settled-is-the-users-decision.md)
+
+ADR-0050 lets the user unsettle any settled session, a merged or discarded one included, as T3 Code un-settles a
+thread whose pull request merged. Unsettle is a decision about where the session is listed, not about its worktree, and
+it is recorded as a `session.unsettled` event after the outcome. So the outcome is no longer always the last event: it
+is **the last event other than `session.unsettled`**, and every reader of the outcome (`SessionLibrary.lastEvents` and
+`worktreeOutcomes`, and through them the removal check, the delete summary and the window's history) steps over those
+events. Replay already passes over them. What the outcome allows does not change: an unsettled merged or discarded
+session stays read-only, Continue is not offered, and Discard only removes a worktree a failed merge left behind. The
+settle rule settles a session for its outcome only while the outcome is its last event; after an Unsettle only the seven
+days from it apply.

@@ -388,6 +388,9 @@ public final class LiveSession {
     /// fails the startup, which returns the draft.
     private func connected(_ process: AgentProcess) async throws {
         guard !isClosed else { return }
+        // A live session is never settled (ADR-0050). Written once the agent is connected, so that a Continue cancelled
+        // or failed before stays settled; always, since the record handed in may predate a Settle.
+        if let resuming { try await library.store().setSettled(nil, of: resuming.id) }
         signIn = nil
         if let agent { catalog?.setSignInNeeded(false, for: agent) }
         observeFailure()

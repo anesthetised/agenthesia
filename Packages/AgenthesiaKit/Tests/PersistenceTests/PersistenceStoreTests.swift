@@ -486,6 +486,34 @@ final class PersistenceStoreTests: Sendable {
         #expect(last[empty.id] == nil)
     }
 
+    @Test func lastEventsCanPassOverOneKind() async throws {
+        let (project, agent, first) = try await seed()
+        let only = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/only")
+        try await store.createSession(only)
+        let skipped = NewEvent(kind: "skipped", payload: Data("{}".utf8), timestamp: date)
+        let kept = try await store.append([event(1), skipped, event(2), skipped, skipped], to: first.id)
+        _ = try await store.append([skipped], to: only.id)
+        let (last, other) = try await store.lastEvents(skipping: "skipped")
+        #expect(other[first.id] == kept[2])
+        // A session with nothing but the skipped kind has no entry.
+        #expect(other[only.id] == nil && other.count == 1)
+        #expect(last[first.id] == kept[4] && last.count == 2)
+        #expect(try await store.lastEvents() == last)
+    }
+
+    /// Both reads start from `session`: without statistics SQLite would otherwise scan every event and run the
+    /// subquery once per event.
+    @Test(arguments: [PersistenceStore.lastEventSQL, PersistenceStore.lastOtherEventSQL])
+    func lastEventsLookUpEachSessionRatherThanScanEveryEvent(sql: String) async throws {
+        _ = try await seed()
+        let arguments: StatementArguments = sql.contains("?") ? ["skipped"] : []
+        let plan = try await database.read { db in
+            try Row.fetchAll(db, sql: "EXPLAIN QUERY PLAN \(sql)", arguments: arguments).map { $0["detail"] as String }
+        }
+        #expect(plan.first?.hasPrefix("SCAN session") == true, "\(plan)")
+        #expect(!plan.contains { $0.hasPrefix("SCAN event") || $0.hasPrefix("SCAN other") }, "\(plan)")
+    }
+
     @Test func oneKiBPayloadsDoNotAllocateAnOverflowPagePerEvent() async throws {
         let (_, _, session) = try await seed()
         let pagesBefore = try #require(await database.read { try Int.fetchOne($0, sql: "PRAGMA page_count") })

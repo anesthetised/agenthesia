@@ -162,7 +162,7 @@ measure `fittingSize` net of `safeAreaInsets`, and put AppKit scroll views at `w
   - quit the app and restore the clipboard and any System Settings value you changed;
   - check `git diff` and `git status` for leftover debug logging, `/tmp` paths and experiments, and rebuild
     the committed state with `just app`;
-  - delete test sessions made outside a temporary home with *Delete Session…* (ending them first);
+  - delete test sessions made outside a temporary home with *Delete Session…* (settling them first);
   - leftovers the owner has to remove: the notification entry of each test bundle identifier in System Settings →
     Notifications.
 - Windows restore after relaunch only with System Settings → Desktop & Dock → *Close windows when quitting

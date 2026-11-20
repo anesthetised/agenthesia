@@ -18,11 +18,11 @@ public struct SessionCommands: Commands {
             Button("New Session") { model?.showingSetup = true }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(model?.canStart != true)
-            Button(model?.owner?.isStarting == true ? "Cancel Startup" : "End Session") {
-                Task { [model] in await model?.endSession() }
+            Button(model?.settleCommandTitle ?? "Settle Session") {
+                Task { [model] in await model?.toggleSettled() }
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
-            .disabled(model?.canEnd != true)
+            .disabled(model?.canToggleSettled != true)
             Button(model?.archiveCommandTitle ?? "Archive Session") {
                 Task { [model] in await model?.toggleArchived() }
             }

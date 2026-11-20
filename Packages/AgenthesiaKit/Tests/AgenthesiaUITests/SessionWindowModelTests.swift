@@ -404,6 +404,7 @@ import Testing
         #expect(model.canEnd)
         await model.navigate()
         #expect(model.displayed?.session.id == records[1].id)
+        // Seven quiet days settled the saved sessions at the refresh (ADR-0050).
         #expect(!model.canEnd && !model.canStop && !model.canResumeQueue && model.canContinue)
         await model.navigate()
         #expect(model.displayed?.session.id == records[0].id)
@@ -607,6 +608,16 @@ import Testing
         #expect(settled.rows.map(\.id) == [AnyHashable(session.id)])
         // A second settle of the same row does nothing.
         await model.settle(owner)
+        // Unsettle brings the saved row back to the list without starting the agent; Settle sends it back.
+        let record = try #require(model.history.first { $0.id == session.id })
+        #expect(model.canUnsettle(record) && !model.canSettle(record))
+        await model.unsettle(record)
+        #expect(sessions.owners.isEmpty && model.sidebar.section(.settled) == nil)
+        let unsettled = try #require(model.history.first { $0.id == session.id })
+        #expect(model.sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(session.id)])
+        #expect(model.canSettle(unsettled) && !model.canUnsettle(unsettled))
+        await model.settle(unsettled)
+        #expect(model.sidebar.section(.settled)?.rows.map(\.id) == [AnyHashable(session.id)])
         await sessions.closeAll()
     }
 
@@ -811,6 +822,13 @@ import Testing
         #expect(model.outcomes == [record.id: .discarded])
         #expect(!model.canDiscard && !model.canContinue && model.filesSession == nil)
         #expect(model.outcome(of: record.id) == .discarded)
+        // The discard settled the session (ADR-0050).
+        let settled = try #require(model.history.first { $0.id == record.id })
+        #expect(settled.settledAt != nil && model.canUnsettle(settled))
+        // Unsettled, it is back in the list and still discarded and read-only (ADR-0032's amendment).
+        await model.unsettle(settled)
+        #expect(model.sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(record.id)])
+        #expect(model.outcomes == [record.id: .discarded] && !model.canDiscard(record) && !model.canContinue)
         #expect(!FileManager.default.fileExists(atPath: record.workingDirectory))
         // Another window learns the outcome with history, before loading the transcript.
         await other.refresh()

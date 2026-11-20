@@ -26,6 +26,9 @@ public final class SessionManager {
     @ObservationIgnored var logs: [UUID: SessionLog] = [:]
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
+    /// Sessions settled by hand in this launch and not unsettled or continued since; a window counts them as settled
+    /// before its next history load shows it, so that a session leaving `owners` never shows in the list (ADR-0050).
+    public internal(set) var settledIDs: Set<UUID> = []
     /// Saved sessions deleted since launch; a window still showing one of them (an ended session it ran) leaves it.
     public internal(set) var deletedIDs: Set<UUID> = []
     // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
@@ -36,6 +39,8 @@ public final class SessionManager {
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
     // Test seam for a history write failing after the merge commit; production appends to the session's log.
     @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
+    // Test seam for a failing `settledAt` write; production writes to the library.
+    @ObservationIgnored var settledWrite: (@Sendable (Date?, UUID) async throws -> Void)?
     /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
     @ObservationIgnored public var catalog: AgentCatalog?
     /// The tokens the `agenthesia-mcp` helper presents to the app's socket (ADR-0049).
@@ -85,10 +90,11 @@ public final class SessionManager {
 
     /// The owner that has the session live, or a new one that continues it once earlier owners of the
     /// session have closed, so one owner writes to its log at a time (ADR-0017). Nil while its worktree is
-    /// being discarded.
+    /// being discarded or merged.
     @discardableResult public func resume(_ session: SessionRecord) -> LiveSession? {
         guard !isDiscarding(session.id), !isMerging(session.id) else { return nil }
         if let live = owner(of: session.id) { return live }
+        settledIDs.remove(session.id)
         let previous = owners.filter { $0.sessionID == session.id }
         owners.removeAll { $0.sessionID == session.id }
         return add(.saved(session), after: previous)
@@ -114,7 +120,11 @@ public final class SessionManager {
     /// Closes the owner and removes it; its session remains in saved history.
     public func end(_ owner: LiveSession) async {
         await owner.close()
-        owners.removeAll { $0 === owner }
+        removeOwners([owner])
+    }
+
+    func removeOwners(_ removed: [LiveSession]) {
+        owners.removeAll { owner in removed.contains { $0 === owner } }
     }
 
     /// Closes every owner, including those still starting, before the app terminates. A merge finishes first,

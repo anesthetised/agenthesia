@@ -5,7 +5,7 @@ import Testing
 @testable import AgenthesiaCore
 
 @MainActor @Suite(.timeLimit(.minutes(1))) struct SessionManagerTests {
-    fileprivate func fixture() throws -> (URL, SessionManager) {
+    func fixture() throws -> (URL, SessionManager) {
         let directory = FileManager.default.temporaryDirectory.appending(path: "session-manager-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let manager = SessionManager(
@@ -15,7 +15,7 @@ import Testing
         return (directory, manager)
     }
 
-    fileprivate func mock(arguments: [String] = []) throws -> AgentInstallRecord {
+    func mock(arguments: [String] = []) throws -> AgentInstallRecord {
         let package = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../..").standardized
         let binary = try #require(
             [".build/debug/MockAgent", ".build/out/Products/Debug/MockAgent"]

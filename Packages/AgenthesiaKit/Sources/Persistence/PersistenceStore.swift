@@ -234,23 +234,50 @@ public final class PersistenceStore: Sendable {
         }
     }
 
-    /// Each session's most recent event, one index lookup per session.
+    /// Each session's most recent event: per session, one index-only lookup of its last sequence and one of its row.
     public func lastEvents() async throws -> [UUID: StoredEvent] {
+        try await database.read { try Self.events(in: $0, sql: Self.lastEventSQL) }
+    }
+
+    /// Each session's most recent event, and its most recent event of another kind than `kind` (a session with only
+    /// `kind` events has no `other` entry), in one read. The second walks the session's events backward from its last,
+    /// reading each one's kind, and stops at the first other one.
+    public func lastEvents(
+        skipping kind: String
+    ) async throws -> (last: [UUID: StoredEvent], other: [UUID: StoredEvent]) {
         try await database.read { db in
-            let rows = try Row.fetchAll(
-                db,
-                sql: """
-                    SELECT event.* FROM session JOIN event ON event.sessionID = session.id
-                    AND event.sequence = (SELECT MAX(sequence) FROM event WHERE sessionID = session.id)
-                    """
-            )
-            return try Dictionary(
-                uniqueKeysWithValues: rows.map { row in
-                    let event = try Self.decodeEvent(row)
-                    return (event.sessionID, event)
-                }
+            (
+                try Self.events(in: db, sql: Self.lastEventSQL),
+                try Self.events(in: db, sql: Self.lastOtherEventSQL, arguments: [kind])
             )
         }
+    }
+
+    // `CROSS JOIN` keeps `session` the outer loop: without statistics SQLite would scan every event and run the
+    // subquery once per event. `PersistenceStoreTests` checks both plans.
+    static let lastEventSQL = """
+        SELECT event.* FROM session CROSS JOIN event ON event.sessionID = session.id
+        AND event.sequence = (SELECT MAX(sequence) FROM event WHERE sessionID = session.id)
+        """
+    static let lastOtherEventSQL = """
+        SELECT event.* FROM session CROSS JOIN event ON event.sessionID = session.id
+        AND event.sequence = (
+            SELECT sequence FROM event AS other WHERE other.sessionID = session.id AND other.kind != ?
+            ORDER BY sequence DESC LIMIT 1
+        )
+        """
+
+    private static func events(
+        in db: Database,
+        sql: String,
+        arguments: StatementArguments = []
+    ) throws -> [UUID: StoredEvent] {
+        try Dictionary(
+            uniqueKeysWithValues: Row.fetchAll(db, sql: sql, arguments: arguments).map { row in
+                let event = try decodeEvent(row)
+                return (event.sessionID, event)
+            }
+        )
     }
 
     private static func decodeEvent(_ row: Row) throws -> StoredEvent {

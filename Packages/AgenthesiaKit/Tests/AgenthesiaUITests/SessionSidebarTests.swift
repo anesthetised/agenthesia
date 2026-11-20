@@ -21,13 +21,15 @@ import Testing
             projectID: project.id,
             agentInstallID: agent.id,
             title: "First",
-            workingDirectory: project.rootPath
+            workingDirectory: project.rootPath,
+            settledAt: .now
         )
         let second = SessionRecord(
             projectID: project.id,
             agentInstallID: agent.id,
             title: "Second",
-            workingDirectory: project.rootPath
+            workingDirectory: project.rootPath,
+            settledAt: .now
         )
         try await store.createProject(project)
         try await store.createAgentInstall(agent)

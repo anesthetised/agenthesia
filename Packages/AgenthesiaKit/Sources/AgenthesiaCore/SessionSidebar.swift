@@ -4,7 +4,7 @@ public import Persistence
 /// Sessions grouped by what they ask of the user (ADR-0039, superseding the project groups of ADR-0026).
 @MainActor public struct SessionSidebar {
     public enum Kind: String, CaseIterable, Sendable {
-        /// The scrolling list, which has no header: the open sessions that are not in a turn.
+        /// The scrolling list, which has no header: the sessions that are not settled or in a turn (ADR-0050).
         case active = "Active"
         case working = "Working"
         case settled = "Settled"
@@ -119,11 +119,12 @@ public import Persistence
     }
 
     /// - The list: live sessions that are not working (`isWorking`), those that wait for a permission or input,
-    ///   failed, or finished unseen first, then the idle ones; each group in start order.
+    ///   failed, or finished unseen first, then the idle ones; each group in start order. Then the saved sessions that
+    ///   are not settled or archived (ADR-0050), by the session's start.
     /// - Working: live sessions that are starting, running or stopping, or about to start a queued turn, in start
     ///   order.
-    /// - Settled: saved sessions that are not live or archived, by last activity, newest first. `activity` holds the
-    ///   time of each saved session's last event; a session without an entry sorts by its start.
+    /// - Settled: saved sessions that are settled and not archived (ADR-0050), by last activity, newest first.
+    ///   `activity` holds the time of each saved session's last event; a session without an entry sorts by its start.
     /// A non-blank `query` keeps the rows whose title or project name contains it, ignoring case and diacritics.
     /// Only a query lists archived sessions (ADR-0044).
     public init(
@@ -152,16 +153,22 @@ public import Persistence
             Self.isWorking(owner.activity, queueDue: Self.queueDue(owner.controller))
         }
         let open = live.filter { !onShelf($0.0) }
+        let saved = history.filter { !liveIDs.contains($0.id) && (filtered || $0.archivedAt == nil) }
+        // An archived session that a search lists is among the settled ones.
+        let isSettled = { (record: SessionRecord) in record.settledAt != nil || record.archivedAt != nil }
+        func savedRow(_ record: SessionRecord) -> Row {
+            Row(source: .saved(record), project: projects[record.projectID], savedActivity: activity)
+        }
         let kinds: [(Kind, [Row])] = [
             (
                 .active,
                 (open.filter { Self.needsYou($0.0.activity) } + open.filter { !Self.needsYou($0.0.activity) }).map(\.1)
+                    + saved.filter { !isSettled($0) }.sorted { $0.createdAt < $1.createdAt }.map(savedRow)
             ),
             (.working, live.filter { onShelf($0.0) }.map(\.1)),
             (
                 .settled,
-                history.filter { !liveIDs.contains($0.id) && (filtered || $0.archivedAt == nil) }
-                    .map { Row(source: .saved($0), project: projects[$0.projectID], savedActivity: activity) }
+                saved.filter(isSettled).map(savedRow)
                     .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
             ),
         ]

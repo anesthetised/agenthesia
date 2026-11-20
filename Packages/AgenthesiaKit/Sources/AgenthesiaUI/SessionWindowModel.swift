@@ -9,6 +9,7 @@ import os
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
+    private static let logger = Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "Sidebar")
     /// Whether the window shows the draft (ADR-0040) or the board instead of a session. Setting it leaves the board.
     var showingSetup = true { didSet { showingBoard = false } }
     /// Whether the window shows the session board (ADR-0046); `showingSetup` is set with it, as no session is shown.
@@ -390,7 +391,19 @@ import os
             && history.contains { $0.id == displayed.session.id }
     }
     var savedSessions: [SessionRecord] {
-        history.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
+        listedHistory.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
+    }
+    /// History as the window lists it: a session settled by hand counts as settled before the next load shows it, so
+    /// it never shows in the list between leaving `owners` and that load.
+    private var listedHistory: [SessionRecord] {
+        let settled = sessions.settledIDs
+        guard !settled.isEmpty else { return history }
+        return history.map { record in
+            guard record.settledAt == nil, settled.contains(record.id) else { return record }
+            var record = record
+            record.settledAt = .distantPast
+            return record
+        }
     }
     /// The sidebar's search text; navigation and the sections only see the rows it matches.
     var sidebarQuery = ""
@@ -399,7 +412,7 @@ import os
     var sidebar: SessionSidebar {
         SessionSidebar(
             projects: projects,
-            history: history,
+            history: listedHistory,
             owners: sessions.owners,
             activity: lastActivity,
             query: sidebarQuery
@@ -457,8 +470,11 @@ import os
         Task { await owner.cancelSignIn() }
     }
 
+    /// Settle Session (Cancel Startup while starting) for the displayed live session, at any time, or for the
+    /// displayed saved session while it is in the list (ADR-0050).
     var canEnd: Bool {
-        !closed && !showingSetup && !isLoadingHistory && restored == nil
+        if let displayedSaved { return canSettle(displayedSaved) }
+        return !closed && !showingSetup && !isLoadingHistory && restored == nil
             && sessions.owners.contains { $0 === owner }
     }
     var canStop: Bool {
@@ -555,7 +571,7 @@ import os
     var archiveCommandTitle: String { Self.archiveTitle(archived: displayedSaved?.archivedAt != nil) }
     /// Why Archive is disabled for a live session.
     var archiveHelp: String? {
-        displayed != nil && !showingSetup && displayedSaved == nil ? "End the session first" : nil
+        displayed != nil && !showingSetup && displayedSaved == nil ? "Settle the session first" : nil
     }
     static func archiveTitle(archived: Bool) -> String { archived ? "Unarchive Session" : "Archive Session" }
 
@@ -698,18 +714,75 @@ import os
         }
     }
 
-    func endSession() async {
-        guard canEnd, let owner else { return }
-        await sessions.end(owner)
-        await refresh()
+    /// The Session menu's toggle (ADR-0050): Unsettle Session for a displayed settled session, Settle Session for any
+    /// other, Cancel Startup while the displayed live session starts or waits for sign-in. The window's owner counts only
+    /// while it is what the window shows.
+    var settleCommandTitle: String {
+        if let displayedSaved { return displayedSaved.settledAt == nil ? "Settle Session" : "Unsettle Session" }
+        guard restored == nil, let owner, Self.isStartingUp(owner) else { return "Settle Session" }
+        return "Cancel Startup"
     }
-    /// Settling a row is End Session for that row's owner, whichever session the window shows.
+    var canToggleSettled: Bool { canEnd || displayedSaved.map(canUnsettle) == true }
+    func toggleSettled() async {
+        if let displayedSaved, displayedSaved.settledAt != nil { return await unsettle(displayedSaved) }
+        await endSession()
+    }
+    /// The toolbar's button: Settle Session for the displayed live session or a saved one in the list, Cancel Startup
+    /// while it starts or waits for sign-in; none for a settled or archived session.
+    var toolbarSettle: (title: String, systemImage: String)? {
+        if let displayedSaved {
+            return displayedSaved.settledAt == nil && displayedSaved.archivedAt == nil
+                ? ("Settle Session", "checkmark.circle") : nil
+        }
+        guard restored == nil, let owner else { return nil }
+        return Self.isStartingUp(owner) ? ("Cancel Startup", "stop.circle") : ("Settle Session", "checkmark.circle")
+    }
+    /// A session that has not started yet, sign-in included, is cancelled rather than settled.
+    private static func isStartingUp(_ owner: LiveSession) -> Bool { owner.isStarting || owner.signIn != nil }
+
+    /// Settle Session in the menu and on the toolbar; Cancel Startup only ends a starting session.
+    func endSession() async {
+        guard canEnd else { return }
+        if let displayedSaved { return await settle(displayedSaved) }
+        guard let owner else { return }
+        if Self.isStartingUp(owner) {
+            await sessions.end(owner)
+            await refresh()
+        } else {
+            await writeSettled { try await sessions.settle(owner) }
+        }
+    }
+    /// A live row settles from its own menu and button, whichever session the window shows, unless a turn runs or a
+    /// permission or form waits.
     func canSettle(_ owner: LiveSession) -> Bool {
         !closed && SessionRow.canSettle(owner.activity) && sessions.owners.contains { $0 === owner }
     }
     func settle(_ owner: LiveSession) async {
         guard canSettle(owner) else { return }
-        await sessions.end(owner)
+        await writeSettled { try await sessions.settle(owner) }
+    }
+    /// A saved row in the list settles at once; archived and settled ones are not in the list (ADR-0050).
+    func canSettle(_ record: SessionRecord) -> Bool {
+        !closed && record.settledAt == nil && record.archivedAt == nil && !sessions.deletingIDs.contains(record.id)
+            && savedSessions.contains { $0.id == record.id }
+    }
+    func settle(_ record: SessionRecord) async {
+        guard canSettle(record) else { return }
+        await writeSettled { try await sessions.settle(record.id) }
+    }
+    /// Unsettle Session on a Settled row: back to the list without starting the agent. A merged or discarded session
+    /// keeps its outcome (ADR-0032's amendment).
+    func canUnsettle(_ record: SessionRecord) -> Bool {
+        !closed && record.settledAt != nil && record.archivedAt == nil && sessions.canUnsettle(record.id)
+            && savedSessions.contains { $0.id == record.id }
+    }
+    func unsettle(_ record: SessionRecord) async {
+        guard canUnsettle(record) else { return }
+        do { try await sessions.unsettle(record.id) } catch { showAlert("Cannot Unsettle the Session", error) }
+        await refresh()
+    }
+    private func writeSettled(_ write: () async throws -> Void) async {
+        do { try await write() } catch { showAlert("Cannot Settle the Session", error) }
         await refresh()
     }
     func stop() async {
@@ -868,7 +941,19 @@ import os
 
     func refresh() async {
         do {
-            history = try await library.history()
+            var history = try await library.history()
+            let events = try await library.lastEvents()
+            // The rule settles from what was just read, and what it wrote is applied to it. A failed write is logged; the
+            // next refresh tries again.
+            let now = Date.now
+            let rule = await sessions.settleByRule(history, events: events, now: now)
+            if let failure = rule.failure {
+                Self.logger.error("Settling by rule failed: \(failure.localizedDescription, privacy: .public)")
+            }
+            for index in history.indices where rule.settled.contains(history[index].id) {
+                history[index].settledAt = now
+            }
+            self.history = history
             if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
                 leaveDeletedSession(id)
             } else if let id = displayed?.session.id, sessions.deletedIDs.contains(id) {
@@ -876,7 +961,7 @@ import os
                 leaveDeletedSession(id)
             }
             projects = try await library.projects()
-            (outcomes, lastActivity) = try await library.lastEvents()
+            (outcomes, lastActivity) = (events.outcomes, events.activity)
             leftoverWorktrees = Set(
                 history.filter {
                     if case .merged = outcomes[$0.id] {

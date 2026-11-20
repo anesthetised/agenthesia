@@ -82,11 +82,15 @@ extension WorktreeDiscardTests {
             stored: nil,
             id: id
         )
-        try await manager.library.record(.merged(commit: "abc", into: "main"), for: merged.id)
+        try await manager.append(
+            [SessionEvent.worktreeRemoved(.merged(commit: "abc", into: "main")).storedEvent()],
+            to: merged.id
+        )
         #expect(try await manager.deleteSummary(merged) == .merged)
         // A merge whose removal failed leaves its worktree; deleting removes it too.
         try await manager.delete(merged)
         #expect(try await isGone(merged, in: manager))
+        #expect(manager.logs[merged.id] == nil)
         #expect(!FileManager.default.fileExists(atPath: merged.workingDirectory))
     }
 

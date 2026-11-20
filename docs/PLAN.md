@@ -194,6 +194,19 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
+- #355 (one log writer per session) is in review: `SessionLog` chains every append to a session's log; `SessionManager`
+  keeps one per session id for the controller and its own appends (worktree outcomes, pull requests), and
+  `SessionLibrary.record` is gone. A controller hands another writer's events to its transcript at once, reads events
+  it missed from the store instead of failing with `outOfOrder`, loads history as a step of the log and builds the
+  reopen baseline inside its step, after reading what was written to the store past the log; a foreign event it cannot
+  apply fails it at once. The manager drops a session's log when the session is deleted. Queue snapshots are still
+  built before their write step, so #357 moves them into the step before deliveries change the queue.
+  `PersistenceStore.append(_ batches:)` writes to several sessions' logs in one transaction, for #317, which still has
+  to add a step that joins two sessions' logs. Tested with Swift Testing (an append during Continue, with and without
+  the log; a failed controller; the controller and the manager sharing one order; history waiting for an earlier step;
+  a baseline after a pending step and after a write past the log; a foreign event that cannot be applied; the
+  two-session transaction), each test seen failing with the fix taken out. The independent review (Opus) found nothing
+  to fix before merging; its suggestions are addressed or noted on #357. No event format or stored data changed.
 - #352 (the list and the Working shelf) landed in #418 (`11c2104`): `SessionSidebar.Kind.active` replaced `needsYou`; the
   list holds the open sessions that are not working, the rows that need the user first, and `SessionSidebar.needsYou`
   keeps those rows for the menu bar. Working holds turns and a queue about to start one (`queueDue`: idle, not paused,

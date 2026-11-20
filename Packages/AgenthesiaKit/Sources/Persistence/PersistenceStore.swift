@@ -171,35 +171,44 @@ public final class PersistenceStore: Sendable {
     /// Callers must await appends in arrival order; concurrently submitted batches have no arrival ordering guarantee.
     public func append(_ events: [NewEvent], to sessionID: UUID) async throws -> [StoredEvent] {
         guard !events.isEmpty else { return [] }
-        return try await database.write { db in
-            let last =
-                try Int64.fetchOne(
-                    db,
-                    sql: "SELECT MAX(sequence) FROM event WHERE sessionID = ?",
-                    arguments: [sessionID.uuidString]
-                ) ?? 0
-            guard last <= Int64.max - Int64(events.count) else { throw PersistenceError.sequenceExhausted }
-            var stored: [StoredEvent] = []
-            for (index, event) in events.enumerated() {
-                // SQLite JSON validation accepts invalid UTF-8 and ignores bytes after a raw NUL.
-                guard !event.payload.contains(0), String(validating: event.payload, as: UTF8.self) != nil else {
-                    throw PersistenceError.invalidEventPayload
-                }
-                let sequence = last + Int64(index) + 1
-                try db.execute(
-                    sql: """
-                        INSERT INTO event (sessionID, sequence, kind, formatVersion, payload, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                    arguments: [
-                        sessionID.uuidString, sequence, event.kind, event.formatVersion, event.payload,
-                        event.timestamp.timeIntervalSinceReferenceDate,
-                    ]
-                )
-                stored.append(StoredEvent(sessionID: sessionID, sequence: sequence, event: event))
+        return try await database.write { try Self.insert(events, to: sessionID, in: $0) }
+    }
+
+    /// Appends to the logs of several sessions in one transaction: every batch commits or none does (ADR-0051), each
+    /// as `append(_:to:)` would. Returns the stored events batch by batch.
+    public func append(_ batches: [(events: [NewEvent], sessionID: UUID)]) async throws -> [[StoredEvent]] {
+        try await database.write { db in try batches.map { try Self.insert($0.events, to: $0.sessionID, in: db) } }
+    }
+
+    private static func insert(_ events: [NewEvent], to sessionID: UUID, in db: Database) throws -> [StoredEvent] {
+        guard !events.isEmpty else { return [] }
+        let last =
+            try Int64.fetchOne(
+                db,
+                sql: "SELECT MAX(sequence) FROM event WHERE sessionID = ?",
+                arguments: [sessionID.uuidString]
+            ) ?? 0
+        guard last <= Int64.max - Int64(events.count) else { throw PersistenceError.sequenceExhausted }
+        var stored: [StoredEvent] = []
+        for (index, event) in events.enumerated() {
+            // SQLite JSON validation accepts invalid UTF-8 and ignores bytes after a raw NUL.
+            guard !event.payload.contains(0), String(validating: event.payload, as: UTF8.self) != nil else {
+                throw PersistenceError.invalidEventPayload
             }
-            return stored
+            let sequence = last + Int64(index) + 1
+            try db.execute(
+                sql: """
+                    INSERT INTO event (sessionID, sequence, kind, formatVersion, payload, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    sessionID.uuidString, sequence, event.kind, event.formatVersion, event.payload,
+                    event.timestamp.timeIntervalSinceReferenceDate,
+                ]
+            )
+            stored.append(StoredEvent(sessionID: sessionID, sequence: sequence, event: event))
         }
+        return stored
     }
 
     /// Reads a bounded page in replay order. Unknown kinds and versions remain available as raw data.

@@ -24,7 +24,8 @@ has no selected row. The search text and the selection belong to the window.
 - **Settled** — saved sessions that are settled and not archived, by last activity, newest first. A session is settled
   by `Settle Session`, or by itself when it is not live and its worktree was merged or discarded
   ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)), or its last activity is seven days old. A live session never
-  settles by itself. The rule runs whenever a window refreshes history: at launch, when a session ends, after a merge
+  settles by itself, and an unsettled merged or discarded session is not settled again for its outcome, only after
+  seven days. The rule runs whenever a window refreshes history: at launch, when a session ends, after a merge
   or a discard. Sessions that existed before #353 start settled.
 - Empty sections are hidden. With no open session at all, in the list or on the Working shelf, the list reads `No open
   sessions` in secondary text, centered; when every open session is on the shelf, the list area is empty. A session
@@ -157,8 +158,7 @@ Right-click on a row:
 |---|---|---|
 | `New Session in Project` | yes | yes |
 | `Open in New Window` | yes | yes |
-| `Settle Session` | yes | in the list |
-| `Unsettle Session` | — | in Settled |
+| `Settle Session` / `Unsettle Session` | `Settle Session` | by the row's state; none when archived |
 | `Archive Session` / `Unarchive Session` | — | yes |
 | `Delete Session…` | — | yes |
 | `Discard Worktree…` | yes | yes |
@@ -174,10 +174,13 @@ Right-click on a row:
   once. On hover a row in the list or on the Working shelf shows a small borderless `✓ Settle` button in place of its
   time (the shelf time on Working) when it can settle, faded in over 0.12 s (at once under Reduce Motion); the same
   action is an accessibility action of the row. Settle Session in the Session menu keeps its own rules (below).
-- `Unsettle Session` moves a settled row back to the list without starting its agent, and counts as its last activity,
-  so the seven days start again. It is disabled for a merged or discarded session, and while the session is starting (a
-  Continue), being merged, discarded or deleted. Continue on a settled session moves it back too. A failed write shows `Cannot Settle the Session` /
-  `Cannot Unsettle the Session`.
+- `Unsettle Session` (the title on a Settled row) moves the session back to the list without starting its agent, and
+  counts as its last activity, so the seven days start again. On hover a Settled row shows a small borderless
+  `↩ Unsettle` button (`arrow.uturn.backward`) in place of its time, as `✓ Settle` does, also an accessibility action. A
+  merged or discarded session can be unsettled: it keeps its `Merged` / `Discarded` reason, stays read-only and cannot
+  continue ([ADR-0032's amendment](../adr/0032-worktree-merge-and-discard.md)). Disabled while the session is starting
+  (a Continue), being merged, discarded or deleted. Continue on a settled session moves it back too. A failed write
+  shows `Cannot Settle the Session` / `Cannot Unsettle the Session`.
 - `Archive Session` hides a saved session from Settled (and its count) without touching its log; `Unarchive Session`
   (the title when it is archived) brings it back. Neither asks for confirmation. Live rows have no such item: a session
   is settled before it can be archived. Unarchive returns a session to the list or to Settled, as its `settledAt` says. Continue on an archived session unarchives it. Storage and the reasons are in
@@ -200,9 +203,11 @@ Right-click on a row:
   origin/<branch> and any pull request from it are not touched.`), and `Discard` / `Cancel`. A live session is ended before its worktree is removed; the row then reads
   `Discarded` ([ADR-0032](../adr/0032-worktree-merge-and-discard.md)).
 
-The Session menu's `Settle Session` (⇧⌘E; the toolbar's `checkmark.circle` button for a live session) replaces End
-Session: it settles the displayed live session at any time, ending a running turn, or the displayed saved session while
-it is in the list. A starting session shows `Cancel Startup` instead, which ends it without settling. The menu has the
+The Session menu's `Settle Session` (⇧⌘E) replaces End Session: it settles the displayed live session at any time,
+ending a running turn, or the displayed saved session while it is in the list; for a displayed settled session it reads
+`Unsettle Session`. A session that is starting or waiting for sign-in shows `Cancel Startup` instead, which ends it
+without settling. The toolbar has the same button (`checkmark.circle`, `stop.circle` for Cancel Startup) for a live
+session and a saved one in the list, and none for a settled or archived one. The menu has the
 same `Archive Session` / `Unarchive Session`, `Delete Session…` and `Discard Worktree…` for the displayed session,
 without shortcuts. Archive and Delete are disabled unless the displayed session is saved; for a live one their help text
 is `Settle the session first`. Each change refreshes the window's history; other windows pick it up at
@@ -212,8 +217,10 @@ their next refresh, and a finished deletion triggers one in every window.
 
 - 2026-11-20, #353 ([ADR-0050](../adr/0050-settled-is-the-users-decision.md)): Settled is stored. Saved sessions that
   are not settled stay in the list; `Settle Session` replaces End Session (menu, toolbar, row) and saved rows in the list
-  have it too; `Unsettle Session` on Settled rows; a session that is not live settles by itself after a merge or a
-  discard, or after seven quiet days. Archive and Delete on a live session say `Settle the session first`.
+  have it too; `Unsettle Session` on Settled rows (menu item, hover button, and the Session menu's toggle), also for
+  merged and discarded sessions, which keep their outcome; a session that is not live settles by itself after a merge
+  or a discard, or after seven quiet days. `Cancel Startup` also during sign-in. Archive and Delete on a live session
+  say `Settle the session first`.
 
 - 2026-11-19, #352: the list holds every open session that is not in a turn, the rows that need the user first, with
   no header; it reads `No open sessions` when empty. The Working shelf holds only the sessions in a turn (and one about

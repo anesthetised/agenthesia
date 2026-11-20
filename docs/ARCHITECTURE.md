@@ -466,7 +466,7 @@ takes the title the agent reported earlier (`PendingPermission.callTitle`), and 
 from `TranscriptState.turnOrigin`. `SubtitleLayout` lays out the second line. The time is the last activity:
 `SessionController.lastActivity` for a live session (the minute of the last stored event, set at most once a minute and
 seeded when history loads), `PersistenceStore.lastEvents()` for a saved one (`SessionLibrary.lastEvents()` returns it
-with the worktree outcomes, in one query), else `createdAt`.
+with the worktree outcomes, read by a second query that steps over `session.unsettled`), else `createdAt`.
 The shelves keep their state in `SessionWindowModel.workingShelfExpanded` / `settledShelfExpanded` (`RootView` remembers
 them in `@SceneStorage`, like the inspector); `SidebarShelves.isOpen` opens them for a search,
 `SessionWindowModel.revealShelf` for Previous/Next Session, and `SidebarShelves.animation` is the spring that Reduce
@@ -493,13 +493,18 @@ next refresh.
 (migration `v9-session-settled-at`, which fills it for every existing session with its last event's time, or its start,
 `SessionRecord.settledAt`), written by `PersistenceStore.setSettled(_:of:)`. `SessionSidebar` puts saved sessions without
 it in the list and those with it on the Settled shelf. `SessionManager.settle` ends a session's owners first, so a live
-session is never settled; Continue clears `settledAt` as it launches (`LiveSession`). `SessionManager.unsettle` appends a
-`session.unsettled` event (`SessionUnsettled`, a kind of its own that the reducer passes over and older builds skip) and
-clears `settledAt`; until each session has one log writer (#355) it is refused while the session is live, starting,
-merging, discarding or being deleted, and `resume` refuses a Continue while it runs. `SessionSettling.settles` is the
-pure rule: a session that is not live settles when the worktree's outcome is its last event or its last activity is seven
-days old. `SessionManager.settleByRule` applies it and writes the time of the check; `SessionWindowModel.refresh` runs it
-first, and refreshes follow launch, a session's end, a merge and a discard.
+session is never settled; Continue clears `settledAt` as it launches (`LiveSession`). `SessionManager.settle` closes the owners, writes `settledAt`, then removes them from `owners`, so a window refreshing on
+that change already reads the session as settled. `SessionManager.unsettle` appends a `session.unsettled` event
+(`SessionUnsettled`, a kind of its own that the reducer passes over; older builds refuse a v9 database, so they never
+read it) and clears `settledAt`; until each session has one log writer (#355) it is refused while the session is live,
+starting, merging, discarding or being deleted, and `resume` refuses a Continue while it runs. A merged or discarded
+session can be unsettled: the worktree's outcome is the last event other than `session.unsettled`
+(`PersistenceStore.lastEvents(skipping:)`, read by `SessionLibrary.worktreeOutcomes` and `lastEvents`, and through them
+the removal check, the delete summary and the window's history; ADR-0032's amendment). `SessionSettling.settles` is the
+pure rule: a session that is not live settles when the worktree's outcome is its very last event or its last activity
+is seven days old. `SessionManager.settleByRule` applies it, writes the time of the check and goes on past a failed
+write; `SessionWindowModel.refresh` runs it first and only logs its failure, and refreshes follow launch, a session's
+end, a merge and a discard.
 
 **Delete Session…** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) removes a saved session for good. Events are
 append-only in the schema itself (`event_no_delete`); migration `v8-session-deletion` lets the guard pass only the
@@ -972,8 +977,10 @@ The event format is version 1:
   outcome, without options) is still read and shown with the option identifier only. When an adapter normalizes
   an update (e.g. legacy modes), its config-options event is appended in the same transaction immediately
   after the raw notification. Replay therefore reproduces live state without discarding original data.
-- `session.pullRequestOpened` and `session.unsettled`: kinds of their own, so that builds that do not know them skip
-  them ([ADR-0045](adr/0045-push-and-pull-requests.md), [ADR-0050](adr/0050-settled-is-the-users-decision.md)).
+- `session.pullRequestOpened` and `session.unsettled`: kinds of their own rather than `SessionEvent` cases. A build that
+  does not know the first skips it ([ADR-0045](adr/0045-push-and-pull-requests.md)); the second comes with migration v9,
+  which older builds refuse, and reading the worktree's outcome steps over it
+  ([ADR-0050](adr/0050-settled-is-the-users-decision.md)).
 
 A new session is created without a title. After each durable append `SessionController` stores one
 ([ADR-0039](adr/0039-t3-style-window-layout.md)): the agent's `session_info_update` title when there is one, otherwise,

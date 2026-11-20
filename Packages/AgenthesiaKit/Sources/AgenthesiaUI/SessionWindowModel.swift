@@ -9,6 +9,7 @@ import os
 
 /// A window's selection and view state; live sessions belong to the app's `SessionManager` (ADR-0026).
 @Observable final class SessionWindowModel {
+    private static let logger = Logger(subsystem: "io.github.anesthetised.Agenthesia", category: "Sidebar")
     /// Whether the window shows the draft (ADR-0040) or the board instead of a session. Setting it leaves the board.
     var showingSetup = true { didSet { showingBoard = false } }
     /// Whether the window shows the session board (ADR-0046); `showingSetup` is set with it, as no session is shown.
@@ -701,12 +702,36 @@ import os
         }
     }
 
+    /// The Session menu's toggle (ADR-0050): Unsettle Session for a displayed settled session, Settle Session for any
+    /// other, Cancel Startup while the displayed live session starts or waits for sign-in.
+    var settleCommandTitle: String {
+        if let displayedSaved { return displayedSaved.settledAt == nil ? "Settle Session" : "Unsettle Session" }
+        return owner.map(Self.isStartingUp) == true ? "Cancel Startup" : "Settle Session"
+    }
+    var canToggleSettled: Bool { canEnd || displayedSaved.map(canUnsettle) == true }
+    func toggleSettled() async {
+        if let displayedSaved, displayedSaved.settledAt != nil { return await unsettle(displayedSaved) }
+        await endSession()
+    }
+    /// The toolbar's button: Settle Session for the displayed live session or a saved one in the list, Cancel Startup
+    /// while it starts or waits for sign-in; none for a settled or archived session.
+    var toolbarSettle: (title: String, systemImage: String)? {
+        if let displayedSaved {
+            return displayedSaved.settledAt == nil && displayedSaved.archivedAt == nil
+                ? ("Settle Session", "checkmark.circle") : nil
+        }
+        guard restored == nil, let owner else { return nil }
+        return Self.isStartingUp(owner) ? ("Cancel Startup", "stop.circle") : ("Settle Session", "checkmark.circle")
+    }
+    /// A session that has not started yet, sign-in included, is cancelled rather than settled.
+    private static func isStartingUp(_ owner: LiveSession) -> Bool { owner.isStarting || owner.signIn != nil }
+
     /// Settle Session in the menu and on the toolbar; Cancel Startup only ends a starting session.
     func endSession() async {
         guard canEnd else { return }
         if let displayedSaved { return await settle(displayedSaved) }
         guard let owner else { return }
-        if owner.isStarting {
+        if Self.isStartingUp(owner) {
             await sessions.end(owner)
             await refresh()
         } else {
@@ -731,10 +756,10 @@ import os
         guard canSettle(record) else { return }
         await writeSettled { try await sessions.settle(record.id) }
     }
-    /// Unsettle Session on a Settled row: back to the list without starting the agent. Not after a merge or a
-    /// discard, whose outcome must stay the session's last event (ADR-0032).
+    /// Unsettle Session on a Settled row: back to the list without starting the agent. A merged or discarded session
+    /// keeps its outcome (ADR-0032's amendment).
     func canUnsettle(_ record: SessionRecord) -> Bool {
-        !closed && record.settledAt != nil && outcome(of: record.id) == nil && sessions.canUnsettle(record.id)
+        !closed && record.settledAt != nil && record.archivedAt == nil && sessions.canUnsettle(record.id)
             && savedSessions.contains { $0.id == record.id }
     }
     func unsettle(_ record: SessionRecord) async {
@@ -901,8 +926,11 @@ import os
     }
 
     func refresh() async {
+        // The rule's failure is logged: history still loads, and the next refresh tries again.
+        do { try await sessions.settleByRule() } catch {
+            Self.logger.error("Settling by rule failed: \(error.localizedDescription, privacy: .public)")
+        }
         do {
-            try await sessions.settleByRule()
             history = try await library.history()
             if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
                 leaveDeletedSession(id)

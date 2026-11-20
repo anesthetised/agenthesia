@@ -26,7 +26,7 @@ struct SessionSidebarRows: View {
             lastActivity: row.lastActivity,
             shelf: section.kind == .working,
             turnStartedAt: owner.controller?.turnStartedAt,
-            onSettle: model.canSettle(owner) ? { Task { await model.settle(owner) } } : nil
+            hoverAction: model.canSettle(owner) ? .settle { Task { await model.settle(owner) } } : nil
         )
         .tag(SessionWindowModel.NavigationTarget.live(owner).id)
         .contextMenu { SessionRowMenu(model: model, row: row) }
@@ -40,10 +40,16 @@ struct SessionSidebarRows: View {
             reason: SidebarReason.saved(archived: record.archivedAt != nil, outcome: model.outcomes[record.id]?.label),
             activity: nil,
             lastActivity: row.lastActivity,
-            onSettle: model.canSettle(record) ? { Task { await model.settle(record) } } : nil
+            hoverAction: hoverAction(record)
         )
         .tag(AnyHashable(record.id))
         .contextMenu { SessionRowMenu(model: model, row: row) }
+    }
+
+    private func hoverAction(_ record: SessionRecord) -> SessionRow.HoverAction? {
+        if model.canSettle(record) { return .settle { Task { await model.settle(record) } } }
+        if model.canUnsettle(record) { return .unsettle { Task { await model.unsettle(record) } } }
+        return nil
     }
 }
 
@@ -72,12 +78,15 @@ struct SessionRowMenu: View {
             }
         case .saved(let record):
             windowMenu(.saved(record))
-            if record.settledAt == nil {
-                Button("Settle Session") { Task { await model.settle(record) } }
-                    .disabled(!model.canSettle(record))
-            } else {
-                Button("Unsettle Session") { Task { await model.unsettle(record) } }
-                    .disabled(!model.canUnsettle(record))
+            // An archived session is in neither list (ADR-0044).
+            if record.archivedAt == nil {
+                if record.settledAt == nil {
+                    Button("Settle Session") { Task { await model.settle(record) } }
+                        .disabled(!model.canSettle(record))
+                } else {
+                    Button("Unsettle Session") { Task { await model.unsettle(record) } }
+                        .disabled(!model.canUnsettle(record))
+                }
             }
             archiveButton(record)
             Button("Delete Session…") { Task { await model.requestDelete(record) } }

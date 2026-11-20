@@ -225,15 +225,20 @@ public final class PersistenceStore: Sendable {
         }
     }
 
-    /// Each session's most recent event, one index lookup per session.
-    public func lastEvents() async throws -> [UUID: StoredEvent] {
+    /// Each session's most recent event, one backward index walk per session. Events of the `skipping` kind are passed
+    /// over, as reading a worktree's outcome does; a session with no other event has no entry.
+    public func lastEvents(skipping kind: String? = nil) async throws -> [UUID: StoredEvent] {
         try await database.read { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: """
                     SELECT event.* FROM session JOIN event ON event.sessionID = session.id
-                    AND event.sequence = (SELECT MAX(sequence) FROM event WHERE sessionID = session.id)
-                    """
+                    AND event.sequence = (
+                        SELECT sequence FROM event AS other WHERE other.sessionID = session.id AND other.kind IS NOT ?
+                        ORDER BY sequence DESC LIMIT 1
+                    )
+                    """,
+                arguments: [kind]
             )
             return try Dictionary(
                 uniqueKeysWithValues: rows.map { row in

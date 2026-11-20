@@ -9,7 +9,7 @@ import Workspace
 @MainActor @Observable
 public final class SessionManager {
     /// Owners in start order until End Session removes them; failed owners stay with their error.
-    public private(set) var owners: [LiveSession] = []
+    public internal(set) var owners: [LiveSession] = []
     public let library: SessionLibrary
     /// What each window shows while it is key in the active app; those sessions need no notification.
     private var shown: [ObjectIdentifier: UUID] = [:]
@@ -36,6 +36,8 @@ public final class SessionManager {
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
     // Test seam for a history write failing after the merge commit; production appends to the library.
     @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
+    // Test seam for a failing `settledAt` write; production writes to the library.
+    @ObservationIgnored var settledWrite: (@Sendable (Date?, UUID) async throws -> Void)?
     /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
     @ObservationIgnored public var catalog: AgentCatalog?
     /// The tokens the `agenthesia-mcp` helper presents to the app's socket (ADR-0049).

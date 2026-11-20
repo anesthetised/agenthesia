@@ -277,8 +277,6 @@ public final class LiveSession {
                     store: store
                 )
             case .saved(let session):
-                // A live session is never settled (ADR-0050).
-                if session.settledAt != nil { try await store.setSettled(nil, of: session.id) }
                 controller = try await SessionController.history(id: session.id, store: store)
                 if let outcome = controller.transcript.worktreeOutcome {
                     throw LaunchError(message: "\(outcome.notice) The session cannot continue.")
@@ -289,6 +287,8 @@ public final class LiveSession {
                 else {
                     throw LaunchError(message: "The working directory “\(session.workingDirectory)” no longer exists.")
                 }
+                // A live session is never settled (ADR-0050). Always written: the record handed in may predate a Settle.
+                try await store.setSettled(nil, of: session.id)
                 workingDirectory = URL(filePath: session.workingDirectory)
             }
             guard !isClosed else { return }

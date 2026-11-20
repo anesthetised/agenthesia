@@ -822,9 +822,13 @@ import Testing
         #expect(model.outcomes == [record.id: .discarded])
         #expect(!model.canDiscard && !model.canContinue && model.filesSession == nil)
         #expect(model.outcome(of: record.id) == .discarded)
-        // The discard settled the session, and its outcome stays its last event: no Unsettle (ADR-0050).
+        // The discard settled the session (ADR-0050).
         let settled = try #require(model.history.first { $0.id == record.id })
-        #expect(settled.settledAt != nil && !model.canUnsettle(settled))
+        #expect(settled.settledAt != nil && model.canUnsettle(settled))
+        // Unsettled, it is back in the list and still discarded and read-only (ADR-0032's amendment).
+        await model.unsettle(settled)
+        #expect(model.sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(record.id)])
+        #expect(model.outcomes == [record.id: .discarded] && !model.canDiscard(record) && !model.canContinue)
         #expect(!FileManager.default.fileExists(atPath: record.workingDirectory))
         // Another window learns the outcome with history, before loading the transcript.
         await other.refresh()

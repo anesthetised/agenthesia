@@ -100,8 +100,8 @@ public struct RootView: View {
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(model.showingSetup || model.displayed == nil)
                 .help("Show or hide the inspector (⌥⌘I)")
-                if model.restored == nil, let owner = model.owner {
-                    Button(owner.isStarting ? "Cancel Startup" : "Settle Session", systemImage: "checkmark.circle") {
+                if let settle = model.toolbarSettle {
+                    Button(settle.title, systemImage: settle.systemImage) {
                         Task { await model.endSession() }
                     }.disabled(!model.canEnd)
                 }

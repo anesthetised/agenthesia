@@ -486,6 +486,20 @@ final class PersistenceStoreTests: Sendable {
         #expect(last[empty.id] == nil)
     }
 
+    @Test func lastEventsCanPassOverOneKind() async throws {
+        let (project, agent, first) = try await seed()
+        let only = SessionRecord(projectID: project.id, agentInstallID: agent.id, workingDirectory: "/tmp/only")
+        try await store.createSession(only)
+        let skipped = NewEvent(kind: "skipped", payload: Data("{}".utf8), timestamp: date)
+        let kept = try await store.append([event(1), skipped, event(2), skipped, skipped], to: first.id)
+        _ = try await store.append([skipped], to: only.id)
+        let last = try await store.lastEvents(skipping: "skipped")
+        #expect(last[first.id] == kept[2])
+        // A session with nothing but the skipped kind has no entry.
+        #expect(last[only.id] == nil && last.count == 1)
+        #expect(try await store.lastEvents()[first.id] == kept[4])
+    }
+
     @Test func oneKiBPayloadsDoNotAllocateAnOverflowPagePerEvent() async throws {
         let (_, _, session) = try await seed()
         let pagesBefore = try #require(await database.read { try Int.fetchOne($0, sql: "PRAGMA page_count") })

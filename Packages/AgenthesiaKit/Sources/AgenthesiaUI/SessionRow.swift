@@ -18,8 +18,22 @@ struct SessionRow: View {
     var shelf = false
     /// When the running turn began; only a shelf row shows it.
     var turnStartedAt: Date?
-    /// Settles the session; set only when `canSettle` holds. A hovered row shows `✓ Settle` in place of its time.
-    var onSettle: (() -> Void)?
+    /// What a hovered row shows in place of its time: `✓ Settle` in the list and on Working, `Unsettle` on Settled
+    /// (ADR-0050). Nil when the row cannot do it now.
+    var hoverAction: HoverAction?
+
+    struct HoverAction {
+        let title: String
+        let systemImage: String
+        let perform: () -> Void
+
+        static func settle(_ perform: @escaping () -> Void) -> Self {
+            .init(title: "Settle", systemImage: "checkmark", perform: perform)
+        }
+        static func unsettle(_ perform: @escaping () -> Void) -> Self {
+            .init(title: "Unsettle", systemImage: "arrow.uturn.backward", perform: perform)
+        }
+    }
 
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,8 +72,8 @@ struct SessionRow: View {
             }
             Spacer()
             if let activity { StatusIcon(activity: activity) }
-            if hovering, let onSettle {
-                Button("Settle", systemImage: "checkmark", action: onSettle)
+            if hovering, let hoverAction {
+                Button(hoverAction.title, systemImage: hoverAction.systemImage, action: hoverAction.perform)
                     .buttonStyle(.borderless).font(.caption)
                     .transition(.opacity)
             } else if let time {
@@ -71,7 +85,7 @@ struct SessionRow: View {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) { hovering = inside }
         }
         .accessibilityActions {
-            if let onSettle { Button("Settle", action: onSettle) }
+            if let hoverAction { Button(hoverAction.title, action: hoverAction.perform) }
         }
         .help(Self.tooltip(title: title, project: project, reason: reason))
         .accessibilityElement(children: .ignore)

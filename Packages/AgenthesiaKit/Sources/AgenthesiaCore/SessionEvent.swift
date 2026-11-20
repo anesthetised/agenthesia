@@ -91,3 +91,14 @@ public struct PullRequest: Codable, Equatable, Sendable {
     /// The transcript text.
     public var notice: String { "Opened pull request #\(number): \(url.absoluteString)" }
 }
+
+/// The user brought a settled session back to the list (ADR-0050). It carries nothing: as the session's last activity
+/// it restarts the seven days, and the reducer passes over it. A kind of its own rather than a `SessionEvent` case, so
+/// that reading a worktree's outcome can step over it.
+enum SessionUnsettled {
+    static let kind = "session.unsettled"
+
+    static func storedEvent(at timestamp: Date = .now) -> NewEvent {
+        NewEvent(kind: kind, payload: Data("{}".utf8), timestamp: timestamp)
+    }
+}

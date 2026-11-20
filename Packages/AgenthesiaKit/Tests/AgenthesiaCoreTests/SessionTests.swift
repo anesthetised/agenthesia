@@ -189,6 +189,8 @@ private func rawUpdate(_ update: ACP.SessionUpdate, session: String = "s") throw
         events += try updates.map { NewEvent(kind: SessionEvent.updateKind, payload: try rawUpdate($0)) }
         events.append(try SessionEvent.finished(id: turn, reason: .endTurn).storedEvent())
         events.append(NewEvent(kind: "future", formatVersion: 4, payload: Data("{}".utf8)))
+        // An Unsettle is known and changes nothing in the transcript (ADR-0050).
+        events.append(SessionUnsettled.storedEvent())
         let stored = try await fixture.store.append(events, to: session.id)
         var state = TranscriptState()
         for event in stored { try state.apply(event) }

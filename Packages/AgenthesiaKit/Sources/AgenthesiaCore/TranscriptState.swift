@@ -251,6 +251,8 @@ public struct TranscriptState: Equatable, Sendable {
             let opened = try JSONDecoder().decode(PullRequest.self, from: event.event.payload)
             pullRequest = opened
             items.append(Item(id: event.sequence, notice: opened.notice))
+        } else if event.event.kind == SessionUnsettled.kind {
+            // Changes only where the sidebar lists the session.
         } else if event.event.kind == SessionEvent.updateKind {
             let notification = try ACP.RecordedSessionUpdate(rawNotification: event.event.payload)
             apply(notification.update, sequence: event.sequence)

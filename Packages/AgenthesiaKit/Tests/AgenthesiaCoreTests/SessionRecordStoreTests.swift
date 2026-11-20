@@ -33,9 +33,10 @@ extension WorktreeDiscardTests {
         #expect(row.createdAt == session.createdAt)
         #expect(row.fallbackUpstream == "origin/main")
         #expect(row.archivedAt == nil)
+        #expect(row.settledAt == nil)
         // A column added later and filled at start is not nil in the row.
         let unset = Mirror(reflecting: row).children.compactMap { child -> String? in
-            guard let label = child.label, label != "archivedAt", label != "title" else { return nil }
+            guard let label = child.label, !["archivedAt", "settledAt", "title"].contains(label) else { return nil }
             let value = Mirror(reflecting: child.value)
             return value.displayStyle == .optional && value.children.isEmpty ? label : nil
         }

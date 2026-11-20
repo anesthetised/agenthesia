@@ -22,6 +22,8 @@ public final class SessionManager {
     public internal(set) var pushingIDs: Set<UUID> = []
     /// `gh` was found signed in once; only a negative answer is asked again (ADR-0045).
     @ObservationIgnored var gitHubCLISignedIn = false
+    /// Each session's log, shared by its live controller and the appends below, so one chain writes to it (#355).
+    @ObservationIgnored var logs: [UUID: SessionLog] = [:]
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
     /// Saved sessions deleted since launch; a window still showing one of them (an ended session it ran) leaves it.
@@ -32,7 +34,7 @@ public final class SessionManager {
     }
     // Test seam applied to new owners and merges; production uses the login-shell resolver.
     @ObservationIgnored var environment: (@Sendable () async -> (values: [String: String], diagnostic: String?))?
-    // Test seam for a history write failing after the merge commit; production appends to the library.
+    // Test seam for a history write failing after the merge commit; production appends to the session's log.
     @ObservationIgnored var recordMerge: (@Sendable (WorktreeOutcome, UUID) async throws -> Void)?
     /// Keeps each agent's confirmed mode and model as the draft's hints (ADR-0040); nil keeps none.
     @ObservationIgnored public var catalog: AgentCatalog?
@@ -184,11 +186,29 @@ public final class SessionManager {
             let (worktree, outcome) = try await removableWorktree(session)
             for owner in owners where owner.sessionID == session.id { await end(owner) }
             try await SessionWorkspace.remove(worktree)
-            if outcome == nil { try await library.record(.discarded, for: session.id) }
+            if outcome == nil {
+                try await append([SessionEvent.worktreeRemoved(.discarded).storedEvent()], to: session.id)
+            }
         }
         discarding[session.id] = task
         defer { discarding[session.id] = nil }
         try await task.value
+    }
+
+    /// The session's log, on the library's store; a controller that continues the session later writes through the
+    /// same one.
+    func log(for id: UUID) async throws -> SessionLog {
+        let store = try await library.store()
+        if let log = logs[id] { return log }
+        let log = SessionLog(sessionID: id, store: store)
+        logs[id] = log
+        return log
+    }
+
+    /// Appends to a session's log after every write already reserved in it, and shows the events in its live
+    /// controller, if any.
+    func append(_ events: [NewEvent], to id: UUID) async throws {
+        try await log(for: id).append(events).value
     }
 
     public func isMerging(_ id: UUID) -> Bool { merging[id] != nil }
@@ -312,7 +332,7 @@ public final class SessionManager {
                 if let recordMerge {
                     try await recordMerge(merged, id)
                 } else {
-                    try await library.record(merged, for: id)
+                    try await append([SessionEvent.worktreeRemoved(merged).storedEvent()], to: id)
                 }
             } catch {
                 throw MergeError.notRecorded(commit: commit, reason: error.localizedDescription)
@@ -396,6 +416,7 @@ public final class SessionManager {
         owner.catalog = catalog
         owner.mcp = mcp
         owner.originLabel = { [weak self] in self?.originLabel($0) ?? $0.label(title: nil, agent: nil) }
+        owner.sessionLog = { [weak self] in try await self?.log(for: $0) }
         owners.append(owner)
         owner.begin(launch, after: previous, initialPrompt: initialPrompt)
         return owner

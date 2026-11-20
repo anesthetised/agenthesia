@@ -46,7 +46,7 @@ before implementation.
 | M16 Multi-agent workflow | Everything landed except #234 (verification in the running app) and its tracker #220. #234 runs now, before M20's sidebar and attention changes, and closes M16; the README screenshots moved to #400, after those changes |
 | M13 Agenthesia tools | Wave 0 and part of wave 1 landed (#308, #309, #56, #311). The review of 2026-11-10 amended ADR-0049 with [ADR-0051](adr/0051-turns-between-sessions.md) (#354); a session core wave comes before wave 3 |
 | M19 Performance | Planned on 2026-11-10 |
-| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row. #390 is in review: an open edit of a queued message holds the session's queue (`SessionController.holdQueue`), tested in Core and the window model; the running-app check with `MockAgent` in light and dark is still to do. #397 is in review: the mode changes at once during a turn and every other option from the next one (`SessionController.pendingConfig`, applied before the queue drains; a refusal pauses it), tested in Core and with a hosted pill; Claude and Codex were checked live on 2026-11-19 (Claude applies a mode change within the turn, Codex only from the next, so it cannot be restricted during a turn; a specific pending pill is parked in #421), Kimi is read from its sources only (#420), and the running-app check is still to do. The independent review's findings are addressed (a mode confirmed during a turn shows a generic note, the owner's decision) |
+| M20 Review findings | Planned on 2026-11-10. [ADR-0050](adr/0050-settled-is-the-users-decision.md) is accepted and not implemented (#353). #373 landed: `createRemote` copies the session record, so `fallbackUpstream` reaches the row, and a test reads every column of a started session's row. #390 landed (#415): an open edit of a queued message holds the session's queue (`SessionController.holdQueue`). #395 landed with its live checks (#422). #397 landed (#419): the mode changes at once during a turn and every other option from the next one; Claude and Codex were checked live on 2026-11-19, Kimi is open in #420, and a specific pending pill for Codex is parked in #421. #352 landed (#418); its shelf move still misses its row for a few frames in some runs (#423). Open: #353, which #352 unblocked, and #423, #424, #234 |
 | M10 Release | After M13 |
 | M5 Terminals | #61 and #67 wait for an agent that calls `terminal/create` (#104); #131 is open |
 | M9, M11, M12, M14, M17 | Not scheduled |
@@ -72,12 +72,13 @@ order". Tiers are on the issues.
 |---|---|
 | Core (M13) | #355 → #356 → #357 → #358 → #359 → #360 → #361 → #310 → #362 → #312 → #313 → wave 2 (#57, #59, #58, #314, #315, #316) → #60 → #317 → #318 → #319 → #320 → #363 → #364 → #365 → #366 → #321 |
 | Performance (M19) | #396 → #97 → #372 → #367 → #370 → #398 → #368 → #369 → #371 → #77, #78, #83 |
-| Interface (M20) | #234, #395, #390, #397 → #352 → #353 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
+| Interface (M20) | #234 → #353, #423 → #376 → #391, #393 → #392 → #394 → #377 → #379 → #381 → #383 → #385 → #387 → #399 → #378, #380, #382, #384, #386 → #400 |
 | Test stability (M10) | #133, before #355 |
-| Any time | #388 (documents and the tracker) |
+| Any time | #388 (documents and the tracker), #424 (two load-sensitive test waits) |
 
-The first step is the head of each lane: #355 (after #133); #396, then #97 and #372; #234, #395, #390 and #397; #133.
-Landed from the lane heads on 2026-11-10: #373, #354, #71, #134, #374, #351, #375.
+The first step is the head of each lane: #355 (after #133); #396, then #97 and #372; #234, then #353; #133.
+Landed from the lane heads on 2026-11-10: #373, #354, #71, #134, #374, #351, #375; on 2026-11-19: #390, #395, #397,
+#352.
 
 #134 and #133 come before the session core: #355–#357 change the queue and the turn paths that the unstable tests
 cover, and on 2026-11-10 two full local runs of `just test` failed in `AgenthesiaUITests` and a third passed, so the
@@ -113,12 +114,12 @@ needs #357 and #60.
 
 | Files | Order |
 |---|---|
-| `SessionController.swift` and the queue | #390 and #397, then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
+| `SessionController.swift` and the queue | #390 and #397 (landed), then #355–#359; #371 after #355. Nothing else changes the controller while #355–#357 are open |
 | `LiveSession.swift`, `MCPSocket.swift` | #71, then #356, then #360 |
 | `TranscriptTable.swift`, `LiveTranscript.swift` | #351, then #396 (scrolling), then #367, then #369, then #312 (the typed row model) |
-| `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#352, #353); #376 after it |
-| `SessionSidebar.swift` and the sidebar's views | #352, #353, #381, #385, then #363 and #364 |
-| `PromptQueue.swift` and the composer | #390, #391, #393, #392, #394, then #366 |
+| `SessionController.transcript` and its readers (`RootView`, `SessionInspector`, the sidebar row, the menu bar) | #368 while the interface lane works on the sidebar (#353, #423); #376 after it |
+| `SessionSidebar.swift` and the sidebar's views | #352 (landed), #353 and #423, #381, #385, then #363 and #364 |
+| `PromptQueue.swift` and the composer | #390 (landed), #391, #393, #392, #394, then #366 |
 | Migrations of the session table | #353 (`settledAt`) and #60 (parent, task, agent name) take their numbers in merge order; each has a test on the previous schema file |
 
 Rules that hold for every lane:
@@ -193,30 +194,57 @@ Wave 3 now also depends on the core: #60 on #356, #317 on #355–#357, #318 on #
 
 Progress:
 
-- #352 (the list and the Working shelf) is in review: `SessionSidebar.Kind.active` replaced `needsYou`; the list holds
-  the live sessions that are not working, the rows that need the user first, and `SessionSidebar.needsYou` keeps those
-  rows for the menu bar. Working holds turns and a queue about to start one (`queueDue`: idle, not paused, not held by
-  an edit, not merging). The menu bar's Working follows the shelf, so idle sessions left it. A row's move animates
-  with the shelves' spring, none under Reduce Motion or while a search filters. Tested with Swift Testing: sectioning
-  for every activity and the order inside the list (Core, with MockAgent), the queue rule (Core, the queue's fake
-  connection, including the moment a released queue is due), the numbered rows, the board's order, the menu bar, and a
-  hosted sidebar with one idle and one running session in `OffscreenWindow`. The first running-app check with `MockAgent`
-  in light and dark (by the integrator) passed the order, the shelf, the board times, the menu bar and `No open
-  sessions`, and found three defects, fixed here: a 13 pt gap below Overview (the headerless section's spacer row; the
-  rows now follow Overview directly); no animation of the move (the list and the shelves read `model.sidebar`
-  themselves, so their observation updated them outside the column's animated transaction; the column now passes its
-  sidebar down, and an on-screen hosted test sees the list's bottom inset pass through in-between values, which it
-  does not without the fix); and a frame or two of `Finished` at the top of the list when the shown session's turn
-  ended (the transcript cleared the mark a frame later; a window that follows the end now marks the turn seen in the
-  same update, `LiveSession.setWatched`). The second running-app check found the turn-start move unreliable: the
-  Working shelf's `List` was made when its first row arrived and showed it a few frames late (and without any shelf
-  the height probe was not mounted, so the first shelf opened at no height); the shelf now keeps its list mounted at
-  no height and its height probe always measures, which also ends the turn-end pause (the shelf used to fade out with
-  the row still in it). The independent review's findings are fixed here: `watchedOwner` leaves out a closed window and
-  a loading Settled session, a freed window releases its session, a query change never animates, and `No open
-  sessions` shows only without any open session (the owner's decision). The animation itself is not asserted in CI,
-  whose runner does not tick it reliably: tests cover the animation's choice and that the row lands in the shelf's
-  existing table, and the frame-level check stays with the running app. The third running-app check is to do.
+- #355 (one log writer per session) is in review: `SessionLog` chains every append to a session's log; `SessionManager`
+  keeps one per session id for the controller and its own appends (worktree outcomes, pull requests), and
+  `SessionLibrary.record` is gone. A controller hands another writer's events to its transcript at once, reads events
+  it missed from the store instead of failing with `outOfOrder`, loads history as a step of the log and builds the
+  reopen baseline inside its step, after reading what was written to the store past the log; a foreign event it cannot
+  apply fails it at once. The manager drops a session's log when the session is deleted. Queue snapshots are still
+  built before their write step, so #357 moves them into the step before deliveries change the queue.
+  `PersistenceStore.append(_ batches:)` writes to several sessions' logs in one transaction, for #317, which still has
+  to add a step that joins two sessions' logs. Tested with Swift Testing (an append during Continue, with and without
+  the log; a failed controller; the controller and the manager sharing one order; history waiting for an earlier step;
+  a baseline after a pending step and after a write past the log; a foreign event that cannot be applied; the
+  two-session transaction), each test seen failing with the fix taken out. The independent review (Opus) found nothing
+  to fix before merging; its suggestions are addressed or noted on #357. No event format or stored data changed.
+- #352 (the list and the Working shelf) landed in #418 (`11c2104`): `SessionSidebar.Kind.active` replaced `needsYou`; the
+  list holds the open sessions that are not working, the rows that need the user first, and `SessionSidebar.needsYou`
+  keeps those rows for the menu bar. Working holds turns and a queue about to start one (`queueDue`: idle, not paused,
+  not held by an edit, not merging). The menu bar's Working follows the shelf, so idle sessions left it. A row's move
+  animates with the shelves' spring, none under Reduce Motion or while a search filters. Tested with Swift Testing:
+  sectioning for every activity and the order inside the list (Core, with MockAgent), the queue rule (Core, the
+  queue's fake connection, including the moment a released queue is due), the numbered rows, the board's order, the
+  menu bar, and a hosted sidebar with one idle and one running session in `OffscreenWindow`. The animation itself is
+  not asserted in CI, whose runner does not tick it reliably: tests cover the animation's choice and that the row lands
+  in the shelf's existing table. Running-app checks with `MockAgent`, light and dark, scripted with `scripts/app-check`
+  and `screencapture` (no computer use), a fresh bundle identifier and `CFFIXED_USER_HOME`: the list's order and
+  symbols, the Working shelf only while a turn runs and hidden when empty, the board's times, the menu bar's Working
+  and Needs You, and `No open sessions` (the owner's decision: only when no session is open in the list or on the
+  shelf). They found and fixed: a 13 pt gap below Overview (the headerless section's spacer row; the rows now follow
+  Overview directly, the owner's decision from close-ups); no animation of the move (the list and the shelves read
+  `model.sidebar` themselves, so their observation updated them outside the column's animated transaction; the column
+  now passes its sidebar down); a frame or two of `Finished` at the top of the list when the shown session's turn
+  ended (a window that follows the end now marks the turn seen in the same update, `LiveSession.setWatched`); and the
+  turn-start move, because the shelf's `List` was made when its first row arrived (the shelf now keeps its list
+  mounted at no height and its height probe always measures, which also ends the turn-end pause). The independent
+  review (a fresh Opus) found `watchedOwner` including a closed window and a loading Settled session, a freed window
+  keeping its session, and a query change animating; all fixed (comment on #418). The move was recorded and read
+  frame by frame at 60 fps: it animates (280–370 ms at turn start, 130–270 ms at turn end), but in 5 of 12 runs at
+  start and 3 of 12 at end the row is in neither table for 1–6 frames and the Working header lags its row; this is
+  #423, and the owner accepted it for the merge. Not checked: VoiceOver, Reduce Motion (only by test), the order of
+  ⌘1…⌘9 and Previous and Next Session in the app, the Dock badge, the queue rule between queued turns.
+- #397 (session settings during a turn) landed in #419 (`1da1ddb`): the mode changes at once during a turn and every
+  other option from the next one (`SessionController.pendingConfig`, applied before the queue drains; a refusal pauses
+  it), tested in Core and with a hosted pill; a mode confirmed during a turn shows a generic note (the owner's
+  decision). Running-app checks with `MockAgent` (`--effort --fast`, `--reject-config`), light and dark: the pending
+  labels, including the toggle and the `…` menu, dropped by choosing the confirmed value, applied at the turn's end
+  before the queued prompt; the mode at once with a waiting request (a grey line and help text, the request kept) and
+  the refused mode's grey line; the refusal banner with `Queue paused` and ⇧⌘R; Stop with a pending change; the pill
+  row measured again when a pending label shrinks. Known: an open `…` menu keeps its stale item until it is closed.
+  Not checked: VoiceOver, a refusal before Send Now, the protocol order in the app (covered by tests). Live agent
+  checks: Claude and Codex on 2026-11-19 (Claude applies a mode change within the turn; Codex only from the next, so
+  it cannot be restricted during a turn; ADR-0019's amendment), Kimi in #420, and a specific pending pill for agents
+  that apply the mode only from the next turn in #421 (`discussion`).
 - #354 (2026-11-10): [ADR-0051](adr/0051-turns-between-sessions.md) records the owner's review; ADR-0049, ADR-0010
   and ADR-0021 carry an `Amended by 0051` line, and the bodies of #93, #307 and the issues of the session core and wave
   3 were aligned with it.
@@ -321,9 +349,11 @@ the first-run, text-size and VoiceOver items.
 | 1 | #351 fix: the `Run interrupted` divider is not drawn across the column (against `docs/behavior/transcript.md`) | `agent:light` | — |
 | 1 | #375 fix: a command's permission request does not show the command (composer card, board, transcript row) | `agent:light` | — |
 | 1 | #395 fix: an agent cannot read files outside the session's folders (reads anywhere, writes inside the roots; [ADR-0052](adr/0052-reads-anywhere-writes-inside-the-roots.md)) (landed; live-checked with Claude and Codex on 2026-11-19, Kimi open in #420) | `agent:strong` | — |
-| 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) (in review; running-app check open) | `agent:strong` | — |
+| 1 | #352 The list holds the open sessions, the Working shelf only the running ones (UI only) (landed in #418; running-app check done, see below) | `agent:strong` | — |
 | 1 | #388 docs: reconcile the documents and the tracker with the code | `agent:light` | — |
-| 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 |
+| 2 | #353 Settled is the user's decision ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) | `agent:strong` | #352, #373 (both landed) |
+| 2 | #423 fix: a row moving between the list and the Working shelf is missing for a few frames (follow-up of #352) | `agent:strong` | — |
+| 2 | #424 test: two waits that a loaded machine can outrun | `agent:light` | — |
 | 2 | #376 One attention level for every surface | `agent:strong` | #368 |
 | 2 | #377 Keyboard: the gaps that need the mouse today | `agent:light` | — |
 | 2 | #379 Review: revert a file | `agent:light` | — |
@@ -333,8 +363,8 @@ the first-run, text-size and VoiceOver items.
 | 3 | #400 Refresh the README screenshots after the sidebar and attention changes | `agent:light` | #352, #353, #376 |
 | 2 | #385 Rename a session; date headers in Settled | `agent:light` | #353 |
 | 2 | #387 Transcript: move between prompts | `agent:light` | — |
-| 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue; in review) | `agent:strong` | — |
-| 2 | #397 Session settings during a turn: the mode at once, model and reasoning level from the next turn (an amendment of ADR-0019; in review, running-app and live agent checks open) | `agent:strong` | — |
+| 2 | #390 fix: a queued message can be sent while it is being edited (an open edit holds the queue; landed in #415) | `agent:strong` | — |
+| 2 | #397 Session settings during a turn: the mode at once, model and reasoning level from the next turn (an amendment of ADR-0019; landed in #419; checked live with Claude and Codex, Kimi in #420, a specific pending pill in #421) | `agent:strong` | — |
 | 2 | #391 Queue: change attachments while editing a queued message | `agent:light` | — |
 | 2 | #393 Queue: reorder by dragging; two buttons on a row | `agent:light` | — |
 | 3 | #392 Queue: step through queued messages, move and delete them from the keyboard | `agent:light` | #390 |
@@ -359,7 +389,8 @@ Progress:
   tools through it and its plan-mode plan file is refused. Claude (claude-agent-acp 0.101.0) and Codex (codex-acp 2.5.0) were checked live on 2026-11-19: both
   read and write outside the working directory with their own tools and never send `fs/*`; Claude asks in `default`
   (Manual) but not in `auto`, Codex does not ask in its default `agent` (Auto review) mode. Kimi could not be checked
-  (no Kimi Code access in its subscription, #420).
+  (no Kimi Code access in its subscription, #420). #422 recorded the live checks in ADR-0052's amendment and closed
+  the issue.
 - Running-app check of #374, #351, #375 and #71 (2026-11-10): one Debug build with the four branches merged, a fresh
   bundle identifier, `CFFIXED_USER_HOME` in a temporary folder, MockAgent, light and dark, scripted with
   `scripts/app-check`. Seen: the menu bar submenu lists the request and Reject answers it; the `Run interrupted`
@@ -387,12 +418,12 @@ Progress:
 
 Pitfalls known so far:
 
-- #352 changes which rows ⌘1…⌘9, Previous and Next Session and the board visit; `SessionSidebar` is the one place that
+- #352 (landed) changed which rows ⌘1…⌘9, Previous and Next Session and the board visit; `SessionSidebar` is the one place that
   orders them, and the menu bar, the Dock badge and `Next Session Needing Input` must keep reading "the rows that need
   the user", not a section.
 - #353 adds `session.settledAt` and fills it for every existing session, so the sidebar looks the same after the
-  update; the migration gets a test on the previous schema file, as #231 did. `SessionController.createRemote` rebuilds
-  the record field by field and already loses `fallbackUpstream`: fix that first, or `settledAt` is lost the same way.
+  update; the migration gets a test on the previous schema file, as #231 did. `SessionController.createRemote` copies the
+  record (#373), and the test that reads every column of a started session's row covers `settledAt` too.
 - Unsettle appends an event to the log of a session that is not live. Until M13's single log writer lands, it is
   refused while a Continue of the same session is starting.
 - Session trees in the sidebar (M13) build on #352's sections; a delegated session settles with its parent.

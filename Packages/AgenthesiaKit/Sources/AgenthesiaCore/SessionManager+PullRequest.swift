@@ -106,11 +106,7 @@ extension SessionManager {
         }
         let pullRequest = PullRequest(url: created.url, number: created.number)
         do {
-            if let controller = owner(of: id)?.controller {
-                try await controller.record(pullRequest)
-            } else {
-                try await library.record(pullRequest, for: id)
-            }
+            try await append([pullRequest.storedEvent()], to: id)
         } catch {
             throw PullRequestError(failure: .notRecorded(pullRequest, reason: error.localizedDescription))
         }

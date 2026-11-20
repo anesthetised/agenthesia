@@ -516,6 +516,32 @@ final class PersistenceStoreTests: Sendable {
         #expect(events == batches.flatMap { $0 }.sorted { $0.sequence < $1.sequence })
     }
 
+    /// A child's end of turn and the outcome in its parent's log commit together or not at all (ADR-0051, #355).
+    @Test func appendsToTwoSessionsInOneTransaction() async throws {
+        let (_, _, first) = try await seed()
+        let second = SessionRecord(
+            projectID: first.projectID,
+            agentInstallID: first.agentInstallID,
+            workingDirectory: first.workingDirectory
+        )
+        try await store.createSession(second)
+        _ = try await store.append([event(0)], to: first.id)
+
+        let stored = try await store.append([
+            ([event(1), event(2)], first.id), ([event(3)], second.id), ([], first.id),
+        ])
+        #expect(stored.map { $0.map(\.sequence) } == [[2, 3], [1], []])
+        #expect(stored[1][0].sessionID == second.id)
+        #expect(try await store.events(in: first.id).map(\.sequence) == [1, 2, 3])
+
+        let invalid = NewEvent(kind: "error", payload: Data("{}\0".utf8))
+        await #expect(throws: PersistenceError.invalidEventPayload) {
+            try await store.append([([event(4)], first.id), ([event(5), invalid], second.id)])
+        }
+        #expect(try await store.events(in: first.id).count == 3)
+        #expect(try await store.events(in: second.id).count == 1)
+    }
+
     @Test(arguments: ["json", "kind", "version", "nul", "utf8"])
     func failedBatchRollsBackAndDoesNotConsumeSequences(invalidField: String) async throws {
         let (_, _, session) = try await seed()

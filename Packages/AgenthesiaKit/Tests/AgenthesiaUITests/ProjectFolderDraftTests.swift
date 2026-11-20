@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Persistence
 import SwiftUI
+import TestSupport
 import Testing
 
 @testable import AgenthesiaCore
@@ -87,21 +88,28 @@ import Testing
         window.contentView = host
         window.orderFront(nil)
         defer { window.close() }
-        func checkout() async throws -> [String] {
-            try await Task.sleep(for: .milliseconds(200))
-            for _ in 0..<30 { await Task.yield(); host.layoutSubtreeIfNeeded() }
-            // The agent's menu comes first.
-            return popups(in: host).dropFirst().map(\.title)
+        // The menu appears once the repository has been probed, so wait for the titles rather than for a while. The
+        // agent's menu comes first.
+        func expectCheckout(_ expected: [String], sourceLocation: SourceLocation = #_sourceLocation) async {
+            var titles: [String] = []
+            await eventually("The checkout menu did not become \(expected): \(titles)", sourceLocation: sourceLocation)
+            {
+                host.layoutSubtreeIfNeeded()
+                titles = popups(in: host).dropFirst().map(\.title)
+                return titles == expected
+            }
+            #expect(titles == expected, sourceLocation: sourceLocation)
         }
-        #expect(try await checkout() == ["New worktree from main"])
+        await expectCheckout(["New worktree from main"])
         model.draftInProjectFolder = true
-        #expect(try await checkout() == ["Project folder"])
+        await expectCheckout(["Project folder"])
         // Outside Git the chip is a label; without a project it is hidden.
         model.draftDirectory = fixture.plain
-        #expect(try await checkout().isEmpty)
+        await expectCheckout([])
         model.draftDirectory = fixture.repo
+        await expectCheckout(["New worktree from main"])
         model.draftWithoutProject = true
-        #expect(try await checkout().isEmpty)
+        await expectCheckout([])
         await fixture.remove()
     }
 

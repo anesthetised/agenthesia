@@ -44,8 +44,8 @@ import Testing
         #expect(settles(lastOutcome: .discarded))
     }
 
-    /// The caller passes no outcome when an Unsettle followed it, so the Unsettle's day counts.
-    @Test func anUnsettleYesterdayKeepsTheSessionInTheList() {
+    /// An outcome that is not the last event is not passed, so the last activity alone decides.
+    @Test func withoutAnOutcomeAsTheLastEventTheLastActivityDecides() {
         #expect(!settles(daysIdle: 1))
         #expect(settles(daysIdle: 8))
     }

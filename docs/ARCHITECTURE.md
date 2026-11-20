@@ -496,8 +496,9 @@ it in the list and those with it on the Settled shelf. `SessionManager.settle` e
 session is never settled; Continue clears `settledAt` as it launches (`LiveSession`). `SessionManager.settle` closes the owners, writes `settledAt`, then removes them from `owners`, so a window refreshing on
 that change already reads the session as settled. `SessionManager.unsettle` appends a `session.unsettled` event
 (`SessionUnsettled`, a kind of its own that the reducer passes over; older builds refuse a v9 database, so they never
-read it) and clears `settledAt`; until each session has one log writer (#355) it is refused while the session is live,
-starting, merging, discarding or being deleted, and `resume` refuses a Continue while it runs. A merged or discarded
+read it) through the session's log (`SessionManager.append`, #355), so a Continue reading the history at the same time
+takes it in order, and clears `settledAt`. It is refused while the session is live or starting (a Continue unsettles it
+itself), merging, discarding or being deleted. A merged or discarded
 session can be unsettled: the worktree's outcome is the last event other than `session.unsettled`
 (`PersistenceStore.lastEvents(skipping:)`, read by `SessionLibrary.worktreeOutcomes` and `lastEvents`, and through them
 the removal check, the delete summary and the window's history; ADR-0032's amendment). `SessionSettling.settles` is the

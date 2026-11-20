@@ -20,24 +20,21 @@ extension SessionManager {
         if let id { try await writeSettled(.now, id) }
     }
 
-    /// Unsettle needs a session that is not live or starting (a Continue), merging, discarding or being deleted. A merged
-    /// or discarded session can be unsettled: it keeps its outcome (ADR-0032's amendment).
+    /// Unsettle needs a session that is not live or starting (a Continue, which unsettles it itself), merging,
+    /// discarding or being deleted. A merged or discarded session can be unsettled: it keeps its outcome (ADR-0032's
+    /// amendment).
     public func canUnsettle(_ id: UUID) -> Bool {
         !owners.contains { $0.sessionID == id && $0.isLive } && !isDiscarding(id) && !isMerging(id)
-            && !deletingIDs.contains(id) && !unsettlingIDs.contains(id)
+            && !deletingIDs.contains(id)
     }
 
     /// Brings a settled session back to the list without starting its agent. The `session.unsettled` event restarts
-    /// the seven days of the rule. A session that is not settled is left alone.
+    /// the seven days of the rule. A session that is not settled is left alone. The event goes through the session's
+    /// log (#355), so a Continue that starts meanwhile reads it in order.
     public func unsettle(_ id: UUID) async throws {
         guard canUnsettle(id) else { return }
-        unsettlingIDs.insert(id)
-        defer { unsettlingIDs.remove(id) }
-        let store = try await library.store()
-        guard try await store.session(id: id)?.settledAt != nil else { return }
-        // A second writer on a saved session's log, as `SessionLibrary.record` is; `canUnsettle` and `resume` keep a
-        // Continue out meanwhile. #355's one log writer per session replaces both.
-        _ = try await store.append([SessionUnsettled.storedEvent()], to: id)
+        guard try await library.store().session(id: id)?.settledAt != nil else { return }
+        try await append([SessionUnsettled.storedEvent()], to: id)
         try await writeSettled(nil, id)
     }
 

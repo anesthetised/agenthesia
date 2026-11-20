@@ -144,22 +144,70 @@ extension SessionManagerTests {
         #expect(settled == [true, false, true])
     }
 
-    @Test func continueIsRefusedWhileAnUnsettleRuns() async throws {
+    /// The log orders an Unsettle and a Continue's reading of the history whichever comes first (#355).
+    @Test(arguments: [false, true])
+    func anUnsettleAndAContinueShareTheLog(unsettleFirst: Bool) async throws {
         let (directory, manager) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let owner = manager.start(directory: directory, agent: try mock(arguments: ["--reopen"]))
         await owner.startup?.value
         let record = try #require(owner.controller?.session)
         try await manager.settle(owner)
-        manager.unsettlingIDs.insert(record.id)
-        #expect(manager.resume(record) == nil && manager.owners.isEmpty)
-        #expect(!manager.canUnsettle(record.id))
-        manager.unsettlingIDs.remove(record.id)
-        // An Unsettle of a session that is not settled writes nothing.
-        try await manager.unsettle(record.id)
-        try await manager.unsettle(record.id)
-        let kinds = try await manager.library.store().events(in: record.id).map(\.event.kind)
+        // Hold the log, so both steps are reserved before either runs.
+        let log = try await manager.log(for: record.id)
+        let hold = Hold()
+        let held = log.run { await hold.wait() }
+        var unsettling: Task<Void, any Error>?
+        if unsettleFirst {
+            unsettling = Task { try await manager.unsettle(record.id) }
+            while log.tail == held { await Task.yield() }
+        }
+        let continued = try #require(manager.resume(record))
+        if !unsettleFirst {
+            while log.tail == held { await Task.yield() }
+            // An Unsettle that passed its check before the Continue started appends behind the Continue's reading.
+            unsettling = Task { try await manager.append([SessionUnsettled.storedEvent()], to: record.id) }
+        }
+        hold.release()
+        try await unsettling?.value
+        await continued.startup?.value
+        let controller = try #require(continued.controller)
+        #expect(controller.status == .idle)
+        let events = try await manager.library.store().events(in: record.id)
+        #expect(events.filter { $0.event.kind == SessionUnsettled.kind }.count == 1)
+        #expect(try await manager.library.store().session(id: record.id)?.settledAt == nil)
+        await continued.send("again")
+        #expect(controller.transcript.items.compactMap { $0.message?.text }.suffix(2) == ["again", "Echo: again"])
+        await manager.closeAll()
+    }
+
+    @Test func unsettleWritesNothingForASessionThatIsNotSettled() async throws {
+        let (directory, manager) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owner = manager.start(directory: directory, agent: try mock())
+        await owner.startup?.value
+        let id = try #require(owner.sessionID)
+        try await manager.settle(owner)
+        try await manager.unsettle(id)
+        try await manager.unsettle(id)
+        let kinds = try await manager.library.store().events(in: id).map(\.event.kind)
         #expect(kinds.filter { $0 == SessionUnsettled.kind }.count == 1)
+    }
+}
+
+@MainActor private final class Hold {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func wait() async {
+        guard !released else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
     }
 }
 

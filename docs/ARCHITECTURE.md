@@ -466,7 +466,7 @@ takes the title the agent reported earlier (`PendingPermission.callTitle`), and 
 from `TranscriptState.turnOrigin`. `SubtitleLayout` lays out the second line. The time is the last activity:
 `SessionController.lastActivity` for a live session (the minute of the last stored event, set at most once a minute and
 seeded when history loads), `PersistenceStore.lastEvents()` for a saved one (`SessionLibrary.lastEvents()` returns it
-with the worktree outcomes, read by a second query that steps over `session.unsettled`), else `createdAt`.
+with the worktree outcomes in one read, see *Settled* below), else `createdAt`.
 The shelves keep their state in `SessionWindowModel.workingShelfExpanded` / `settledShelfExpanded` (`RootView` remembers
 them in `@SceneStorage`, like the inspector); `SidebarShelves.isOpen` opens them for a search,
 `SessionWindowModel.revealShelf` for Previous/Next Session, and `SidebarShelves.animation` is the spring that Reduce
@@ -492,20 +492,26 @@ next refresh.
 **Settled** ([ADR-0050](adr/0050-settled-is-the-users-decision.md)) is stored: the nullable `session.settledAt`
 (migration `v9-session-settled-at`, which fills it for every existing session with its last event's time, or its start,
 `SessionRecord.settledAt`), written by `PersistenceStore.setSettled(_:of:)`. `SessionSidebar` puts saved sessions without
-it in the list and those with it on the Settled shelf. `SessionManager.settle` ends a session's owners first, so a live
-session is never settled; Continue clears `settledAt` as it launches (`LiveSession`). `SessionManager.settle` closes the owners, writes `settledAt`, then removes them from `owners`, so a window refreshing on
-that change already reads the session as settled. `SessionManager.unsettle` appends a `session.unsettled` event
-(`SessionUnsettled`, a kind of its own that the reducer passes over; older builds refuse a v9 database, so they never
-read it) through the session's log (`SessionManager.append`, #355), so a Continue reading the history at the same time
-takes it in order, and clears `settledAt`. It is refused while the session is live or starting (a Continue unsettles it
-itself), merging, discarding or being deleted. A merged or discarded
-session can be unsettled: the worktree's outcome is the last event other than `session.unsettled`
-(`PersistenceStore.lastEvents(skipping:)`, read by `SessionLibrary.worktreeOutcomes` and `lastEvents`, and through them
-the removal check, the delete summary and the window's history; ADR-0032's amendment). `SessionSettling.settles` is the
-pure rule: a session that is not live settles when the worktree's outcome is its very last event or its last activity
-is seven days old. `SessionManager.settleByRule` applies it, writes the time of the check and goes on past a failed
-write; `SessionWindowModel.refresh` runs it first and only logs its failure, and refreshes follow launch, a session's
-end, a merge and a discard.
+it in the list and those with it on the Settled shelf. `SessionManager.settle` closes a session's owners, writes
+`settledAt`, then removes them from `owners`, so a live session is never settled; it also adds the session to
+`SessionManager.settledIDs`, which a window applies to its history (`listedHistory`) until a load shows the write, so the
+session never shows in the list between leaving `owners` and that load. Continue clears `settledAt` once the agent is
+connected (`LiveSession.connected`), so a Continue cancelled at sign-in or failed stays settled. `SessionManager.unsettle`
+appends a `session.unsettled` event (`SessionUnsettled`, a kind of its own that the reducer passes over; older builds
+refuse a v9 database, so they never read it) through the session's log (`SessionManager.append`, #355), so a Continue
+reading the history at the same time takes it in order, and clears `settledAt`. It is refused while the session is live
+or starting (a Continue unsettles it itself), merging, discarding or being deleted. A merged or discarded session can be
+unsettled: the worktree's outcome is the last event other than `session.unsettled` (ADR-0032's amendment).
+`PersistenceStore.lastEvents(skipping:)` reads each session's last event and its last other event in one read;
+`SessionLibrary.lastEvents()` turns them into `LastEvents` (outcomes, activity, the outcomes that are a session's very last
+event, and the sessions with an event other than an Unsettle, which Delete's summary reads), shared by the rule, the
+window, the removal check and the delete summary. Both queries `CROSS JOIN` from `session`, so SQLite looks each session
+up by index instead of scanning every event and running the subquery per event; a test checks both plans.
+`SessionSettling.settles` is the pure rule: a session that is not live settles when the worktree's outcome is its very
+last event or its last activity is seven days old. `SessionManager.settleByRule` applies it to history and the last
+events a window has just read, writes the time of the check, goes on past a failed write and returns what it settled;
+`SessionWindowModel.refresh` applies those writes to the history it read and only logs a failure. Refreshes follow
+launch, a session's end, a merge and a discard.
 
 **Delete Session…** ([ADR-0044](adr/0044-delete-and-archive-sessions.md)) removes a saved session for good. Events are
 append-only in the schema itself (`event_no_delete`); migration `v8-session-deletion` lets the guard pass only the

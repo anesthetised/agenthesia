@@ -9,7 +9,7 @@ import Workspace
 @MainActor @Observable
 public final class SessionManager {
     /// Owners in start order until End Session removes them; failed owners stay with their error.
-    public internal(set) var owners: [LiveSession] = []
+    public private(set) var owners: [LiveSession] = []
     public let library: SessionLibrary
     /// What each window shows while it is key in the active app; those sessions need no notification.
     private var shown: [ObjectIdentifier: UUID] = [:]
@@ -26,6 +26,9 @@ public final class SessionManager {
     @ObservationIgnored var logs: [UUID: SessionLog] = [:]
     /// Saved sessions being deleted (ADR-0044); windows refresh history when one finishes.
     public internal(set) var deletingIDs: Set<UUID> = []
+    /// Sessions settled by hand in this launch and not unsettled or continued since; a window counts them as settled
+    /// before its next history load shows it, so that a session leaving `owners` never shows in the list (ADR-0050).
+    public internal(set) var settledIDs: Set<UUID> = []
     /// Saved sessions deleted since launch; a window still showing one of them (an ended session it ran) leaves it.
     public internal(set) var deletedIDs: Set<UUID> = []
     // Test seam for moving a folder to the Trash; tests remove it instead of filling the user's Trash.
@@ -91,6 +94,7 @@ public final class SessionManager {
     @discardableResult public func resume(_ session: SessionRecord) -> LiveSession? {
         guard !isDiscarding(session.id), !isMerging(session.id) else { return nil }
         if let live = owner(of: session.id) { return live }
+        settledIDs.remove(session.id)
         let previous = owners.filter { $0.sessionID == session.id }
         owners.removeAll { $0.sessionID == session.id }
         return add(.saved(session), after: previous)
@@ -116,7 +120,11 @@ public final class SessionManager {
     /// Closes the owner and removes it; its session remains in saved history.
     public func end(_ owner: LiveSession) async {
         await owner.close()
-        owners.removeAll { $0 === owner }
+        removeOwners([owner])
+    }
+
+    func removeOwners(_ removed: [LiveSession]) {
+        owners.removeAll { owner in removed.contains { $0 === owner } }
     }
 
     /// Closes every owner, including those still starting, before the app terminates. A merge finishes first,

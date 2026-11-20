@@ -227,12 +227,13 @@ extension WorktreeDiscardTests {
         let unsettledAt = try #require(try await store.lastEvents()[session.id])
         #expect(unsettledAt.event.kind == SessionUnsettled.kind)
         #expect(
-            try await store.lastEvents(skipping: SessionUnsettled.kind)[session.id]?.sequence == unsettledAt.sequence
-                - 1
+            try await store.lastEvents(skipping: SessionUnsettled.kind).other[session.id]?.sequence
+                == unsettledAt.sequence - 1
         )
         #expect(try await manager.library.worktreeOutcomes() == [session.id: .discarded])
-        let (outcomes, activity) = try await manager.library.lastEvents()
-        #expect(outcomes == [session.id: .discarded] && activity[session.id] == unsettledAt.event.timestamp)
+        let events = try await manager.library.lastEvents()
+        #expect(events.outcomes == [session.id: .discarded] && events.lastOutcomes.isEmpty)
+        #expect(events.activity[session.id] == unsettledAt.event.timestamp && events.recorded == [session.id])
         #expect(try await manager.deleteSummary(session) == .discarded)
         await #expect(throws: SessionManager.DiscardError.alreadyRemoved) { try await manager.discard(session) }
         // Not settled again for its outcome; the seven days count from the Unsettle.
@@ -247,5 +248,43 @@ extension WorktreeDiscardTests {
         #expect(!continued.isLive && continued.errorMessage?.contains("cannot continue") == true)
         #expect(try await store.session(id: session.id)?.settledAt != nil)
         await manager.closeAll()
+    }
+}
+
+extension SessionManagerTests {
+    @Test func aContinueThatFailsToReopenLeavesTheSessionSettled() async throws {
+        let (directory, manager) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // Without `--reopen` a new agent process does not know the session, so reopening it fails.
+        let owner = manager.start(directory: directory, agent: try mock())
+        await owner.startup?.value
+        let record = try #require(owner.controller?.session)
+        try await manager.settle(owner)
+        let settled = try #require(try await manager.library.store().session(id: record.id))
+        let continued = try #require(manager.resume(settled))
+        await continued.startup?.value
+        #expect(!continued.isLive && continued.errorMessage != nil)
+        #expect(try await manager.library.store().session(id: record.id)?.settledAt != nil)
+        await manager.closeAll()
+    }
+
+    @Test func deleteCallsASessionWithOnlyUnsettlesFailedToStart() async throws {
+        let (directory, manager) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await manager.library.store()
+        let project = try await manager.library.project(directory: directory)
+        let agent = try await manager.library.install(try mock())
+        let session = SessionRecord(
+            projectID: project.id,
+            agentInstallID: agent.id,
+            workingDirectory: directory.path,
+            settledAt: .now
+        )
+        try await store.createSession(session)
+        try await manager.unsettle(session.id)
+        #expect(try await store.events(in: session.id).map(\.event.kind) == [SessionUnsettled.kind])
+        #expect(try await manager.deleteSummary(session) == .failedToStart)
+        _ = try await store.append([try SessionEvent.started(configOptions: []).storedEvent()], to: session.id)
+        #expect(try await manager.deleteSummary(session) == .history)
     }
 }

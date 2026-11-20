@@ -433,9 +433,9 @@ import Testing
         let live = try #require(owner.controller?.lastActivity)
         await manager.closeAll()
 
-        let (outcomes, activity) = try await manager.library.lastEvents()
-        #expect(outcomes.isEmpty)
-        let last = try #require(activity[record.id])
+        let events = try await manager.library.lastEvents()
+        #expect(events.outcomes.isEmpty)
+        let last = try #require(events.activity[record.id])
         #expect(abs(last.timeIntervalSinceNow) < 120)
         let restored = try await SessionController.history(id: record.id, store: manager.library.store())
         #expect(restored.lastActivity != nil && abs(restored.lastActivity!.timeIntervalSince(live)) < 120)

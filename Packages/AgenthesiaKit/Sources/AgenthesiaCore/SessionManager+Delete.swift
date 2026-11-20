@@ -28,14 +28,16 @@ extension SessionManager {
     }
 
     public func deleteSummary(_ session: SessionRecord) async throws -> DeleteSummary {
-        let (outcomes, activity) = try await library.lastEvents()
-        switch outcomes[session.id] {
+        let events = try await library.lastEvents()
+        // A session with no event but Unsettles never started.
+        let started = events.recorded.contains(session.id)
+        switch events.outcomes[session.id] {
         case .merged: return .merged
         case .discarded: return .discarded
         case nil: break
         }
         guard let project = try await library.project(id: session.projectID) else {
-            return activity[session.id] == nil ? .failedToStart : .history
+            return started ? .history : .failedToStart
         }
         if let folder = scratchFolder(of: session, project: project) {
             return .folder(name: folder.lastPathComponent, files: Self.fileCount(in: folder))
@@ -45,7 +47,7 @@ extension SessionManager {
         {
             return .worktree(try? await discardSummary(session))
         }
-        return activity[session.id] == nil ? .failedToStart : .history
+        return started ? .history : .failedToStart
     }
 
     /// Deletes a saved session for good (ADR-0044). Its files go first: a worktree Agenthesia created, under

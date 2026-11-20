@@ -391,7 +391,19 @@ import os
             && history.contains { $0.id == displayed.session.id }
     }
     var savedSessions: [SessionRecord] {
-        history.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
+        listedHistory.filter { record in !sessions.owners.contains { $0.sessionID == record.id } }
+    }
+    /// History as the window lists it: a session settled by hand counts as settled before the next load shows it, so
+    /// it never shows in the list between leaving `owners` and that load.
+    private var listedHistory: [SessionRecord] {
+        let settled = sessions.settledIDs
+        guard !settled.isEmpty else { return history }
+        return history.map { record in
+            guard record.settledAt == nil, settled.contains(record.id) else { return record }
+            var record = record
+            record.settledAt = .distantPast
+            return record
+        }
     }
     /// The sidebar's search text; navigation and the sections only see the rows it matches.
     var sidebarQuery = ""
@@ -400,7 +412,7 @@ import os
     var sidebar: SessionSidebar {
         SessionSidebar(
             projects: projects,
-            history: history,
+            history: listedHistory,
             owners: sessions.owners,
             activity: lastActivity,
             query: sidebarQuery
@@ -703,10 +715,12 @@ import os
     }
 
     /// The Session menu's toggle (ADR-0050): Unsettle Session for a displayed settled session, Settle Session for any
-    /// other, Cancel Startup while the displayed live session starts or waits for sign-in.
+    /// other, Cancel Startup while the displayed live session starts or waits for sign-in. The window's owner counts only
+    /// while it is what the window shows.
     var settleCommandTitle: String {
         if let displayedSaved { return displayedSaved.settledAt == nil ? "Settle Session" : "Unsettle Session" }
-        return owner.map(Self.isStartingUp) == true ? "Cancel Startup" : "Settle Session"
+        guard restored == nil, let owner, Self.isStartingUp(owner) else { return "Settle Session" }
+        return "Cancel Startup"
     }
     var canToggleSettled: Bool { canEnd || displayedSaved.map(canUnsettle) == true }
     func toggleSettled() async {
@@ -926,12 +940,20 @@ import os
     }
 
     func refresh() async {
-        // The rule's failure is logged: history still loads, and the next refresh tries again.
-        do { try await sessions.settleByRule() } catch {
-            Self.logger.error("Settling by rule failed: \(error.localizedDescription, privacy: .public)")
-        }
         do {
-            history = try await library.history()
+            var history = try await library.history()
+            let events = try await library.lastEvents()
+            // The rule settles from what was just read, and what it wrote is applied to it. A failed write is logged; the
+            // next refresh tries again.
+            let now = Date.now
+            let rule = await sessions.settleByRule(history, events: events, now: now)
+            if let failure = rule.failure {
+                Self.logger.error("Settling by rule failed: \(failure.localizedDescription, privacy: .public)")
+            }
+            for index in history.indices where rule.settled.contains(history[index].id) {
+                history[index].settledAt = now
+            }
+            self.history = history
             if let id = restored?.session.id ?? selectedHistoryID, !history.contains(where: { $0.id == id }) {
                 leaveDeletedSession(id)
             } else if let id = displayed?.session.id, sessions.deletedIDs.contains(id) {
@@ -939,7 +961,7 @@ import os
                 leaveDeletedSession(id)
             }
             projects = try await library.projects()
-            (outcomes, lastActivity) = try await library.lastEvents()
+            (outcomes, lastActivity) = (events.outcomes, events.activity)
             leftoverWorktrees = Set(
                 history.filter {
                     if case .merged = outcomes[$0.id] {

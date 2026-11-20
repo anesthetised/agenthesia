@@ -179,7 +179,8 @@ Right-click on a row:
   `↩ Unsettle` button (`arrow.uturn.backward`) in place of its time, as `✓ Settle` does, also an accessibility action. A
   merged or discarded session can be unsettled: it keeps its `Merged` / `Discarded` reason, stays read-only and cannot
   continue ([ADR-0032's amendment](../adr/0032-worktree-merge-and-discard.md)). Disabled while the session is starting
-  (a Continue), being merged, discarded or deleted. Continue on a settled session moves it back too. A failed write
+  (a Continue), being merged, discarded or deleted. Continue on a settled session moves it back too, once its agent is connected: a Continue cancelled at sign-in or failed
+  leaves it settled. A failed write
   shows `Cannot Settle the Session` / `Cannot Unsettle the Session`.
 - `Archive Session` hides a saved session from Settled (and its count) without touching its log; `Unarchive Session`
   (the title when it is archived) brings it back. Neither asks for confirmation. Live rows have no such item: a session

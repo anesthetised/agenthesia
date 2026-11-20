@@ -116,6 +116,84 @@ import Testing
     }
 }
 
+extension SessionSettleWindowTests {
+    @Test func aContinueCancelledAtSignInLeavesTheSessionSettled() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = try manager()
+        let model = SessionWindowModel(sessions: sessions)
+        let signedIn = directory.appending(path: "signed-in")
+        try Data().write(to: signedIn)
+        let arguments = ["--auth", "--auth-file", signedIn.path(percentEncoded: false), "--reopen"]
+        model.start(directory: directory, executable: try mock().executable, arguments: arguments)
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        let id = try #require(owner.sessionID)
+        await model.settle(owner)
+        #expect(try await settledAt(id, sessions) != nil)
+        // Signed out, the Continue waits for sign-in: the menu and the toolbar cancel it rather than settle it.
+        try FileManager.default.removeItem(at: signedIn)
+        let record = try #require(model.history.first { $0.id == id })
+        let continued = try #require(sessions.resume(record))
+        model.show(continued)
+        await continued.startup?.value
+        #expect(continued.signIn != nil)
+        #expect(model.settleCommandTitle == "Cancel Startup" && model.toolbarSettle?.title == "Cancel Startup")
+        await model.endSession()
+        #expect(sessions.owners.isEmpty)
+        #expect(try await settledAt(id, sessions) != nil)
+        #expect(model.sidebar.section(.settled)?.rows.map(\.id) == [AnyHashable(id)])
+    }
+
+    @Test func anArchivedSessionHasNoToolbarButton() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = try manager()
+        let model = SessionWindowModel(sessions: sessions)
+        let record = try await savedSession(in: model)
+        await model.setArchived(true, record)
+        #expect(model.toolbarSettle == nil && !model.canEnd && model.settleCommandTitle == "Settle Session")
+        await sessions.closeAll()
+    }
+
+    /// The window's own owner does not name the item while the window shows a session that is live in another one.
+    @Test func theTitleFollowsTheShownSessionWhenItIsLiveElsewhere() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = try manager()
+        let model = SessionWindowModel(sessions: sessions)
+        let record = try await savedSession(in: model)
+        let elsewhere = try #require(sessions.resume(record))
+        await elsewhere.startup?.value
+        let gate = Gate()
+        sessions.environment = { (await gate.wait(), nil) }
+        model.owner = sessions.start(directory: directory, agent: try mock())
+        #expect(model.restored?.session.id == record.id && model.owner?.isStarting == true)
+        #expect(model.settleCommandTitle == "Settle Session" && !model.canToggleSettled)
+        gate.release()
+        await sessions.closeAll()
+    }
+
+    /// A window that has not reloaded history yet already lists a session settled elsewhere as settled.
+    @Test func aSessionSettledInAnotherWindowIsNeverInTheList() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sessions = try manager()
+        let model = SessionWindowModel(sessions: sessions)
+        let other = SessionWindowModel(sessions: sessions)
+        model.start(directory: directory, executable: try mock().executable, arguments: [])
+        let owner = try #require(model.owner)
+        await owner.startup?.value
+        let id = try #require(owner.sessionID)
+        await other.refresh()
+        #expect(other.sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(id)])
+        try await sessions.settle(owner)
+        // No refresh of `other`: its history still holds the record as it was.
+        #expect(other.history.first { $0.id == id }?.settledAt == nil)
+        #expect(other.sidebar.section(.active) == nil)
+        #expect(other.sidebar.section(.settled)?.rows.map(\.id) == [AnyHashable(id)])
+        // Unsettle takes it back to the list before any reload, too.
+        try await sessions.unsettle(id)
+        #expect(other.sidebar.section(.active)?.rows.map(\.id) == [AnyHashable(id)])
+    }
+}
+
 @MainActor private final class Gate {
     private var continuation: CheckedContinuation<[String: String], Never>?
 

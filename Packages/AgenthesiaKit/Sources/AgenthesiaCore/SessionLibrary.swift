@@ -48,16 +48,29 @@ public actor SessionLibrary {
         try await store().sessionCount(usingInstallation: installationID)
     }
 
-    /// Sessions whose worktree was merged or discarded: the outcome is a session's last event other than an Unsettle
-    /// (ADR-0032 and its amendment).
-    public func worktreeOutcomes() async throws -> [UUID: WorktreeOutcome] {
-        try await store().lastEvents(skipping: SessionUnsettled.kind).compactMapValues(WorktreeOutcome.init(lastEvent:))
+    /// What the sidebar, the settle rule and Delete read from each session's last events, in one read.
+    public struct LastEvents: Sendable {
+        /// The worktree's outcome: a session's last event other than an Unsettle (ADR-0032 and its amendment).
+        public var outcomes: [UUID: WorktreeOutcome] = [:]
+        /// The time of each session's last event, an Unsettle included (ADR-0039).
+        public var activity: [UUID: Date] = [:]
+        /// The outcome of the sessions whose very last event it is; the settle rule reads only these (ADR-0050).
+        var lastOutcomes: [UUID: WorktreeOutcome] = [:]
+        /// The sessions with an event other than an Unsettle; Delete calls the others failed to start.
+        var recorded: Set<UUID> = []
     }
 
-    /// The worktree outcomes and the time of each session's last event (ADR-0039), an Unsettle included.
-    public func lastEvents() async throws -> (outcomes: [UUID: WorktreeOutcome], activity: [UUID: Date]) {
-        let activity = try await store().lastEvents().mapValues(\.event.timestamp)
-        return (try await worktreeOutcomes(), activity)
+    /// Sessions whose worktree was merged or discarded.
+    public func worktreeOutcomes() async throws -> [UUID: WorktreeOutcome] { try await lastEvents().outcomes }
+
+    public func lastEvents() async throws -> LastEvents {
+        let (last, other) = try await store().lastEvents(skipping: SessionUnsettled.kind)
+        return LastEvents(
+            outcomes: other.compactMapValues(WorktreeOutcome.init(lastEvent:)),
+            activity: last.mapValues(\.event.timestamp),
+            lastOutcomes: last.compactMapValues(WorktreeOutcome.init(lastEvent:)),
+            recorded: Set(other.keys)
+        )
     }
 
     func project(id: UUID) async throws -> ProjectRecord? { try await store().projects().first { $0.id == id } }

@@ -8,6 +8,7 @@ import Testing
 
 private actor QueueConnection: ACP.AgentConnection {
     var prompts: [[ACP.ContentBlock]] = []
+    var returnedPrompts = 0
     var injections: [[ACP.ContentBlock]] = []
     var cancellationCount = 0
     var waiter: CheckedContinuation<ACP.StopReason, any Error>?
@@ -41,6 +42,7 @@ private actor QueueConnection: ACP.AgentConnection {
     func deleteSession(_ sessionId: ACP.SessionID) async throws {}
     func prompt(_ content: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws -> ACP.StopReason {
         prompts.append(content)
+        defer { returnedPrompts += 1 }
         return try await withCheckedThrowingContinuation { waiter = $0 }
     }
     func inject(_ content: [ACP.ContentBlock], in sessionId: ACP.SessionID) async throws {
@@ -66,6 +68,9 @@ private actor QueueConnection: ACP.AgentConnection {
     func breakTurn() { waiter?.resume(throwing: QueueFailure()); waiter = nil }
     func rejectTurn() { waiter?.resume(throwing: RPCError.internalError("Rejected prompt")); waiter = nil }
     func waitForPrompts(_ count: Int) async { while prompts.count < count { await Task.yield() } }
+    /// Returns after `prompt` has returned or thrown `count` times. Its caller is resumed on the main actor before a
+    /// caller of this method is, so the session has seen the turn end by then.
+    func waitForReturnedPrompts(_ count: Int) async { while returnedPrompts < count { await Task.yield() } }
 }
 
 private struct QueueFailure: Error {}
@@ -771,6 +776,8 @@ private actor QueueGate {
         } else {
             stopping = nil
             if outcome == "error" { await connection.rejectTurn() } else { await connection.finish(.endTurn) }
+            // The session sees the turn end when `prompt` returns to it; the preparation, once committed, must see that.
+            await connection.waitForReturnedPrompts(1)
         }
         session.appendEvents = { try await store.append($0, to: $1) }
         await gate.open()

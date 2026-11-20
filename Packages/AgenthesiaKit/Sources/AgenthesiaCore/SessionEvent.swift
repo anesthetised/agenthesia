@@ -93,8 +93,8 @@ public struct PullRequest: Codable, Equatable, Sendable {
 }
 
 /// The user brought a settled session back to the list (ADR-0050). It carries nothing: as the session's last activity
-/// it restarts the seven days, and the reducer passes over it. A kind of its own, like `PullRequest`, so older builds
-/// skip it.
+/// it restarts the seven days, and the reducer passes over it. A kind of its own rather than a `SessionEvent` case, so
+/// that reading a worktree's outcome can step over it.
 enum SessionUnsettled {
     static let kind = "session.unsettled"
 
